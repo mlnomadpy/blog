@@ -1,0 +1,47 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+import { SITE_TITLE, SITE_DESCRIPTION } from '../consts';
+
+const posts = (await getCollection('blog', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+
+const byYear = posts.reduce<Record<number, typeof posts>>((acc, p) => {
+  const y = p.data.pubDate.getFullYear();
+  (acc[y] ??= []).push(p);
+  return acc;
+}, {});
+const years = Object.keys(byYear).map(Number).sort((a, b) => b - a);
+const dateFmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+<BaseLayout title={SITE_TITLE} description={SITE_DESCRIPTION}>
+  <section class="intro">
+    <h1>{SITE_TITLE}</h1>
+    <p class="lead">{SITE_DESCRIPTION}</p>
+  </section>
+
+  {years.map((year) => (
+    <section class="year-group">
+      <h2>{year}</h2>
+      <ul class="post-list">
+        {byYear[year].map((post) => (
+          <li>
+            <a class="post-link" href={`${base}/${post.id}/`}>
+              <p class="meta">
+                <time datetime={post.data.pubDate.toISOString()}>{dateFmt.format(post.data.pubDate)}</time>
+              </p>
+              <h3>{post.data.title}</h3>
+              {post.data.description && <p class="excerpt">{post.data.description}</p>}
+            </a>
+            {post.data.tags.length > 0 && (
+              <p style="margin-top:0.3rem">
+                {post.data.tags.map((t) => <a class="tag" href={`${base}/tag/${t}/`}>#{t}</a>)}
+              </p>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  ))}
+</BaseLayout>

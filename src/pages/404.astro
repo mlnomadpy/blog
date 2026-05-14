@@ -1,0 +1,13 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+<BaseLayout title="404 — Not found" description="The page you are looking for does not exist." noindex>
+  <h1>404</h1>
+  <p class="muted" style="font-family:var(--serif);font-style:italic;font-size:1.1rem">
+    The page you are looking for has wandered off.
+  </p>
+  <p>
+    Try the <a href={`${base}/`}>post index</a>, or <a href={`${base}/search`}>search</a> for what you wanted.
+  </p>
+</BaseLayout>

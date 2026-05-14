@@ -1,40 +1,31 @@
 {
-  "name": "hexo-site",
-  "version": "0.0.1",
+  "name": "tahabouhsine-blog",
+  "type": "module",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
-    "start": "hexo server -p $PORT",
-    "build": "hexo generate",
-    "clean": "hexo clean",
-    "deploy": "hexo deploy",
-    "server": "hexo server"
-  },
-  "hexo": {
-    "version": "5.4.0"
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build && node scripts/postbuild.mjs",
+    "preview": "astro preview",
+    "astro": "astro"
   },
   "dependencies": {
-    "hexo": "^5.0.0",
-    "hexo-deployer-git": "^3.0.0",
-    "hexo-deployer-heroku": "^0.1.2",
-    "hexo-generator-archive": "^1.0.0",
-    "hexo-generator-category": "^1.0.0",
-    "hexo-generator-feed": "^3.0.0",
-    "hexo-generator-index": "^2.0.0",
-    "hexo-generator-search": "^2.4.3",
-    "hexo-generator-tag": "^1.0.0",
-    "hexo-render-pug": "^2.1.4",
-    "hexo-renderer-ejs": "^1.0.0",
-    "hexo-renderer-marked": "^4.0.0",
-    "hexo-renderer-pug": "^2.0.0",
-    "hexo-renderer-sass": "^0.4.0",
-    "hexo-renderer-stylus": "^2.0.1",
-    "hexo-server": "^2.0.0",
-    "hexo-theme-landscape": "^0.0.3",
-    "hexo-wordcount": "^6.0.1",
-    "pug": "^3.0.2"
+    "@astrojs/mdx": "^4.0.3",
+    "@astrojs/rss": "^4.0.10",
+    "@astrojs/sitemap": "^3.2.1",
+    "@fontsource-variable/inter": "^5.2.8",
+    "@fontsource-variable/jetbrains-mono": "^5.2.8",
+    "@fontsource/lora": "^5.2.8",
+    "astro": "^5.1.1",
+    "katex": "^0.16.11",
+    "rehype-autolink-headings": "^7.1.0",
+    "rehype-katex": "^7.0.1",
+    "rehype-slug": "^6.0.0",
+    "remark-math": "^6.0.0"
   },
-  "engines": {
-    "node": "7.1.0",
-    "npm": "3.10.9"
+  "devDependencies": {
+    "pagefind": "^1.5.2",
+    "reading-time": "^1.5.0"
   }
 }

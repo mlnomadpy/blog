@@ -1,0 +1,30 @@
+---
+import { GISCUS } from '../consts';
+const configured = GISCUS.repoId && GISCUS.categoryId;
+---
+{configured ? (
+  <section aria-label="Comments" style="margin-top:3rem">
+    <script
+      src="https://giscus.app/client.js"
+      data-repo={GISCUS.repo}
+      data-repo-id={GISCUS.repoId}
+      data-category={GISCUS.category}
+      data-category-id={GISCUS.categoryId}
+      data-mapping={GISCUS.mapping}
+      data-strict="0"
+      data-reactions-enabled={GISCUS.reactionsEnabled}
+      data-emit-metadata={GISCUS.emitMetadata}
+      data-input-position={GISCUS.inputPosition}
+      data-theme={GISCUS.theme}
+      data-lang={GISCUS.lang}
+      data-loading="lazy"
+      crossorigin="anonymous"
+      async
+    />
+  </section>
+) : (
+  <aside class="callout" style="margin-top:3rem">
+    Comments are powered by <a href="https://giscus.app" target="_blank" rel="noopener noreferrer">giscus</a> + GitHub Discussions.
+    Configure <code>src/consts.ts</code> with your <code>repoId</code> and <code>categoryId</code> to enable them.
+  </aside>
+)}

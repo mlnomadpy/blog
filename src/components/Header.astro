@@ -1,0 +1,29 @@
+---
+import { SITE_TITLE } from '../consts';
+import ThemeToggle from './ThemeToggle.astro';
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const path = Astro.url.pathname.replace(/\/$/, '') || '/';
+const isActive = (href: string) => {
+  const target = href.replace(/\/$/, '') || '/';
+  if (target === `${base}` || target === '') return path === base || path === `${base}/` || path === '/';
+  return path === target || path.startsWith(target + '/');
+};
+const links = [
+  { href: `${base}/`, label: 'posts' },
+  { href: `${base}/search`, label: 'search' },
+  { href: `${base}/tags`, label: 'tags' },
+  { href: `${base}/about`, label: 'about' },
+];
+---
+<header class="site-header">
+  <div class="site-header-inner">
+    <a class="brand" href={`${base}/`}>{SITE_TITLE}</a>
+    <nav aria-label="Primary">
+      {links.map((l) => (
+        <a href={l.href} aria-current={isActive(l.href) ? 'page' : undefined}>{l.label}</a>
+      ))}
+      <a href={`${base}/rss.xml`} aria-label="RSS feed">rss</a>
+      <ThemeToggle />
+    </nav>
+  </div>
+</header>
