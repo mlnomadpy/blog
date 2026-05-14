@@ -1,0 +1,110 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="generator" content="Astro v5.18.1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#fbfaf6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)"><title>Morocco and AI Illiteracy — Part I — Records of the !mmortal Data Scientist</title><meta name="description" content="On Morocco, AI education, and the cost of staying behind."><meta name="author" content="Taha Bouhsine"><link rel="canonical" href="https://tahabouhsine.com/blog/ai-illiteracy-pt1/"><link rel="icon" href="/blog/favicon.svg" type="image/svg+xml"><link rel="alternate" type="application/rss+xml" title="Records of the !mmortal Data Scientist" href="/blog/rss.xml"><link rel="sitemap" href="/blog/sitemap-index.xml"><meta property="og:type" content="article"><meta property="og:site_name" content="Records of the !mmortal Data Scientist"><meta property="og:title" content="Morocco and AI Illiteracy — Part I — Records of the !mmortal Data Scientist"><meta property="og:description" content="On Morocco, AI education, and the cost of staying behind."><meta property="og:url" content="https://tahabouhsine.com/blog/ai-illiteracy-pt1/"><meta property="og:locale" content="en_US"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="Morocco and AI Illiteracy — Part I — Records of the !mmortal Data Scientist"><meta name="twitter:description" content="On Morocco, AI education, and the cost of staying behind."><meta property="article:published_time" content="2021-09-22T00:00:00.000Z"><meta property="article:author" content="Taha Bouhsine"><meta property="article:tag" content="morocco"><meta property="article:tag" content="ai"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Morocco and AI Illiteracy — Part I","description":"On Morocco, AI education, and the cost of staying behind.","datePublished":"2021-09-22T00:00:00.000Z","dateModified":"2021-09-22T00:00:00.000Z","author":{"@type":"Person","name":"Taha Bouhsine","url":"https://tahabouhsine.com/"},"publisher":{"@type":"Person","name":"Taha Bouhsine"},"mainEntityOfPage":{"@type":"WebPage","@id":"https://tahabouhsine.com/blog/ai-illiteracy-pt1/"},"keywords":"morocco, ai","url":"https://tahabouhsine.com/blog/ai-illiteracy-pt1/"}</script><script>{`
+  (() => {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'light' || stored === 'dark') {
+      document.documentElement.setAttribute('data-theme', stored);
+    }
+  })();
+`}</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.P6dYqOFY.css"></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>{`
+  (() => {
+    const apply = (theme) => {
+      document.documentElement.setAttribute('data-theme', theme);
+      const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+      if (meta) meta.setAttribute('content', theme === 'dark' ? '#0e1116' : '#fbfaf6');
+      // Sync giscus iframe if present
+      const giscus = document.querySelector('iframe.giscus-frame');
+      if (giscus && giscus.contentWindow) {
+        giscus.contentWindow.postMessage(
+          { giscus: { setConfig: { theme: theme === 'dark' ? 'dark' : 'light' } } },
+          'https://giscus.app'
+        );
+      }
+    };
+
+    const init = () => {
+      const btns = document.querySelectorAll('[data-theme-toggle]');
+      btns.forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', () => {
+          const current = document.documentElement.getAttribute('data-theme')
+            || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          const next = current === 'dark' ? 'light' : 'dark';
+          localStorage.setItem('theme', next);
+          apply(next);
+        });
+      });
+    };
+
+    init();
+    document.addEventListener('astro:after-swap', init);
+    document.addEventListener('astro:page-load', init);
+  })();
+`}</script> </nav> </div> </header> <main id="main">  <div class="reading-progress" data-reading-progress aria-hidden="true"></div> <script>{`
+  (() => {
+    const init = () => {
+      const bar = document.querySelector('[data-reading-progress]');
+      if (!bar) return;
+      const onScroll = () => {
+        const h = document.documentElement;
+        const scrolled = h.scrollTop;
+        const max = h.scrollHeight - h.clientHeight;
+        const pct = max > 0 ? Math.min(100, (scrolled / max) * 100) : 0;
+        bar.style.width = pct + '%';
+      };
+      onScroll();
+      window.removeEventListener('scroll', window.__rp_onScroll || (() => {}));
+      window.__rp_onScroll = onScroll;
+      window.addEventListener('scroll', onScroll, { passive: true });
+    };
+    init();
+    document.addEventListener('astro:page-load', init);
+    document.addEventListener('astro:after-swap', init);
+  })();
+`}</script> <article data-pagefind-body data-pagefind-meta="date:2021-09-22"> <header class="post-header"> <h1 data-pagefind-meta="title">Morocco and AI Illiteracy — Part I</h1> <p class="meta"> <time datetime="2021-09-22T00:00:00.000Z">September 21, 2021</time>   · 2 min read </p> <p style="margin-top:0.65rem" data-pagefind-meta="tags:morocco,ai"> <a class="tag" href="/blog/tag/morocco/">#morocco</a><a class="tag" href="/blog/tag/ai/">#ai</a> </p> </header>  <p>One of the things that got me to pursue my passion for artificial intelligence was the saying of Dr. Andrew Ng back in 2017.</p>
+<blockquote>
+<p>AI is the new electricity.
+<cite>— Dr. Andrew Ng, 2017</cite></p>
+</blockquote>
+<p>You might think of it as another quote on the internet, but as you start looking at the wide range of applications and crucial solutions created with AI, the question of using AI or not will be a question of survival for countries and their people.</p>
+<p>Especially for us in third world countries where we are still fighting illiteracy and the widespread of misinformation, wars will be redefined. A simple deepfake video of a leader voicing controversial opinions would shake the country to its core.</p>
+<p>Thus, it has become a crucial task for leaders around the globe to include AI education for young people and add it to the learning material starting from elementary school — and to inform people as much as possible about the dangers and importance of this technology in life. As for Morocco, it is still 12 years behind in teaching its people computer science in general. As for AI, there is not enough focus and support for creating its own AI experts.</p>
+<p>The results, if we keep neglecting those problems in the next five years: Morocco, as usual, will buy all of its AI products from other advanced countries. Most of the time, those products do not use state-of-the-art technologies because of licensing and regulations. Hence, Morocco will be forever behind and again inclined to follow the old steps and make the same mistakes other countries have already made. And Morocco will still be considered a third-world country, and if it sits still and does nothing, it will forever be.</p>
+<p>The problem that will soon arise without a doubt: we will be facing an epidemic of AI illiteracy. Africans will not lack clean water only, but also clean data and AI specialists. The advanced countries are recruiting AI talents silently. While African countries are facing a flood of legacy code maintenance jobs, especially from one of the European countries.</p>
+<p>I am not trying to sound like an alarmist, but if we do not implement any solution for this matter soon, most African countries will face the point of no return.</p>  </article> <nav class="post-nav" aria-label="Adjacent posts"><a href="/blog/poem-0-1/" class="prev" rel="prev"><div class="label">← Previous</div><div class="title">Poem 0.1</div></a><a href="/blog/attention-is-a-kernel/" class="next" rel="next"><div class="label">Next →</div><div class="title">Attention is Explainable Because it is a Kernel</div></a></nav> <aside class="callout" style="margin-top:3rem">
+Comments are powered by <a href="https://giscus.app" target="_blank" rel="noopener noreferrer">giscus</a> + GitHub Discussions.
+    Configure <code>src/consts.ts</code> with your <code>repoId</code> and <code>categoryId</code> to enable them.
+</aside> <script>{`
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('pre').forEach((pre) => {
+        if (pre.dataset.copyEnhanced) return;
+        pre.dataset.copyEnhanced = '1';
+        const btn = document.createElement('button');
+        btn.className = 'code-copy';
+        btn.type = 'button';
+        btn.textContent = 'copy';
+        btn.setAttribute('aria-label', 'Copy code');
+        btn.addEventListener('click', async () => {
+          const code = pre.querySelector('code');
+          const text = (code ? code.innerText : pre.innerText) || '';
+          try {
+            await navigator.clipboard.writeText(text);
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = 'copy';
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+        pre.appendChild(btn);
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+`}</script>  </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> </span> </footer> </body></html>
