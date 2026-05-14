@@ -102,11 +102,11 @@ const jsonLd =
 <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
 
 {/* Theme bootstrap — runs before paint to avoid FOUC */}
-<script is:inline>{`
+<script is:inline>
   (() => {
     const stored = localStorage.getItem('theme');
     if (stored === 'light' || stored === 'dark') {
       document.documentElement.setAttribute('data-theme', stored);
     }
   })();
-`}</script>
+</script>

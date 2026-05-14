@@ -3,28 +3,53 @@ import { GISCUS } from '../consts';
 const configured = GISCUS.repoId && GISCUS.categoryId;
 ---
 {configured ? (
-  <section aria-label="Comments" style="margin-top:3rem">
-    <script
-      src="https://giscus.app/client.js"
-      data-repo={GISCUS.repo}
-      data-repo-id={GISCUS.repoId}
-      data-category={GISCUS.category}
-      data-category-id={GISCUS.categoryId}
-      data-mapping={GISCUS.mapping}
-      data-strict="0"
-      data-reactions-enabled={GISCUS.reactionsEnabled}
-      data-emit-metadata={GISCUS.emitMetadata}
-      data-input-position={GISCUS.inputPosition}
-      data-theme={GISCUS.theme}
-      data-lang={GISCUS.lang}
-      data-loading="lazy"
-      crossorigin="anonymous"
-      async
-    />
-  </section>
+  <section
+    aria-label="Comments"
+    id="giscus-mount"
+    style="margin-top:3rem"
+    data-giscus={JSON.stringify(GISCUS)}
+  ></section>
 ) : (
   <aside class="callout" style="margin-top:3rem">
     Comments are powered by <a href="https://giscus.app" target="_blank" rel="noopener noreferrer">giscus</a> + GitHub Discussions.
     Configure <code>src/consts.ts</code> with your <code>repoId</code> and <code>categoryId</code> to enable them.
   </aside>
+)}
+
+{configured && (
+  <script is:inline>
+    (() => {
+      const load = () => {
+        const mount = document.getElementById('giscus-mount');
+        if (!mount || mount.dataset.loaded === '1') return;
+        const cfg = JSON.parse(mount.dataset.giscus);
+        const theme = document.documentElement.getAttribute('data-theme')
+          || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        const s = document.createElement('script');
+        s.src = 'https://giscus.app/client.js';
+        s.async = true;
+        s.crossOrigin = 'anonymous';
+        const attrs = {
+          'data-repo': cfg.repo,
+          'data-repo-id': cfg.repoId,
+          'data-category': cfg.category,
+          'data-category-id': cfg.categoryId,
+          'data-mapping': cfg.mapping,
+          'data-strict': '0',
+          'data-reactions-enabled': cfg.reactionsEnabled,
+          'data-emit-metadata': cfg.emitMetadata,
+          'data-input-position': cfg.inputPosition,
+          'data-theme': theme,
+          'data-lang': cfg.lang,
+          'data-loading': 'lazy',
+        };
+        for (const k in attrs) s.setAttribute(k, attrs[k]);
+        mount.appendChild(s);
+        mount.dataset.loaded = '1';
+      };
+      load();
+      document.addEventListener('astro:page-load', load);
+      document.addEventListener('astro:after-swap', load);
+    })();
+  </script>
 )}
