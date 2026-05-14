@@ -1,0 +1,27 @@
+---
+interface Props {
+  kind?: 'theorem' | 'lemma' | 'definition' | 'proposition' | 'corollary' | 'remark' | 'example' | 'proof';
+  title?: string;
+  number?: string | number;
+}
+const { kind = 'theorem', title, number } = Astro.props;
+const labels: Record<string, string> = {
+  theorem: 'Theorem',
+  lemma: 'Lemma',
+  definition: 'Definition',
+  proposition: 'Proposition',
+  corollary: 'Corollary',
+  remark: 'Remark',
+  example: 'Example',
+  proof: 'Proof',
+};
+const label = labels[kind] ?? 'Theorem';
+---
+<div class={`thm ${kind}`}>
+  <div class="thm-label">
+    {label}{number ? ` ${number}` : ''}{title ? <span class="thm-title"> — {title}</span> : null}
+  </div>
+  <div class="thm-body">
+    <slot />
+  </div>
+</div>

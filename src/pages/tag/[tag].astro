@@ -1,0 +1,42 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+
+export async function getStaticPaths() {
+  const posts = await getCollection('blog', ({ data }) => !data.draft);
+  const tags = new Set<string>();
+  for (const post of posts) for (const t of post.data.tags) tags.add(t);
+  return [...tags].map((tag) => ({
+    params: { tag },
+    props: {
+      tag,
+      posts: posts
+        .filter((p) => p.data.tags.includes(tag))
+        .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf()),
+    },
+  }));
+}
+
+const { tag, posts } = Astro.props;
+const dateFmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+<BaseLayout title={`#${tag}`} description={`Posts tagged #${tag}.`}>
+  <p class="meta"><a href={`${base}/tags`}>← all tags</a></p>
+  <h1>#{tag}</h1>
+  <p class="lead">{posts.length} post{posts.length === 1 ? '' : 's'} tagged <code>#{tag}</code>.</p>
+
+  <ul class="post-list">
+    {posts.map((post) => (
+      <li>
+        <a class="post-link" href={`${base}/${post.id}/`}>
+          <p class="meta">
+            <time datetime={post.data.pubDate.toISOString()}>{dateFmt.format(post.data.pubDate)}</time>
+          </p>
+          <h3>{post.data.title}</h3>
+          {post.data.description && <p class="excerpt">{post.data.description}</p>}
+        </a>
+      </li>
+    ))}
+  </ul>
+</BaseLayout>

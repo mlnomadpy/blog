@@ -1,0 +1,37 @@
+---
+import { getCollection, render } from 'astro:content';
+import readingTime from 'reading-time';
+import PostLayout from '../layouts/PostLayout.astro';
+
+export async function getStaticPaths() {
+  const posts = (await getCollection('blog', ({ data }) => !data.draft))
+    .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+
+  return posts.map((post, i) => ({
+    params: { slug: post.id },
+    props: {
+      post,
+      // sorted desc → i+1 is older (previous in time), i-1 is newer (next in time)
+      next: i > 0 ? { slug: posts[i - 1].id, title: posts[i - 1].data.title } : undefined,
+      prev: i < posts.length - 1 ? { slug: posts[i + 1].id, title: posts[i + 1].data.title } : undefined,
+    },
+  }));
+}
+
+const { post, prev, next } = Astro.props;
+const { Content } = await render(post);
+const stats = readingTime(post.body ?? '');
+---
+<PostLayout
+  title={post.data.title}
+  description={post.data.description}
+  pubDate={post.data.pubDate}
+  updatedDate={post.data.updatedDate}
+  tags={post.data.tags}
+  heroImage={post.data.heroImage}
+  readingTimeText={stats.text}
+  prev={prev}
+  next={next}
+>
+  <Content />
+</PostLayout>
