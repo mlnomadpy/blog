@@ -1,11 +1,11 @@
-<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="generator" content="Astro v5.18.1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#fbfaf6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)"><title>Attention is Explainable Because it is a Kernel — Records of the !mmortal Data Scientist</title><meta name="description" content="A reading of self-attention through kernel smoothing and RKHS."><meta name="author" content="Taha Bouhsine"><link rel="canonical" href="https://tahabouhsine.com/blog/attention-is-a-kernel/"><link rel="icon" href="/blog/favicon.svg" type="image/svg+xml"><link rel="alternate" type="application/rss+xml" title="Records of the !mmortal Data Scientist" href="/blog/rss.xml"><link rel="sitemap" href="/blog/sitemap-index.xml"><meta property="og:type" content="article"><meta property="og:site_name" content="Records of the !mmortal Data Scientist"><meta property="og:title" content="Attention is Explainable Because it is a Kernel — Records of the !mmortal Data Scientist"><meta property="og:description" content="A reading of self-attention through kernel smoothing and RKHS."><meta property="og:url" content="https://tahabouhsine.com/blog/attention-is-a-kernel/"><meta property="og:locale" content="en_US"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="Attention is Explainable Because it is a Kernel — Records of the !mmortal Data Scientist"><meta name="twitter:description" content="A reading of self-attention through kernel smoothing and RKHS."><meta property="article:published_time" content="2026-05-14T00:00:00.000Z"><meta property="article:author" content="Taha Bouhsine"><meta property="article:tag" content="ml"><meta property="article:tag" content="attention"><meta property="article:tag" content="kernels"><meta property="article:tag" content="interpretability"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Attention is Explainable Because it is a Kernel","description":"A reading of self-attention through kernel smoothing and RKHS.","datePublished":"2026-05-14T00:00:00.000Z","dateModified":"2026-05-14T00:00:00.000Z","author":{"@type":"Person","name":"Taha Bouhsine","url":"https://tahabouhsine.com/"},"publisher":{"@type":"Person","name":"Taha Bouhsine"},"mainEntityOfPage":{"@type":"WebPage","@id":"https://tahabouhsine.com/blog/attention-is-a-kernel/"},"keywords":"ml, attention, kernels, interpretability","url":"https://tahabouhsine.com/blog/attention-is-a-kernel/"}</script><script>{`
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="generator" content="Astro v5.18.1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#fbfaf6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)"><title>Attention is Explainable Because it is a Kernel — Records of the !mmortal Data Scientist</title><meta name="description" content="A reading of self-attention through kernel smoothing and RKHS."><meta name="author" content="Taha Bouhsine"><link rel="canonical" href="https://tahabouhsine.com/blog/attention-is-a-kernel/"><link rel="icon" href="/blog/favicon.svg" type="image/svg+xml"><link rel="alternate" type="application/rss+xml" title="Records of the !mmortal Data Scientist" href="/blog/rss.xml"><link rel="sitemap" href="/blog/sitemap-index.xml"><meta property="og:type" content="article"><meta property="og:site_name" content="Records of the !mmortal Data Scientist"><meta property="og:title" content="Attention is Explainable Because it is a Kernel — Records of the !mmortal Data Scientist"><meta property="og:description" content="A reading of self-attention through kernel smoothing and RKHS."><meta property="og:url" content="https://tahabouhsine.com/blog/attention-is-a-kernel/"><meta property="og:locale" content="en_US"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="Attention is Explainable Because it is a Kernel — Records of the !mmortal Data Scientist"><meta name="twitter:description" content="A reading of self-attention through kernel smoothing and RKHS."><meta property="article:published_time" content="2026-05-14T00:00:00.000Z"><meta property="article:author" content="Taha Bouhsine"><meta property="article:tag" content="ml"><meta property="article:tag" content="attention"><meta property="article:tag" content="kernels"><meta property="article:tag" content="interpretability"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Attention is Explainable Because it is a Kernel","description":"A reading of self-attention through kernel smoothing and RKHS.","datePublished":"2026-05-14T00:00:00.000Z","dateModified":"2026-05-14T00:00:00.000Z","author":{"@type":"Person","name":"Taha Bouhsine","url":"https://tahabouhsine.com/"},"publisher":{"@type":"Person","name":"Taha Bouhsine"},"mainEntityOfPage":{"@type":"WebPage","@id":"https://tahabouhsine.com/blog/attention-is-a-kernel/"},"keywords":"ml, attention, kernels, interpretability","url":"https://tahabouhsine.com/blog/attention-is-a-kernel/"}</script><script>
   (() => {
     const stored = localStorage.getItem('theme');
     if (stored === 'light' || stored === 'dark') {
       document.documentElement.setAttribute('data-theme', stored);
     }
   })();
-`}</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.DmNMADbs.css"></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>{`
+</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.DmNMADbs.css"></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>
   (() => {
     const apply = (theme) => {
       document.documentElement.setAttribute('data-theme', theme);
@@ -40,7 +40,7 @@
     document.addEventListener('astro:after-swap', init);
     document.addEventListener('astro:page-load', init);
   })();
-`}</script> </nav> </div> </header> <main id="main">  <div class="reading-progress" data-reading-progress aria-hidden="true"></div> <script>{`
+</script> </nav> </div> </header> <main id="main">  <div class="reading-progress" data-reading-progress aria-hidden="true"></div> <script>
   (() => {
     const init = () => {
       const bar = document.querySelector('[data-reading-progress]');
@@ -61,7 +61,7 @@
     document.addEventListener('astro:page-load', init);
     document.addEventListener('astro:after-swap', init);
   })();
-`}</script> <article data-pagefind-body data-pagefind-meta="date:2026-05-14"> <header class="post-header"> <h1 data-pagefind-meta="title">Attention is Explainable Because it is a Kernel</h1> <p class="meta"> <time datetime="2026-05-14T00:00:00.000Z">May 13, 2026</time>   · 13 min read </p> <p style="margin-top:0.65rem" data-pagefind-meta="tags:ml,attention,kernels,interpretability"> <a class="tag" href="/blog/tag/ml/">#ml</a><a class="tag" href="/blog/tag/attention/">#attention</a><a class="tag" href="/blog/tag/kernels/">#kernels</a><a class="tag" href="/blog/tag/interpretability/">#interpretability</a> </p> </header>  <p><em>A reading of self-attention through kernel smoothing and RKHS.</em></p>
+</script> <article data-pagefind-body data-pagefind-meta="date:2026-05-14"> <header class="post-header"> <h1 data-pagefind-meta="title">Attention is Explainable Because it is a Kernel</h1> <p class="meta"> <time datetime="2026-05-14T00:00:00.000Z">May 13, 2026</time>   · 13 min read </p> <p style="margin-top:0.65rem" data-pagefind-meta="tags:ml,attention,kernels,interpretability"> <a class="tag" href="/blog/tag/ml/">#ml</a><a class="tag" href="/blog/tag/attention/">#attention</a><a class="tag" href="/blog/tag/kernels/">#kernels</a><a class="tag" href="/blog/tag/interpretability/">#interpretability</a> </p> </header>  <p><em>A reading of self-attention through kernel smoothing and RKHS.</em></p>
 <hr/>
 <p>Self-attention is the part of a transformer that practitioners can usually read. Heads can be visualized, individual attention patterns line up with recognizable behaviors, and a token’s output can be written as an explicit weighted sum over other tokens. The position-wise MLP, sitting in the very same block, almost never affords this kind of reading.</p>
 <p>This piece is an explanation, not a new result. The observation that self-attention is mathematically a kernel smoother is due to <a href="https://aclanthology.org/D19-1443/">Tsai et al. (2019)</a> and has been developed further by <a href="https://ojs.aaai.org/index.php/AAAI/article/view/17172">Song et al. (2021)</a>, <a href="https://arxiv.org/abs/2009.14794">Choromanski et al. (2021)</a>, <a href="https://arxiv.org/abs/2006.16236">Katharopoulos et al. (2020)</a>, and <a href="https://arxiv.org/abs/2210.05794">Han et al. (2022)</a>, among others. What I want to emphasize, and what seems to me underdiscussed, is that this is not just a reformulation useful for designing efficient attention variants. It is the reason attention is explainable in the first place.</p>
@@ -114,8 +114,8 @@ M834 80h400000v40h-400000z"></path></svg></span></span></span><span class="vlist
 <span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mover accent="true"><mi>f</mi><mo>^</mo></mover><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mo>=</mo><munder><mo>∑</mo><mi>i</mi></munder><mfrac><mrow><mi>K</mi><mo stretchy="false">(</mo><mi>x</mi><mo separator="true">,</mo><msub><mi>x</mi><mi>i</mi></msub><mo stretchy="false">)</mo></mrow><mrow><munder><mo>∑</mo><mi>j</mi></munder><mi>K</mi><mo stretchy="false">(</mo><mi>x</mi><mo separator="true">,</mo><msub><mi>x</mi><mi>j</mi></msub><mo stretchy="false">)</mo></mrow></mfrac><mtext> </mtext><msub><mi>y</mi><mi>i</mi></msub><mi mathvariant="normal">.</mi></mrow><annotation encoding="application/x-tex">\hat f(x) = \sum_i \frac{K(x, x_i)}{\sum_j K(x, x_j)}\, y_i.</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.2079em;vertical-align:-0.25em"></span><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9579em"><span style="top:-3em"><span class="pstrut" style="height:3em"></span><span class="mord mathnormal" style="margin-right:0.1076em">f</span></span><span style="top:-3.2634em"><span class="pstrut" style="height:3em"></span><span class="accent-body" style="left:-0.0833em"><span class="mord">^</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em"><span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:2.7047em;vertical-align:-1.2777em"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.05em"><span style="top:-1.8723em;margin-left:0em"><span class="pstrut" style="height:3.05em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.05em"><span class="pstrut" style="height:3.05em"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.2777em"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.427em"><span style="top:-2.314em"><span class="pstrut" style="height:3em"></span><span class="mord"><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:0em">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.162em"><span style="top:-2.4003em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4358em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0715em">K</span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span><span style="top:-3.23em"><span class="pstrut" style="height:3em"></span><span class="frac-line" style="border-bottom-width:0.04em"></span></span><span style="top:-3.677em"><span class="pstrut" style="height:3em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em">K</span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.1218em"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mord">.</span></span></span></span></span>
 <p>These two expressions are the same up to relabeling.</p>
 <figure class="viz"> <div class="viz-controls"> <label>
-bandwidth <em style="font-style:normal;color:var(--fg)">h</em> <input type="range" min="-2" max="0.4" step="0.04" value="-0.8" id="ks-hvjgckf-h" aria-label="kernel bandwidth"> <span class="readout" id="ks-hvjgckf-readout">0.16</span> </label> <span class="faint">drag on the chart to move the query x</span> </div> <canvas id="ks-hvjgckf-c" height="300" aria-label="Nadaraya-Watson kernel smoother demonstration"></canvas> <figcaption>Nadaraya–Watson kernel regression. Drag along the chart to move the query x. The orange bell at the bottom is the kernel centered at x; data points are sized by their kernel weight. The smoothed curve is the prediction for every x in the domain. Self-attention is this picture, with the kernel replaced by an exponential dot product over learned q/k projections and the y_i replaced by learned value projections.</figcaption> </figure> <script>(function(){const id = "ks-hvjgckf";
-{`
+bandwidth <em style="font-style:normal;color:var(--fg)">h</em> <input type="range" min="-2" max="0.4" step="0.04" value="-0.8" id="ks-s6yqh69-h" aria-label="kernel bandwidth"> <span class="readout" id="ks-s6yqh69-readout">0.16</span> </label> <span class="faint">drag on the chart to move the query x</span> </div> <canvas id="ks-s6yqh69-c" height="300" aria-label="Nadaraya-Watson kernel smoother demonstration"></canvas> <figcaption>Nadaraya–Watson kernel regression. Drag along the chart to move the query x. The orange bell at the bottom is the kernel centered at x; data points are sized by their kernel weight. The smoothed curve is the prediction for every x in the domain. Self-attention is this picture, with the kernel replaced by an exponential dot product over learned q/k projections and the y_i replaced by learned value projections.</figcaption> </figure> <script>(function(){const id = "ks-s6yqh69";
+
 (() => {
   const setup = () => {
     const c = document.getElementById(id + '-c');
@@ -123,19 +123,40 @@ bandwidth <em style="font-style:normal;color:var(--fg)">h</em> <input type="rang
     c.dataset.ready = '1';
     const slider = document.getElementById(id + '-h');
     const readout = document.getElementById(id + '-readout');
+    const ctx = c.getContext('2d');
 
     // Deterministic data: noisy sin
     const rng = (s => () => { s = (s * 9301 + 49297) % 233280; return s / 233280; })(1337);
     const N = 22;
-    const xs = []; const ys = [];
+    const xs = new Float32Array(N);
+    const ys = new Float32Array(N);
     for (let i = 0; i < N; i++) {
-      const x = i / (N - 1);
-      xs.push(x);
-      ys.push(Math.sin(x * Math.PI * 2.2) * 0.55 + (rng() - 0.5) * 0.35);
+      xs[i] = i / (N - 1);
+      ys[i] = Math.sin(xs[i] * Math.PI * 2.2) * 0.55 + (rng() - 0.5) * 0.35;
     }
+
+    const M = 200;
+    const smoothY = new Float32Array(M + 1);
+    let smoothH = -1;
 
     let queryX = 0.4;
     const state = { dpr: 1, w: 0, h: 0 };
+
+    // Cache theme colors; refresh on theme toggle.
+    let colors = readColors();
+    function readColors() {
+      const s = getComputedStyle(document.documentElement);
+      const v = (n) => s.getPropertyValue(n).trim();
+      return {
+        accent: v('--accent') || '#b3661b',
+        fg: v('--fg') || '#1a1a1a',
+        muted: v('--fg-muted') || '#5a5f66',
+        faint: v('--fg-faint') || '#8d8d8d',
+        border: v('--border') || '#e4e1d6',
+      };
+    }
+    const themeObs = new MutationObserver(() => { colors = readColors(); requestRedraw(); });
+    themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
     const fit = () => {
       const rect = c.getBoundingClientRect();
@@ -147,33 +168,44 @@ bandwidth <em style="font-style:normal;color:var(--fg)">h</em> <input type="rang
       c.height = Math.round(rect.height * dpr);
     };
 
-    const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    const computeSmoothIfNeeded = (h) => {
+      if (h === smoothH) return;
+      smoothH = h;
+      const inv2hh = 1 / (2 * h * h);
+      for (let i = 0; i <= M; i++) {
+        const x = i / M;
+        let num = 0, den = 0;
+        for (let k = 0; k < N; k++) {
+          const d = x - xs[k];
+          const w = Math.exp(-(d * d) * inv2hh);
+          num += w * ys[k];
+          den += w;
+        }
+        smoothY[i] = den > 0 ? num / den : 0;
+      }
+    };
 
     const draw = () => {
-      const ctx = c.getContext('2d');
       const W = state.w, H = state.h;
+      if (W === 0 || H === 0) return;
       ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
       ctx.clearRect(0, 0, W, H);
 
-      const accent = cssVar('--accent') || '#b3661b';
-      const fg = cssVar('--fg') || '#1a1a1a';
-      const muted = cssVar('--fg-muted') || '#5a5f66';
-      const faint = cssVar('--fg-faint') || '#8d8d8d';
-      const border = cssVar('--border') || '#e4e1d6';
+      const { accent, fg, muted, faint, border } = colors;
 
       const padL = 36, padR = 14, padT = 18, padB = 30;
       const plotW = W - padL - padR;
       const plotH = H - padT - padB;
       const yMin = -1.1, yMax = 1.1;
+      const yRange = yMax - yMin;
       const sx = (x) => padL + x * plotW;
-      const sy = (y) => padT + (yMax - y) / (yMax - yMin) * plotH;
+      const sy = (y) => padT + (yMax - y) / yRange * plotH;
 
       ctx.strokeStyle = border;
       ctx.lineWidth = 1;
       ctx.beginPath();
       for (let g = 0; g <= 4; g++) {
-        const y = yMin + (g / 4) * (yMax - yMin);
-        const py = sy(y);
+        const py = sy(yMin + (g / 4) * yRange);
         ctx.moveTo(padL, py); ctx.lineTo(W - padR, py);
       }
       ctx.stroke();
@@ -183,32 +215,24 @@ bandwidth <em style="font-style:normal;color:var(--fg)">h</em> <input type="rang
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
       for (let g = 0; g <= 4; g++) {
-        const y = yMin + (g / 4) * (yMax - yMin);
+        const y = yMin + (g / 4) * yRange;
         ctx.fillText(y.toFixed(1), padL - 4, sy(y));
       }
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
-      for (let g = 0; g <= 5; g++) {
-        const x = g / 5;
-        ctx.fillText(x.toFixed(1), sx(x), H - padB + 6);
-      }
+      for (let g = 0; g <= 5; g++) ctx.fillText((g / 5).toFixed(1), sx(g / 5), H - padB + 6);
 
       const h = Math.pow(10, parseFloat(slider.value));
       readout.textContent = h.toFixed(2);
+      computeSmoothIfNeeded(h);
+      const inv2hh = 1 / (2 * h * h);
 
+      // Cached smoothed curve.
       ctx.strokeStyle = muted;
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      const M = 200;
       for (let i = 0; i <= M; i++) {
-        const x = i / M;
-        let num = 0, den = 0;
-        for (let k = 0; k < N; k++) {
-          const w = Math.exp(-((x - xs[k]) ** 2) / (2 * h * h));
-          num += w * ys[k]; den += w;
-        }
-        const y = den > 0 ? num / den : 0;
-        const px = sx(x), py = sy(y);
+        const px = sx(i / M), py = sy(smoothY[i]);
         if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
       }
       ctx.stroke();
@@ -229,15 +253,19 @@ bandwidth <em style="font-style:normal;color:var(--fg)">h</em> <input type="rang
       const kAmp = 28;
       for (let i = 0; i <= M; i++) {
         const x = i / M;
-        const w = Math.exp(-((x - queryX) ** 2) / (2 * h * h));
+        const d = x - queryX;
+        const w = Math.exp(-(d * d) * inv2hh);
         const px = sx(x), py = kBase - w * kAmp;
         if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
       }
       ctx.stroke();
 
-      // Data points sized by weight at query
+      // Data points sized by weight at query + accumulate prediction.
+      let num = 0, den = 0;
       for (let k = 0; k < N; k++) {
-        const w = Math.exp(-((queryX - xs[k]) ** 2) / (2 * h * h));
+        const d = queryX - xs[k];
+        const w = Math.exp(-(d * d) * inv2hh);
+        num += w * ys[k]; den += w;
         const px = sx(xs[k]), py = sy(ys[k]);
         const r = 2 + w * 5.5;
         ctx.fillStyle = w > 0.05 ? accent : faint;
@@ -246,12 +274,6 @@ bandwidth <em style="font-style:normal;color:var(--fg)">h</em> <input type="rang
       }
       ctx.globalAlpha = 1;
 
-      // Prediction at query (filled dot)
-      let num = 0, den = 0;
-      for (let k = 0; k < N; k++) {
-        const w = Math.exp(-((queryX - xs[k]) ** 2) / (2 * h * h));
-        num += w * ys[k]; den += w;
-      }
       const yhat = den > 0 ? num / den : 0;
       ctx.fillStyle = accent;
       ctx.beginPath(); ctx.arc(qPx, sy(yhat), 5, 0, Math.PI * 2); ctx.fill();
@@ -260,30 +282,43 @@ bandwidth <em style="font-style:normal;color:var(--fg)">h</em> <input type="rang
       ctx.stroke();
     };
 
+    let rafScheduled = false;
+    let visible = false;
+    const requestRedraw = () => {
+      if (rafScheduled || !visible) return;
+      rafScheduled = true;
+      requestAnimationFrame(() => { rafScheduled = false; draw(); });
+    };
+
     const onPointer = (e) => {
       const rect = c.getBoundingClientRect();
       const x = (e.clientX - rect.left) / rect.width;
       queryX = Math.max(0, Math.min(1, x));
-      draw();
+      requestRedraw();
     };
 
     let dragging = false;
     c.addEventListener('pointerdown', (e) => { dragging = true; c.setPointerCapture(e.pointerId); onPointer(e); });
     c.addEventListener('pointermove', (e) => { if (dragging) onPointer(e); });
     c.addEventListener('pointerup', (e) => { dragging = false; try { c.releasePointerCapture(e.pointerId); } catch {} });
-    slider.addEventListener('input', draw);
+    slider.addEventListener('input', requestRedraw);
 
-    const ro = new ResizeObserver(() => { fit(); draw(); });
+    const ro = new ResizeObserver(() => { fit(); requestRedraw(); });
     ro.observe(c);
 
-    fit(); draw();
+    const io = new IntersectionObserver((entries) => {
+      const wasVisible = visible;
+      visible = entries[0].isIntersecting;
+      if (visible && !wasVisible) { fit(); draw(); }
+    }, { rootMargin: '120px' });
+    io.observe(c);
   };
 
   setup();
   document.addEventListener('astro:page-load', setup);
   document.addEventListener('astro:after-swap', setup);
 })();
-`}})();</script>
+})();</script>
 
 
 
@@ -331,116 +366,139 @@ M834 80h400000v40h-400000z"></path></svg></span></span></span><span class="vlist
 <p><strong>1. The kernel is an explicit pairwise score.</strong> For every pair of tokens <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mi>i</mi><mo separator="true">,</mo><mi>j</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(i, j)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mopen">(</span><span class="mord mathnormal">i</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0572em">j</span><span class="mclose">)</span></span></span></span> there is a single real number <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>q</mi><mi>i</mi></msub><mo>⋅</mo><msub><mi>k</mi><mi>j</mi></msub></mrow><annotation encoding="application/x-tex">q_i \cdot k_j</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6389em;vertical-align:-0.1944em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:0.9805em;vertical-align:-0.2861em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span></span></span></span> that summarizes how relevant token <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>j</mi></mrow><annotation encoding="application/x-tex">j</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.854em;vertical-align:-0.1944em"></span><span class="mord mathnormal" style="margin-right:0.0572em">j</span></span></span></span> is to token <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>i</mi></mrow><annotation encoding="application/x-tex">i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6595em"></span><span class="mord mathnormal">i</span></span></span></span> under this head. Visualizing a head means visualizing the matrix of <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>α</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub></mrow><annotation encoding="application/x-tex">\alpha_{ij}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0037em">α</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.0037em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span></span></span></span>. Comparing two heads means comparing two such matrices. The algorithmic descriptions one finds in the mechanistic interpretability literature (“this head copies from the most recent occurrence of the current token,” “this head attends from each token to its syntactic head”) are statements about the structure of this matrix. The kernel supplies a geometry on tokens, and geometry is the kind of object humans can reason about.</p>
 <p><strong>2. The weights normalize.</strong> The softmax enforces <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mo>∑</mo><mi>j</mi></msub><msub><mi>α</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>=</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">\sum_j \alpha_{ij} = 1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.1858em;vertical-align:-0.4358em"></span><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:0em">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.162em"><span style="top:-2.4003em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4358em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0037em">α</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.0037em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">1</span></span></span></span> with <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>α</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>≥</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\alpha_{ij} \ge 0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9221em;vertical-align:-0.2861em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0037em">α</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.0037em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">≥</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">0</span></span></span></span>, so each output <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>y</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">y_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span></span></span></span> is a convex combination of value vectors. This is the source of every attribution-style statement one ever makes about attention. When we say a head “moved information from token <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>j</mi></mrow><annotation encoding="application/x-tex">j</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.854em;vertical-align:-0.1944em"></span><span class="mord mathnormal" style="margin-right:0.0572em">j</span></span></span></span> to token <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>i</mi></mrow><annotation encoding="application/x-tex">i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6595em"></span><span class="mord mathnormal">i</span></span></span></span>,” we mean <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>α</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub></mrow><annotation encoding="application/x-tex">\alpha_{ij}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0037em">α</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.0037em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span></span></span></span> was large. When we say a head “ignored token <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>j</mi></mrow><annotation encoding="application/x-tex">j</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.854em;vertical-align:-0.1944em"></span><span class="mord mathnormal" style="margin-right:0.0572em">j</span></span></span></span>,” we mean <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>α</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub></mrow><annotation encoding="application/x-tex">\alpha_{ij}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0037em">α</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.0037em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span></span></span></span> was small. These statements are coherent precisely because the weights are normalized contribution masses, not arbitrary activations.</p>
 <p>A standard linear layer, where some output coordinate is a linear combination of input coordinates with weights that can be positive, negative, or large in magnitude, does not admit this reading at all. The weights are not a partition of unity, do not compose across layers in any attribution-respecting way, and need not even be of consistent sign for nearby inputs. The fact that attention does admit it is again a direct consequence of its being a kernel smoother. In the Nadaraya–Watson form the weights normalize for the same reason and serve the same role.</p>
-<figure class="viz"> <div class="viz-grid"> <div class="viz-cell"> <h4>positional</h4> <canvas id="ap-63s5glb-pos" data-kind="positional" data-size="12" aria-label="Attention pattern: positional"></canvas> </div><div class="viz-cell"> <h4>induction</h4> <canvas id="ap-63s5glb-ind" data-kind="induction" data-size="12" aria-label="Attention pattern: induction"></canvas> </div><div class="viz-cell"> <h4>previous token</h4> <canvas id="ap-63s5glb-prv" data-kind="previous" data-size="12" aria-label="Attention pattern: previous token"></canvas> </div> </div> <figcaption>Three causal attention matrices over a 12-token sequence, each induced by a different kernel structure. Row i shows what token i attends to; brighter cells are higher α_ij. Left: a positional kernel that decays with distance. Center: an induction-like pattern where each token looks back to positions following earlier occurrences of the previous token. Right: a previous-token kernel. These are not three different layers — they are three different heads. The kernel is what tells you which one you are reading.</figcaption> </figure> <script>(function(){const ids = ["ap-63s5glb-pos","ap-63s5glb-ind","ap-63s5glb-prv"];
-{`
+<figure class="viz"> <div class="viz-grid"> <div class="viz-cell"> <h4>positional</h4> <canvas id="ap-7n9bz1a-pos" data-kind="positional" data-size="12" aria-label="Attention pattern: positional"></canvas> </div><div class="viz-cell"> <h4>induction</h4> <canvas id="ap-7n9bz1a-ind" data-kind="induction" data-size="12" aria-label="Attention pattern: induction"></canvas> </div><div class="viz-cell"> <h4>previous token</h4> <canvas id="ap-7n9bz1a-prv" data-kind="previous" data-size="12" aria-label="Attention pattern: previous token"></canvas> </div> </div> <figcaption>Three causal attention matrices over a 12-token sequence, each induced by a different kernel structure. Row i shows what token i attends to; brighter cells are higher α_ij. Left: a positional kernel that decays with distance. Center: an induction-like pattern where each token looks back to positions following earlier occurrences of the previous token. Right: a previous-token kernel. These are not three different layers — they are three different heads. The kernel is what tells you which one you are reading.</figcaption> </figure> <script>(function(){const ids = ["ap-7n9bz1a-pos","ap-7n9bz1a-ind","ap-7n9bz1a-prv"];
+
 (() => {
+  const parseColor = (v) => {
+    v = v.trim();
+    if (v.startsWith('#')) {
+      let s = v.slice(1);
+      if (s.length === 3) s = s.split('').map((c) => c + c).join('');
+      return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
+    }
+    const m = v.match(/\d+/g);
+    return m ? [parseInt(m[0], 10), parseInt(m[1], 10), parseInt(m[2], 10)] : [0, 0, 0];
+  };
+  const readColors = () => {
+    const s = getComputedStyle(document.documentElement);
+    return {
+      bg: parseColor(s.getPropertyValue('--bg-sunken') || '#0a0d12'),
+      accent: parseColor(s.getPropertyValue('--accent') || '#ffb454'),
+    };
+  };
+  let colors = readColors();
+  const themeObs = new MutationObserver(() => { colors = readColors(); needs.forEach((c) => c.dataset.ready && c.__redraw && c.__redraw()); });
+  themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  const needs = [];
+
   const setup = () => {
     ids.forEach((cid) => {
       const c = document.getElementById(cid);
       if (!c || c.dataset.ready) return;
       c.dataset.ready = '1';
+      needs.push(c);
+      const ctx = c.getContext('2d');
       const kind = c.dataset.kind;
       const N = parseInt(c.dataset.size, 10) || 12;
 
-      const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-
-      // Build NxN attention matrix according to kind.
+      // Deterministic "sentence" for induction visualization.
       const tokenIds = (() => {
-        // Deterministic "sentence" for induction visualization.
-        const seed = 7919;
-        let s = seed;
+        let s = 7919;
         const r = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
         return Array.from({ length: N }, () => Math.floor(r() * 5));
       })();
-      // Plant a repeat so induction has something to copy from.
       tokenIds[N - 2] = tokenIds[2];
       tokenIds[N - 1] = tokenIds[3];
 
-      const A = [];
+      const A = new Float32Array(N * N);
       for (let i = 0; i < N; i++) {
-        const row = new Array(N).fill(0);
+        let rowMax = -Infinity;
         for (let j = 0; j < N; j++) {
-          if (j > i) continue; // causal mask
-          let s = 0;
-          if (kind === 'positional') {
-            const d = i - j;
-            s = -d * 0.9 - (d > 0 ? 0 : 8);
-          } else if (kind === 'previous') {
-            s = j === i - 1 ? 4 : -2;
-            if (j === i) s = -8;
-          } else if (kind === 'induction') {
-            // Token at i looks for last occurrence of tokenIds[i-1], attends to the next position.
-            if (i >= 2 && j < i) {
-              const target = tokenIds[i - 1];
-              const prev = tokenIds[j - 1];
-              s = (prev === target ? 4 : -1.5);
+          let s = -Infinity;
+          if (j <= i) {
+            if (kind === 'positional') {
+              s = -(i - j) * 0.9;
+            } else if (kind === 'previous') {
+              s = j === i - 1 ? 4 : (j === i ? -8 : -2);
             } else {
-              s = -3;
+              if (i >= 2) {
+                const target = tokenIds[i - 1];
+                const prev = j >= 1 ? tokenIds[j - 1] : -1;
+                s = prev === target ? 4 : -1.5;
+              } else {
+                s = -3;
+              }
             }
           }
-          row[j] = s;
+          A[i * N + j] = s;
+          if (s > rowMax) rowMax = s;
         }
-        const m = Math.max(...row);
         let sum = 0;
-        for (let j = 0; j < N; j++) { row[j] = Math.exp(row[j] - m); sum += row[j]; }
-        for (let j = 0; j < N; j++) row[j] /= sum;
-        A.push(row);
+        for (let j = 0; j < N; j++) {
+          const v = Math.exp(A[i * N + j] - rowMax);
+          A[i * N + j] = v;
+          sum += v;
+        }
+        for (let j = 0; j < N; j++) A[i * N + j] /= sum;
       }
 
-      const state = { dpr: 1, w: 0, h: 0 };
+      const state = { dpr: 1, w: 0 };
 
       const fit = () => {
         const rect = c.getBoundingClientRect();
         const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
         state.dpr = dpr;
         state.w = rect.width;
-        state.h = rect.width; // square
         c.style.height = rect.width + 'px';
         c.width = Math.round(rect.width * dpr);
         c.height = Math.round(rect.width * dpr);
       };
 
-      const lerpHex = (a, b, t) => {
-        const pa = a.replace('#', '').match(/.{2}/g).map((x) => parseInt(x, 16));
-        const pb = b.replace('#', '').match(/.{2}/g).map((x) => parseInt(x, 16));
-        const r = Math.round(pa[0] + (pb[0] - pa[0]) * t);
-        const g = Math.round(pa[1] + (pb[1] - pa[1]) * t);
-        const bl = Math.round(pa[2] + (pb[2] - pa[2]) * t);
-        return 'rgb(' + r + ',' + g + ',' + bl + ')';
-      };
-      const toHex = (rgb) => {
-        const m = rgb.match(/\\d+/g);
-        if (!m) return rgb;
-        return '#' + m.slice(0, 3).map((v) => parseInt(v, 10).toString(16).padStart(2, '0')).join('');
-      };
-
       const draw = () => {
-        const ctx = c.getContext('2d');
+        const W = state.w;
+        if (W === 0) return;
         ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
-        ctx.clearRect(0, 0, state.w, state.h);
+        ctx.clearRect(0, 0, W, W);
 
-        const bgRaw = getComputedStyle(c).backgroundColor;
-        const bgHex = bgRaw.startsWith('rgb') ? toHex(bgRaw) : (cssVar('--bg-sunken') || '#0a0d12');
-        const accent = cssVar('--accent') || '#ffb454';
-        const accentHex = accent.startsWith('#') ? accent : toHex('rgb(' + accent + ')');
-
+        const [br, bg, bb] = colors.bg;
+        const [ar, ag, ab] = colors.accent;
         const pad = 1;
-        const inner = state.w - pad * 2;
+        const inner = W - pad * 2;
         const cell = inner / N;
         for (let i = 0; i < N; i++) {
           for (let j = 0; j < N; j++) {
-            const a = A[i][j];
-            const t = Math.pow(a * N * 0.7, 0.6);
-            const tt = Math.min(1, t);
-            ctx.fillStyle = lerpHex(bgHex, accentHex, tt);
+            const a = A[i * N + j];
+            const t = Math.min(1, Math.pow(a * N * 0.7, 0.6));
+            const r = Math.round(br + (ar - br) * t);
+            const g = Math.round(bg + (ag - bg) * t);
+            const b = Math.round(bb + (ab - bb) * t);
+            ctx.fillStyle = 'rgb(' + r + ',' + g + ',' + b + ')';
             ctx.fillRect(pad + j * cell, pad + i * cell, cell + 0.5, cell + 0.5);
           }
         }
       };
+      c.__redraw = draw;
 
-      const ro = new ResizeObserver(() => { fit(); draw(); });
+      let rafScheduled = false;
+      const requestRedraw = () => {
+        if (rafScheduled) return;
+        rafScheduled = true;
+        requestAnimationFrame(() => { rafScheduled = false; draw(); });
+      };
+
+      const ro = new ResizeObserver(() => { fit(); requestRedraw(); });
       ro.observe(c);
-      fit(); draw();
+
+      let drawnOnce = false;
+      const io = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && !drawnOnce) {
+          drawnOnce = true;
+          fit();
+          draw();
+          io.disconnect();
+        }
+      }, { rootMargin: '120px' });
+      io.observe(c);
     });
   };
 
@@ -448,7 +506,7 @@ M834 80h400000v40h-400000z"></path></svg></span></span></span><span class="vlist
   document.addEventListener('astro:page-load', setup);
   document.addEventListener('astro:after-swap', setup);
 })();
-`}})();</script>
+})();</script>
 <p><strong>3. Kernels carry locality.</strong> Kernel smoothers, by construction, weight nearby points more heavily than distant ones, and the notion of “nearby” is whatever the kernel says it is. In attention, “nearby” is high <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>q</mi><mi>i</mi></msub><mo>⋅</mo><msub><mi>k</mi><mi>j</mi></msub></mrow><annotation encoding="application/x-tex">q_i \cdot k_j</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6389em;vertical-align:-0.1944em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:0.9805em;vertical-align:-0.2861em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span></span></span></span>, which the model is free to shape during training. The upshot is that attention behaves, by default, like a content-addressable nearest-neighbor retrieval over the sequence: <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>j</mi><mi>i</mi><mo lspace="0em" rspace="0em">∗</mo></msubsup><mo>=</mo><msub><mrow><mi mathvariant="normal">arg max</mi><mo>⁡</mo></mrow><mi>j</mi></msub><msub><mi>q</mi><mi>i</mi></msub><mo>⋅</mo><msub><mi>k</mi><mi>j</mi></msub></mrow><annotation encoding="application/x-tex">j^{*}_i = \operatorname*{arg\,max}_j q_i \cdot k_j</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9474em;vertical-align:-0.2587em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0572em">j</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6887em"><span style="top:-2.4413em;margin-left:-0.0572em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">∗</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2587em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.8247em;vertical-align:-0.3802em"></span><span class="mop"><span class="mop"><span class="mord mathrm" style="margin-right:0.0139em">arg</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathrm">max</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2175em"><span style="top:-2.4559em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3802em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:0.9805em;vertical-align:-0.2861em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span></span></span></span> in the sharp limit. This is exactly how it gets used in many of the algorithms that mechanistic interpretability has uncovered. Induction heads retrieve previous occurrences of a token. Name-mover heads retrieve antecedents. Positional heads retrieve fixed offsets. None of these descriptions requires anything beyond the kernel-smoother view; they are different specializations of “look up the most similar previous token under this kernel.”</p>
 <h2 id="and-when-you-symmetrize-an-rkhs">And, when you symmetrize, an RKHS<a class="heading-anchor-link" aria-label="Link to heading" href="#and-when-you-symmetrize-an-rkhs"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
 <p>There is one further connection, weaker but worth stating, that completes the picture. If one is willing to symmetrize the kernel, replacing the query/key asymmetry with a single symmetric, positive-definite kernel <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi><mo stretchy="false">(</mo><mi>z</mi><mo separator="true">,</mo><msup><mi>z</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">K(z, z&#39;)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0019em;vertical-align:-0.25em"></span><span class="mord mathnormal" style="margin-right:0.0715em">K</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.044em">z</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.044em">z</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span> acting on a shared representation (as several variants in the literature do), then attention lives inside a reproducing kernel Hilbert space</p>
@@ -460,9 +518,9 @@ M834 80h400000v40h-400000z"></path></svg></span></span></span><span class="vlist
 <span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>f</mi><mo stretchy="false">(</mo><mo>⋅</mo><mo stretchy="false">)</mo><mo>=</mo><munder><mo>∑</mo><mi>j</mi></munder><msub><mi>β</mi><mi>j</mi></msub><mtext> </mtext><mi>K</mi><mo stretchy="false">(</mo><mo>⋅</mo><mo separator="true">,</mo><msub><mi>k</mi><mi>j</mi></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">f(\cdot) = \sum_j \beta_j\, K(\cdot, k_j)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord mathnormal" style="margin-right:0.1076em">f</span><span class="mopen">(</span><span class="mord">⋅</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:2.4638em;vertical-align:-1.4138em"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.05em"><span style="top:-1.8723em;margin-left:0em"><span class="pstrut" style="height:3.05em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em">j</span></span></span><span style="top:-3.05em"><span class="pstrut" style="height:3.05em"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.4138em"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0528em">β</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.0528em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0715em">K</span><span class="mopen">(</span><span class="mord">⋅</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span>
 <p>in this basis with explicit coefficients. “Which token does this output depend on, and by how much?” becomes a literal question about coefficients in a fixed basis, not an interpretive one.</p>
 <figure class="viz"> <div class="viz-controls"> <label>
-kernel width <em style="font-style:normal;color:var(--fg)">σ</em> <input type="range" min="-1.5" max="-0.3" step="0.05" value="-0.9" id="rbf-wnh5rw1-s" aria-label="RBF kernel width"> <span class="readout" id="rbf-wnh5rw1-readout">0.13</span> </label> <label> <input type="checkbox" id="rbf-wnh5rw1-show" checked> show basis sections
-</label> </div> <canvas id="rbf-wnh5rw1-c" height="280" aria-label="RBF basis expansion approximating a target function"></canvas> <figcaption>A function (dashed) approximated as a finite sum of kernel sections K(·, k_j) centered at fixed anchor points. The orange curve is the sum; the lighter strokes are the individual α_j K(·, k_j). Shrinking the kernel width makes each section more local and the explanation more token-specific; widening it pools more sections together. This is what the inside of a kernel-machine layer looks like.</figcaption> </figure> <script>(function(){const id = "rbf-wnh5rw1";
-{`
+kernel width <em style="font-style:normal;color:var(--fg)">σ</em> <input type="range" min="-1.5" max="-0.3" step="0.05" value="-0.9" id="rbf-e4b2q7u-s" aria-label="RBF kernel width"> <span class="readout" id="rbf-e4b2q7u-readout">0.13</span> </label> <label> <input type="checkbox" id="rbf-e4b2q7u-show" checked> show basis sections
+</label> </div> <canvas id="rbf-e4b2q7u-c" height="280" aria-label="RBF basis expansion approximating a target function"></canvas> <figcaption>A function (dashed) approximated as a finite sum of kernel sections K(·, k_j) centered at fixed anchor points. The orange curve is the sum; the lighter strokes are the individual α_j K(·, k_j). Shrinking the kernel width makes each section more local and the explanation more token-specific; widening it pools more sections together. This is what the inside of a kernel-machine layer looks like.</figcaption> </figure> <script>(function(){const id = "rbf-e4b2q7u";
+
 (() => {
   const setup = () => {
     const c = document.getElementById(id + '-c');
@@ -471,12 +529,41 @@ kernel width <em style="font-style:normal;color:var(--fg)">σ</em> <input type="
     const slider = document.getElementById(id + '-s');
     const showBasis = document.getElementById(id + '-show');
     const readout = document.getElementById(id + '-readout');
+    const ctx = c.getContext('2d');
 
-    const centers = Array.from({ length: 9 }, (_, k) => k / 8);
-    const target = (x) => Math.sin(x * Math.PI * 2.2) * 0.6 - x * 0.1 + 0.1;
+    const n = 9;
+    const centers = new Float32Array(n);
+    const targets = new Float32Array(n);
+    for (let k = 0; k < n; k++) {
+      centers[k] = k / (n - 1);
+      targets[k] = Math.sin(centers[k] * Math.PI * 2.2) * 0.6 - centers[k] * 0.1 + 0.1;
+    }
+    const M = 240;
+    const xs = new Float32Array(M + 1);
+    for (let i = 0; i <= M; i++) xs[i] = i / M;
+
+    // Caches keyed by sigma.
+    let cacheSigma = -1;
+    const alpha = new Float32Array(n);
+    const sumY = new Float32Array(M + 1);
+    const basisY = new Float32Array((M + 1) * n);
+
+    // Cache theme colors.
+    let colors = readColors();
+    function readColors() {
+      const s = getComputedStyle(document.documentElement);
+      const v = (name) => s.getPropertyValue(name).trim();
+      return {
+        accent: v('--accent') || '#b3661b',
+        muted: v('--fg-muted') || '#5a5f66',
+        faint: v('--fg-faint') || '#8d8d8d',
+        border: v('--border') || '#e4e1d6',
+      };
+    }
+    const themeObs = new MutationObserver(() => { colors = readColors(); requestRedraw(); });
+    themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
     const state = { dpr: 1, w: 0, h: 0 };
-
     const fit = () => {
       const rect = c.getBoundingClientRect();
       const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
@@ -487,128 +574,157 @@ kernel width <em style="font-style:normal;color:var(--fg)">σ</em> <input type="
       c.height = Math.round(rect.height * dpr);
     };
 
-    const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-
-    // Solve (K + λI) α = y  for a tiny set — straight Gaussian elimination.
-    const solve = (K, y) => {
-      const n = K.length;
-      const A = K.map((row, i) => [...row].concat(y[i]));
-      for (let i = 0; i < n; i++) {
+    // Solve (K + λI) α = y in place. Tiny n=9, O(n^3) once per sigma change.
+    const solve = (K, y, out) => {
+      const N = y.length;
+      const A = new Float64Array(N * (N + 1));
+      for (let i = 0; i < N; i++) {
+        for (let j = 0; j < N; j++) A[i * (N + 1) + j] = K[i * N + j];
+        A[i * (N + 1) + N] = y[i];
+      }
+      for (let i = 0; i < N; i++) {
         let piv = i;
-        for (let r = i + 1; r < n; r++) if (Math.abs(A[r][i]) > Math.abs(A[piv][i])) piv = r;
-        [A[i], A[piv]] = [A[piv], A[i]];
-        if (Math.abs(A[i][i]) < 1e-12) continue;
-        for (let r = 0; r < n; r++) {
+        for (let r = i + 1; r < N; r++) if (Math.abs(A[r * (N + 1) + i]) > Math.abs(A[piv * (N + 1) + i])) piv = r;
+        if (piv !== i) {
+          for (let k = 0; k <= N; k++) {
+            const tmp = A[i * (N + 1) + k]; A[i * (N + 1) + k] = A[piv * (N + 1) + k]; A[piv * (N + 1) + k] = tmp;
+          }
+        }
+        const d = A[i * (N + 1) + i];
+        if (Math.abs(d) < 1e-12) continue;
+        for (let r = 0; r < N; r++) {
           if (r === i) continue;
-          const f = A[r][i] / A[i][i];
-          for (let k = i; k <= n; k++) A[r][k] -= f * A[i][k];
+          const f = A[r * (N + 1) + i] / d;
+          if (f === 0) continue;
+          for (let k = i; k <= N; k++) A[r * (N + 1) + k] -= f * A[i * (N + 1) + k];
         }
       }
-      return A.map((row, i) => row[n] / row[i][i] || 0);
+      for (let i = 0; i < N; i++) out[i] = A[i * (N + 1) + N] / A[i * (N + 1) + i];
+    };
+
+    const recompute = (sigma) => {
+      if (sigma === cacheSigma) return;
+      cacheSigma = sigma;
+      const inv2ss = 1 / (2 * sigma * sigma);
+      const lambda = 1e-4;
+      const K = new Float64Array(n * n);
+      for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
+          const d = centers[i] - centers[j];
+          K[i * n + j] = Math.exp(-(d * d) * inv2ss) + (i === j ? lambda : 0);
+        }
+      }
+      solve(K, targets, alpha);
+
+      // Pre-compute basis sections and sum at sample xs.
+      for (let i = 0; i <= M; i++) {
+        let s = 0;
+        for (let j = 0; j < n; j++) {
+          const d = xs[i] - centers[j];
+          const kij = Math.exp(-(d * d) * inv2ss);
+          const v = alpha[j] * kij;
+          basisY[i * n + j] = v;
+          s += v;
+        }
+        sumY[i] = s;
+      }
     };
 
     const draw = () => {
-      const ctx = c.getContext('2d');
       const W = state.w, H = state.h;
+      if (W === 0 || H === 0) return;
       ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
       ctx.clearRect(0, 0, W, H);
 
-      const accent = cssVar('--accent') || '#b3661b';
-      const muted = cssVar('--fg-muted') || '#5a5f66';
-      const faint = cssVar('--fg-faint') || '#8d8d8d';
-      const border = cssVar('--border') || '#e4e1d6';
-
+      const { accent, muted, faint, border } = colors;
       const padL = 30, padR = 14, padT = 16, padB = 26;
       const plotW = W - padL - padR;
       const plotH = H - padT - padB;
       const yMin = -1.0, yMax = 1.0;
+      const yRange = yMax - yMin;
       const sx = (x) => padL + x * plotW;
-      const sy = (y) => padT + (yMax - y) / (yMax - yMin) * plotH;
+      const sy = (y) => padT + (yMax - y) / yRange * plotH;
 
       ctx.strokeStyle = border;
       ctx.lineWidth = 1;
       ctx.beginPath();
-      [yMin, 0, yMax].forEach((y) => { ctx.moveTo(padL, sy(y)); ctx.lineTo(W - padR, sy(y)); });
+      ctx.moveTo(padL, sy(yMin)); ctx.lineTo(W - padR, sy(yMin));
+      ctx.moveTo(padL, sy(0)); ctx.lineTo(W - padR, sy(0));
+      ctx.moveTo(padL, sy(yMax)); ctx.lineTo(W - padR, sy(yMax));
       ctx.stroke();
 
       const sigma = Math.pow(10, parseFloat(slider.value));
       readout.textContent = sigma.toFixed(2);
-      const rbf = (x, c) => Math.exp(-((x - c) ** 2) / (2 * sigma * sigma));
+      recompute(sigma);
 
-      // Fit α: kernel ridge with tiny λ.
-      const n = centers.length;
-      const lambda = 1e-4;
-      const K = [], yvec = [];
-      for (let i = 0; i < n; i++) {
-        const row = new Array(n);
-        for (let j = 0; j < n; j++) row[j] = rbf(centers[i], centers[j]) + (i === j ? lambda : 0);
-        K.push(row);
-        yvec.push(target(centers[i]));
-      }
-      const alpha = solve(K, yvec);
-
-      // Target function (dashed muted)
+      // Target function (dashed)
       ctx.strokeStyle = faint;
       ctx.setLineDash([4, 4]);
       ctx.lineWidth = 1.2;
       ctx.beginPath();
-      const M = 240;
       for (let i = 0; i <= M; i++) {
-        const x = i / M;
-        const px = sx(x), py = sy(target(x));
+        const t = Math.sin(xs[i] * Math.PI * 2.2) * 0.6 - xs[i] * 0.1 + 0.1;
+        const px = sx(xs[i]), py = sy(t);
         if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
       }
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Basis sections (each α_j K(·, c_j))
       if (showBasis.checked) {
         ctx.strokeStyle = accent + '55';
         ctx.lineWidth = 1;
         for (let j = 0; j < n; j++) {
           ctx.beginPath();
           for (let i = 0; i <= M; i++) {
-            const x = i / M;
-            const y = alpha[j] * rbf(x, centers[j]);
-            const px = sx(x), py = sy(y);
+            const px = sx(xs[i]), py = sy(basisY[i * n + j]);
             if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
           }
           ctx.stroke();
         }
       }
 
-      // Sum
       ctx.strokeStyle = accent;
       ctx.lineWidth = 1.8;
       ctx.beginPath();
       for (let i = 0; i <= M; i++) {
-        const x = i / M;
-        let s = 0;
-        for (let j = 0; j < n; j++) s += alpha[j] * rbf(x, centers[j]);
-        const px = sx(x), py = sy(s);
+        const px = sx(xs[i]), py = sy(sumY[i]);
         if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
       }
       ctx.stroke();
 
-      // Center markers
       ctx.fillStyle = muted;
-      centers.forEach((cx) => {
-        ctx.beginPath(); ctx.arc(sx(cx), sy(target(cx)), 3, 0, Math.PI * 2); ctx.fill();
-      });
+      for (let k = 0; k < n; k++) {
+        ctx.beginPath(); ctx.arc(sx(centers[k]), sy(targets[k]), 3, 0, Math.PI * 2); ctx.fill();
+      }
     };
 
-    slider.addEventListener('input', draw);
-    showBasis.addEventListener('change', draw);
-    const ro = new ResizeObserver(() => { fit(); draw(); });
+    let rafScheduled = false;
+    let visible = false;
+    const requestRedraw = () => {
+      if (rafScheduled || !visible) return;
+      rafScheduled = true;
+      requestAnimationFrame(() => { rafScheduled = false; draw(); });
+    };
+
+    slider.addEventListener('input', requestRedraw);
+    showBasis.addEventListener('change', requestRedraw);
+
+    const ro = new ResizeObserver(() => { fit(); requestRedraw(); });
     ro.observe(c);
-    fit(); draw();
+
+    const io = new IntersectionObserver((entries) => {
+      const was = visible;
+      visible = entries[0].isIntersecting;
+      if (visible && !was) { fit(); draw(); }
+    }, { rootMargin: '120px' });
+    io.observe(c);
   };
 
   setup();
   document.addEventListener('astro:page-load', setup);
   document.addEventListener('astro:after-swap', setup);
 })();
-`}})();</script>
+})();</script>
 <p>Even where the strict RKHS structure breaks (because the attention kernel is non-symmetric), the kernel-smoother view retains a <em>geometry</em> on tokens: a learned distance, an explicit similarity score. It is this geometry that makes attention legible. The MLP, as we now argue, has no geometry at all.</p>
 <h2 id="the-mlp-has-no-kernel-and-that-is-the-whole-story">The MLP has no kernel, and that is the whole story<a class="heading-anchor-link" aria-label="Link to heading" href="#the-mlp-has-no-kernel-and-that-is-the-whole-story"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
 <p>We can now state plainly the side of the story that the interpretability literature usually phrases as “MLPs are hard,” because the kernel reading makes the obstruction concrete.</p>
@@ -639,7 +755,7 @@ kernel width <em style="font-style:normal;color:var(--fg)">σ</em> <input type="
 <p><em>References inline. The kernel-smoother view of attention is due to <a href="https://aclanthology.org/D19-1443/">Tsai et al.</a>, with related developments by <a href="https://ojs.aaai.org/index.php/AAAI/article/view/17172">Song et al.</a>, <a href="https://arxiv.org/abs/2009.14794">Choromanski et al.</a>, <a href="https://arxiv.org/abs/2006.16236">Katharopoulos et al.</a>, and <a href="https://arxiv.org/abs/2210.05794">Han et al.</a>. The Yat kernel is from <a href="https://arxiv.org/abs/2605.03262">Bouhsine, 2026</a>. The superposition framing is from <a href="https://transformer-circuits.pub/2022/toy_model/index.html">Elhage et al.</a>, and the mechanistic interpretability descriptions are from the <a href="https://distill.pub/2020/circuits/zoom-in/">circuits thread</a> and related work.</em></p>  </article> <nav class="post-nav" aria-label="Adjacent posts"><a href="/blog/ai-illiteracy-pt1/" class="prev" rel="prev"><div class="label">← Previous</div><div class="title">Morocco and AI Illiteracy — Part I</div></a><a href="/blog/hello-math/" class="next" rel="next"><div class="label">Next →</div><div class="title">Hello, math and JS</div></a></nav> <aside class="callout" style="margin-top:3rem">
 Comments are powered by <a href="https://giscus.app" target="_blank" rel="noopener noreferrer">giscus</a> + GitHub Discussions.
     Configure <code>src/consts.ts</code> with your <code>repoId</code> and <code>categoryId</code> to enable them.
-</aside> <script>{`
+</aside> <script>
   (() => {
     const enhance = () => {
       document.querySelectorAll('pre').forEach((pre) => {
@@ -672,4 +788,4 @@ Comments are powered by <a href="https://giscus.app" target="_blank" rel="noopen
     document.addEventListener('astro:page-load', enhance);
     document.addEventListener('astro:after-swap', enhance);
   })();
-`}</script>  </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> </span> </footer> </body></html>
+</script>  </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> </span> </footer> </body></html>
