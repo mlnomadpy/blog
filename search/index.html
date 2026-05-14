@@ -5,7 +5,7 @@
       document.documentElement.setAttribute('data-theme', stored);
     }
   })();
-</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><style>.pagefind-ui{--pagefind-ui-primary: var(--accent);--pagefind-ui-text: var(--fg);--pagefind-ui-background: var(--bg);--pagefind-ui-border: var(--border);--pagefind-ui-tag: var(--bg-elev);--pagefind-ui-border-radius: 6px;--pagefind-ui-font: var(--sans)}.pagefind-ui__result-title a{color:var(--link)}
+</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><style>.search-box[data-astro-cid-ipsxrsrh]{display:flex;align-items:center;gap:.75rem;margin:1.25rem 0 .5rem}.search-box[data-astro-cid-ipsxrsrh] input[data-astro-cid-ipsxrsrh]{flex:1;background:var(--bg-elev);color:var(--fg);border:1px solid var(--border);padding:.7rem .9rem;border-radius:var(--radius);font-family:var(--sans);font-size:1rem;outline:none;transition:border-color var(--transition-fast),box-shadow var(--transition-fast)}.search-box[data-astro-cid-ipsxrsrh] input[data-astro-cid-ipsxrsrh]:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}.search-count[data-astro-cid-ipsxrsrh]{font-family:var(--mono);font-size:.8rem;color:var(--fg-faint);white-space:nowrap}.search-results[data-astro-cid-ipsxrsrh]{list-style:none;padding:0;margin:1rem 0 0}.search-row[data-astro-cid-ipsxrsrh]{border-bottom:1px dashed var(--border)}.search-row[data-astro-cid-ipsxrsrh]:last-child{border-bottom:0}.search-link[data-astro-cid-ipsxrsrh]{display:block;padding:.85rem 0;text-decoration:none;color:inherit}.search-link[data-astro-cid-ipsxrsrh]:hover .search-title[data-astro-cid-ipsxrsrh]{color:var(--accent)}.search-title[data-astro-cid-ipsxrsrh]{font-family:var(--serif);font-size:1.1rem;margin:0 0 .2rem;line-height:1.35;color:var(--fg);transition:color var(--transition-fast)}.search-meta[data-astro-cid-ipsxrsrh]{font-family:var(--mono);font-size:.75rem;color:var(--fg-faint);margin:0 0 .3rem}.search-snippet[data-astro-cid-ipsxrsrh]{font-family:var(--serif);font-size:.96rem;color:var(--fg-muted);margin:0;line-height:1.55}.search-snippet[data-astro-cid-ipsxrsrh] mark[data-astro-cid-ipsxrsrh],.search-title[data-astro-cid-ipsxrsrh] mark[data-astro-cid-ipsxrsrh]{background:var(--accent-soft);color:inherit;border-radius:2px;padding:0 .15em}
 </style>
 <link rel="stylesheet" href="/blog/_astro/_slug_.DmNMADbs.css"></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/search" aria-current="page">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>
   (() => {
@@ -42,15 +42,191 @@
     document.addEventListener('astro:after-swap', init);
     document.addEventListener('astro:page-load', init);
   })();
-</script> </nav> </div> </header> <main id="main">  <h1>Search</h1> <p class="muted">Full-text search powered by <a href="https://pagefind.app" target="_blank" rel="noopener noreferrer">Pagefind</a>. Indexed at build time.</p> <div id="search" style="margin-top:1.5rem"></div> <link rel="stylesheet" href="/blog/pagefind/pagefind-ui.css"> <script>(function(){const base = "/blog";
+</script> </nav> </div> </header> <main id="main">  <h1 data-astro-cid-ipsxrsrh>Search</h1> <p class="muted" style="font-family:var(--serif);font-style:italic;margin-top:-0.5rem" data-astro-cid-ipsxrsrh>
+Type to filter posts by title, description, body, or <code data-astro-cid-ipsxrsrh>#tag</code>.
+</p> <div class="search-box" data-astro-cid-ipsxrsrh> <input type="search" id="search-input" placeholder="Search posts…" autocomplete="off" spellcheck="false" autofocus data-astro-cid-ipsxrsrh> <span class="search-count" id="search-count" aria-live="polite" data-astro-cid-ipsxrsrh></span> </div> <ul id="search-results" class="search-results" data-astro-cid-ipsxrsrh></ul> <p id="search-empty" class="muted" hidden data-astro-cid-ipsxrsrh>No posts match.</p> <p id="search-loading" class="muted" data-astro-cid-ipsxrsrh>Loading index…</p> <script>(function(){const indexUrl = "/blog/search.json";
+const base = "/blog";
 
-    window.addEventListener('DOMContentLoaded', async () => {
-      const { PagefindUI } = await import(`${base}/pagefind/pagefind-ui.js`);
-      new PagefindUI({
-        element: '#search',
-        showImages: false,
-        showSubResults: true,
-        resetStyles: false,
-      });
-    });
-  })();</script>   </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> </span> </footer> </body></html>
+    (() => {
+      const setup = () => {
+        const input = document.getElementById('search-input');
+        if (!input || input.dataset.ready) return;
+        input.dataset.ready = '1';
+        const results = document.getElementById('search-results');
+        const empty = document.getElementById('search-empty');
+        const loading = document.getElementById('search-loading');
+        const count = document.getElementById('search-count');
+
+        let index = null;
+        let pending = null;
+
+        const render = (rows, q) => {
+          results.innerHTML = '';
+          if (!index) return;
+          if (!rows.length) {
+            empty.hidden = q.length === 0;
+            count.textContent = q ? '0 results' : '';
+            if (!q) {
+              // show all when query is empty
+              empty.hidden = true;
+              for (const e of index) results.appendChild(renderRow(e, ''));
+              count.textContent = index.length + ' posts';
+            }
+            return;
+          }
+          empty.hidden = true;
+          count.textContent = rows.length + ' result' + (rows.length === 1 ? '' : 's');
+          for (const r of rows) results.appendChild(renderRow(r.entry, q));
+        };
+
+        const renderRow = (e, q) => {
+          const li = document.createElement('li');
+          li.className = 'search-row';
+          const a = document.createElement('a');
+          a.className = 'search-link';
+          a.href = base + '/' + e.id + '/';
+
+          const title = document.createElement('h3');
+          title.className = 'search-title';
+          title.appendChild(highlight(e.title, q));
+          a.appendChild(title);
+
+          const meta = document.createElement('p');
+          meta.className = 'search-meta';
+          const d = new Date(e.pubDate);
+          meta.textContent = d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+          if (e.tags && e.tags.length) {
+            const sep = document.createElement('span');
+            sep.textContent = ' · ';
+            meta.appendChild(sep);
+            const tags = document.createElement('span');
+            tags.textContent = e.tags.map((t) => '#' + t).join(' ');
+            meta.appendChild(tags);
+          }
+          a.appendChild(meta);
+
+          if (q && e.body) {
+            const snip = snippet(e.body, q);
+            if (snip) {
+              const p = document.createElement('p');
+              p.className = 'search-snippet';
+              p.appendChild(snip);
+              a.appendChild(p);
+            }
+          } else if (e.description) {
+            const p = document.createElement('p');
+            p.className = 'search-snippet';
+            p.textContent = e.description;
+            a.appendChild(p);
+          }
+          li.appendChild(a);
+          return li;
+        };
+
+        const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+        const highlight = (text, q) => {
+          const frag = document.createDocumentFragment();
+          if (!q) { frag.appendChild(document.createTextNode(text)); return frag; }
+          const tokens = q.split(/\s+/).filter(Boolean).map(escapeRe);
+          if (!tokens.length) { frag.appendChild(document.createTextNode(text)); return frag; }
+          const re = new RegExp('(' + tokens.join('|') + ')', 'gi');
+          let last = 0;
+          text.replace(re, (m, _g, off) => {
+            if (off > last) frag.appendChild(document.createTextNode(text.slice(last, off)));
+            const mark = document.createElement('mark');
+            mark.textContent = m;
+            frag.appendChild(mark);
+            last = off + m.length;
+            return m;
+          });
+          if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+          return frag;
+        };
+
+        const snippet = (body, q) => {
+          const tokens = q.split(/\s+/).filter(Boolean);
+          if (!tokens.length) return null;
+          const lower = body.toLowerCase();
+          let pos = -1;
+          for (const t of tokens) {
+            const i = lower.indexOf(t.toLowerCase());
+            if (i >= 0 && (pos === -1 || i < pos)) pos = i;
+          }
+          if (pos === -1) return null;
+          const start = Math.max(0, pos - 60);
+          const end = Math.min(body.length, pos + 140);
+          let txt = body.slice(start, end);
+          if (start > 0) txt = '…' + txt;
+          if (end < body.length) txt = txt + '…';
+          return highlight(txt, q);
+        };
+
+        const score = (e, tokens) => {
+          let total = 0;
+          const t = e.title.toLowerCase();
+          const d = (e.description || '').toLowerCase();
+          const b = (e.body || '').toLowerCase();
+          const tags = (e.tags || []).map((x) => x.toLowerCase());
+          for (const tok of tokens) {
+            const isTag = tok.startsWith('#');
+            const term = isTag ? tok.slice(1) : tok;
+            if (!term) return 0;
+            let hit = 0;
+            if (isTag) {
+              if (tags.includes(term)) hit += 200;
+              else if (tags.some((g) => g.includes(term))) hit += 80;
+            } else {
+              if (t.includes(term)) hit += 100;
+              if (tags.some((g) => g.includes(term))) hit += 60;
+              if (d.includes(term)) hit += 30;
+              if (b.includes(term)) hit += 10;
+            }
+            if (hit === 0) return 0;
+            total += hit;
+          }
+          return total;
+        };
+
+        const run = () => {
+          if (!index) return;
+          const q = input.value.trim();
+          if (!q) { render([], ''); return; }
+          const tokens = q.toLowerCase().split(/\s+/).filter(Boolean);
+          const rows = [];
+          for (const e of index) {
+            const s = score(e, tokens);
+            if (s > 0) rows.push({ s, entry: e });
+          }
+          rows.sort((a, b) => b.s - a.s);
+          render(rows, q);
+        };
+
+        const schedule = () => {
+          if (pending) cancelAnimationFrame(pending);
+          pending = requestAnimationFrame(() => { pending = null; run(); });
+        };
+
+        input.addEventListener('input', schedule);
+
+        fetch(indexUrl)
+          .then((r) => r.json())
+          .then((data) => {
+            index = data;
+            loading.hidden = true;
+            const params = new URLSearchParams(window.location.search);
+            const q = params.get('q') || '';
+            if (q) { input.value = q; }
+            run();
+          })
+          .catch((err) => {
+            loading.textContent = 'Failed to load search index.';
+            console.error(err);
+          });
+      };
+
+      setup();
+      document.addEventListener('astro:page-load', setup);
+      document.addEventListener('astro:after-swap', setup);
+    })();
+  })();</script>  </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> </span> </footer> </body></html> 
