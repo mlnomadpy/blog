@@ -4,6 +4,9 @@ description: A reading of self-attention through kernel smoothing and RKHS.
 pubDate: 2026-05-14
 tags: [ml, attention, kernels, interpretability]
 ---
+import KernelSmoother from '../../components/viz/KernelSmoother.astro';
+import AttentionPatterns from '../../components/viz/AttentionPatterns.astro';
+import RBFExpansion from '../../components/viz/RBFExpansion.astro';
 
 *A reading of self-attention through kernel smoothing and RKHS.*
 
@@ -47,6 +50,8 @@ $$
 
 These two expressions are the same up to relabeling.
 
+<KernelSmoother caption="Nadaraya–Watson kernel regression. Drag along the chart to move the query x. The orange bell at the bottom is the kernel centered at x; data points are sized by their kernel weight. The smoothed curve is the prediction for every x in the domain. Self-attention is this picture, with the kernel replaced by an exponential dot product over learned q/k projections and the y_i replaced by learned value projections." />
+
 | Kernel regression | Self-attention |
 |---|---|
 | Query point $x$ | Query projection $q_i$ |
@@ -66,6 +71,8 @@ These are what you are actually using whenever you "read" an attention pattern.
 **2. The weights normalize.** The softmax enforces $\sum_j \alpha_{ij} = 1$ with $\alpha_{ij} \ge 0$, so each output $y_i$ is a convex combination of value vectors. This is the source of every attribution-style statement one ever makes about attention. When we say a head "moved information from token $j$ to token $i$," we mean $\alpha_{ij}$ was large. When we say a head "ignored token $j$," we mean $\alpha_{ij}$ was small. These statements are coherent precisely because the weights are normalized contribution masses, not arbitrary activations.
 
 A standard linear layer, where some output coordinate is a linear combination of input coordinates with weights that can be positive, negative, or large in magnitude, does not admit this reading at all. The weights are not a partition of unity, do not compose across layers in any attribution-respecting way, and need not even be of consistent sign for nearby inputs. The fact that attention does admit it is again a direct consequence of its being a kernel smoother. In the Nadaraya–Watson form the weights normalize for the same reason and serve the same role.
+
+<AttentionPatterns caption="Three causal attention matrices over a 12-token sequence, each induced by a different kernel structure. Row i shows what token i attends to; brighter cells are higher α_ij. Left: a positional kernel that decays with distance. Center: an induction-like pattern where each token looks back to positions following earlier occurrences of the previous token. Right: a previous-token kernel. These are not three different layers — they are three different heads. The kernel is what tells you which one you are reading." size={12} />
 
 **3. Kernels carry locality.** Kernel smoothers, by construction, weight nearby points more heavily than distant ones, and the notion of "nearby" is whatever the kernel says it is. In attention, "nearby" is high $q_i \cdot k_j$, which the model is free to shape during training. The upshot is that attention behaves, by default, like a content-addressable nearest-neighbor retrieval over the sequence: $j^{*}_i = \operatorname*{arg\,max}_j q_i \cdot k_j$ in the sharp limit. This is exactly how it gets used in many of the algorithms that mechanistic interpretability has uncovered. Induction heads retrieve previous occurrences of a token. Name-mover heads retrieve antecedents. Positional heads retrieve fixed offsets. None of these descriptions requires anything beyond the kernel-smoother view; they are different specializations of "look up the most similar previous token under this kernel."
 
@@ -90,6 +97,9 @@ f(\cdot) = \sum_j \beta_j\, K(\cdot, k_j)
 $$
 
 in this basis with explicit coefficients. "Which token does this output depend on, and by how much?" becomes a literal question about coefficients in a fixed basis, not an interpretive one.
+
+<RBFExpansion caption="A function (dashed) approximated as a finite sum of kernel sections K(·, k_j) centered at fixed anchor points. The orange curve is the sum; the lighter strokes are the individual α_j K(·, k_j). Shrinking the kernel width makes each section more local and the explanation more token-specific; widening it pools more sections together. This is what the inside of a kernel-machine layer looks like." />
+
 
 Even where the strict RKHS structure breaks (because the attention kernel is non-symmetric), the kernel-smoother view retains a *geometry* on tokens: a learned distance, an explicit similarity score. It is this geometry that makes attention legible. The MLP, as we now argue, has no geometry at all.
 

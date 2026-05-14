@@ -1,19 +1,186 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import aboutImg from '../assets/about.jpg';
----
-<BaseLayout title="About" description="About Taha Bouhsine.">
-  <h1>About</h1>
-  <img src={aboutImg.src} alt="Taha" width="220" style="border-radius:50%;float:right;margin:0 0 1rem 1.5rem" />
 
-  <h2>I am a Data Scientist</h2>
+const links = [
+  { label: 'Email', href: 'mailto:tahabhs14@gmail.com' },
+  { label: 'GitHub', href: 'https://github.com/mlnomadpy' },
+  { label: 'Google Scholar', href: 'https://scholar.google.com/citations?user=IsBjb3EAAAAJ' },
+  { label: 'LinkedIn', href: 'https://www.linkedin.com/in/tahabsn/' },
+  { label: 'GDE profile', href: 'https://g.dev/tahabsn' },
+  { label: 'ML Talks', href: 'https://www.youtube.com/playlist?list=PLQKoJ5C0cEMhm-h2fPsIePpTWz5OpBSkS' },
+];
+
+const papers = [
+  {
+    title: 'A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance',
+    authors: 'T. Bouhsine',
+    venue: 'arXiv:2605.03262, 2026',
+    href: 'https://arxiv.org/abs/2605.03262',
+    note: 'The Yat kernel — a universal, characteristic RKHS that yields a finite learned-center kernel expansion with a closed-form norm. Foundation for white-box MLPs.',
+  },
+  {
+    title: 'In Defense of Cosine Similarity: Normalization Eliminates the Gauge Freedom',
+    authors: 'T. Bouhsine',
+    venue: 'arXiv:2602.19393, 2026',
+    href: 'https://arxiv.org/abs/2602.19393',
+    note: 'Why normalization is not just a heuristic — it removes a real gauge symmetry that confounds interpretability.',
+  },
+  {
+    title: 'SLAY: Geometry-Aware Spherical Linearized Attention with Yat-Kernel',
+    authors: 'J. M. Luna, T. Bouhsine, K. Choromanski',
+    venue: 'arXiv:2602.04915, 2026 — with Google DeepMind & Columbia',
+    href: 'https://arxiv.org/abs/2602.04915',
+    note: 'Linear-time attention that matches softmax performance with O(L) scaling, via a Mercer-kernel reformulation on the sphere.',
+  },
+  {
+    title: 'DenoMAE 2.0: Improving Denoising Masked Autoencoders by Classifying Local Patches for Automatic Modulation Classification',
+    authors: 'A. Faysal, T. Bouhsine, et al.',
+    venue: 'IEEE Xplore, 2025 (arXiv:2502.18202)',
+    href: 'https://arxiv.org/abs/2502.18202',
+    note: 'Multimodal denoising MAE for RF modulation classification. Up to 16.55% accuracy gains on RadioML over prior SOTA.',
+  },
+  {
+    title: 'DenoMAE: A Multimodal Autoencoder for Denoising Modulation Signals',
+    authors: 'A. Faysal, T. Bouhsine, M. Rostami, et al.',
+    venue: 'arXiv:2501.11538, 2025',
+    href: 'https://arxiv.org/abs/2501.11538',
+    note: 'The original multimodal denoising masked autoencoder for automatic modulation classification.',
+  },
+];
+---
+<BaseLayout title="About" description="Taha Bouhsine — AI research scientist working on interpretability, kernel methods, and white-box neural architectures.">
+  <section class="about-hero">
+    <img src={aboutImg.src} alt="Taha Bouhsine" width="160" height="160" loading="eager" />
+    <div>
+      <h1 style="margin:0 0 0.35rem">Taha Bouhsine</h1>
+      <p class="muted" style="font-family:var(--sans);font-style:normal;margin:0 0 0.65rem;color:var(--accent);font-size:0.98rem">
+        AI Research Scientist &amp; Engineer · Founder
+      </p>
+      <p class="lead" style="margin:0">
+        I work on interpretability, kernel methods, and white-box neural architectures —
+        the structural reasons some deep learning components are legible and others aren't.
+      </p>
+    </div>
+  </section>
+
+  <h2>Currently</h2>
   <p>
-    Always, since as long as I can remember, I have found myself captivated by the beauty of what a computer does — and I have always wanted to understand it, be part of it, and innovate.
+    Co-founder and research scientist at <strong>Azetta.AI</strong>, building linear-time attention
+    and large-scale TPU training infrastructure (JAX/Flax). Previously founded
+    <strong>MLNomads</strong>, where I introduced the Yat kernel and Neural-Matter Networks.
   </p>
   <p>
-    I started my journey in Computer Science as a self-taught using online courses and books. The road was a bit rough since English was not my first language. After getting my Mathematics High School Degree, I continued my studies in a Bachelor of Science in Mathematics and Computer Sciences at the University of Ibn Zohr, Faculty of Science in Agadir.
+    Google Developer Expert in AI/ML since 2024. Research collaborations with
+    <strong>Google DeepMind</strong>, <strong>Columbia University</strong>, and the
+    <strong>U.S. FAA William J. Hughes Technical Center</strong>. Reviewer for
+    NeurIPS and ICML.
   </p>
-  <p>
-    I am currently pursuing a Master of Research in Data Science and Artificial Intelligence applied to Computer Vision, Signal Processing, and Natural Language Processing.
+
+  <h2>Selected papers</h2>
+  <p class="muted" style="margin-top:-0.5rem;font-family:var(--sans);font-size:0.92rem">
+    Full list on <a href="https://scholar.google.com/citations?user=IsBjb3EAAAAJ">Google Scholar</a>.
   </p>
+  <ul class="paper-list">
+    {papers.map((p) => (
+      <li>
+        <a href={p.href} class="paper-title">{p.title}</a>
+        <p class="paper-meta">{p.authors} · {p.venue}</p>
+        <p class="paper-note">{p.note}</p>
+      </li>
+    ))}
+  </ul>
+
+  <h2>Elsewhere</h2>
+  <ul class="link-list">
+    {links.map((l) => (
+      <li>
+        <a href={l.href}>{l.label}</a>
+        <span class="faint">{l.href.replace(/^https?:\/\//, '').replace(/^mailto:/, '')}</span>
+      </li>
+    ))}
+  </ul>
 </BaseLayout>
+
+<style>
+  .about-hero {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 1.5rem;
+    align-items: center;
+    margin: 0 0 2.5rem;
+  }
+  .about-hero img {
+    border-radius: 50%;
+    width: 160px;
+    height: 160px;
+    object-fit: cover;
+  }
+  @media (max-width: 540px) {
+    .about-hero {
+      grid-template-columns: 110px 1fr;
+      gap: 1rem;
+    }
+    .about-hero img { width: 110px; height: 110px; }
+  }
+
+  .paper-list {
+    list-style: none;
+    padding: 0;
+    margin: 1.25rem 0 2rem;
+  }
+  .paper-list li {
+    padding: 0.85rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .paper-list li:last-child { border-bottom: 0; }
+  .paper-title {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 1.06rem;
+    line-height: 1.4;
+    display: inline-block;
+  }
+  .paper-meta {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--fg-muted);
+    margin: 0.2rem 0 0.4rem;
+    letter-spacing: 0.01em;
+  }
+  .paper-note {
+    font-family: var(--serif);
+    color: var(--fg-muted);
+    font-size: 1rem;
+    margin: 0;
+    line-height: 1.55;
+  }
+
+  .link-list {
+    list-style: none;
+    padding: 0;
+    margin: 1rem 0 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.4rem 1.5rem;
+  }
+  .link-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    padding: 0.3rem 0;
+    border-bottom: 1px dotted var(--border);
+    font-family: var(--mono);
+    font-size: 0.88rem;
+  }
+  .link-list li a { font-family: var(--mono); }
+  .link-list li .faint {
+    font-size: 0.78rem;
+    color: var(--fg-faint);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 60%;
+  }
+</style>

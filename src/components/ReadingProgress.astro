@@ -2,7 +2,7 @@
 ---
 <div class="reading-progress" data-reading-progress aria-hidden="true"></div>
 
-<script is:inline>{`
+<script is:inline>
   (() => {
     const init = () => {
       const bar = document.querySelector('[data-reading-progress]');
@@ -23,4 +23,4 @@
     document.addEventListener('astro:page-load', init);
     document.addEventListener('astro:after-swap', init);
   })();
-`}</script>
+</script>

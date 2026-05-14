@@ -1,0 +1,165 @@
+---
+interface Props {
+  caption?: string;
+  size?: number;
+}
+const { caption, size = 12 } = Astro.props;
+const id = `ap-${Math.random().toString(36).slice(2, 9)}`;
+const cells = [
+  { id: `${id}-pos`, title: 'positional', kind: 'positional' },
+  { id: `${id}-ind`, title: 'induction', kind: 'induction' },
+  { id: `${id}-prv`, title: 'previous token', kind: 'previous' },
+];
+---
+<figure class="viz">
+  <div class="viz-grid">
+    {cells.map((cell) => (
+      <div class="viz-cell">
+        <h4>{cell.title}</h4>
+        <canvas id={cell.id} data-kind={cell.kind} data-size={size} aria-label={`Attention pattern: ${cell.title}`}></canvas>
+      </div>
+    ))}
+  </div>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<script is:inline define:vars={{ ids: cells.map((c) => c.id) }}>
+(() => {
+  const parseColor = (v) => {
+    v = v.trim();
+    if (v.startsWith('#')) {
+      let s = v.slice(1);
+      if (s.length === 3) s = s.split('').map((c) => c + c).join('');
+      return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
+    }
+    const m = v.match(/\d+/g);
+    return m ? [parseInt(m[0], 10), parseInt(m[1], 10), parseInt(m[2], 10)] : [0, 0, 0];
+  };
+  const readColors = () => {
+    const s = getComputedStyle(document.documentElement);
+    return {
+      bg: parseColor(s.getPropertyValue('--bg-sunken') || '#0a0d12'),
+      accent: parseColor(s.getPropertyValue('--accent') || '#ffb454'),
+    };
+  };
+  let colors = readColors();
+  const themeObs = new MutationObserver(() => { colors = readColors(); needs.forEach((c) => c.dataset.ready && c.__redraw && c.__redraw()); });
+  themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  const needs = [];
+
+  const setup = () => {
+    ids.forEach((cid) => {
+      const c = document.getElementById(cid);
+      if (!c || c.dataset.ready) return;
+      c.dataset.ready = '1';
+      needs.push(c);
+      const ctx = c.getContext('2d');
+      const kind = c.dataset.kind;
+      const N = parseInt(c.dataset.size, 10) || 12;
+
+      // Deterministic "sentence" for induction visualization.
+      const tokenIds = (() => {
+        let s = 7919;
+        const r = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+        return Array.from({ length: N }, () => Math.floor(r() * 5));
+      })();
+      tokenIds[N - 2] = tokenIds[2];
+      tokenIds[N - 1] = tokenIds[3];
+
+      const A = new Float32Array(N * N);
+      for (let i = 0; i < N; i++) {
+        let rowMax = -Infinity;
+        for (let j = 0; j < N; j++) {
+          let s = -Infinity;
+          if (j <= i) {
+            if (kind === 'positional') {
+              s = -(i - j) * 0.9;
+            } else if (kind === 'previous') {
+              s = j === i - 1 ? 4 : (j === i ? -8 : -2);
+            } else {
+              if (i >= 2) {
+                const target = tokenIds[i - 1];
+                const prev = j >= 1 ? tokenIds[j - 1] : -1;
+                s = prev === target ? 4 : -1.5;
+              } else {
+                s = -3;
+              }
+            }
+          }
+          A[i * N + j] = s;
+          if (s > rowMax) rowMax = s;
+        }
+        let sum = 0;
+        for (let j = 0; j < N; j++) {
+          const v = Math.exp(A[i * N + j] - rowMax);
+          A[i * N + j] = v;
+          sum += v;
+        }
+        for (let j = 0; j < N; j++) A[i * N + j] /= sum;
+      }
+
+      const state = { dpr: 1, w: 0 };
+
+      const fit = () => {
+        const rect = c.getBoundingClientRect();
+        const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+        state.dpr = dpr;
+        state.w = rect.width;
+        c.style.height = rect.width + 'px';
+        c.width = Math.round(rect.width * dpr);
+        c.height = Math.round(rect.width * dpr);
+      };
+
+      const draw = () => {
+        const W = state.w;
+        if (W === 0) return;
+        ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+        ctx.clearRect(0, 0, W, W);
+
+        const [br, bg, bb] = colors.bg;
+        const [ar, ag, ab] = colors.accent;
+        const pad = 1;
+        const inner = W - pad * 2;
+        const cell = inner / N;
+        for (let i = 0; i < N; i++) {
+          for (let j = 0; j < N; j++) {
+            const a = A[i * N + j];
+            const t = Math.min(1, Math.pow(a * N * 0.7, 0.6));
+            const r = Math.round(br + (ar - br) * t);
+            const g = Math.round(bg + (ag - bg) * t);
+            const b = Math.round(bb + (ab - bb) * t);
+            ctx.fillStyle = 'rgb(' + r + ',' + g + ',' + b + ')';
+            ctx.fillRect(pad + j * cell, pad + i * cell, cell + 0.5, cell + 0.5);
+          }
+        }
+      };
+      c.__redraw = draw;
+
+      let rafScheduled = false;
+      const requestRedraw = () => {
+        if (rafScheduled) return;
+        rafScheduled = true;
+        requestAnimationFrame(() => { rafScheduled = false; draw(); });
+      };
+
+      const ro = new ResizeObserver(() => { fit(); requestRedraw(); });
+      ro.observe(c);
+
+      let drawnOnce = false;
+      const io = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && !drawnOnce) {
+          drawnOnce = true;
+          fit();
+          draw();
+          io.disconnect();
+        }
+      }, { rootMargin: '120px' });
+      io.observe(c);
+    });
+  };
+
+  setup();
+  document.addEventListener('astro:page-load', setup);
+  document.addEventListener('astro:after-swap', setup);
+})();
+</script>
