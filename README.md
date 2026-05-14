@@ -90,13 +90,31 @@ will 404 unless something else (e.g. a separate root site repo) serves it.
 
 On `github.com/mlnomadpy/blog` → **Settings → Pages**:
 
-- **Source**: GitHub Actions
+- **Source**: *Deploy from a branch*
+- **Branch**: `gh-pages` / `/ (root)`
 - Save.
 
-The `.github/workflows/deploy.yml` workflow will run on push to `master` and
-deploy `dist/` automatically.
-
 When the domain field shows your CNAME, tick **Enforce HTTPS**.
+
+### Deploying
+
+Deploys are run from your machine — no CI involved:
+
+```bash
+npm run deploy
+```
+
+That command builds the site (`npm run build` → `dist/`), then pushes the
+contents of `dist/` to the remote `gh-pages` branch via the `gh-pages` npm
+package. GitHub Pages serves whatever sits on that branch.
+
+Because `astro.config.mjs` sets `base: '/blog'`, the `postbuild` script
+rearranges `dist/` so that:
+
+- `dist/CNAME`, `dist/.nojekyll`, `dist/robots.txt` sit at the deploy root
+- `dist/blog/` contains the site (`index.html`, `_astro/`, `pagefind/`, etc.)
+
+Final URL: `https://tahabouhsine.com/blog/`.
 
 ### 3. Enable comments (giscus)
 
@@ -120,11 +138,6 @@ When the domain field shows your CNAME, tick **Enforce HTTPS**.
 
    Until both IDs are filled in, posts render a placeholder note instead of the
    comments widget.
-
-### 4. (Optional) Branch name
-
-The workflow triggers on `master` or `main`. The current branch is
-`mlnomadpy/hartford`; merge to `master` before expecting deploys.
 
 ## Project layout
 
@@ -154,6 +167,7 @@ The workflow triggers on `master` or `main`. The current branch is
 ├── public/
 │   ├── CNAME                 # tahabouhsine.com
 │   ├── .nojekyll
+│   ├── robots.txt
 │   └── favicon.svg
-└── .github/workflows/deploy.yml
+└── scripts/postbuild.mjs     # rearranges dist + runs pagefind
 ```

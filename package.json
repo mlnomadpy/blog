@@ -8,6 +8,7 @@
     "start": "astro dev",
     "build": "astro build && node scripts/postbuild.mjs",
     "preview": "astro preview",
+    "deploy": "npm run build && gh-pages -d dist -b gh-pages -t -m \"deploy: $(git rev-parse --short HEAD)\"",
     "astro": "astro"
   },
   "dependencies": {
@@ -25,6 +26,7 @@
     "remark-math": "^6.0.0"
   },
   "devDependencies": {
+    "gh-pages": "^6.3.0",
     "pagefind": "^1.5.2",
     "reading-time": "^1.5.0"
   }
