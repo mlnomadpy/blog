@@ -1,0 +1,798 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="generator" content="Astro v5.18.1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#fbfaf6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)"><title>Opposite Is Not Different — Records of the !mmortal Data Scientist</title><meta name="description" content="The cosine-similarity scale has three landmarks, not two. Maximum difference is orthogonality, not opposition — and the most influential contrastive losses spent years optimizing for the wrong target."><meta name="author" content="Taha Bouhsine"><link rel="canonical" href="https://tahabouhsine.com/blog/opposite-is-not-different/"><link rel="icon" href="/blog/favicon.svg" type="image/svg+xml"><link rel="alternate" type="application/rss+xml" title="Records of the !mmortal Data Scientist" href="/blog/rss.xml"><link rel="sitemap" href="/blog/sitemap-index.xml"><meta property="og:type" content="article"><meta property="og:site_name" content="Records of the !mmortal Data Scientist"><meta property="og:title" content="Opposite Is Not Different — Records of the !mmortal Data Scientist"><meta property="og:description" content="The cosine-similarity scale has three landmarks, not two. Maximum difference is orthogonality, not opposition — and the most influential contrastive losses spent years optimizing for the wrong target."><meta property="og:url" content="https://tahabouhsine.com/blog/opposite-is-not-different/"><meta property="og:locale" content="en_US"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="Opposite Is Not Different — Records of the !mmortal Data Scientist"><meta name="twitter:description" content="The cosine-similarity scale has three landmarks, not two. Maximum difference is orthogonality, not opposition — and the most influential contrastive losses spent years optimizing for the wrong target."><meta property="article:published_time" content="2026-02-22T00:00:00.000Z"><meta property="article:author" content="Taha Bouhsine"><meta property="article:tag" content="ml"><meta property="article:tag" content="geometry"><meta property="article:tag" content="contrastive"><meta property="article:tag" content="embeddings"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Opposite Is Not Different","description":"The cosine-similarity scale has three landmarks, not two. Maximum difference is orthogonality, not opposition — and the most influential contrastive losses spent years optimizing for the wrong target.","datePublished":"2026-02-22T00:00:00.000Z","dateModified":"2026-02-22T00:00:00.000Z","author":{"@type":"Person","name":"Taha Bouhsine","url":"https://tahabouhsine.com/"},"publisher":{"@type":"Person","name":"Taha Bouhsine"},"mainEntityOfPage":{"@type":"WebPage","@id":"https://tahabouhsine.com/blog/opposite-is-not-different/"},"keywords":"ml, geometry, contrastive, embeddings","url":"https://tahabouhsine.com/blog/opposite-is-not-different/"}</script><script>
+  (() => {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'light' || stored === 'dark') {
+      document.documentElement.setAttribute('data-theme', stored);
+    }
+  })();
+</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.DmNMADbs.css"><style>.ovo-presets[data-astro-cid-q2lx4uns]{display:flex;flex-wrap:wrap;gap:.35rem;align-items:center}.ovo-presets[data-astro-cid-q2lx4uns] button[data-astro-cid-q2lx4uns]{font-family:var(--mono);font-size:.78rem;padding:.3rem .7rem;background:var(--bg);color:var(--fg-muted);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;transition:all var(--transition-fast)}.ovo-presets[data-astro-cid-q2lx4uns] button[data-astro-cid-q2lx4uns]:hover{color:var(--accent);border-color:var(--accent)}.ovo-row[data-astro-cid-q2lx4uns]{display:grid;grid-template-columns:minmax(0,2.5fr) minmax(180px,1fr);gap:1rem;align-items:stretch}.ovo-readouts[data-astro-cid-q2lx4uns]{display:flex;flex-direction:column;gap:.45rem;font-family:var(--mono);font-size:.86rem;padding:.65rem .85rem;background:var(--bg-sunken);border:1px solid var(--border);border-radius:var(--radius-sm)}.readout-row[data-astro-cid-q2lx4uns]{display:flex;justify-content:space-between;gap:.5rem}.readout-label[data-astro-cid-q2lx4uns]{color:var(--fg-muted)}.readout-val[data-astro-cid-q2lx4uns]{color:var(--fg);font-variant-numeric:tabular-nums}.readout-tag[data-astro-cid-q2lx4uns]{margin-top:.2rem;padding-top:.45rem;border-top:1px solid var(--border);color:var(--accent);font-size:.78rem;letter-spacing:.04em;text-transform:uppercase}@media(max-width:640px){.ovo-row[data-astro-cid-q2lx4uns]{grid-template-columns:1fr}}
+</style></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>
+  (() => {
+    const apply = (theme) => {
+      document.documentElement.setAttribute('data-theme', theme);
+      const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+      if (meta) meta.setAttribute('content', theme === 'dark' ? '#0e1116' : '#fbfaf6');
+      // Sync giscus iframe if present
+      const giscus = document.querySelector('iframe.giscus-frame');
+      if (giscus && giscus.contentWindow) {
+        giscus.contentWindow.postMessage(
+          { giscus: { setConfig: { theme: theme === 'dark' ? 'dark' : 'light' } } },
+          'https://giscus.app'
+        );
+      }
+    };
+
+    const init = () => {
+      const btns = document.querySelectorAll('[data-theme-toggle]');
+      btns.forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', () => {
+          const current = document.documentElement.getAttribute('data-theme')
+            || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          const next = current === 'dark' ? 'light' : 'dark';
+          localStorage.setItem('theme', next);
+          apply(next);
+        });
+      });
+    };
+
+    init();
+    document.addEventListener('astro:after-swap', init);
+    document.addEventListener('astro:page-load', init);
+  })();
+</script> </nav> </div> </header> <main id="main">  <div class="reading-progress" data-reading-progress aria-hidden="true"></div> <script>
+  (() => {
+    const init = () => {
+      const bar = document.querySelector('[data-reading-progress]');
+      if (!bar) return;
+      const onScroll = () => {
+        const h = document.documentElement;
+        const scrolled = h.scrollTop;
+        const max = h.scrollHeight - h.clientHeight;
+        const pct = max > 0 ? Math.min(100, (scrolled / max) * 100) : 0;
+        bar.style.width = pct + '%';
+      };
+      onScroll();
+      window.removeEventListener('scroll', window.__rp_onScroll || (() => {}));
+      window.__rp_onScroll = onScroll;
+      window.addEventListener('scroll', onScroll, { passive: true });
+    };
+    init();
+    document.addEventListener('astro:page-load', init);
+    document.addEventListener('astro:after-swap', init);
+  })();
+</script> <article data-pagefind-body data-pagefind-meta="date:2026-02-22"> <header class="post-header"> <h1 data-pagefind-meta="title">Opposite Is Not Different</h1> <p class="meta"> <time datetime="2026-02-22T00:00:00.000Z">February 21, 2026</time>   · 8 min read </p> <p style="margin-top:0.65rem" data-pagefind-meta="tags:ml,geometry,contrastive,embeddings"> <a class="tag" href="/blog/tag/ml/">#ml</a><a class="tag" href="/blog/tag/geometry/">#geometry</a><a class="tag" href="/blog/tag/contrastive/">#contrastive</a><a class="tag" href="/blog/tag/embeddings/">#embeddings</a> </p> </header>  <p>A standard assumption in contrastive learning holds that pushing negative pairs to cosine similarity <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>−</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">-1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em"></span><span class="mord">−</span><span class="mord">1</span></span></span></span> achieves “maximal difference.” This is wrong, and the cost has been substantial.</p>
+<p>Two unit vectors <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">u</mi><mo separator="true">,</mo><mi mathvariant="bold">v</mi></mrow><annotation encoding="application/x-tex">\mathbf{u}, \mathbf{v}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6389em;vertical-align:-0.1944em"></span><span class="mord mathbf">u</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathbf" style="margin-right:0.016em">v</span></span></span></span> with <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>cos</mi><mo>⁡</mo><mi>θ</mi><mo stretchy="false">(</mo><mi mathvariant="bold">u</mi><mo separator="true">,</mo><mi mathvariant="bold">v</mi><mo stretchy="false">)</mo><mo>=</mo><mo>−</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">\cos\theta(\mathbf{u}, \mathbf{v}) = -1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mop">cos</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0278em">θ</span><span class="mopen">(</span><span class="mord mathbf">u</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathbf" style="margin-right:0.016em">v</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em"></span><span class="mord">−</span><span class="mord">1</span></span></span></span> are antiparallel — <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">v</mi><mo>=</mo><mo>−</mo><mi mathvariant="bold">u</mi></mrow><annotation encoding="application/x-tex">\mathbf{v} = -\mathbf{u}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4444em"></span><span class="mord mathbf" style="margin-right:0.016em">v</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6667em;vertical-align:-0.0833em"></span><span class="mord">−</span><span class="mord mathbf">u</span></span></span></span> — and antiparallel means linearly dependent. They span a single one-dimensional subspace; knowing <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">u</mi></mrow><annotation encoding="application/x-tex">\mathbf{u}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4444em"></span><span class="mord mathbf">u</span></span></span></span> determines <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">v</mi></mrow><annotation encoding="application/x-tex">\mathbf{v}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4444em"></span><span class="mord mathbf" style="margin-right:0.016em">v</span></span></span></span> exactly. In every algebraic, geometric, and information-theoretic sense they are the same direction with a sign flip. Two vectors at <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>cos</mi><mo>⁡</mo><mo>=</mo><mo>−</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">\cos = -1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em"></span><span class="mop">cos</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em"></span><span class="mord">−</span><span class="mord">1</span></span></span></span> are not different. They are redundant.</p>
+<p>The correct geometry of difference is <strong>orthogonality</strong>. Vectors with <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>cos</mi><mo>⁡</mo><mi>θ</mi><mo>=</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\cos\theta = 0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em"></span><span class="mop">cos</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0278em">θ</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">0</span></span></span></span> are linearly independent: their span has dimension two, the projection of one onto the other is zero, and neither can be reconstructed from the other. Orthogonality is where genuinely new information lives.</p>
+<p>The rest of this post makes the consequence concrete. CLIP’s InfoNCE loss implicitly targets opposition; SigLIP’s sigmoid loss equilibrates at orthogonality; cross-entropy classification has always targeted orthogonality; the simplex packing result tells us why every multi-class problem above <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>2</mn></mrow><annotation encoding="application/x-tex">n = 2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">2</span></span></span></span> should be reaching for orthogonality rather than opposition. The cosine scale has three landmarks, not two — and the field spent years engineering around the missing landmark.</p>
+<h2 id="the-cosine-scale-has-three-landmarks">The cosine scale has three landmarks<a class="heading-anchor-link" aria-label="Link to heading" href="#the-cosine-scale-has-three-landmarks"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The standard mental model puts cosine similarity on a single axis from <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>+</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">+1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em"></span><span class="mord">+</span><span class="mord">1</span></span></span></span> (“most similar”) to <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>−</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">-1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em"></span><span class="mord">−</span><span class="mord">1</span></span></span></span> (“most different”). That model is missing the structure of vector spaces. Three points on the scale are qualitatively different:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>cos</mi><mo>⁡</mo><mi>θ</mi></mrow><annotation encoding="application/x-tex">\cos\theta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em"></span><span class="mop">cos</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0278em">θ</span></span></span></span></th><th>Algebraic status</th><th>Information content</th></tr></thead><tbody><tr><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>+</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">+1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em"></span><span class="mord">+</span><span class="mord">1</span></span></span></span></td><td>Parallel (same direction)</td><td>Maximally redundant</td></tr><tr><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>−</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">-1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em"></span><span class="mord">−</span><span class="mord">1</span></span></span></span></td><td>Antiparallel (opposite direction)</td><td>Maximally redundant (sign-flipped)</td></tr><tr><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mphantom><mo>−</mo></mphantom><mn>0</mn></mrow><annotation encoding="application/x-tex">\phantom{-}0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em"></span><span class="mord" style="color:transparent">−</span><span class="mord">0</span></span></span></span></td><td>Orthogonal (perpendicular)</td><td>Zero shared information</td></tr></tbody></table>
+<p>The “difference” axis runs from <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>±</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">\pm 1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em"></span><span class="mord">±</span><span class="mord">1</span></span></span></span> (dependent) to <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0</mn></mrow><annotation encoding="application/x-tex">0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">0</span></span></span></span> (independent), not from <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>+</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">+1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em"></span><span class="mord">+</span><span class="mord">1</span></span></span></span> to <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>−</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">-1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em"></span><span class="mord">−</span><span class="mord">1</span></span></span></span>.</p>
+<figure class="viz" data-astro-cid-q2lx4uns> <div class="viz-controls" data-ovo="ovo-q98h1ko" data-astro-cid-q2lx4uns> <div class="ovo-presets" data-astro-cid-q2lx4uns> <span class="faint" style="margin-right:0.4rem" data-astro-cid-q2lx4uns>snap to:</span> <button type="button" data-angle="0" data-astro-cid-q2lx4uns>parallel</button> <button type="button" data-angle="90" data-astro-cid-q2lx4uns>orthogonal</button> <button type="button" data-angle="180" data-astro-cid-q2lx4uns>antiparallel</button> </div> <span class="faint" data-astro-cid-q2lx4uns>drag the green vector tip</span> </div> <div class="ovo-row" data-astro-cid-q2lx4uns> <canvas id="ovo-q98h1ko-c" height="340" aria-label="Unit circle showing two vectors with adjustable angle" data-astro-cid-q2lx4uns></canvas> <div class="ovo-readouts" id="ovo-q98h1ko-readouts" data-astro-cid-q2lx4uns> <div class="readout-row" data-astro-cid-q2lx4uns><span class="readout-label" data-astro-cid-q2lx4uns>θ</span><span class="readout-val" data-key="theta" data-astro-cid-q2lx4uns>—</span></div> <div class="readout-row" data-astro-cid-q2lx4uns><span class="readout-label" data-astro-cid-q2lx4uns>cos θ</span><span class="readout-val" data-key="cos" data-astro-cid-q2lx4uns>—</span></div> <div class="readout-row" data-astro-cid-q2lx4uns><span class="readout-label" data-astro-cid-q2lx4uns>cos²θ</span><span class="readout-val" data-key="cos2" data-astro-cid-q2lx4uns>—</span></div> <div class="readout-row" data-astro-cid-q2lx4uns><span class="readout-label" data-astro-cid-q2lx4uns>1 − cos²θ</span><span class="readout-val" data-key="ind" data-astro-cid-q2lx4uns>—</span></div> <div class="readout-row" data-astro-cid-q2lx4uns><span class="readout-label" data-astro-cid-q2lx4uns>dim span(u, v)</span><span class="readout-val" data-key="dim" data-astro-cid-q2lx4uns>—</span></div> <div class="readout-tag" data-key="status" data-astro-cid-q2lx4uns>—</div> </div> </div> <figcaption data-astro-cid-q2lx4uns>Drag the green tip around the unit circle. When v lines up with ±u (cos θ = ±1), the span of (u, v) collapses to a single line — the two vectors are linearly dependent. Anywhere else, the span fills the plane and the dimension is 2. The two cases that look &#39;most different&#39; on the cosine axis (the parallel and antiparallel snap-points) are the two cases where the span is degenerate. Orthogonality is the configuration that actually carries new information.</figcaption> </figure>  <script>(function(){const id = "ovo-q98h1ko";
+
+(() => {
+  const readColors = () => {
+    const s = getComputedStyle(document.documentElement);
+    const v = (n) => s.getPropertyValue(n).trim();
+    return {
+      accent: v('--accent') || '#b3661b',
+      muted: v('--fg-muted') || '#5a5f66',
+      faint: v('--fg-faint') || '#8d8d8d',
+      border: v('--border') || '#e4e1d6',
+      fg: v('--fg') || '#1a1a1a',
+    };
+  };
+  let colors = readColors();
+
+  const setup = () => {
+    const c = document.getElementById(id + '-c');
+    if (!c || c.dataset.ready) return;
+    c.dataset.ready = '1';
+    const ctx = c.getContext('2d');
+    const wrap = document.querySelector(`[data-ovo="${id}"]`);
+    const presets = wrap.querySelectorAll('.ovo-presets button');
+    const readouts = document.getElementById(id + '-readouts');
+    const rv = {};
+    readouts.querySelectorAll('[data-key]').forEach((el) => { rv[el.dataset.key] = el; });
+
+    let thetaDeg = 60;
+    const state = { dpr: 1, w: 0, h: 0 };
+
+    const fit = () => {
+      const rect = c.getBoundingClientRect();
+      const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+      state.dpr = dpr;
+      state.w = rect.width;
+      state.h = rect.height;
+      c.width = Math.round(rect.width * dpr);
+      c.height = Math.round(rect.height * dpr);
+    };
+
+    const themeObs = new MutationObserver(() => { colors = readColors(); requestRedraw(); });
+    themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+    let rafScheduled = false;
+    let visible = false;
+    const requestRedraw = () => {
+      if (rafScheduled || !visible) return;
+      rafScheduled = true;
+      requestAnimationFrame(() => { rafScheduled = false; draw(); });
+    };
+
+    const draw = () => {
+      const W = state.w, H = state.h;
+      if (W === 0) return;
+      ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+      const { accent, muted, faint, border, fg } = colors;
+
+      const cx = W / 2, cy = H / 2;
+      const R = Math.min(W, H) * 0.4;
+      const arrow = (x0, y0, x1, y1, color, width) => {
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0); ctx.lineTo(x1, y1);
+        ctx.stroke();
+        const a = Math.atan2(y1 - y0, x1 - x0);
+        const s = 8;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x1 - s * Math.cos(a - 0.4), y1 - s * Math.sin(a - 0.4));
+        ctx.lineTo(x1 - s * Math.cos(a + 0.4), y1 - s * Math.sin(a + 0.4));
+        ctx.closePath();
+        ctx.fill();
+      };
+
+      // Frame
+      ctx.strokeStyle = border;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Axes
+      ctx.strokeStyle = faint;
+      ctx.setLineDash([2, 4]);
+      ctx.beginPath();
+      ctx.moveTo(cx - R - 18, cy); ctx.lineTo(cx + R + 18, cy);
+      ctx.moveTo(cx, cy - R - 18); ctx.lineTo(cx, cy + R + 18);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      const theta = (thetaDeg * Math.PI) / 180;
+      const ux = cx + R, uy = cy;
+      const vx = cx + R * Math.cos(theta);
+      const vy = cy - R * Math.sin(theta);
+
+      // Span indicator: if dependent, highlight the line through origin and ±u
+      const cosT = Math.cos(theta);
+      const sinT = Math.sin(theta);
+      const dependent = Math.abs(sinT) < 1e-3;
+      if (dependent) {
+        ctx.strokeStyle = accent + '44';
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.moveTo(cx - R - 30, cy);
+        ctx.lineTo(cx + R + 30, cy);
+        ctx.stroke();
+      } else {
+        // Lightly fill the span (whole plane within frame): just a translucent square tint.
+        ctx.fillStyle = accent + '0d';
+        ctx.fillRect(cx - R - 30, cy - R - 30, 2 * R + 60, 2 * R + 60);
+      }
+
+      // Projection of v onto u (dashed line along x-axis)
+      const projLen = cosT * R;
+      ctx.strokeStyle = muted;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath();
+      ctx.moveTo(cx + projLen, cy);
+      ctx.lineTo(vx, vy);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Projection arrow (small)
+      if (Math.abs(projLen) > 4) {
+        arrow(cx, cy, cx + projLen, cy, muted, 1);
+      }
+
+      // Angle arc
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      const arcR = R * 0.22;
+      const start = 0;
+      const end = -theta;
+      ctx.arc(cx, cy, arcR, Math.min(start, end), Math.max(start, end));
+      ctx.stroke();
+
+      // u arrow
+      arrow(cx, cy, ux, uy, accent, 2.2);
+      ctx.fillStyle = accent;
+      ctx.font = 'bold 13px ' + (getComputedStyle(document.body).fontFamily || 'serif');
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('u', ux + 8, uy - 4);
+
+      // v arrow (different visual treatment)
+      const vColor = dependent ? muted : fg;
+      arrow(cx, cy, vx, vy, vColor, 2.2);
+      ctx.fillStyle = vColor;
+      ctx.fillText('v', vx + 8 * Math.cos(theta + 0.1), vy - 8 * Math.sin(theta + 0.1) - 2);
+
+      // Tip handle for v
+      ctx.fillStyle = accent;
+      ctx.beginPath();
+      ctx.arc(vx, vy, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = colors.bg || '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Angle label
+      ctx.fillStyle = faint;
+      ctx.font = '11px ui-monospace, monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const lblAngle = -theta / 2;
+      ctx.fillText(thetaDeg.toFixed(0) + '°', cx + (arcR + 12) * Math.cos(lblAngle), cy + (arcR + 12) * Math.sin(lblAngle));
+
+      // Update readouts
+      const cos2 = cosT * cosT;
+      rv.theta.textContent = thetaDeg.toFixed(0) + '°';
+      rv.cos.textContent = cosT.toFixed(3);
+      rv.cos2.textContent = cos2.toFixed(3);
+      rv.ind.textContent = (1 - cos2).toFixed(3);
+      rv.dim.textContent = dependent ? '1' : '2';
+      if (Math.abs(cosT - 1) < 1e-3) rv.status.textContent = 'parallel — same direction, dim 1';
+      else if (Math.abs(cosT + 1) < 1e-3) rv.status.textContent = 'antiparallel — sign-flipped, dim 1';
+      else if (Math.abs(cosT) < 1e-3) rv.status.textContent = 'orthogonal — independent, dim 2';
+      else rv.status.textContent = 'linearly independent, dim 2';
+    };
+
+    const setFromPointer = (e) => {
+      const rect = c.getBoundingClientRect();
+      const dx = e.clientX - rect.left - rect.width / 2;
+      const dy = -(e.clientY - rect.top - rect.height / 2);
+      let a = (Math.atan2(dy, dx) * 180) / Math.PI;
+      if (a < 0) a += 360;
+      thetaDeg = a;
+      requestRedraw();
+    };
+
+    let dragging = false;
+    c.addEventListener('pointerdown', (e) => {
+      dragging = true;
+      c.setPointerCapture?.(e.pointerId);
+      setFromPointer(e);
+    });
+    c.addEventListener('pointermove', (e) => { if (dragging) setFromPointer(e); });
+    c.addEventListener('pointerup', (e) => {
+      dragging = false;
+      try { c.releasePointerCapture?.(e.pointerId); } catch {}
+    });
+
+    presets.forEach((b) =>
+      b.addEventListener('click', () => {
+        thetaDeg = parseFloat(b.dataset.angle);
+        requestRedraw();
+      }),
+    );
+
+    const ro = new ResizeObserver(() => { fit(); requestRedraw(); });
+    ro.observe(c);
+
+    const io = new IntersectionObserver((entries) => {
+      const was = visible;
+      visible = entries[0].isIntersecting;
+      if (visible && !was) { fit(); draw(); }
+    }, { rootMargin: '120px' });
+    io.observe(c);
+  };
+
+  setup();
+  document.addEventListener('astro:page-load', setup);
+  document.addEventListener('astro:after-swap', setup);
+})();
+})();</script>
+<p>The information argument is the cleanest way to see it. Define directional mutual information as <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>I</mi><mtext>dir</mtext></msub><mo stretchy="false">(</mo><mi mathvariant="bold">u</mi><mo separator="true">;</mo><mi mathvariant="bold">v</mi><mo stretchy="false">)</mo><mo>=</mo><msup><mrow><mi>cos</mi><mo>⁡</mo></mrow><mn>2</mn></msup><mi>θ</mi></mrow><annotation encoding="application/x-tex">I_\text{dir}(\mathbf{u}; \mathbf{v}) = \cos^2 \theta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0785em">I</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:-0.0785em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">dir</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathbf">u</span><span class="mpunct">;</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathbf" style="margin-right:0.016em">v</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.8141em"></span><span class="mop"><span class="mop">cos</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0278em">θ</span></span></span></span> — the fraction of <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">v</mi></mrow><annotation encoding="application/x-tex">\mathbf{v}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4444em"></span><span class="mord mathbf" style="margin-right:0.016em">v</span></span></span></span>‘s variance explained by <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">u</mi></mrow><annotation encoding="application/x-tex">\mathbf{u}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4444em"></span><span class="mord mathbf">u</span></span></span></span>. Both parallel and antiparallel give <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mrow><mi>cos</mi><mo>⁡</mo></mrow><mn>2</mn></msup><mo>=</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">\cos^2 = 1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em"></span><span class="mop"><span class="mop">cos</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">1</span></span></span></span>: each one is reconstructable from the other up to a sign. Only orthogonality gives <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mrow><mi>cos</mi><mo>⁡</mo></mrow><mn>2</mn></msup><mo>=</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\cos^2 = 0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em"></span><span class="mop"><span class="mop">cos</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">0</span></span></span></span>: neither carries any information about the other.</p>
+<figure class="viz"> <div class="viz-controls" style="justify-content:space-between"> <span class="faint" id="sic-3w9of0w-legend"> <span style="color:var(--accent)">— cos θ</span>
+&nbsp; <span style="color:var(--fg-muted)">‒ ‒ cos² θ (shared info)</span>
+&nbsp; <span style="color:var(--fg)">···· 1 − cos² θ (independence)</span> </span> <span class="readout" id="sic-3w9of0w-readout">θ = 90°</span> </div> <canvas id="sic-3w9of0w-c" height="260" aria-label="Cosine, cosine squared, and one minus cosine squared as functions of angle"></canvas> <figcaption>Three quantities on the cosine axis. The similarity cos θ (accent solid) bottoms out at 180°. Shared information cos²θ (dashed) is the actual redundancy measure — it is maximized at both 0° and 180°, so &#39;opposite&#39; and &#39;identical&#39; are equally redundant. The independence curve 1 − cos²θ (dotted) peaks at exactly 90°. Drag along the chart to read the three values at any angle.</figcaption> </figure> <script>(function(){const id = "sic-3w9of0w";
+
+(() => {
+  const readColors = () => {
+    const s = getComputedStyle(document.documentElement);
+    const v = (n) => s.getPropertyValue(n).trim();
+    return {
+      accent: v('--accent') || '#b3661b',
+      muted: v('--fg-muted') || '#5a5f66',
+      faint: v('--fg-faint') || '#8d8d8d',
+      border: v('--border') || '#e4e1d6',
+      fg: v('--fg') || '#1a1a1a',
+    };
+  };
+  let colors = readColors();
+
+  const setup = () => {
+    const c = document.getElementById(id + '-c');
+    if (!c || c.dataset.ready) return;
+    c.dataset.ready = '1';
+    const ctx = c.getContext('2d');
+    const readout = document.getElementById(id + '-readout');
+
+    let thetaDeg = 90;
+    const state = { dpr: 1, w: 0, h: 0 };
+
+    const fit = () => {
+      const rect = c.getBoundingClientRect();
+      const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+      state.dpr = dpr;
+      state.w = rect.width;
+      state.h = rect.height;
+      c.width = Math.round(rect.width * dpr);
+      c.height = Math.round(rect.height * dpr);
+    };
+
+    const themeObs = new MutationObserver(() => { colors = readColors(); requestRedraw(); });
+    themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+    let rafScheduled = false;
+    let visible = false;
+    const requestRedraw = () => {
+      if (rafScheduled || !visible) return;
+      rafScheduled = true;
+      requestAnimationFrame(() => { rafScheduled = false; draw(); });
+    };
+
+    const draw = () => {
+      const W = state.w, H = state.h;
+      if (W === 0) return;
+      ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+      const { accent, muted, faint, border, fg } = colors;
+
+      const padL = 40, padR = 14, padT = 18, padB = 34;
+      const plotW = W - padL - padR;
+      const plotH = H - padT - padB;
+      const xMin = 0, xMax = 360, yMin = -1.05, yMax = 1.1;
+      const sx = (x) => padL + ((x - xMin) / (xMax - xMin)) * plotW;
+      const sy = (y) => padT + ((yMax - y) / (yMax - yMin)) * plotH;
+
+      // Horizontal gridlines
+      ctx.strokeStyle = border;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      [-1, -0.5, 0, 0.5, 1].forEach((y) => { ctx.moveTo(padL, sy(y)); ctx.lineTo(W - padR, sy(y)); });
+      ctx.stroke();
+
+      // Axis labels
+      ctx.fillStyle = faint;
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      [-1, -0.5, 0, 0.5, 1].forEach((y) => { ctx.fillText(y.toString(), padL - 4, sy(y)); });
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      [0, 45, 90, 135, 180, 225, 270, 315, 360].forEach((x) => { ctx.fillText(x + '°', sx(x), H - padB + 6); });
+      ctx.fillStyle = muted;
+      ctx.fillText('angle θ', padL + plotW / 2, H - padB + 18);
+
+      const M = 360;
+      // cos²θ (dashed muted)
+      ctx.strokeStyle = muted;
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      for (let i = 0; i <= M; i++) {
+        const x = (i / M) * 360;
+        const t = (x * Math.PI) / 180;
+        const y = Math.cos(t) ** 2;
+        const px = sx(x), py = sy(y);
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // 1 - cos²θ (dotted fg)
+      ctx.strokeStyle = fg;
+      ctx.lineWidth = 1.4;
+      ctx.setLineDash([1.5, 3.5]);
+      ctx.beginPath();
+      for (let i = 0; i <= M; i++) {
+        const x = (i / M) * 360;
+        const t = (x * Math.PI) / 180;
+        const y = 1 - Math.cos(t) ** 2;
+        const px = sx(x), py = sy(y);
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // cos θ (solid accent) on top
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      for (let i = 0; i <= M; i++) {
+        const x = (i / M) * 360;
+        const t = (x * Math.PI) / 180;
+        const y = Math.cos(t);
+        const px = sx(x), py = sy(y);
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+
+      // Vertical marker at thetaDeg
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 3]);
+      ctx.beginPath();
+      ctx.moveTo(sx(thetaDeg), padT);
+      ctx.lineTo(sx(thetaDeg), H - padB);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Dots at the three curve values at θ
+      const t = (thetaDeg * Math.PI) / 180;
+      const ct = Math.cos(t);
+      const points = [
+        { y: ct, color: accent, label: 'cos θ' },
+        { y: ct * ct, color: muted, label: 'cos²θ' },
+        { y: 1 - ct * ct, color: fg, label: '1−cos²θ' },
+      ];
+      points.forEach(({ y, color }) => {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(sx(thetaDeg), sy(y), 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Highlight 90° tick differently
+      if (Math.abs(thetaDeg - 90) < 0.5) {
+        ctx.fillStyle = accent;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.font = 'bold 11px ui-monospace, monospace';
+        ctx.fillText('orthogonality', sx(90), padT + 12);
+      }
+
+      readout.textContent = 'θ = ' + thetaDeg.toFixed(0) + '°  ·  cos θ = ' + ct.toFixed(3)
+        + '  ·  cos²θ = ' + (ct * ct).toFixed(3)
+        + '  ·  1−cos²θ = ' + (1 - ct * ct).toFixed(3);
+    };
+
+    const setFromPointer = (e) => {
+      const rect = c.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const padL = 40;
+      const plotW = rect.width - 40 - 14;
+      let v = ((x - padL) / plotW) * 360;
+      v = Math.max(0, Math.min(360, v));
+      thetaDeg = v;
+      requestRedraw();
+    };
+
+    let dragging = false;
+    c.addEventListener('pointerdown', (e) => {
+      dragging = true;
+      c.setPointerCapture?.(e.pointerId);
+      setFromPointer(e);
+    });
+    c.addEventListener('pointermove', (e) => { if (dragging) setFromPointer(e); });
+    c.addEventListener('pointerup', (e) => {
+      dragging = false;
+      try { c.releasePointerCapture?.(e.pointerId); } catch {}
+    });
+
+    const ro = new ResizeObserver(() => { fit(); requestRedraw(); });
+    ro.observe(c);
+
+    const io = new IntersectionObserver((entries) => {
+      const was = visible;
+      visible = entries[0].isIntersecting;
+      if (visible && !was) { fit(); draw(); }
+    }, { rootMargin: '120px' });
+    io.observe(c);
+  };
+
+  setup();
+  document.addEventListener('astro:page-load', setup);
+  document.addEventListener('astro:after-swap', setup);
+})();
+})();</script>
+<p>The thesis in one line:</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mrow><mtext>  </mtext><mtext>max difference</mtext><mtext>  </mtext><mo>⟺</mo><mtext>  </mtext><msup><mrow><mi>cos</mi><mo>⁡</mo></mrow><mn>2</mn></msup><mi>θ</mi><mo>=</mo><mn>0</mn><mtext>  </mtext><mo>⟺</mo><mtext>  </mtext><mi mathvariant="bold">u</mi><mo>⊥</mo><mi mathvariant="bold">v</mi><mtext>  </mtext></mrow></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">\boxed{\;\text{max difference} \;\Longleftrightarrow\; \cos^2 \theta = 0 \;\Longleftrightarrow\; \mathbf{u} \perp \mathbf{v}\;}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.5681em;vertical-align:-0.364em"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.2041em"><span style="top:-3.5681em"><span class="pstrut" style="height:3.5681em"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mspace" style="margin-right:0.2778em"></span><span class="mord text"><span class="mord">max difference</span></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">⟺</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mop"><span class="mop">cos</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8641em"><span style="top:-3.113em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0278em">θ</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mord">0</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">⟺</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mord mathbf">u</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">⊥</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mord mathbf" style="margin-right:0.016em">v</span><span class="mspace" style="margin-right:0.2778em"></span></span></span></span></span><span style="top:-3.2041em"><span class="pstrut" style="height:3.5681em"></span><span class="stretchy fbox" style="height:1.5681em;border-style:solid;border-width:0.04em"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.364em"><span></span></span></span></span></span></span></span></span></span>
+<h2 id="clip-optimizes-for-the-wrong-target">CLIP optimizes for the wrong target<a class="heading-anchor-link" aria-label="Link to heading" href="#clip-optimizes-for-the-wrong-target"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>OpenAI’s CLIP is trained with InfoNCE — a softmax contrastive loss over a batch of <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi></mrow><annotation encoding="application/x-tex">N</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em"></span><span class="mord mathnormal" style="margin-right:0.109em">N</span></span></span></span> image-text pairs:</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi mathvariant="script">L</mi><mtext>CLIP</mtext></msub><mo>=</mo><mo>−</mo><mfrac><mn>1</mn><mi>N</mi></mfrac><munder><mo>∑</mo><mi>i</mi></munder><mi>log</mi><mo>⁡</mo><mfrac><mrow><mi>exp</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">m</mi></mrow><mrow><mi>i</mi><mi>i</mi></mrow></msub><mi mathvariant="normal">/</mi><mi>τ</mi><mo stretchy="false">)</mo></mrow><mrow><munder><mo>∑</mo><mi>k</mi></munder><mi>exp</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">m</mi></mrow><mrow><mi>i</mi><mi>k</mi></mrow></msub><mi mathvariant="normal">/</mi><mi>τ</mi><mo stretchy="false">)</mo></mrow></mfrac><mi mathvariant="normal">.</mi></mrow><annotation encoding="application/x-tex">\mathcal{L}_\text{CLIP} = -\frac{1}{N}\sum_i \log \frac{\exp(\mathrm{sim}_{ii}/\tau)}{\sum_k \exp(\mathrm{sim}_{ik}/\tau)}.</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em"></span><span class="mord"><span class="mord mathcal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">CLIP</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:2.7047em;vertical-align:-1.2777em"></span><span class="mord">−</span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em"><span style="top:-2.314em"><span class="pstrut" style="height:3em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.109em">N</span></span></span><span style="top:-3.23em"><span class="pstrut" style="height:3em"></span><span class="frac-line" style="border-bottom-width:0.04em"></span></span><span style="top:-3.677em"><span class="pstrut" style="height:3em"></span><span class="mord"><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.05em"><span style="top:-1.8723em;margin-left:0em"><span class="pstrut" style="height:3.05em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.05em"><span class="pstrut" style="height:3.05em"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.2777em"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mop">lo<span style="margin-right:0.0139em">g</span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.427em"><span style="top:-2.314em"><span class="pstrut" style="height:3em"></span><span class="mord"><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:0em">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1864em"><span style="top:-2.4003em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2997em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mop">exp</span><span class="mopen">(</span><span class="mord"><span class="mord"><span class="mord mathrm">sim</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em">ik</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.1132em">τ</span><span class="mclose">)</span></span></span><span style="top:-3.23em"><span class="pstrut" style="height:3em"></span><span class="frac-line" style="border-bottom-width:0.04em"></span></span><span style="top:-3.677em"><span class="pstrut" style="height:3em"></span><span class="mord"><span class="mop">exp</span><span class="mopen">(</span><span class="mord"><span class="mord"><span class="mord mathrm">sim</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">ii</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.1132em">τ</span><span class="mclose">)</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.9857em"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mord">.</span></span></span></span></span>
+<p>The gradient with respect to any negative similarity is strictly positive: the loss decreases monotonically as that similarity decreases. Cosine similarity is bounded below by <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>−</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">-1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em"></span><span class="mord">−</span><span class="mord">1</span></span></span></span>, so the global minimum of every negative term is antiparallel alignment. CLIP wants every pair of unlike concepts to be linearly dependent on each other.</p>
+<p>This is geometrically impossible at scale. In <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi mathvariant="double-struck">R</mi><mi>d</mi></msup></mrow><annotation encoding="application/x-tex">\mathbb{R}^d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8491em"></span><span class="mord"><span class="mord mathbb">R</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">d</span></span></span></span></span></span></span></span></span></span></span>, the maximum number of mutually antiparallel unit-vector pairs is exactly <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi></mrow><annotation encoding="application/x-tex">d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em"></span><span class="mord mathnormal">d</span></span></span></span> — one pair per coordinate axis. CLIP’s 512-dimensional embedding space carries at most 512 binary oppositions. ImageNet has 1,000 classes; the real world has millions of concepts. A loss demanding <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>cos</mi><mo>⁡</mo><mo>=</mo><mo>−</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">\cos = -1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em"></span><span class="mop">cos</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em"></span><span class="mord">−</span><span class="mord">1</span></span></span></span> for every negative is asking for a configuration that does not exist in the space it’s being computed in.</p>
+<p>The computational cost follows from the same mistake. Random unit vectors in <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi mathvariant="double-struck">S</mi><mrow><mi>d</mi><mo>−</mo><mn>1</mn></mrow></msup></mrow><annotation encoding="application/x-tex">\mathbb{S}^{d-1}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8491em"></span><span class="mord"><span class="mord mathbb">S</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">d</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span></span></span></span></span></span></span></span> concentrate near cosine zero with variance <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mi mathvariant="normal">/</mi><mi>d</mi></mrow><annotation encoding="application/x-tex">1/d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord">1/</span><span class="mord mathnormal">d</span></span></span></span> — for <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mo>=</mo><mn>512</mn></mrow><annotation encoding="application/x-tex">d = 512</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em"></span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">512</span></span></span></span>, the standard deviation of a random pair’s cosine is around <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.044</mn></mrow><annotation encoding="application/x-tex">0.044</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">0.044</span></span></span></span>. The loss’s gradient is dominated by the rare negatives that happen to lie far enough from the equator to register; most of the batch contributes near-zero signal. To accumulate enough gradient, CLIP was trained with <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi><mo>=</mo><mn>32,768</mn></mrow><annotation encoding="application/x-tex">N = 32{,}768</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em"></span><span class="mord mathnormal" style="margin-right:0.109em">N</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em"></span><span class="mord">32</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">768</span></span></span></span> pairs per step, an <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi><mo>×</mo><mi>N</mi></mrow><annotation encoding="application/x-tex">N \times N</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em"></span><span class="mord mathnormal" style="margin-right:0.109em">N</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:0.6833em"></span><span class="mord mathnormal" style="margin-right:0.109em">N</span></span></span></span> similarity matrix at <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo lspace="0em" rspace="0em">∼</mo><mn>4</mn></mrow><annotation encoding="application/x-tex">{\sim}4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord"><span class="mrel">∼</span></span><span class="mord">4</span></span></span></span> GB per device, and a multi-year engineering effort in distributed training, gradient caching, and memory-efficient attention. The engineering was needed because the geometry was wrong.</p>
+<h2 id="siglip-gets-it-right">SigLIP gets it right<a class="heading-anchor-link" aria-label="Link to heading" href="#siglip-gets-it-right"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Google’s SigLIP replaces the softmax with a pairwise sigmoid:</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi mathvariant="script">L</mi><mtext>SigLIP</mtext></msub><mo>=</mo><munder><mo>∑</mo><mrow><mi>i</mi><mo separator="true">,</mo><mi>j</mi></mrow></munder><mi>log</mi><mo>⁡</mo><mtext> ⁣</mtext><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">(</mo><mn>1</mn><mo>+</mo><mi>exp</mi><mo>⁡</mo><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">(</mo><mo>−</mo><msub><mi>y</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo stretchy="false">(</mo><msub><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">m</mi></mrow><mrow><mi>i</mi><mi>j</mi></mrow></msub><mi mathvariant="normal">/</mi><mi>τ</mi><mo>−</mo><mi>b</mi><mo stretchy="false">)</mo><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">)</mo><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">)</mo><mo separator="true">,</mo></mrow><annotation encoding="application/x-tex">\mathcal{L}_\text{SigLIP} = \sum_{i, j} \log\!\big(1 + \exp\big(-y_{ij}(\mathrm{sim}_{ij}/\tau - b)\big)\big),</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em"></span><span class="mord"><span class="mord mathcal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">SigLIP</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:2.4638em;vertical-align:-1.4138em"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.05em"><span style="top:-1.8723em;margin-left:0em"><span class="pstrut" style="height:3.05em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight" style="margin-right:0.0572em">j</span></span></span></span><span style="top:-3.05em"><span class="pstrut" style="height:3.05em"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.4138em"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mop">lo<span style="margin-right:0.0139em">g</span></span><span class="mspace" style="margin-right:-0.1667em"></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em"></span><span class="mop">exp</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord"><span class="mord"><span class="mord mathrm">sim</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.1132em">τ</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em"></span><span class="mord mathnormal">b</span><span class="mclose">)</span><span class="mord"><span class="delimsizing size1">)</span></span><span class="mord"><span class="delimsizing size1">)</span></span><span class="mpunct">,</span></span></span></span></span>
+<p>with <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>y</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>=</mo><mo>±</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">y_{ij} = \pm 1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em"></span><span class="mord">±</span><span class="mord">1</span></span></span></span> for matched/mismatched and <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>b</mi></mrow><annotation encoding="application/x-tex">b</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em"></span><span class="mord mathnormal">b</span></span></span></span> a learnable bias. The sigmoid gradient on mismatched pairs vanishes once <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">m</mi></mrow><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>&lt;</mo><mi>b</mi></mrow><annotation encoding="application/x-tex">\mathrm{sim}_{ij} &lt; b</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.954em;vertical-align:-0.2861em"></span><span class="mord"><span class="mord"><span class="mord mathrm">sim</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">&lt;</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6944em"></span><span class="mord mathnormal">b</span></span></span></span> by a few multiples of <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>τ</mi></mrow><annotation encoding="application/x-tex">\tau</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em"></span><span class="mord mathnormal" style="margin-right:0.1132em">τ</span></span></span></span>. The loss does not push negatives toward <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>−</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">-1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em"></span><span class="mord">−</span><span class="mord">1</span></span></span></span>; it requires only that they fall below the bias.</p>
+<p>That single change aligns the objective with the geometry. Random embeddings on <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi mathvariant="double-struck">S</mi><mrow><mi>d</mi><mo>−</mo><mn>1</mn></mrow></msup></mrow><annotation encoding="application/x-tex">\mathbb{S}^{d-1}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8491em"></span><span class="mord"><span class="mord mathbb">S</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">d</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span></span></span></span></span></span></span></span> already concentrate around cosine zero — exactly where SigLIP is willing to leave them. The loss isn’t fighting the spherical geometry to drag every negative across the equator. The pairwise structure eliminates the <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi><mo>×</mo><mi>N</mi></mrow><annotation encoding="application/x-tex">N \times N</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em"></span><span class="mord mathnormal" style="margin-right:0.109em">N</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:0.6833em"></span><span class="mord mathnormal" style="margin-right:0.109em">N</span></span></span></span> softmax competition. The result is better zero-shot accuracy with smaller batches and less compute. The headline framing is “sigmoid beats softmax,” but the structural framing is sharper: targeting orthogonality lets the network use the geometry it is operating on instead of fighting against it.</p>
+<h2 id="cross-entropy-has-always-targeted-orthogonality">Cross-entropy has always targeted orthogonality<a class="heading-anchor-link" aria-label="Link to heading" href="#cross-entropy-has-always-targeted-orthogonality"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The cross-entropy loss has been doing the right thing the whole time. For discrete distributions <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi><mo separator="true">,</mo><mi>q</mi></mrow><annotation encoding="application/x-tex">p, q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em"></span><span class="mord mathnormal">p</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0359em">q</span></span></span></span>,</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>H</mi><mo stretchy="false">(</mo><mi>p</mi><mo separator="true">,</mo><mi>q</mi><mo stretchy="false">)</mo><mo>=</mo><mo>−</mo><munder><mo>∑</mo><mi>x</mi></munder><mi>p</mi><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mi>log</mi><mo>⁡</mo><mi>q</mi><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mo separator="true">,</mo></mrow><annotation encoding="application/x-tex">H(p, q) = -\sum_x p(x) \log q(x),</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord mathnormal" style="margin-right:0.0813em">H</span><span class="mopen">(</span><span class="mord mathnormal">p</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0359em">q</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:2.3em;vertical-align:-1.25em"></span><span class="mord">−</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.05em"><span style="top:-1.9em;margin-left:0em"><span class="pstrut" style="height:3.05em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">x</span></span></span><span style="top:-3.05em"><span class="pstrut" style="height:3.05em"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.25em"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal">p</span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mop">lo<span style="margin-right:0.0139em">g</span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0359em">q</span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose">)</span><span class="mpunct">,</span></span></span></span></span>
+<p>and the key fact is its singularity structure: if <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">u</mi><mi mathvariant="normal">p</mi><mi mathvariant="normal">p</mi></mrow><mo stretchy="false">(</mo><mi>p</mi><mo stretchy="false">)</mo><mo>∩</mo><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">u</mi><mi mathvariant="normal">p</mi><mi mathvariant="normal">p</mi></mrow><mo stretchy="false">(</mo><mi>q</mi><mo stretchy="false">)</mo><mo>=</mo><mi mathvariant="normal">∅</mi></mrow><annotation encoding="application/x-tex">\mathrm{supp}(p) \cap \mathrm{supp}(q) = \varnothing</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathrm">supp</span></span><span class="mopen">(</span><span class="mord mathnormal">p</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">∩</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathrm">supp</span></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0359em">q</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6633em;vertical-align:-0.0817em"></span><span class="mord amsrm">∅</span></span></span></span>, then <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>H</mi><mo stretchy="false">(</mo><mi>p</mi><mo separator="true">,</mo><mi>q</mi><mo stretchy="false">)</mo><mo>=</mo><mo>+</mo><mi mathvariant="normal">∞</mi></mrow><annotation encoding="application/x-tex">H(p, q) = +\infty</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord mathnormal" style="margin-right:0.0813em">H</span><span class="mopen">(</span><span class="mord mathnormal">p</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0359em">q</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6667em;vertical-align:-0.0833em"></span><span class="mord">+</span><span class="mord">∞</span></span></span></span>. Disjoint supports are the probabilistic analog of orthogonal vectors — distributions that share no mass, like vectors that share no projection. The cross-entropy singularity is the orthogonality condition lifted into probability.</p>
+<p>The same structure shows up directly in classifier weights. For a softmax classifier with logits <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>z</mi><mi>k</mi></msub><mo>=</mo><msubsup><mi mathvariant="bold">w</mi><mi>k</mi><mi mathvariant="normal">⊤</mi></msubsup><mi mathvariant="bold">h</mi></mrow><annotation encoding="application/x-tex">z_k = \mathbf{w}_k^\top \mathbf{h}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.044em">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:-0.044em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1.1322em;vertical-align:-0.2831em"></span><span class="mord"><span class="mord mathbf" style="margin-right:0.016em">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8491em"><span style="top:-2.4169em;margin-left:-0.016em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em">k</span></span></span><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">⊤</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2831em"><span></span></span></span></span></span></span><span class="mord mathbf">h</span></span></span></span> and class label <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi></mrow><annotation encoding="application/x-tex">y</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em"></span><span class="mord mathnormal" style="margin-right:0.0359em">y</span></span></span></span>, the gradient on wrong-class logits <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>z</mi><mi>k</mi></msub></mrow><annotation encoding="application/x-tex">z_k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.044em">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:-0.044em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span></span></span></span> pushes them toward <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>−</mo><mi mathvariant="normal">∞</mi></mrow><annotation encoding="application/x-tex">-\infty</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6667em;vertical-align:-0.0833em"></span><span class="mord">−</span><span class="mord">∞</span></span></span></span>. On the unit sphere the most efficient path to a smaller <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>z</mi><mi>k</mi></msub></mrow><annotation encoding="application/x-tex">z_k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.044em">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:-0.044em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span></span></span></span> is <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="bold">w</mi><mi>k</mi></msub><mo>⊥</mo><mi mathvariant="bold">h</mi></mrow><annotation encoding="application/x-tex">\mathbf{w}_k \perp \mathbf{h}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em"></span><span class="mord"><span class="mord mathbf" style="margin-right:0.016em">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:-0.016em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">⊥</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6944em"></span><span class="mord mathbf">h</span></span></span></span> — the equilibrium has each wrong-class weight orthogonal to the embedding, not antiparallel to it. The “well-separated representations” that plain cross-entropy classifiers produce without any contrastive auxiliary loss are not a happy accident. They are orthogonal by construction.</p>
+<h2 id="the-simplex-packing-result">The simplex packing result<a class="heading-anchor-link" aria-label="Link to heading" href="#the-simplex-packing-result"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>What is the optimal arrangement of <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi></mrow><annotation encoding="application/x-tex">n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em"></span><span class="mord mathnormal">n</span></span></span></span> class representations on <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi mathvariant="double-struck">S</mi><mrow><mi>d</mi><mo>−</mo><mn>1</mn></mrow></msup></mrow><annotation encoding="application/x-tex">\mathbb{S}^{d-1}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8491em"></span><span class="mord"><span class="mord mathbb">S</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">d</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span></span></span></span></span></span></span></span> for <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>≤</mo><mi>d</mi><mo>+</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">n \le d + 1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7719em;vertical-align:-0.136em"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">≤</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.0833em"></span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">1</span></span></span></span>? It is the regular simplex: <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi></mrow><annotation encoding="application/x-tex">n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em"></span><span class="mord mathnormal">n</span></span></span></span> unit vectors with all pairwise cosines equal to</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>cos</mi><mo>⁡</mo><msub><mi>θ</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>=</mo><mo>−</mo><mfrac><mn>1</mn><mrow><mi>n</mi><mo>−</mo><mn>1</mn></mrow></mfrac><mi mathvariant="normal">.</mi></mrow><annotation encoding="application/x-tex">\cos\theta_{ij} = -\frac{1}{n - 1}.</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9805em;vertical-align:-0.2861em"></span><span class="mop">cos</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:2.0908em;vertical-align:-0.7693em"></span><span class="mord">−</span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em"><span style="top:-2.314em"><span class="pstrut" style="height:3em"></span><span class="mord"><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mord">1</span></span></span><span style="top:-3.23em"><span class="pstrut" style="height:3em"></span><span class="frac-line" style="border-bottom-width:0.04em"></span></span><span style="top:-3.677em"><span class="pstrut" style="height:3em"></span><span class="mord"><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.7693em"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mord">.</span></span></span></span></span>
+<p>For <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>2</mn></mrow><annotation encoding="application/x-tex">n = 2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">2</span></span></span></span> this is <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>−</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">-1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em"></span><span class="mord">−</span><span class="mord">1</span></span></span></span> — exactly antiparallel. The binary case is where the opposition-is-difference intuition came from, and where it is correct. The confusion starts when that intuition is generalized.</p>
+<figure class="viz"> <div class="viz-controls"> <label>
+classes <em style="font-style:normal;color:var(--fg)">n</em> <input type="range" min="2" max="100" step="1" value="10" id="sp-vfgtsor-n" aria-label="number of classes"> <span class="readout" id="sp-vfgtsor-readout">n = 10 · cos θ ≈ −0.111</span> </label> </div> <canvas id="sp-vfgtsor-c" height="260" aria-label="Optimal inter-class cosine on the simplex as a function of n"></canvas> <figcaption>The optimal inter-class cosine cos θ = −1/(n−1) for n classes on the simplex. The curve crosses from opposition territory (the bottom dotted line, n=2) into orthogonality territory (the top dashed line, the asymptote) almost immediately. By n=3 the optimal cosine is already only −0.5; by n=10 it is −0.11; by n=50, −0.02. Multi-class is orthogonality up to vanishing corrections. Drag the n slider to see where any specific problem sits.</figcaption> </figure> <script>(function(){const id = "sp-vfgtsor";
+
+(() => {
+  const readColors = () => {
+    const s = getComputedStyle(document.documentElement);
+    const v = (n) => s.getPropertyValue(n).trim();
+    return {
+      accent: v('--accent') || '#b3661b',
+      muted: v('--fg-muted') || '#5a5f66',
+      faint: v('--fg-faint') || '#8d8d8d',
+      border: v('--border') || '#e4e1d6',
+      fg: v('--fg') || '#1a1a1a',
+    };
+  };
+  let colors = readColors();
+
+  const setup = () => {
+    const c = document.getElementById(id + '-c');
+    if (!c || c.dataset.ready) return;
+    c.dataset.ready = '1';
+    const ctx = c.getContext('2d');
+    const slider = document.getElementById(id + '-n');
+    const readout = document.getElementById(id + '-readout');
+
+    let n = 10;
+    const state = { dpr: 1, w: 0, h: 0 };
+
+    const fit = () => {
+      const rect = c.getBoundingClientRect();
+      const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+      state.dpr = dpr;
+      state.w = rect.width;
+      state.h = rect.height;
+      c.width = Math.round(rect.width * dpr);
+      c.height = Math.round(rect.height * dpr);
+    };
+
+    const themeObs = new MutationObserver(() => { colors = readColors(); requestRedraw(); });
+    themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+    let rafScheduled = false;
+    let visible = false;
+    const requestRedraw = () => {
+      if (rafScheduled || !visible) return;
+      rafScheduled = true;
+      requestAnimationFrame(() => { rafScheduled = false; draw(); });
+    };
+
+    const draw = () => {
+      const W = state.w, H = state.h;
+      if (W === 0) return;
+      ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+      const { accent, muted, faint, border, fg } = colors;
+
+      const padL = 42, padR = 16, padT = 18, padB = 34;
+      const plotW = W - padL - padR;
+      const plotH = H - padT - padB;
+      const xMin = 2, xMax = 100, yMin = -1.05, yMax = 0.1;
+      const sx = (x) => padL + ((x - xMin) / (xMax - xMin)) * plotW;
+      const sy = (y) => padT + ((yMax - y) / (yMax - yMin)) * plotH;
+
+      // Grid
+      ctx.strokeStyle = border;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      [-1, -0.75, -0.5, -0.25, 0].forEach((y) => { ctx.moveTo(padL, sy(y)); ctx.lineTo(W - padR, sy(y)); });
+      ctx.stroke();
+
+      // Labels
+      ctx.fillStyle = faint;
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      [-1, -0.5, 0].forEach((y) => { ctx.fillText(y.toString(), padL - 4, sy(y)); });
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      [2, 10, 25, 50, 75, 100].forEach((x) => { ctx.fillText(x.toString(), sx(x), H - padB + 6); });
+      ctx.fillStyle = muted;
+      ctx.fillText('number of classes n', padL + plotW / 2, H - padB + 18);
+
+      // Reference: orthogonality (0) and opposition (-1)
+      ctx.strokeStyle = muted;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath();
+      ctx.moveTo(padL, sy(0)); ctx.lineTo(W - padR, sy(0));
+      ctx.stroke();
+      ctx.setLineDash([1.5, 3.5]);
+      ctx.beginPath();
+      ctx.moveTo(padL, sy(-1)); ctx.lineTo(W - padR, sy(-1));
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = faint;
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText('orthogonality (cos = 0)', W - padR - 4, sy(0) - 4);
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'top';
+      ctx.fillText('opposition (cos = −1)', W - padR - 4, sy(-1) + 4);
+
+      // Curve: -1/(n-1)
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      const M = 200;
+      for (let i = 0; i <= M; i++) {
+        const x = xMin + (i / M) * (xMax - xMin);
+        const y = -1 / (x - 1);
+        const px = sx(x), py = sy(y);
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+
+      // Annotated key points
+      const keys = [2, 3, 10, 50];
+      ctx.fillStyle = muted;
+      ctx.font = '10px ui-monospace, monospace';
+      keys.forEach((kn) => {
+        const yy = -1 / (kn - 1);
+        const px = sx(kn), py = sy(yy);
+        ctx.fillStyle = muted;
+        ctx.beginPath();
+        ctx.arc(px, py, 2.6, 0, Math.PI * 2);
+        ctx.fill();
+        if (kn === 2 || kn === 3 || kn === 10 || kn === 50) {
+          ctx.textAlign = 'left';
+          ctx.textBaseline = kn === 2 ? 'top' : 'bottom';
+          const offY = kn === 2 ? 8 : -6;
+          ctx.fillText('n=' + kn + ' (' + yy.toFixed(2) + ')', px + 6, py + offY);
+        }
+      });
+
+      // Current n marker
+      const ny = -1 / (n - 1);
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath();
+      ctx.moveTo(sx(n), padT); ctx.lineTo(sx(n), H - padB);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = accent;
+      ctx.beginPath();
+      ctx.arc(sx(n), sy(ny), 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = fg;
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+
+      readout.textContent = 'n = ' + n + ' · cos θ ≈ ' + ny.toFixed(3);
+    };
+
+    slider.addEventListener('input', () => { n = parseInt(slider.value, 10); requestRedraw(); });
+
+    const ro = new ResizeObserver(() => { fit(); requestRedraw(); });
+    ro.observe(c);
+
+    const io = new IntersectionObserver((entries) => {
+      const was = visible;
+      visible = entries[0].isIntersecting;
+      if (visible && !was) { fit(); draw(); }
+    }, { rootMargin: '120px' });
+    io.observe(c);
+  };
+
+  setup();
+  document.addEventListener('astro:page-load', setup);
+  document.addEventListener('astro:after-swap', setup);
+})();
+})();</script>
+<p>For <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>≥</mo><mn>3</mn></mrow><annotation encoding="application/x-tex">n \ge 3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7719em;vertical-align:-0.136em"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">≥</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">3</span></span></span></span> the optimal configuration moves rapidly toward orthogonality. <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>3</mn></mrow><annotation encoding="application/x-tex">n = 3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">3</span></span></span></span>: <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>−</mo><mstyle scriptlevel="0" displaystyle="false"><mfrac><mn>1</mn><mn>2</mn></mfrac></mstyle></mrow><annotation encoding="application/x-tex">-\tfrac{1}{2}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em"></span><span class="mord">−</span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em"><span style="top:-2.655em"><span class="pstrut" style="height:3em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2</span></span></span></span><span style="top:-3.23em"><span class="pstrut" style="height:3em"></span><span class="frac-line" style="border-bottom-width:0.04em"></span></span><span style="top:-3.394em"><span class="pstrut" style="height:3em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span>. <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>10</mn></mrow><annotation encoding="application/x-tex">n = 10</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">10</span></span></span></span>: <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>−</mo><mstyle scriptlevel="0" displaystyle="false"><mfrac><mn>1</mn><mn>9</mn></mfrac></mstyle><mo>≈</mo><mo>−</mo><mn>0.11</mn></mrow><annotation encoding="application/x-tex">-\tfrac{1}{9} \approx -0.11</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em"></span><span class="mord">−</span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em"><span style="top:-2.655em"><span class="pstrut" style="height:3em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">9</span></span></span></span><span style="top:-3.23em"><span class="pstrut" style="height:3em"></span><span class="frac-line" style="border-bottom-width:0.04em"></span></span><span style="top:-3.394em"><span class="pstrut" style="height:3em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em"></span><span class="mord">−</span><span class="mord">0.11</span></span></span></span>. <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>50</mn></mrow><annotation encoding="application/x-tex">n = 50</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">50</span></span></span></span>: <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo lspace="0em" rspace="0em">∼</mo><mo>−</mo><mn>0.02</mn></mrow><annotation encoding="application/x-tex">{\sim} -0.02</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6667em;vertical-align:-0.0833em"></span><span class="mord"><span class="mrel">∼</span></span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">0.02</span></span></span></span>. As <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>→</mo><mi mathvariant="normal">∞</mi></mrow><annotation encoding="application/x-tex">n \to \infty</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.4306em"></span><span class="mord">∞</span></span></span></span>, <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>cos</mi><mo>⁡</mo><mi>θ</mi><mo>→</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\cos\theta \to 0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em"></span><span class="mop">cos</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0278em">θ</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">0</span></span></span></span>. Beyond the smallest cases the simplex <em>is</em> orthogonal up to a vanishing correction, and any loss that insists on <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>cos</mi><mo>⁡</mo><mo>=</mo><mo>−</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">\cos = -1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em"></span><span class="mop">cos</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em"></span><span class="mord">−</span><span class="mord">1</span></span></span></span> for every negative is asking the geometry for something it cannot supply.</p>
+<h2 id="what-changes-if-you-get-the-target-right">What changes if you get the target right<a class="heading-anchor-link" aria-label="Link to heading" href="#what-changes-if-you-get-the-target-right"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Every method that targets orthogonality (SigLIP, plain cross-entropy) shares two properties: it aligns with the natural concentration of measure on <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi mathvariant="double-struck">S</mi><mrow><mi>d</mi><mo>−</mo><mn>1</mn></mrow></msup></mrow><annotation encoding="application/x-tex">\mathbb{S}^{d-1}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8491em"></span><span class="mord"><span class="mord mathbb">S</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">d</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span></span></span></span></span></span></span></span>, and it achieves comparable or better accuracy with substantially less compute. Every method that targets opposition (SimCLR, CLIP, SupCon) requires enormous batches to overcome the geometric tension between its objective and the high-dimensional sphere it is operating on.</p>
+<p>The thesis, in one sentence: the geometry of difference is not opposition; it is orthogonality. The most influential contrastive losses of the past five years spent enormous engineering effort compensating for a single geometric mistake — and the loss that did not make the mistake was sitting beside them the whole time, in the form of plain cross-entropy.</p>  </article> <nav class="post-nav" aria-label="Adjacent posts"><a href="/blog/activations-are-bad-for-geometry/" class="prev" rel="prev"><div class="label">← Previous</div><div class="title">Activations Are Bad for Geometry</div></a><a href="/blog/attention-is-a-kernel/" class="next" rel="next"><div class="label">Next →</div><div class="title">Attention is Explainable Because it is a Kernel</div></a></nav> <section aria-label="Comments" id="giscus-mount" style="margin-top:3rem" data-giscus="{&#34;repo&#34;:&#34;mlnomadpy/blog&#34;,&#34;repoId&#34;:&#34;MDEwOlJlcG9zaXRvcnk0MDQ4MzY2NDU=&#34;,&#34;category&#34;:&#34;Announcements&#34;,&#34;categoryId&#34;:&#34;DIC_kwDOGCFRJc4C9EiR&#34;,&#34;mapping&#34;:&#34;pathname&#34;,&#34;reactionsEnabled&#34;:&#34;1&#34;,&#34;emitMetadata&#34;:&#34;0&#34;,&#34;inputPosition&#34;:&#34;top&#34;,&#34;theme&#34;:&#34;preferred_color_scheme&#34;,&#34;lang&#34;:&#34;en&#34;}"></section><script>
+    (() => {
+      const load = () => {
+        const mount = document.getElementById('giscus-mount');
+        if (!mount || mount.dataset.loaded === '1') return;
+        const cfg = JSON.parse(mount.dataset.giscus);
+        const theme = document.documentElement.getAttribute('data-theme')
+          || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        const s = document.createElement('script');
+        s.src = 'https://giscus.app/client.js';
+        s.async = true;
+        s.crossOrigin = 'anonymous';
+        const attrs = {
+          'data-repo': cfg.repo,
+          'data-repo-id': cfg.repoId,
+          'data-category': cfg.category,
+          'data-category-id': cfg.categoryId,
+          'data-mapping': cfg.mapping,
+          'data-strict': '0',
+          'data-reactions-enabled': cfg.reactionsEnabled,
+          'data-emit-metadata': cfg.emitMetadata,
+          'data-input-position': cfg.inputPosition,
+          'data-theme': theme,
+          'data-lang': cfg.lang,
+          'data-loading': 'lazy',
+        };
+        for (const k in attrs) s.setAttribute(k, attrs[k]);
+        mount.appendChild(s);
+        mount.dataset.loaded = '1';
+      };
+      load();
+      document.addEventListener('astro:page-load', load);
+      document.addEventListener('astro:after-swap', load);
+    })();
+  </script> <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('pre').forEach((pre) => {
+        if (pre.dataset.copyEnhanced) return;
+        pre.dataset.copyEnhanced = '1';
+        const btn = document.createElement('button');
+        btn.className = 'code-copy';
+        btn.type = 'button';
+        btn.textContent = 'copy';
+        btn.setAttribute('aria-label', 'Copy code');
+        btn.addEventListener('click', async () => {
+          const code = pre.querySelector('code');
+          const text = (code ? code.innerText : pre.innerText) || '';
+          try {
+            await navigator.clipboard.writeText(text);
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = 'copy';
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+        pre.appendChild(btn);
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>  </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> </span> </footer> </body></html>
