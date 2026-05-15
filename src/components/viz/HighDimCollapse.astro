@@ -1,0 +1,162 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 220 } = Astro.props;
+const id = `hdc-${Math.random().toString(36).slice(2, 9)}`;
+---
+<figure class="viz">
+  <canvas id={`${id}-c`} height={height} aria-label="ReLU dead-coordinate probability versus layer width"></canvas>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<script is:inline define:vars={{ id }}>
+(() => {
+  const readColors = () => {
+    const s = getComputedStyle(document.documentElement);
+    const v = (n) => s.getPropertyValue(n).trim();
+    return {
+      accent: v('--accent') || '#b3661b',
+      fg: v('--fg') || '#1a1a1a',
+      muted: v('--fg-muted') || '#5a5f66',
+      faint: v('--fg-faint') || '#8d8d8d',
+      border: v('--border') || '#e4e1d6',
+    };
+  };
+  let colors = readColors();
+
+  const setup = () => {
+    const c = document.getElementById(id + '-c');
+    if (!c || c.dataset.ready) return;
+    c.dataset.ready = '1';
+    const ctx = c.getContext('2d');
+    const state = { dpr: 1, w: 0, h: 0 };
+
+    const fit = () => {
+      const rect = c.getBoundingClientRect();
+      const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+      state.dpr = dpr;
+      state.w = rect.width;
+      state.h = rect.height;
+      c.width = Math.round(rect.width * dpr);
+      c.height = Math.round(rect.height * dpr);
+    };
+
+    const draw = () => {
+      const W = state.w, H = state.h;
+      if (W === 0) return;
+      ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+      const { accent, muted, faint, border } = colors;
+
+      const padL = 38, padR = 14, padT = 16, padB = 32;
+      const plotW = W - padL - padR;
+      const plotH = H - padT - padB;
+      const xMin = 1, xMax = 24, yMin = 0, yMax = 1.05;
+      const sx = (x) => padL + ((x - xMin) / (xMax - xMin)) * plotW;
+      const sy = (y) => padT + ((yMax - y) / (yMax - yMin)) * plotH;
+
+      // Gridlines
+      ctx.strokeStyle = border;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let k = 0; k <= 4; k++) {
+        const yy = (k / 4);
+        ctx.moveTo(padL, sy(yy));
+        ctx.lineTo(W - padR, sy(yy));
+      }
+      ctx.stroke();
+
+      // Axis ticks
+      ctx.fillStyle = faint;
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      for (let k = 0; k <= 4; k++) {
+        const yy = k / 4;
+        ctx.fillText(yy.toFixed(2), padL - 4, sy(yy));
+      }
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      for (const t of [1, 5, 10, 15, 20, 24]) {
+        ctx.fillText(String(t), sx(t), H - padB + 5);
+      }
+      // Axis labels
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = muted;
+      ctx.fillText('layer width n', padL + plotW / 2, H - padB + 18);
+      ctx.save();
+      ctx.translate(10, padT + plotH / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillText('P(≥ 1 zeroed)', 0, 0);
+      ctx.restore();
+
+      // Expected-fraction reference line at 0.5
+      ctx.strokeStyle = muted;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath();
+      ctx.moveTo(padL, sy(0.5));
+      ctx.lineTo(W - padR, sy(0.5));
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = faint;
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText('E[active fraction] = ½', W - padR - 4, sy(0.5) - 4);
+
+      // 1 - 2^-n curve
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      const M = 240;
+      for (let i = 0; i <= M; i++) {
+        const x = xMin + (i / M) * (xMax - xMin);
+        const y = 1 - Math.pow(0.5, x);
+        const px = sx(x), py = sy(y);
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+
+      // Annotate n=10
+      const ax = 10, ay = 1 - Math.pow(0.5, 10);
+      ctx.fillStyle = accent;
+      ctx.beginPath();
+      ctx.arc(sx(ax), sy(ay), 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = colors.fg;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.font = '11px ui-monospace, monospace';
+      ctx.fillText('n = 10 → 99.9%', sx(ax) + 8, sy(ay) - 2);
+    };
+
+    const themeObs = new MutationObserver(() => { colors = readColors(); requestRedraw(); });
+    themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+    let rafScheduled = false;
+    let visible = false;
+    const requestRedraw = () => {
+      if (rafScheduled || !visible) return;
+      rafScheduled = true;
+      requestAnimationFrame(() => { rafScheduled = false; draw(); });
+    };
+
+    const ro = new ResizeObserver(() => { fit(); requestRedraw(); });
+    ro.observe(c);
+
+    const io = new IntersectionObserver((entries) => {
+      const was = visible;
+      visible = entries[0].isIntersecting;
+      if (visible && !was) { fit(); draw(); }
+    }, { rootMargin: '120px' });
+    io.observe(c);
+  };
+
+  setup();
+  document.addEventListener('astro:page-load', setup);
+  document.addEventListener('astro:after-swap', setup);
+})();
+</script>

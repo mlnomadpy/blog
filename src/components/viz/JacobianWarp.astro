@@ -1,0 +1,461 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 280 } = Astro.props;
+const id = `jw-${Math.random().toString(36).slice(2, 9)}`;
+const kinds = [
+  { value: 'identity', label: 'identity' },
+  { value: 'relu', label: 'ReLU' },
+  { value: 'sigmoid', label: 'sigmoid' },
+  { value: 'tanh', label: 'tanh' },
+  { value: 'gelu', label: 'GELU' },
+];
+---
+<figure class="viz">
+  <div class="viz-controls jw-controls" data-jw={id}>
+    <div class="jw-row">
+      <div class="jw-buttons">
+        {kinds.map((k, i) => (
+          <button type="button" data-act={k.value} class={i === 1 ? 'active' : ''}>{k.label}</button>
+        ))}
+      </div>
+      <div class="jw-mode" role="group" aria-label="dimensionality">
+        <button type="button" data-mode="2d" class="active">2D</button>
+        <button type="button" data-mode="3d">3D</button>
+      </div>
+    </div>
+    <label>
+      <span style="color:var(--fg)">W rotation θ</span>
+      <input type="range" min="-0.7854" max="0.7854" step="0.02" value="0" id={`${id}-theta`} aria-label="W rotation angle" />
+      <span class="readout" id={`${id}-readout`}>0°</span>
+    </label>
+    <span class="faint jw-hint" id={`${id}-hint`}>2D: grid + unit disk · drag with cursor disabled</span>
+  </div>
+  <div class="jw-pair">
+    <div class="jw-cell">
+      <h4>input space</h4>
+      <canvas id={`${id}-in`} height={height} aria-label="Input space"></canvas>
+    </div>
+    <div class="jw-cell">
+      <h4>output space φ(Wx)</h4>
+      <canvas id={`${id}-out`} height={height} aria-label="Output space after linear map and activation"></canvas>
+    </div>
+  </div>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+  .jw-controls { flex-direction: column; align-items: stretch; gap: 0.6rem; }
+  .jw-row { display: flex; flex-wrap: wrap; gap: 0.6rem 1rem; align-items: center; justify-content: space-between; }
+  .jw-buttons, .jw-mode {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+  .jw-buttons button, .jw-mode button {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    padding: 0.3rem 0.7rem;
+    background: var(--bg);
+    color: var(--fg-muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+  .jw-buttons button:hover,
+  .jw-mode button:hover { color: var(--accent); border-color: var(--accent); }
+  .jw-buttons button.active,
+  .jw-mode button.active {
+    color: var(--bg);
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .jw-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+  .jw-cell h4 {
+    font-family: var(--mono);
+    font-size: 0.74rem;
+    color: var(--fg-muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin: 0 0 0.35rem;
+    font-weight: 500;
+    text-align: center;
+  }
+  .jw-hint { font-size: 0.78rem; }
+  @media (max-width: 640px) {
+    .jw-pair { grid-template-columns: 1fr; }
+  }
+</style>
+
+<script is:inline define:vars={{ id }}>
+(() => {
+  const ACT = {
+    identity: (z) => z,
+    relu: (z) => (z > 0 ? z : 0),
+    sigmoid: (z) => 1 / (1 + Math.exp(-z)),
+    tanh: (z) => Math.tanh(z),
+    gelu: (z) => 0.5 * z * (1 + Math.tanh(Math.sqrt(2 / Math.PI) * (z + 0.044715 * z * z * z))),
+  };
+
+  const readColors = () => {
+    const s = getComputedStyle(document.documentElement);
+    const v = (n) => s.getPropertyValue(n).trim();
+    return {
+      accent: v('--accent') || '#b3661b',
+      muted: v('--fg-muted') || '#5a5f66',
+      faint: v('--fg-faint') || '#8d8d8d',
+      border: v('--border') || '#e4e1d6',
+      fg: v('--fg') || '#1a1a1a',
+    };
+  };
+  let colors = readColors();
+
+  const setup = () => {
+    const cIn = document.getElementById(id + '-in');
+    const cOut = document.getElementById(id + '-out');
+    if (!cIn || cIn.dataset.ready) return;
+    cIn.dataset.ready = '1';
+    cOut.dataset.ready = '1';
+    const ctxIn = cIn.getContext('2d');
+    const ctxOut = cOut.getContext('2d');
+    const slider = document.getElementById(id + '-theta');
+    const readout = document.getElementById(id + '-readout');
+    const hint = document.getElementById(id + '-hint');
+    const wrap = document.querySelector(`[data-jw="${id}"]`);
+    const actButtons = wrap.querySelectorAll('.jw-buttons button');
+    const modeButtons = wrap.querySelectorAll('.jw-mode button');
+
+    let act = 'relu';
+    let mode = '2d';
+    let theta = 0;
+    const view = { az: 0.55, el: 0.45 };
+    const state = { dpr: 1, w: 0, h: 0 };
+    let dragging = null;
+
+    const fit = () => {
+      const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+      state.dpr = dpr;
+      [cIn, cOut].forEach((c) => {
+        const rect = c.getBoundingClientRect();
+        state.w = rect.width;
+        state.h = rect.height;
+        c.width = Math.round(rect.width * dpr);
+        c.height = Math.round(rect.height * dpr);
+      });
+    };
+
+    const themeObs = new MutationObserver(() => { colors = readColors(); requestRedraw(); });
+    themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+    let rafScheduled = false;
+    let visible = false;
+    const requestRedraw = () => {
+      if (rafScheduled || !visible) return;
+      rafScheduled = true;
+      requestAnimationFrame(() => { rafScheduled = false; draw(); });
+    };
+
+    // ── 2D math ────────────────────────────────────────────────────
+    const rotate2 = (x, y) => {
+      const ct = Math.cos(theta), st = Math.sin(theta);
+      return [ct * x - st * y, st * x + ct * y];
+    };
+    const transform2 = (x, y) => {
+      const [zx, zy] = rotate2(x, y);
+      return [ACT[act](zx), ACT[act](zy)];
+    };
+
+    // ── 3D math ────────────────────────────────────────────────────
+    const rotate3 = (x, y, z) => {
+      // W is rotation around the z-axis by θ (matches the 2D case in the xy-plane)
+      const ct = Math.cos(theta), st = Math.sin(theta);
+      return [ct * x - st * y, st * x + ct * y, z];
+    };
+    const transform3 = (x, y, z) => {
+      const [zx, zy, zz] = rotate3(x, y, z);
+      return [ACT[act](zx), ACT[act](zy), ACT[act](zz)];
+    };
+    const project = (x, y, z) => {
+      // Camera: rotate around y-axis by az, then around x-axis by el. Orthographic.
+      const ca = Math.cos(view.az), sa = Math.sin(view.az);
+      const x1 = ca * x + sa * z;
+      const z1 = -sa * x + ca * z;
+      const ce = Math.cos(view.el), se = Math.sin(view.el);
+      const y2 = ce * y - se * z1;
+      const z2 = se * y + ce * z1;
+      return { x: x1, y: y2, depth: z2 };
+    };
+
+    // ── 2D rendering ───────────────────────────────────────────────
+    const project2 = (ctx, x, y, pad, plotW, plotH, xMin, xMax, yMin, yMax) =>
+      [pad + ((x - xMin) / (xMax - xMin)) * plotW, pad + ((yMax - y) / (yMax - yMin)) * plotH];
+
+    const drawPlot2D = (ctx, isOut) => {
+      const W = state.w, H = state.h;
+      ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+
+      const { accent, muted, faint, border } = colors;
+      const pad = 10;
+      const plotW = W - pad * 2;
+      const plotH = H - pad * 2;
+      const xMin = -1.6, xMax = 1.6, yMin = -1.6, yMax = 1.6;
+      const p = (x, y) => project2(ctx, x, y, pad, plotW, plotH, xMin, xMax, yMin, yMax);
+
+      ctx.strokeStyle = border;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(pad, pad, plotW, plotH);
+
+      ctx.beginPath();
+      ctx.moveTo(...p(xMin, 0)); ctx.lineTo(...p(xMax, 0));
+      ctx.moveTo(...p(0, yMin)); ctx.lineTo(...p(0, yMax));
+      ctx.stroke();
+
+      const N = 11;
+      const samples = 21;
+      const range = 1.2;
+      ctx.strokeStyle = muted + '55';
+      ctx.lineWidth = 0.8;
+      for (let i = 0; i < N; i++) {
+        const y = -range + (i / (N - 1)) * 2 * range;
+        ctx.beginPath();
+        for (let j = 0; j < samples; j++) {
+          const x = -range + (j / (samples - 1)) * 2 * range;
+          const [px, py] = isOut ? transform2(x, y) : [x, y];
+          const [sx, sy] = p(px, py);
+          if (j === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+        }
+        ctx.stroke();
+      }
+      for (let i = 0; i < N; i++) {
+        const x = -range + (i / (N - 1)) * 2 * range;
+        ctx.beginPath();
+        for (let j = 0; j < samples; j++) {
+          const y = -range + (j / (samples - 1)) * 2 * range;
+          const [px, py] = isOut ? transform2(x, y) : [x, y];
+          const [sx, sy] = p(px, py);
+          if (j === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+        }
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = accent + '1a';
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      const K = 96;
+      for (let i = 0; i <= K; i++) {
+        const a = (i / K) * Math.PI * 2;
+        const ix = Math.cos(a), iy = Math.sin(a);
+        const [px, py] = isOut ? transform2(ix, iy) : [ix, iy];
+        const [sx, sy] = p(px, py);
+        if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = faint;
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(isOut ? 'φ(Wx)₁' : 'x₁', W - pad - 2, p(0, 0)[1] - 2);
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText(isOut ? 'φ(Wx)₂' : 'x₂', p(0, 0)[0] + 4, pad + 2);
+    };
+
+    // ── 3D rendering ───────────────────────────────────────────────
+    const drawPlot3D = (ctx, isOut) => {
+      const W = state.w, H = state.h;
+      ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+
+      const { accent, muted, faint, border } = colors;
+      const pad = 10;
+      const plotW = W - pad * 2;
+      const plotH = H - pad * 2;
+      ctx.strokeStyle = border;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(pad, pad, plotW, plotH);
+
+      // World bounds [-1.6, 1.6] cube; centre at (0,0,0).
+      const halfW = 1.6;
+      const scale = Math.min(plotW, plotH) * 0.5 / halfW * 0.95;
+      const cx = W / 2, cy = H / 2;
+      const xform = isOut ? transform3 : (x, y, z) => [x, y, z];
+      const proj = (x, y, z) => {
+        const [tx, ty, tz] = xform(x, y, z);
+        const q = project(tx, ty, tz);
+        return { sx: cx + q.x * scale, sy: cy - q.y * scale, depth: q.depth };
+      };
+
+      // Collect line segments for painter's algorithm-ish sort.
+      const segs = [];
+      const push = (a, b, color, width, fade) => {
+        segs.push({ a, b, color, width, fade, z: (a.depth + b.depth) * 0.5 });
+      };
+
+      // Axis frame at origin (input only — output coord origin shifts with activation)
+      if (!isOut) {
+        const axis = (ax, ay, az) => {
+          const o = proj(0, 0, 0);
+          const e = proj(ax, ay, az);
+          push(o, e, faint, 1.0, false);
+        };
+        axis(1.4, 0, 0); axis(0, 1.4, 0); axis(0, 0, 1.4);
+      }
+
+      // Sphere wireframe: 7 latitude rings + 12 meridians.
+      const NLat = 7;
+      const NLon = 12;
+      const MPerRing = 48;
+      const MPerMer = 33;
+
+      // Latitudes
+      for (let i = 1; i < NLat; i++) {
+        const phi = -Math.PI / 2 + (i / NLat) * Math.PI;
+        const r = Math.cos(phi);
+        const yL = Math.sin(phi);
+        let prev = proj(r, yL, 0);
+        for (let j = 1; j <= MPerRing; j++) {
+          const a = (j / MPerRing) * Math.PI * 2;
+          const curr = proj(r * Math.cos(a), yL, r * Math.sin(a));
+          push(prev, curr, muted + '88', 0.9, true);
+          prev = curr;
+        }
+      }
+      // Meridians
+      for (let i = 0; i < NLon; i++) {
+        const lon = (i / NLon) * Math.PI * 2;
+        let prev = proj(0, -1, 0);
+        for (let j = 1; j <= MPerMer; j++) {
+          const t = -Math.PI / 2 + (j / MPerMer) * Math.PI;
+          const curr = proj(Math.cos(t) * Math.cos(lon), Math.sin(t), Math.cos(t) * Math.sin(lon));
+          push(prev, curr, muted + '88', 0.9, true);
+          prev = curr;
+        }
+      }
+
+      // Equator highlighted in accent (the disk in 2D)
+      {
+        const M = 96;
+        let prev = proj(1, 0, 0);
+        for (let j = 1; j <= M; j++) {
+          const a = (j / M) * Math.PI * 2;
+          const curr = proj(Math.cos(a), 0, Math.sin(a));
+          push(prev, curr, accent, 1.6, false);
+          prev = curr;
+        }
+      }
+
+      // Draw, sorted back-to-front so closer lines paint over distant ones.
+      segs.sort((a, b) => a.z - b.z);
+      for (const s of segs) {
+        ctx.strokeStyle = s.color;
+        ctx.lineWidth = s.width;
+        if (s.fade) {
+          // depth in roughly [-1.6, 1.6]; map to alpha 0.35..1.0
+          const f = Math.max(0, Math.min(1, (s.z + 1.6) / 3.2));
+          ctx.globalAlpha = 0.4 + 0.6 * f;
+        } else {
+          ctx.globalAlpha = 1;
+        }
+        ctx.beginPath();
+        ctx.moveTo(s.a.sx, s.a.sy);
+        ctx.lineTo(s.b.sx, s.b.sy);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+
+      // Label
+      ctx.fillStyle = faint;
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(isOut ? 'φ(Wx)' : 'x ∈ ℝ³', W - pad - 4, H - pad - 4);
+    };
+
+    const draw = () => {
+      if (mode === '2d') {
+        drawPlot2D(ctxIn, false);
+        drawPlot2D(ctxOut, true);
+      } else {
+        drawPlot3D(ctxIn, false);
+        drawPlot3D(ctxOut, true);
+      }
+      readout.textContent = Math.round((theta * 180) / Math.PI) + '°';
+      hint.textContent = mode === '3d'
+        ? '3D: unit sphere + equator · drag a canvas to orbit the camera'
+        : '2D: grid + unit disk';
+    };
+
+    actButtons.forEach((b) =>
+      b.addEventListener('click', () => {
+        act = b.dataset.act;
+        actButtons.forEach((other) => other.classList.toggle('active', other === b));
+        requestRedraw();
+      }),
+    );
+    modeButtons.forEach((b) =>
+      b.addEventListener('click', () => {
+        mode = b.dataset.mode;
+        modeButtons.forEach((other) => other.classList.toggle('active', other === b));
+        dragging = null;
+        requestRedraw();
+      }),
+    );
+    slider.addEventListener('input', () => {
+      theta = parseFloat(slider.value);
+      requestRedraw();
+    });
+
+    // Drag-to-orbit (3D only)
+    const onPointerDown = (e) => {
+      if (mode !== '3d') return;
+      dragging = { x: e.clientX, y: e.clientY, az: view.az, el: view.el };
+      e.target.setPointerCapture?.(e.pointerId);
+    };
+    const onPointerMove = (e) => {
+      if (!dragging || mode !== '3d') return;
+      const dx = e.clientX - dragging.x;
+      const dy = e.clientY - dragging.y;
+      view.az = dragging.az + dx * 0.01;
+      view.el = Math.max(-1.4, Math.min(1.4, dragging.el + dy * 0.01));
+      requestRedraw();
+    };
+    const onPointerUp = (e) => {
+      if (dragging) { try { e.target.releasePointerCapture?.(e.pointerId); } catch {} }
+      dragging = null;
+    };
+    [cIn, cOut].forEach((c) => {
+      c.addEventListener('pointerdown', onPointerDown);
+      c.addEventListener('pointermove', onPointerMove);
+      c.addEventListener('pointerup', onPointerUp);
+      c.addEventListener('pointercancel', onPointerUp);
+    });
+
+    const ro = new ResizeObserver(() => { fit(); requestRedraw(); });
+    ro.observe(cIn);
+    ro.observe(cOut);
+
+    const io = new IntersectionObserver((entries) => {
+      const wasVisible = visible;
+      visible = entries[0].isIntersecting;
+      if (visible && !wasVisible) { fit(); draw(); }
+    }, { rootMargin: '120px' });
+    io.observe(cIn);
+  };
+
+  setup();
+  document.addEventListener('astro:page-load', setup);
+  document.addEventListener('astro:after-swap', setup);
+})();
+</script>
