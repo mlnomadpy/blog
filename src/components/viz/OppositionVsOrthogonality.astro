@@ -1,0 +1,309 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 340 } = Astro.props;
+const id = `ovo-${Math.random().toString(36).slice(2, 9)}`;
+---
+<figure class="viz">
+  <div class="viz-controls" data-ovo={id}>
+    <div class="ovo-presets">
+      <span class="faint" style="margin-right:0.4rem">snap to:</span>
+      <button type="button" data-angle="0">parallel</button>
+      <button type="button" data-angle="90">orthogonal</button>
+      <button type="button" data-angle="180">antiparallel</button>
+    </div>
+    <span class="faint">drag the green vector tip</span>
+  </div>
+  <div class="ovo-row">
+    <canvas id={`${id}-c`} height={height} aria-label="Unit circle showing two vectors with adjustable angle"></canvas>
+    <div class="ovo-readouts" id={`${id}-readouts`}>
+      <div class="readout-row"><span class="readout-label">θ</span><span class="readout-val" data-key="theta">—</span></div>
+      <div class="readout-row"><span class="readout-label">cos θ</span><span class="readout-val" data-key="cos">—</span></div>
+      <div class="readout-row"><span class="readout-label">cos²θ</span><span class="readout-val" data-key="cos2">—</span></div>
+      <div class="readout-row"><span class="readout-label">1 − cos²θ</span><span class="readout-val" data-key="ind">—</span></div>
+      <div class="readout-row"><span class="readout-label">dim span(u, v)</span><span class="readout-val" data-key="dim">—</span></div>
+      <div class="readout-tag" data-key="status">—</div>
+    </div>
+  </div>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+  .ovo-presets { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
+  .ovo-presets button {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    padding: 0.3rem 0.7rem;
+    background: var(--bg);
+    color: var(--fg-muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+  .ovo-presets button:hover { color: var(--accent); border-color: var(--accent); }
+  .ovo-row {
+    display: grid;
+    grid-template-columns: minmax(0, 2.5fr) minmax(180px, 1fr);
+    gap: 1rem;
+    align-items: stretch;
+  }
+  .ovo-readouts {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    font-family: var(--mono);
+    font-size: 0.86rem;
+    padding: 0.65rem 0.85rem;
+    background: var(--bg-sunken);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+  }
+  .readout-row { display: flex; justify-content: space-between; gap: 0.5rem; }
+  .readout-label { color: var(--fg-muted); }
+  .readout-val { color: var(--fg); font-variant-numeric: tabular-nums; }
+  .readout-tag {
+    margin-top: 0.2rem;
+    padding-top: 0.45rem;
+    border-top: 1px solid var(--border);
+    color: var(--accent);
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  @media (max-width: 640px) {
+    .ovo-row { grid-template-columns: 1fr; }
+  }
+</style>
+
+<script is:inline define:vars={{ id }}>
+(() => {
+  const readColors = () => {
+    const s = getComputedStyle(document.documentElement);
+    const v = (n) => s.getPropertyValue(n).trim();
+    return {
+      accent: v('--accent') || '#b3661b',
+      muted: v('--fg-muted') || '#5a5f66',
+      faint: v('--fg-faint') || '#8d8d8d',
+      border: v('--border') || '#e4e1d6',
+      fg: v('--fg') || '#1a1a1a',
+    };
+  };
+  let colors = readColors();
+
+  const setup = () => {
+    const c = document.getElementById(id + '-c');
+    if (!c || c.dataset.ready) return;
+    c.dataset.ready = '1';
+    const ctx = c.getContext('2d');
+    const wrap = document.querySelector(`[data-ovo="${id}"]`);
+    const presets = wrap.querySelectorAll('.ovo-presets button');
+    const readouts = document.getElementById(id + '-readouts');
+    const rv = {};
+    readouts.querySelectorAll('[data-key]').forEach((el) => { rv[el.dataset.key] = el; });
+
+    let thetaDeg = 60;
+    const state = { dpr: 1, w: 0, h: 0 };
+
+    const fit = () => {
+      const rect = c.getBoundingClientRect();
+      const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+      state.dpr = dpr;
+      state.w = rect.width;
+      state.h = rect.height;
+      c.width = Math.round(rect.width * dpr);
+      c.height = Math.round(rect.height * dpr);
+    };
+
+    const themeObs = new MutationObserver(() => { colors = readColors(); requestRedraw(); });
+    themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+    let rafScheduled = false;
+    let visible = false;
+    const requestRedraw = () => {
+      if (rafScheduled || !visible) return;
+      rafScheduled = true;
+      requestAnimationFrame(() => { rafScheduled = false; draw(); });
+    };
+
+    const draw = () => {
+      const W = state.w, H = state.h;
+      if (W === 0) return;
+      ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+      const { accent, muted, faint, border, fg } = colors;
+
+      const cx = W / 2, cy = H / 2;
+      const R = Math.min(W, H) * 0.4;
+      const arrow = (x0, y0, x1, y1, color, width) => {
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0); ctx.lineTo(x1, y1);
+        ctx.stroke();
+        const a = Math.atan2(y1 - y0, x1 - x0);
+        const s = 8;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x1 - s * Math.cos(a - 0.4), y1 - s * Math.sin(a - 0.4));
+        ctx.lineTo(x1 - s * Math.cos(a + 0.4), y1 - s * Math.sin(a + 0.4));
+        ctx.closePath();
+        ctx.fill();
+      };
+
+      // Frame
+      ctx.strokeStyle = border;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Axes
+      ctx.strokeStyle = faint;
+      ctx.setLineDash([2, 4]);
+      ctx.beginPath();
+      ctx.moveTo(cx - R - 18, cy); ctx.lineTo(cx + R + 18, cy);
+      ctx.moveTo(cx, cy - R - 18); ctx.lineTo(cx, cy + R + 18);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      const theta = (thetaDeg * Math.PI) / 180;
+      const ux = cx + R, uy = cy;
+      const vx = cx + R * Math.cos(theta);
+      const vy = cy - R * Math.sin(theta);
+
+      // Span indicator: if dependent, highlight the line through origin and ±u
+      const cosT = Math.cos(theta);
+      const sinT = Math.sin(theta);
+      const dependent = Math.abs(sinT) < 1e-3;
+      if (dependent) {
+        ctx.strokeStyle = accent + '44';
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.moveTo(cx - R - 30, cy);
+        ctx.lineTo(cx + R + 30, cy);
+        ctx.stroke();
+      } else {
+        // Lightly fill the span (whole plane within frame): just a translucent square tint.
+        ctx.fillStyle = accent + '0d';
+        ctx.fillRect(cx - R - 30, cy - R - 30, 2 * R + 60, 2 * R + 60);
+      }
+
+      // Projection of v onto u (dashed line along x-axis)
+      const projLen = cosT * R;
+      ctx.strokeStyle = muted;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath();
+      ctx.moveTo(cx + projLen, cy);
+      ctx.lineTo(vx, vy);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Projection arrow (small)
+      if (Math.abs(projLen) > 4) {
+        arrow(cx, cy, cx + projLen, cy, muted, 1);
+      }
+
+      // Angle arc
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      const arcR = R * 0.22;
+      const start = 0;
+      const end = -theta;
+      ctx.arc(cx, cy, arcR, Math.min(start, end), Math.max(start, end));
+      ctx.stroke();
+
+      // u arrow
+      arrow(cx, cy, ux, uy, accent, 2.2);
+      ctx.fillStyle = accent;
+      ctx.font = 'bold 13px ' + (getComputedStyle(document.body).fontFamily || 'serif');
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('u', ux + 8, uy - 4);
+
+      // v arrow (different visual treatment)
+      const vColor = dependent ? muted : fg;
+      arrow(cx, cy, vx, vy, vColor, 2.2);
+      ctx.fillStyle = vColor;
+      ctx.fillText('v', vx + 8 * Math.cos(theta + 0.1), vy - 8 * Math.sin(theta + 0.1) - 2);
+
+      // Tip handle for v
+      ctx.fillStyle = accent;
+      ctx.beginPath();
+      ctx.arc(vx, vy, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = colors.bg || '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Angle label
+      ctx.fillStyle = faint;
+      ctx.font = '11px ui-monospace, monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const lblAngle = -theta / 2;
+      ctx.fillText(thetaDeg.toFixed(0) + '°', cx + (arcR + 12) * Math.cos(lblAngle), cy + (arcR + 12) * Math.sin(lblAngle));
+
+      // Update readouts
+      const cos2 = cosT * cosT;
+      rv.theta.textContent = thetaDeg.toFixed(0) + '°';
+      rv.cos.textContent = cosT.toFixed(3);
+      rv.cos2.textContent = cos2.toFixed(3);
+      rv.ind.textContent = (1 - cos2).toFixed(3);
+      rv.dim.textContent = dependent ? '1' : '2';
+      if (Math.abs(cosT - 1) < 1e-3) rv.status.textContent = 'parallel — same direction, dim 1';
+      else if (Math.abs(cosT + 1) < 1e-3) rv.status.textContent = 'antiparallel — sign-flipped, dim 1';
+      else if (Math.abs(cosT) < 1e-3) rv.status.textContent = 'orthogonal — independent, dim 2';
+      else rv.status.textContent = 'linearly independent, dim 2';
+    };
+
+    const setFromPointer = (e) => {
+      const rect = c.getBoundingClientRect();
+      const dx = e.clientX - rect.left - rect.width / 2;
+      const dy = -(e.clientY - rect.top - rect.height / 2);
+      let a = (Math.atan2(dy, dx) * 180) / Math.PI;
+      if (a < 0) a += 360;
+      thetaDeg = a;
+      requestRedraw();
+    };
+
+    let dragging = false;
+    c.addEventListener('pointerdown', (e) => {
+      dragging = true;
+      c.setPointerCapture?.(e.pointerId);
+      setFromPointer(e);
+    });
+    c.addEventListener('pointermove', (e) => { if (dragging) setFromPointer(e); });
+    c.addEventListener('pointerup', (e) => {
+      dragging = false;
+      try { c.releasePointerCapture?.(e.pointerId); } catch {}
+    });
+
+    presets.forEach((b) =>
+      b.addEventListener('click', () => {
+        thetaDeg = parseFloat(b.dataset.angle);
+        requestRedraw();
+      }),
+    );
+
+    const ro = new ResizeObserver(() => { fit(); requestRedraw(); });
+    ro.observe(c);
+
+    const io = new IntersectionObserver((entries) => {
+      const was = visible;
+      visible = entries[0].isIntersecting;
+      if (visible && !was) { fit(); draw(); }
+    }, { rootMargin: '120px' });
+    io.observe(c);
+  };
+
+  setup();
+  document.addEventListener('astro:page-load', setup);
+  document.addEventListener('astro:after-swap', setup);
+})();
+</script>
