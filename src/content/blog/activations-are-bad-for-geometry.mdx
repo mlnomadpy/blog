@@ -7,6 +7,7 @@ tags: [ml, geometry, kernels, interpretability]
 import ActivationGallery from '../../components/viz/ActivationGallery.astro';
 import JacobianWarp from '../../components/viz/JacobianWarp.astro';
 import HighDimCollapse from '../../components/viz/HighDimCollapse.astro';
+import CiteAs from '../../components/CiteAs.astro';
 
 A neural network layer is a map. Its Jacobian decides whether that map preserves geometry — distances, angles, volumes on the data manifold — or destroys it. For the standard form $F(\mathbf{x}) = \phi(\mathbf{W}\mathbf{x} + \mathbf{b})$, with $\phi$ applied coordinatewise, the Jacobian factors as
 
@@ -125,3 +126,15 @@ $$
 with a closed-form RKHS norm $\|f\|^2_{\mathcal{H}_K} = \boldsymbol{\alpha}^\top \mathbf{K} \boldsymbol{\alpha}$. There is no $\mathbf{D}_\phi$ sitting in the middle to collapse rank or saturate the metric. The primitive *is* the geometry; selectivity is implemented *as* geometry; kernel similarity *is* the score.
 
 The pointwise activation is not the price of expressivity. It is the price of refusing to make the primitive a kernel. Pick activations with the same care you pick a loss. They are not there for nonlinearity, and they are not free.
+
+<CiteAs
+  slug="activations-are-bad-for-geometry"
+  title="Activations Are Bad for Geometry"
+  pubDate={frontmatter.pubDate}
+  paper={{
+    title: "Manifolds, Activations, and Lost Geometry: How Pointwise Nonlinearities Break the Map",
+    authors: "Bouhsine, T.",
+    year: 2026,
+    venue: "Unpublished manuscript",
+  }}
+/>

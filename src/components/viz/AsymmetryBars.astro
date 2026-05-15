@@ -1,0 +1,335 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 320 } = Astro.props;
+const id = `ab-${Math.random().toString(36).slice(2, 9)}`;
+---
+<figure class="viz">
+  <div class="viz-controls ab-controls" data-ab={id}>
+    <div class="ab-presets">
+      <span class="faint" style="margin-right:0.4rem">preset:</span>
+      <button type="button" data-preset="match" class="active">match (q = p)</button>
+      <button type="button" data-preset="miss">miss truth on C</button>
+      <button type="button" data-preset="add">add falsehood on D</button>
+    </div>
+    <span class="faint">drag the top of any q bar to adjust</span>
+  </div>
+  <canvas id={`${id}-c`} height={height} aria-label="Asymmetry of cross-entropy under truth distribution p and model distribution q"></canvas>
+  <div class="ab-readouts" id={`${id}-readouts`}>
+    <div class="ab-cell"><span class="readout-label">H(p, q)</span><span class="readout-val" data-key="pq">—</span><span class="readout-tag" data-key="pq-tag">—</span></div>
+    <div class="ab-cell"><span class="readout-label">H(q, p)</span><span class="readout-val" data-key="qp">—</span><span class="readout-tag" data-key="qp-tag">—</span></div>
+    <div class="ab-cell"><span class="readout-label">violating mass S(p, q)</span><span class="readout-val" data-key="s">—</span></div>
+  </div>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+  .ab-controls { flex-direction: column; align-items: stretch; }
+  .ab-presets { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
+  .ab-presets button {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    padding: 0.3rem 0.7rem;
+    background: var(--bg);
+    color: var(--fg-muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+  .ab-presets button:hover { color: var(--accent); border-color: var(--accent); }
+  .ab-presets button.active { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+  .ab-readouts {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+    margin-top: 0.6rem;
+    font-family: var(--mono);
+    font-size: 0.86rem;
+  }
+  .ab-cell {
+    background: var(--bg-sunken);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.55rem 0.7rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .ab-cell .readout-label { color: var(--fg-muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .ab-cell .readout-val { color: var(--fg); font-variant-numeric: tabular-nums; font-size: 1.05rem; }
+  .ab-cell .readout-tag { color: var(--accent); font-size: 0.72rem; }
+  @media (max-width: 640px) {
+    .ab-readouts { grid-template-columns: 1fr; }
+  }
+</style>
+
+<script is:inline define:vars={{ id }}>
+(() => {
+  const readColors = () => {
+    const s = getComputedStyle(document.documentElement);
+    const v = (n) => s.getPropertyValue(n).trim();
+    return {
+      accent: v('--accent') || '#b3661b',
+      muted: v('--fg-muted') || '#5a5f66',
+      faint: v('--fg-faint') || '#8d8d8d',
+      border: v('--border') || '#e4e1d6',
+      fg: v('--fg') || '#1a1a1a',
+    };
+  };
+  let colors = readColors();
+
+  const labels = ['A', 'B', 'C', 'D'];
+
+  const setup = () => {
+    const c = document.getElementById(id + '-c');
+    if (!c || c.dataset.ready) return;
+    c.dataset.ready = '1';
+    const ctx = c.getContext('2d');
+    const wrap = document.querySelector(`[data-ab="${id}"]`);
+    const presets = wrap.querySelectorAll('.ab-presets button');
+    const readouts = document.getElementById(id + '-readouts');
+    const rv = {};
+    readouts.querySelectorAll('[data-key]').forEach((el) => { rv[el.dataset.key] = el; });
+
+    // Fixed truth: A=0.5, B=0.3, C=0.2, D=0
+    const p = [0.5, 0.3, 0.2, 0];
+    // Initial q = p
+    let q = [...p];
+    const state = { dpr: 1, w: 0, h: 0 };
+
+    const fit = () => {
+      const rect = c.getBoundingClientRect();
+      const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+      state.dpr = dpr;
+      state.w = rect.width;
+      state.h = rect.height;
+      c.width = Math.round(rect.width * dpr);
+      c.height = Math.round(rect.height * dpr);
+    };
+
+    const themeObs = new MutationObserver(() => { colors = readColors(); requestRedraw(); });
+    themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+    let rafScheduled = false;
+    let visible = false;
+    const requestRedraw = () => {
+      if (rafScheduled || !visible) return;
+      rafScheduled = true;
+      requestAnimationFrame(() => { rafScheduled = false; draw(); });
+    };
+
+    // Renormalize q so sum = 1; if user dragged index i to value v, scale others
+    const setQ = (i, v) => {
+      v = Math.max(0, Math.min(1, v));
+      const others = q.reduce((a, x, k) => a + (k === i ? 0 : x), 0);
+      const want = 1 - v;
+      if (others > 1e-9) {
+        const scale = want / others;
+        for (let k = 0; k < q.length; k++) if (k !== i) q[k] *= scale;
+      } else {
+        // distribute uniformly
+        for (let k = 0; k < q.length; k++) if (k !== i) q[k] = want / (q.length - 1);
+      }
+      q[i] = v;
+    };
+
+    // Layout helpers — bars share x axis layout
+    const layoutBars = () => {
+      const W = state.w, H = state.h;
+      const padL = 30, padR = 20, padT = 16, padB = 38;
+      const plotW = W - padL - padR;
+      const plotH = H - padT - padB;
+      const n = labels.length;
+      const groupW = plotW / n;
+      const innerPad = groupW * 0.18;
+      const halfW = (groupW - 2 * innerPad) / 2; // p on left, q on right of each group
+      const xCenter = (i) => padL + groupW * i + groupW / 2;
+      const pX = (i) => xCenter(i) - halfW - 2;
+      const qX = (i) => xCenter(i) + 2;
+      const barW = halfW - 1;
+      const baseY = padT + plotH;
+      return { padL, padR, padT, padB, plotW, plotH, xCenter, pX, qX, barW, baseY, plotMaxH: plotH };
+    };
+
+    const yForP = (val, L) => L.baseY - val * L.plotMaxH * 0.95;
+
+    const draw = () => {
+      const W = state.w, H = state.h;
+      if (W === 0) return;
+      ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+      const { accent, muted, faint, border, fg } = colors;
+      const L = layoutBars();
+
+      // Frame line at top of bars (0..1)
+      ctx.strokeStyle = border;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(L.padL, L.baseY); ctx.lineTo(L.padL + L.plotW, L.baseY);
+      ctx.stroke();
+
+      // 0.5 reference line
+      ctx.strokeStyle = border;
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath();
+      ctx.moveTo(L.padL, yForP(0.5, L)); ctx.lineTo(L.padL + L.plotW, yForP(0.5, L));
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = faint;
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('0.5', L.padL - 4, yForP(0.5, L));
+      ctx.fillText('0', L.padL - 4, L.baseY);
+      ctx.fillText('1', L.padL - 4, yForP(1, L));
+
+      // Bars
+      for (let i = 0; i < labels.length; i++) {
+        // p (outlined, muted fill)
+        const pH = p[i] * L.plotMaxH * 0.95;
+        ctx.fillStyle = muted + '33';
+        ctx.strokeStyle = muted;
+        ctx.lineWidth = 1;
+        ctx.fillRect(L.pX(i), L.baseY - pH, L.barW, pH);
+        ctx.strokeRect(L.pX(i), L.baseY - pH, L.barW, pH);
+
+        // q (accent fill)
+        const qH = q[i] * L.plotMaxH * 0.95;
+        ctx.fillStyle = accent;
+        ctx.strokeStyle = accent;
+        ctx.fillRect(L.qX(i), L.baseY - qH, L.barW, qH);
+        ctx.strokeRect(L.qX(i), L.baseY - qH, L.barW, qH);
+
+        // Top handle for q
+        ctx.fillStyle = colors.bg || '#fff';
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(L.qX(i) + L.barW / 2, L.baseY - qH, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Label
+        ctx.fillStyle = faint;
+        ctx.font = '11px ui-monospace, monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(labels[i], L.xCenter(i), L.baseY + 4);
+
+        // Note for D
+        if (i === 3 && p[i] === 0) {
+          ctx.fillStyle = faint;
+          ctx.font = '9px ui-monospace, monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+          ctx.fillText('(p = 0)', L.xCenter(i), L.baseY + 18);
+        }
+      }
+
+      // Legend
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = muted;
+      ctx.fillRect(L.padL, L.padT, 10, 8);
+      ctx.strokeStyle = muted; ctx.lineWidth = 1; ctx.strokeRect(L.padL, L.padT, 10, 8);
+      ctx.fillStyle = faint;
+      ctx.fillText('p (truth)', L.padL + 14, L.padT + 4);
+      ctx.fillStyle = accent;
+      ctx.fillRect(L.padL + 70, L.padT, 10, 8);
+      ctx.fillStyle = faint;
+      ctx.fillText('q (model)', L.padL + 84, L.padT + 4);
+
+      // Compute cross-entropies
+      const ce = (a, b) => {
+        let total = 0;
+        for (let i = 0; i < a.length; i++) {
+          if (a[i] > 0) {
+            if (b[i] <= 0) return Infinity;
+            total -= a[i] * Math.log(b[i]);
+          }
+        }
+        return total;
+      };
+      const Hpq = ce(p, q);
+      const Hqp = ce(q, p);
+      const violating = p.reduce((s, x, i) => s + (x > 0 && q[i] <= 0 ? x : 0), 0);
+      const inverseViol = q.reduce((s, x, i) => s + (x > 0 && p[i] <= 0 ? x : 0), 0);
+
+      const fmt = (x) => Number.isFinite(x) ? x.toFixed(3) + ' nats' : '∞';
+      rv.pq.textContent = fmt(Hpq);
+      rv.qp.textContent = fmt(Hqp);
+      rv.s.textContent = violating.toFixed(3);
+
+      if (!Number.isFinite(Hpq)) rv['pq-tag'].textContent = '↑ model missing truth at some coord';
+      else rv['pq-tag'].textContent = 'finite — model covers all of p';
+      if (!Number.isFinite(Hqp)) rv['qp-tag'].textContent = '↑ model claims mass where p has none';
+      else rv['qp-tag'].textContent = 'finite — q matches p’s support';
+    };
+
+    // Drag handling on q bar tops
+    let dragIdx = -1;
+    const hitTest = (e) => {
+      const rect = c.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const L = layoutBars();
+      for (let i = 0; i < labels.length; i++) {
+        if (x >= L.qX(i) - 4 && x <= L.qX(i) + L.barW + 4) return i;
+      }
+      return -1;
+    };
+    const setFromPointer = (e) => {
+      if (dragIdx < 0) return;
+      const rect = c.getBoundingClientRect();
+      const y = e.clientY - rect.top;
+      const L = layoutBars();
+      const v = Math.max(0, Math.min(1, (L.baseY - y) / (L.plotMaxH * 0.95)));
+      setQ(dragIdx, v);
+      // mark active preset off
+      presets.forEach((b) => b.classList.remove('active'));
+      requestRedraw();
+    };
+    c.addEventListener('pointerdown', (e) => {
+      const i = hitTest(e);
+      if (i < 0) return;
+      dragIdx = i;
+      c.setPointerCapture?.(e.pointerId);
+      setFromPointer(e);
+    });
+    c.addEventListener('pointermove', (e) => { if (dragIdx >= 0) setFromPointer(e); });
+    c.addEventListener('pointerup', (e) => {
+      dragIdx = -1;
+      try { c.releasePointerCapture?.(e.pointerId); } catch {}
+    });
+
+    const setPreset = (name) => {
+      if (name === 'match') q = [...p];
+      else if (name === 'miss') q = [0.6, 0.4, 0, 0];
+      else if (name === 'add') q = [0.45, 0.27, 0.18, 0.1];
+      requestRedraw();
+    };
+    presets.forEach((b) =>
+      b.addEventListener('click', () => {
+        presets.forEach((other) => other.classList.toggle('active', other === b));
+        setPreset(b.dataset.preset);
+      }),
+    );
+
+    const ro = new ResizeObserver(() => { fit(); requestRedraw(); });
+    ro.observe(c);
+    const io = new IntersectionObserver((entries) => {
+      const was = visible;
+      visible = entries[0].isIntersecting;
+      if (visible && !was) { fit(); draw(); }
+    }, { rootMargin: '120px' });
+    io.observe(c);
+  };
+
+  setup();
+  document.addEventListener('astro:page-load', setup);
+  document.addEventListener('astro:after-swap', setup);
+})();
+</script>

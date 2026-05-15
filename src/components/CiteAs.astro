@@ -1,0 +1,204 @@
+---
+import { SITE_AUTHOR, SITE_TITLE } from '../consts';
+
+interface PaperRef {
+  title: string;
+  authors?: string;
+  year: number | string;
+  venue?: string;
+  arxiv?: string; // e.g. "2605.03262"
+  url?: string;
+}
+
+interface Props {
+  slug: string;
+  title: string;
+  pubDate: Date | string;
+  paper?: PaperRef;
+}
+
+const props = Astro.props;
+const { slug, title, paper } = props;
+const pubDate = props.pubDate instanceof Date ? props.pubDate : new Date(props.pubDate);
+
+const site = Astro.site?.toString() ?? 'https://tahabouhsine.com/';
+const blogUrl = new URL(`/blog/${slug}/`, site).toString();
+const year = pubDate.getUTCFullYear();
+const monthAbbrev = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'][pubDate.getUTCMonth()];
+
+const blogBibKey = `bouhsine${year}${slug.replace(/-/g, '')}`;
+const blogBib = `@misc{${blogBibKey},
+  author       = {Bouhsine, Taha},
+  title        = {${title}},
+  year         = {${year}},
+  month        = {${monthAbbrev}},
+  howpublished = {\\url{${blogUrl}}},
+  note         = {Blog post, ${SITE_TITLE}}
+}`;
+
+const buildPaperBib = (p: PaperRef): { key: string; entry: string } => {
+  const surname = (p.authors ?? SITE_AUTHOR).split(',')[0].split(' ').slice(-1)[0].toLowerCase();
+  const slugBit = p.arxiv ? p.arxiv.replace('.', '') : (p.title.split(/\s+/).slice(0, 2).join('').toLowerCase().replace(/[^a-z0-9]/g, ''));
+  const key = `${surname}${p.year}${slugBit}`;
+  if (p.arxiv) {
+    return {
+      key,
+      entry: `@article{${key},
+  author        = {${p.authors ?? 'Bouhsine, Taha'}},
+  title         = {${p.title}},
+  year          = {${p.year}},
+  eprint        = {${p.arxiv}},
+  archivePrefix = {arXiv}${p.venue ? `,\n  journal       = {${p.venue}}` : ''}
+}`,
+    };
+  }
+  return {
+    key,
+    entry: `@unpublished{${key},
+  author = {${p.authors ?? 'Bouhsine, Taha'}},
+  title  = {${p.title}},
+  year   = {${p.year}}${p.venue ? `,\n  note   = {${p.venue}}` : ''}
+}`,
+  };
+};
+
+const paperBib = paper ? buildPaperBib(paper) : null;
+const paperUrl = paper ? (paper.url ?? (paper.arxiv ? `https://arxiv.org/abs/${paper.arxiv}` : undefined)) : undefined;
+
+const dateFmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+---
+<section class="cite-as" aria-labelledby={`cite-${slug}`}>
+  <h2 id={`cite-${slug}`}>Cite as</h2>
+
+  <p class="cite-line">
+    Bouhsine, T. (<time datetime={pubDate.toISOString()}>{year}, {dateFmt.format(pubDate).replace(/^.*?, /, '')}</time>).
+    <em>{title}</em>. {SITE_TITLE}.
+    <a href={blogUrl}>{blogUrl}</a>
+  </p>
+
+  <details class="cite-bib">
+    <summary>BibTeX</summary>
+    <pre><code class="bibtex">{blogBib}</code></pre>
+    <button type="button" class="cite-copy" data-copy={blogBib} aria-label="Copy BibTeX">copy</button>
+  </details>
+
+  {paper && paperBib && (
+    <>
+      <h3>For the underlying paper</h3>
+      <p class="cite-line">
+        {paper.authors ?? 'Bouhsine, T.'} ({paper.year}).
+        <em> {paper.title}</em>.
+        {paper.arxiv && <> arXiv:<a href={`https://arxiv.org/abs/${paper.arxiv}`}>{paper.arxiv}</a>.</>}
+        {paper.venue && !paper.arxiv && <> {paper.venue}.</>}
+        {paperUrl && !paper.arxiv && <> <a href={paperUrl}>{paperUrl}</a></>}
+      </p>
+      <details class="cite-bib">
+        <summary>BibTeX</summary>
+        <pre><code class="bibtex">{paperBib.entry}</code></pre>
+        <button type="button" class="cite-copy" data-copy={paperBib.entry} aria-label="Copy BibTeX">copy</button>
+      </details>
+    </>
+  )}
+</section>
+
+<style>
+  .cite-as {
+    margin: 3.5rem 0 0;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  .cite-as h2 {
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--fg-faint);
+    font-weight: 500;
+    margin: 0 0 0.75rem;
+  }
+  .cite-as h3 {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--fg-faint);
+    font-weight: 500;
+    margin: 1.5rem 0 0.6rem;
+  }
+  .cite-line {
+    font-family: var(--serif);
+    font-size: 0.98rem;
+    line-height: 1.55;
+    color: var(--fg-muted);
+    margin: 0 0 0.5rem;
+  }
+  .cite-line em { color: var(--fg); }
+  .cite-bib {
+    margin: 0.4rem 0 0;
+    position: relative;
+  }
+  .cite-bib summary {
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--fg-muted);
+    padding: 0.25rem 0;
+    user-select: none;
+  }
+  .cite-bib summary:hover { color: var(--accent); }
+  .cite-bib pre {
+    margin: 0.4rem 0 0;
+    padding: 0.85rem 1rem;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow-x: auto;
+    font-size: 0.82rem;
+    line-height: 1.55;
+  }
+  .cite-bib pre code { background: transparent; border: 0; padding: 0; }
+  .cite-copy {
+    position: absolute;
+    top: 2.1rem;
+    right: 0.55rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--fg-muted);
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    padding: 0.25rem 0.55rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: color var(--transition-fast), border-color var(--transition-fast);
+  }
+  .cite-copy:hover { color: var(--accent); border-color: var(--accent); }
+  .cite-copy.copied { color: var(--accent); border-color: var(--accent); }
+</style>
+
+<script is:inline>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('.cite-copy').forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(btn.dataset.copy || '');
+            const original = btn.textContent;
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = original;
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>

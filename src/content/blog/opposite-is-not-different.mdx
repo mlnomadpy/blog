@@ -7,6 +7,7 @@ tags: [ml, geometry, contrastive, embeddings]
 import OppositionVsOrthogonality from '../../components/viz/OppositionVsOrthogonality.astro';
 import SharedInfoCurve from '../../components/viz/SharedInfoCurve.astro';
 import SimplexPacking from '../../components/viz/SimplexPacking.astro';
+import CiteAs from '../../components/CiteAs.astro';
 
 A standard assumption in contrastive learning holds that pushing negative pairs to cosine similarity $-1$ achieves "maximal difference." This is wrong, and the cost has been substantial.
 
@@ -76,7 +77,7 @@ $$
 
 and the key fact is its singularity structure: if $\mathrm{supp}(p) \cap \mathrm{supp}(q) = \varnothing$, then $H(p, q) = +\infty$. Disjoint supports are the probabilistic analog of orthogonal vectors — distributions that share no mass, like vectors that share no projection. The cross-entropy singularity is the orthogonality condition lifted into probability.
 
-The same structure shows up directly in classifier weights. For a softmax classifier with logits $z_k = \mathbf{w}_k^\top \mathbf{h}$ and class label $y$, the gradient on wrong-class logits $z_k$ pushes them toward $-\infty$. On the unit sphere the most efficient path to a smaller $z_k$ is $\mathbf{w}_k \perp \mathbf{h}$ — the equilibrium has each wrong-class weight orthogonal to the embedding, not antiparallel to it. The "well-separated representations" that plain cross-entropy classifiers produce without any contrastive auxiliary loss are not a happy accident. They are orthogonal by construction.
+The same structure shows up directly in classifier weights. For a softmax classifier with logits $z_k = \mathbf{w}_k^\top \mathbf{h}$ and class label $y$, the gradient on wrong-class logits $z_k$ pushes them toward $-\infty$. On the unit sphere the loss has competing pressures: $\mathbf{w}_y$ wants to be parallel to $\mathbf{h}$ to maximise $z_y$, and each $\mathbf{w}_k$ with $k \neq y$ wants to be antiparallel to $\mathbf{h}$ to minimise $z_k$. With $n$ classes sharing the same $\mathbf{h}$, the antiparallel target cannot be reached by all $n-1$ wrong-class weights simultaneously — they cannot all be $-\mathbf{h}$. The equilibrium is whatever configuration best balances those pressures subject to mutual diversity of the $\mathbf{w}_k$, and the next section shows that configuration is the regular simplex with $\langle\mathbf{w}_k, \mathbf{h}\rangle = -1/(n-1)$: approximately orthogonal for any non-trivial multi-class problem, exactly orthogonal in the $n \to \infty$ limit, and exactly antiparallel only in the binary case $n = 2$. The "well-separated representations" that plain cross-entropy classifiers produce without any contrastive auxiliary loss are not a happy accident. They are the simplex, sitting where the geometry says it should.
 
 ## The simplex packing result
 
@@ -97,3 +98,15 @@ For $n \ge 3$ the optimal configuration moves rapidly toward orthogonality. $n =
 Every method that targets orthogonality (SigLIP, plain cross-entropy) shares two properties: it aligns with the natural concentration of measure on $\mathbb{S}^{d-1}$, and it achieves comparable or better accuracy with substantially less compute. Every method that targets opposition (SimCLR, CLIP, SupCon) requires enormous batches to overcome the geometric tension between its objective and the high-dimensional sphere it is operating on.
 
 The thesis, in one sentence: the geometry of difference is not opposition; it is orthogonality. The most influential contrastive losses of the past five years spent enormous engineering effort compensating for a single geometric mistake — and the loss that did not make the mistake was sitting beside them the whole time, in the form of plain cross-entropy.
+
+<CiteAs
+  slug="opposite-is-not-different"
+  title="Opposite Is Not Different"
+  pubDate={frontmatter.pubDate}
+  paper={{
+    title: "Opposite ≠ Different: The Orthogonality Thesis",
+    authors: "Bouhsine, T.",
+    year: 2026,
+    venue: "Unpublished manuscript",
+  }}
+/>
