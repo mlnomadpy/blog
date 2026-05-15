@@ -7,6 +7,7 @@ tags: [ml, attention, kernels, interpretability]
 import KernelSmoother from '../../components/viz/KernelSmoother.astro';
 import AttentionPatterns from '../../components/viz/AttentionPatterns.astro';
 import RBFExpansion from '../../components/viz/RBFExpansion.astro';
+import CiteAs from '../../components/CiteAs.astro';
 
 *A reading of self-attention through kernel smoothing and RKHS.*
 
@@ -163,3 +164,15 @@ The MLP lacks those objects natively. Until it has them, every explanation of ML
 ---
 
 *References inline. The kernel-smoother view of attention is due to [Tsai et al.](https://aclanthology.org/D19-1443/), with related developments by [Song et al.](https://ojs.aaai.org/index.php/AAAI/article/view/17172), [Choromanski et al.](https://arxiv.org/abs/2009.14794), [Katharopoulos et al.](https://arxiv.org/abs/2006.16236), and [Han et al.](https://arxiv.org/abs/2210.05794). The Yat kernel is from [Bouhsine, 2026](https://arxiv.org/abs/2605.03262). The superposition framing is from [Elhage et al.](https://transformer-circuits.pub/2022/toy_model/index.html), and the mechanistic interpretability descriptions are from the [circuits thread](https://distill.pub/2020/circuits/zoom-in/) and related work.*
+
+<CiteAs
+  slug="attention-is-a-kernel"
+  title="Attention is Explainable Because it is a Kernel"
+  pubDate={frontmatter.pubDate}
+  paper={{
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance",
+    authors: "Bouhsine, T.",
+    year: 2026,
+    arxiv: "2605.03262",
+  }}
+/>
