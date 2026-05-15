@@ -1,0 +1,837 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="generator" content="Astro v5.18.1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#fbfaf6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)"><title>Activations Are Bad for Geometry — Records of the !mmortal Data Scientist</title><meta name="description" content="Pointwise activations factor into the layer's Jacobian as a diagonal modulation. The same modulation that buys selectivity destroys geometric structure on the data manifold."><meta name="author" content="Taha Bouhsine"><link rel="canonical" href="https://tahabouhsine.com/blog/activations-are-bad-for-geometry/"><link rel="icon" href="/blog/favicon.svg" type="image/svg+xml"><link rel="alternate" type="application/rss+xml" title="Records of the !mmortal Data Scientist" href="/blog/rss.xml"><link rel="sitemap" href="/blog/sitemap-index.xml"><meta property="og:type" content="article"><meta property="og:site_name" content="Records of the !mmortal Data Scientist"><meta property="og:title" content="Activations Are Bad for Geometry — Records of the !mmortal Data Scientist"><meta property="og:description" content="Pointwise activations factor into the layer's Jacobian as a diagonal modulation. The same modulation that buys selectivity destroys geometric structure on the data manifold."><meta property="og:url" content="https://tahabouhsine.com/blog/activations-are-bad-for-geometry/"><meta property="og:locale" content="en_US"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="Activations Are Bad for Geometry — Records of the !mmortal Data Scientist"><meta name="twitter:description" content="Pointwise activations factor into the layer's Jacobian as a diagonal modulation. The same modulation that buys selectivity destroys geometric structure on the data manifold."><meta property="article:published_time" content="2026-02-20T00:00:00.000Z"><meta property="article:author" content="Taha Bouhsine"><meta property="article:tag" content="ml"><meta property="article:tag" content="geometry"><meta property="article:tag" content="kernels"><meta property="article:tag" content="interpretability"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Activations Are Bad for Geometry","description":"Pointwise activations factor into the layer's Jacobian as a diagonal modulation. The same modulation that buys selectivity destroys geometric structure on the data manifold.","datePublished":"2026-02-20T00:00:00.000Z","dateModified":"2026-02-20T00:00:00.000Z","author":{"@type":"Person","name":"Taha Bouhsine","url":"https://tahabouhsine.com/"},"publisher":{"@type":"Person","name":"Taha Bouhsine"},"mainEntityOfPage":{"@type":"WebPage","@id":"https://tahabouhsine.com/blog/activations-are-bad-for-geometry/"},"keywords":"ml, geometry, kernels, interpretability","url":"https://tahabouhsine.com/blog/activations-are-bad-for-geometry/"}</script><script>
+  (() => {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'light' || stored === 'dark') {
+      document.documentElement.setAttribute('data-theme', stored);
+    }
+  })();
+</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.DmNMADbs.css"><style>.act-grid[data-astro-cid-xenwalr7]{grid-template-columns:repeat(3,1fr)}@media(max-width:640px){.act-grid[data-astro-cid-xenwalr7]{grid-template-columns:repeat(2,1fr)}}.viz-cell[data-astro-cid-xenwalr7] canvas[data-astro-cid-xenwalr7]{height:110px}
+</style><style>.jw-controls[data-astro-cid-3y66d3k2]{flex-direction:column;align-items:stretch;gap:.6rem}.jw-row[data-astro-cid-3y66d3k2]{display:flex;flex-wrap:wrap;gap:.6rem 1rem;align-items:center;justify-content:space-between}.jw-buttons[data-astro-cid-3y66d3k2],.jw-mode[data-astro-cid-3y66d3k2]{display:flex;flex-wrap:wrap;gap:.35rem}.jw-buttons[data-astro-cid-3y66d3k2] button[data-astro-cid-3y66d3k2],.jw-mode[data-astro-cid-3y66d3k2] button[data-astro-cid-3y66d3k2]{font-family:var(--mono);font-size:.78rem;padding:.3rem .7rem;background:var(--bg);color:var(--fg-muted);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;transition:all var(--transition-fast)}.jw-buttons[data-astro-cid-3y66d3k2] button[data-astro-cid-3y66d3k2]:hover,.jw-mode[data-astro-cid-3y66d3k2] button[data-astro-cid-3y66d3k2]:hover{color:var(--accent);border-color:var(--accent)}.jw-buttons[data-astro-cid-3y66d3k2] button[data-astro-cid-3y66d3k2].active,.jw-mode[data-astro-cid-3y66d3k2] button[data-astro-cid-3y66d3k2].active{color:var(--bg);background:var(--accent);border-color:var(--accent)}.jw-pair[data-astro-cid-3y66d3k2]{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}.jw-cell[data-astro-cid-3y66d3k2] h4[data-astro-cid-3y66d3k2]{font-family:var(--mono);font-size:.74rem;color:var(--fg-muted);letter-spacing:.06em;text-transform:uppercase;margin:0 0 .35rem;font-weight:500;text-align:center}.jw-hint[data-astro-cid-3y66d3k2]{font-size:.78rem}@media(max-width:640px){.jw-pair[data-astro-cid-3y66d3k2]{grid-template-columns:1fr}}
+</style></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>
+  (() => {
+    const apply = (theme) => {
+      document.documentElement.setAttribute('data-theme', theme);
+      const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+      if (meta) meta.setAttribute('content', theme === 'dark' ? '#0e1116' : '#fbfaf6');
+      // Sync giscus iframe if present
+      const giscus = document.querySelector('iframe.giscus-frame');
+      if (giscus && giscus.contentWindow) {
+        giscus.contentWindow.postMessage(
+          { giscus: { setConfig: { theme: theme === 'dark' ? 'dark' : 'light' } } },
+          'https://giscus.app'
+        );
+      }
+    };
+
+    const init = () => {
+      const btns = document.querySelectorAll('[data-theme-toggle]');
+      btns.forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', () => {
+          const current = document.documentElement.getAttribute('data-theme')
+            || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          const next = current === 'dark' ? 'light' : 'dark';
+          localStorage.setItem('theme', next);
+          apply(next);
+        });
+      });
+    };
+
+    init();
+    document.addEventListener('astro:after-swap', init);
+    document.addEventListener('astro:page-load', init);
+  })();
+</script> </nav> </div> </header> <main id="main">  <div class="reading-progress" data-reading-progress aria-hidden="true"></div> <script>
+  (() => {
+    const init = () => {
+      const bar = document.querySelector('[data-reading-progress]');
+      if (!bar) return;
+      const onScroll = () => {
+        const h = document.documentElement;
+        const scrolled = h.scrollTop;
+        const max = h.scrollHeight - h.clientHeight;
+        const pct = max > 0 ? Math.min(100, (scrolled / max) * 100) : 0;
+        bar.style.width = pct + '%';
+      };
+      onScroll();
+      window.removeEventListener('scroll', window.__rp_onScroll || (() => {}));
+      window.__rp_onScroll = onScroll;
+      window.addEventListener('scroll', onScroll, { passive: true });
+    };
+    init();
+    document.addEventListener('astro:page-load', init);
+    document.addEventListener('astro:after-swap', init);
+  })();
+</script> <article data-pagefind-body data-pagefind-meta="date:2026-02-20"> <header class="post-header"> <h1 data-pagefind-meta="title">Activations Are Bad for Geometry</h1> <p class="meta"> <time datetime="2026-02-20T00:00:00.000Z">February 19, 2026</time>   · 11 min read </p> <p style="margin-top:0.65rem" data-pagefind-meta="tags:ml,geometry,kernels,interpretability"> <a class="tag" href="/blog/tag/ml/">#ml</a><a class="tag" href="/blog/tag/geometry/">#geometry</a><a class="tag" href="/blog/tag/kernels/">#kernels</a><a class="tag" href="/blog/tag/interpretability/">#interpretability</a> </p> </header>  <p>A neural network layer is a map. Its Jacobian decides whether that map preserves geometry — distances, angles, volumes on the data manifold — or destroys it. For the standard form <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>F</mi><mo stretchy="false">(</mo><mi mathvariant="bold">x</mi><mo stretchy="false">)</mo><mo>=</mo><mi>ϕ</mi><mo stretchy="false">(</mo><mi mathvariant="bold">W</mi><mi mathvariant="bold">x</mi><mo>+</mo><mi mathvariant="bold">b</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">F(\mathbf{x}) = \phi(\mathbf{W}\mathbf{x} + \mathbf{b})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord mathnormal" style="margin-right:0.1389em">F</span><span class="mopen">(</span><span class="mord mathbf">x</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord mathnormal">ϕ</span><span class="mopen">(</span><span class="mord mathbf">Wx</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord mathbf">b</span><span class="mclose">)</span></span></span></span>, with <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ϕ</mi></mrow><annotation encoding="application/x-tex">\phi</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em"></span><span class="mord mathnormal">ϕ</span></span></span></span> applied coordinatewise, the Jacobian factors as</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi mathvariant="bold">J</mi><mi>F</mi></msub><mo stretchy="false">(</mo><mi mathvariant="bold">x</mi><mo stretchy="false">)</mo><mo>=</mo><msub><mi mathvariant="bold">D</mi><mi>ϕ</mi></msub><mo stretchy="false">(</mo><mi mathvariant="bold">z</mi><mo stretchy="false">)</mo><mtext> </mtext><mi mathvariant="bold">W</mi><mo separator="true">,</mo><mspace width="2em"></mspace><mi mathvariant="bold">z</mi><mo>=</mo><mi mathvariant="bold">W</mi><mi mathvariant="bold">x</mi><mo>+</mo><mi mathvariant="bold">b</mi><mo separator="true">,</mo></mrow><annotation encoding="application/x-tex">\mathbf{J}_F(\mathbf{x}) = \mathbf{D}_\phi(\mathbf{z}) \, \mathbf{W}, \qquad \mathbf{z} = \mathbf{W}\mathbf{x} + \mathbf{b},</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathbf">J</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em">F</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathbf">x</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em"></span><span class="mord"><span class="mord mathbf">D</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">ϕ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathbf">z</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathbf" style="margin-right:0.016em">W</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em"></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathbf">z</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.7694em;vertical-align:-0.0833em"></span><span class="mord mathbf">Wx</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em"></span><span class="mord mathbf">b</span><span class="mpunct">,</span></span></span></span></span>
+<p>where <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="bold">D</mi><mi>ϕ</mi></msub><mo stretchy="false">(</mo><mi mathvariant="bold">z</mi><mo stretchy="false">)</mo><mo>=</mo><mrow><mi mathvariant="normal">d</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">g</mi></mrow><mo stretchy="false">(</mo><msup><mi>ϕ</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mo stretchy="false">(</mo><msub><mi>z</mi><mn>1</mn></msub><mo stretchy="false">)</mo><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><msup><mi>ϕ</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mo stretchy="false">(</mo><msub><mi>z</mi><mi>m</mi></msub><mo stretchy="false">)</mo><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\mathbf{D}_\phi(\mathbf{z}) = \mathrm{diag}(\phi&#39;(z_1), \ldots, \phi&#39;(z_m))</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em"></span><span class="mord"><span class="mord mathbf">D</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">ϕ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathbf">z</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1.0019em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathrm" style="margin-right:0.0139em">diag</span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">ϕ</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.044em">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em"><span style="top:-2.55em;margin-left:-0.044em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal">ϕ</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.044em">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em"><span style="top:-2.55em;margin-left:-0.044em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">m</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mclose">))</span></span></span></span>. <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="bold">D</mi><mi>ϕ</mi></msub></mrow><annotation encoding="application/x-tex">\mathbf{D}_\phi</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9722em;vertical-align:-0.2861em"></span><span class="mord"><span class="mord mathbf">D</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">ϕ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span></span></span></span> is everything the activation contributes; <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">W</mi></mrow><annotation encoding="application/x-tex">\mathbf{W}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6861em"></span><span class="mord mathbf" style="margin-right:0.016em">W</span></span></span></span> does the rotating and mixing. The activation cannot produce new geometric structure — it can only modulate what the linear part provides, and only coordinatewise.</p>
+<p>That is a strong constraint. The only structure <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="bold">D</mi><mi>ϕ</mi></msub></mrow><annotation encoding="application/x-tex">\mathbf{D}_\phi</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9722em;vertical-align:-0.2861em"></span><span class="mord"><span class="mord mathbf">D</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">ϕ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span></span></span></span> can have is whatever <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>ϕ</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup></mrow><annotation encoding="application/x-tex">\phi&#39;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9463em;vertical-align:-0.1944em"></span><span class="mord"><span class="mord mathnormal">ϕ</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span></span></span></span> chooses to look like at the <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi></mrow><annotation encoding="application/x-tex">m</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em"></span><span class="mord mathnormal">m</span></span></span></span> pre-activations the input happens to produce. Under almost every activation in current use, that structure is one of: zero, small, or of bounded magnitude. None of these are accidental — they are what gives the activation its selectivity. They are also what makes it destroy geometry.</p>
+<p>The rest of this post makes that destructive role concrete: how rank collapses under ReLU, how the pullback metric warps under saturation, how high-dimensional layers make these pathologies the rule rather than the exception, and why the tradeoff between selectivity and geometric fidelity is structural — no pointwise activation escapes it.</p>
+<h2 id="the-jacobian-activation-by-activation">The Jacobian, activation by activation<a class="heading-anchor-link" aria-label="Link to heading" href="#the-jacobian-activation-by-activation"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The singular values of <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="bold">J</mi><mi>F</mi></msub></mrow><annotation encoding="application/x-tex">\mathbf{J}_F</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8361em;vertical-align:-0.15em"></span><span class="mord"><span class="mord mathbf">J</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em">F</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span></span></span></span> are the singular values of <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">W</mi></mrow><annotation encoding="application/x-tex">\mathbf{W}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6861em"></span><span class="mord mathbf" style="margin-right:0.016em">W</span></span></span></span> <em>scaled coordinatewise</em> by the entries of <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="bold">D</mi><mi>ϕ</mi></msub></mrow><annotation encoding="application/x-tex">\mathbf{D}_\phi</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9722em;vertical-align:-0.2861em"></span><span class="mord"><span class="mord mathbf">D</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">ϕ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span></span></span></span>. So everything turns on <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>ϕ</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mo stretchy="false">(</mo><mi>z</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\phi&#39;(z)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0019em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathnormal">ϕ</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.044em">z</span><span class="mclose">)</span></span></span></span> at the <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi></mrow><annotation encoding="application/x-tex">m</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em"></span><span class="mord mathnormal">m</span></span></span></span> pre-activations the layer actually sees.</p>
+<figure class="viz" data-astro-cid-xenwalr7> <div class="viz-controls" style="justify-content:center" data-astro-cid-xenwalr7> <span data-astro-cid-xenwalr7><span style="color:var(--accent)" data-astro-cid-xenwalr7>— φ(z)</span> &nbsp; <span style="color:var(--fg-muted)" data-astro-cid-xenwalr7>‒ ‒ φ′(z)</span></span> </div> <div class="viz-grid act-grid" data-astro-cid-xenwalr7> <div class="viz-cell" data-astro-cid-xenwalr7> <h4 data-astro-cid-xenwalr7>identity</h4> <canvas id="ag-zbyy862-id" data-kind="identity" aria-label="identity activation and its derivative" data-astro-cid-xenwalr7></canvas> </div><div class="viz-cell" data-astro-cid-xenwalr7> <h4 data-astro-cid-xenwalr7>ReLU</h4> <canvas id="ag-zbyy862-re" data-kind="relu" aria-label="ReLU activation and its derivative" data-astro-cid-xenwalr7></canvas> </div><div class="viz-cell" data-astro-cid-xenwalr7> <h4 data-astro-cid-xenwalr7>leaky ReLU</h4> <canvas id="ag-zbyy862-lr" data-kind="leaky" aria-label="leaky ReLU activation and its derivative" data-astro-cid-xenwalr7></canvas> </div><div class="viz-cell" data-astro-cid-xenwalr7> <h4 data-astro-cid-xenwalr7>sigmoid</h4> <canvas id="ag-zbyy862-si" data-kind="sigmoid" aria-label="sigmoid activation and its derivative" data-astro-cid-xenwalr7></canvas> </div><div class="viz-cell" data-astro-cid-xenwalr7> <h4 data-astro-cid-xenwalr7>tanh</h4> <canvas id="ag-zbyy862-th" data-kind="tanh" aria-label="tanh activation and its derivative" data-astro-cid-xenwalr7></canvas> </div><div class="viz-cell" data-astro-cid-xenwalr7> <h4 data-astro-cid-xenwalr7>GELU</h4> <canvas id="ag-zbyy862-ge" data-kind="gelu" aria-label="GELU activation and its derivative" data-astro-cid-xenwalr7></canvas> </div> </div> <figcaption data-astro-cid-xenwalr7>Six common activations and their derivatives. The accent line is φ(z); the dashed line is φ′(z) — what the layer&#39;s geometry depends on. ReLU has φ′ ∈ {0, 1}, a hard gate. Leaky ReLU avoids the exact zero but jumps between α and 1. Sigmoid and tanh have φ′ tending to zero at both ends. GELU and softplus stay strictly positive and smooth.</figcaption> </figure>  <script>(function(){const ids = ["ag-zbyy862-id","ag-zbyy862-re","ag-zbyy862-lr","ag-zbyy862-si","ag-zbyy862-th","ag-zbyy862-ge"];
+
+(() => {
+  const ACT = {
+    identity: (z) => z,
+    relu: (z) => (z > 0 ? z : 0),
+    leaky: (z) => (z > 0 ? z : 0.1 * z),
+    sigmoid: (z) => 1 / (1 + Math.exp(-z)),
+    tanh: (z) => Math.tanh(z),
+    gelu: (z) => 0.5 * z * (1 + Math.tanh(Math.sqrt(2 / Math.PI) * (z + 0.044715 * z * z * z))),
+  };
+  const dAct = (kind, z) => {
+    const h = 1e-3;
+    return (ACT[kind](z + h) - ACT[kind](z - h)) / (2 * h);
+  };
+
+  const readColors = () => {
+    const s = getComputedStyle(document.documentElement);
+    const v = (n) => s.getPropertyValue(n).trim();
+    return {
+      accent: v('--accent') || '#b3661b',
+      muted: v('--fg-muted') || '#5a5f66',
+      faint: v('--fg-faint') || '#8d8d8d',
+      border: v('--border') || '#e4e1d6',
+    };
+  };
+  let colors = readColors();
+  const refs = [];
+  const themeObs = new MutationObserver(() => {
+    colors = readColors();
+    refs.forEach((r) => r.draw && r.draw());
+  });
+  themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  const setup = () => {
+    ids.forEach((cid) => {
+      const c = document.getElementById(cid);
+      if (!c || c.dataset.ready) return;
+      c.dataset.ready = '1';
+      const kind = c.dataset.kind;
+      const ctx = c.getContext('2d');
+      const state = { dpr: 1, w: 0, h: 0 };
+
+      const fit = () => {
+        const rect = c.getBoundingClientRect();
+        const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+        state.dpr = dpr;
+        state.w = rect.width;
+        state.h = rect.height;
+        c.width = Math.round(rect.width * dpr);
+        c.height = Math.round(rect.height * dpr);
+      };
+
+      const draw = () => {
+        const W = state.w, H = state.h;
+        if (W === 0 || H === 0) return;
+        ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+        ctx.clearRect(0, 0, W, H);
+        const { accent, muted, faint, border } = colors;
+
+        const padL = 6, padR = 6, padT = 6, padB = 16;
+        const plotW = W - padL - padR;
+        const plotH = H - padT - padB;
+        const xMin = -3, xMax = 3, yMin = -1.2, yMax = 1.8;
+        const sx = (x) => padL + ((x - xMin) / (xMax - xMin)) * plotW;
+        const sy = (y) => padT + ((yMax - y) / (yMax - yMin)) * plotH;
+
+        ctx.strokeStyle = border;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padL, sy(0)); ctx.lineTo(W - padR, sy(0));
+        ctx.moveTo(sx(0), padT); ctx.lineTo(sx(0), H - padB);
+        ctx.stroke();
+
+        const M = 120;
+        // φ′(z) dashed muted
+        ctx.strokeStyle = muted;
+        ctx.lineWidth = 1.1;
+        ctx.setLineDash([3, 4]);
+        ctx.beginPath();
+        for (let i = 0; i <= M; i++) {
+          const x = xMin + (i / M) * (xMax - xMin);
+          let y = dAct(kind, x);
+          if (y > yMax) y = yMax;
+          if (y < yMin) y = yMin;
+          const px = sx(x), py = sy(y);
+          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // φ(z) solid accent
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 1.7;
+        ctx.beginPath();
+        for (let i = 0; i <= M; i++) {
+          const x = xMin + (i / M) * (xMax - xMin);
+          let y = ACT[kind](x);
+          if (y > yMax) y = yMax;
+          if (y < yMin) y = yMin;
+          const px = sx(x), py = sy(y);
+          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+
+        // axis labels
+        ctx.fillStyle = faint;
+        ctx.font = '9px ui-monospace, monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText('z', W - padR + 2, sy(0) - 3);
+        ctx.textAlign = 'left';
+        ctx.fillText('1', sx(0) + 3, sy(1) - 9);
+      };
+
+      const ref = { draw };
+      refs.push(ref);
+
+      const ro = new ResizeObserver(() => { fit(); draw(); });
+      ro.observe(c);
+
+      let drawn = false;
+      const io = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && !drawn) {
+          drawn = true;
+          fit();
+          draw();
+          io.disconnect();
+        }
+      }, { rootMargin: '120px' });
+      io.observe(c);
+    });
+  };
+
+  setup();
+  document.addEventListener('astro:page-load', setup);
+  document.addEventListener('astro:after-swap', setup);
+})();
+})();</script>
+<p>The picture is uniform. ReLU gives <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>ϕ</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mo stretchy="false">(</mo><mi>z</mi><mo stretchy="false">)</mo><mo>∈</mo><mo stretchy="false">{</mo><mn>0</mn><mo separator="true">,</mo><mn>1</mn><mo stretchy="false">}</mo></mrow><annotation encoding="application/x-tex">\phi&#39;(z) \in \{0, 1\}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0019em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathnormal">ϕ</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.044em">z</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mopen">{</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord">1</span><span class="mclose">}</span></span></span></span> — a hard gate that zeroes rows of <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="bold">J</mi><mi>F</mi></msub></mrow><annotation encoding="application/x-tex">\mathbf{J}_F</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8361em;vertical-align:-0.15em"></span><span class="mord"><span class="mord mathbf">J</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em">F</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span></span></span></span> on the negative half-plane. Sigmoid and tanh never zero exactly but saturate at both ends; small singular values multiply, and the Jacobian becomes ill-conditioned the moment any coordinate is far from zero. Leaky ReLU keeps <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>ϕ</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup></mrow><annotation encoding="application/x-tex">\phi&#39;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9463em;vertical-align:-0.1944em"></span><span class="mord"><span class="mord mathnormal">ϕ</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span></span></span></span> strictly positive but pins it into <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">{</mo><mi>α</mi><mo separator="true">,</mo><mn>1</mn><mo stretchy="false">}</mo></mrow><annotation encoding="application/x-tex">\{\alpha, 1\}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mopen">{</span><span class="mord mathnormal" style="margin-right:0.0037em">α</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord">1</span><span class="mclose">}</span></span></span></span> with <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi><mo>≪</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">\alpha \ll 1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em"></span><span class="mord mathnormal" style="margin-right:0.0037em">α</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">≪</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">1</span></span></span></span>, taking a factor-of-<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mi mathvariant="normal">/</mi><mi>α</mi></mrow><annotation encoding="application/x-tex">1/\alpha</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord">1/</span><span class="mord mathnormal" style="margin-right:0.0037em">α</span></span></span></span> hit to the condition number in expectation. GELU and softplus are smooth and <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>ϕ</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mo>&gt;</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\phi&#39; &gt; 0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9463em;vertical-align:-0.1944em"></span><span class="mord"><span class="mord mathnormal">ϕ</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">&gt;</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">0</span></span></span></span> everywhere; their conditioning cost is mild, gradual, and never zero.</p>
+<p>These differences are not stylistic. They are the difference between a layer that can collapse, a layer that can degenerate, and a layer that mostly behaves.</p>
+<h2 id="rank-collapse-made-concrete">Rank collapse, made concrete<a class="heading-anchor-link" aria-label="Link to heading" href="#rank-collapse-made-concrete"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>ReLU’s effect on rank is exact. With active set <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>S</mi><mo stretchy="false">(</mo><mi mathvariant="bold">x</mi><mo stretchy="false">)</mo><mo>=</mo><mo stretchy="false">{</mo><mi>i</mi><mo>:</mo><msub><mi>z</mi><mi>i</mi></msub><mo>&gt;</mo><mn>0</mn><mo stretchy="false">}</mo></mrow><annotation encoding="application/x-tex">S(\mathbf{x}) = \{ i : z_i &gt; 0 \}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord mathnormal" style="margin-right:0.0576em">S</span><span class="mopen">(</span><span class="mord mathbf">x</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mopen">{</span><span class="mord mathnormal">i</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">:</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6891em;vertical-align:-0.15em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.044em">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.044em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">&gt;</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord">0</span><span class="mclose">}</span></span></span></span>,</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mrow><mi mathvariant="normal">r</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">k</mi></mrow><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">(</mo><msub><mi mathvariant="bold">J</mi><mi>F</mi></msub><mo stretchy="false">(</mo><mi mathvariant="bold">x</mi><mo stretchy="false">)</mo><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">)</mo><mo>=</mo><mrow><mi mathvariant="normal">r</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">k</mi></mrow><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">(</mo><msub><mi mathvariant="bold">W</mi><mrow><mi>S</mi><mo stretchy="false">(</mo><mi mathvariant="bold">x</mi><mo stretchy="false">)</mo><mo separator="true">,</mo><mtext> </mtext><mo>:</mo></mrow></msub><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">)</mo><mo separator="true">,</mo></mrow><annotation encoding="application/x-tex">\mathrm{rank}\big(\mathbf{J}_F(\mathbf{x})\big) = \mathrm{rank}\big(\mathbf{W}_{S(\mathbf{x}),\,:}\big),</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em"></span><span class="mord"><span class="mord mathrm">rank</span></span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mord"><span class="mord mathbf">J</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em">F</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathbf">x</span><span class="mclose">)</span><span class="mord"><span class="delimsizing size1">)</span></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1.2052em;vertical-align:-0.3552em"></span><span class="mord"><span class="mord mathrm">rank</span></span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mord"><span class="mord mathbf" style="margin-right:0.016em">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em"><span style="top:-2.5198em;margin-left:-0.016em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0576em">S</span><span class="mopen mtight">(</span><span class="mord mathbf mtight">x</span><span class="mclose mtight">)</span><span class="mpunct mtight">,</span><span class="mspace mtight" style="margin-right:0.1952em"></span><span class="mrel mtight">:</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3552em"><span></span></span></span></span></span></span><span class="mord"><span class="delimsizing size1">)</span></span><span class="mpunct">,</span></span></span></span></span>
+<p>the rank of <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">W</mi></mrow><annotation encoding="application/x-tex">\mathbf{W}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6861em"></span><span class="mord mathbf" style="margin-right:0.016em">W</span></span></span></span> restricted to its surviving rows. If <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="bold">W</mi><mi>S</mi></msub></mrow><annotation encoding="application/x-tex">\mathbf{W}_S</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8361em;vertical-align:-0.15em"></span><span class="mord"><span class="mord mathbf" style="margin-right:0.016em">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em"><span style="top:-2.55em;margin-left:-0.016em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0576em">S</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span></span></span></span> no longer spans <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi mathvariant="double-struck">R</mi><mi>n</mi></msup></mrow><annotation encoding="application/x-tex">\mathbb{R}^n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6889em"></span><span class="mord"><span class="mord mathbb">R</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6644em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">n</span></span></span></span></span></span></span></span></span></span></span>, the Jacobian loses column rank and a neighborhood of <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">x</mi></mrow><annotation encoding="application/x-tex">\mathbf{x}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4444em"></span><span class="mord mathbf">x</span></span></span></span> is crushed onto a lower-dimensional subset of output space. Information that lived along the killed columns is gone in the strong sense — the next layer receives the same image regardless of where you were inside <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ker</mi><mo>⁡</mo><msub><mi mathvariant="bold">J</mi><mi>F</mi></msub></mrow><annotation encoding="application/x-tex">\ker \mathbf{J}_F</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em"></span><span class="mop">ker</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathbf">J</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em">F</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span></span></span></span>.</p>
+<p>The usual reply is that <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi><mo>≫</mo><mi>n</mi></mrow><annotation encoding="application/x-tex">m \gg n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em"></span><span class="mord mathnormal">m</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">≫</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.4306em"></span><span class="mord mathnormal">n</span></span></span></span> makes the surviving submatrix wide enough to retain full column rank. That is correct in width but misleading in depth. The end-to-end Jacobian of an <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>L</mi></mrow><annotation encoding="application/x-tex">L</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em"></span><span class="mord mathnormal">L</span></span></span></span>-layer network is</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi mathvariant="bold">J</mi><mi>F</mi></msub><mo stretchy="false">(</mo><mi mathvariant="bold">x</mi><mo stretchy="false">)</mo><mo>=</mo><munderover><mo>∏</mo><mrow><mi mathvariant="normal">ℓ</mi><mo>=</mo><mi>L</mi></mrow><mn>1</mn></munderover><msub><mi mathvariant="bold">D</mi><mi>ϕ</mi></msub><mo stretchy="false">(</mo><msup><mi mathvariant="bold">z</mi><mrow><mo stretchy="false">(</mo><mi mathvariant="normal">ℓ</mi><mo stretchy="false">)</mo></mrow></msup><mo stretchy="false">)</mo><mtext> </mtext><msub><mi mathvariant="bold">W</mi><mi mathvariant="normal">ℓ</mi></msub><mo separator="true">,</mo></mrow><annotation encoding="application/x-tex">\mathbf{J}_F(\mathbf{x}) = \prod_{\ell = L}^{1} \mathbf{D}_\phi(\mathbf{z}^{(\ell)})\, \mathbf{W}_\ell,</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathbf">J</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em">F</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathbf">x</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:3.1032em;vertical-align:-1.3021em"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.8011em"><span style="top:-1.8479em;margin-left:0em"><span class="pstrut" style="height:3.05em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">ℓ</span><span class="mrel mtight">=</span><span class="mord mathnormal mtight">L</span></span></span></span><span style="top:-3.05em"><span class="pstrut" style="height:3.05em"></span><span><span class="mop op-symbol large-op">∏</span></span></span><span style="top:-4.3em;margin-left:0em"><span class="pstrut" style="height:3.05em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.3021em"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathbf">D</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">ϕ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord"><span class="mord mathbf">z</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.938em"><span style="top:-3.113em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mtight">ℓ</span><span class="mclose mtight">)</span></span></span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathbf" style="margin-right:0.016em">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:-0.016em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">ℓ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mpunct">,</span></span></span></span></span>
+<p>and any rank lost at any layer is lost end-to-end. ReLU rank collapse compounds; it does not undo. Residual connections bias each layer toward <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">I</mi></mrow><annotation encoding="application/x-tex">\mathbf{I}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6861em"></span><span class="mord mathbf">I</span></span></span></span> plus a small perturbation and mitigate the compounding, but they do not guarantee against it.</p>
+<h2 id="when-activations-dont-break-things">When activations don’t break things<a class="heading-anchor-link" aria-label="Link to heading" href="#when-activations-dont-break-things"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The negative result has a positive sibling. If <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ϕ</mi></mrow><annotation encoding="application/x-tex">\phi</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em"></span><span class="mord mathnormal">ϕ</span></span></span></span> is strictly monotone and <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">W</mi></mrow><annotation encoding="application/x-tex">\mathbf{W}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6861em"></span><span class="mord mathbf" style="margin-right:0.016em">W</span></span></span></span> has full column rank, then <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>F</mi></mrow><annotation encoding="application/x-tex">F</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em"></span><span class="mord mathnormal" style="margin-right:0.1389em">F</span></span></span></span> restricted to any compact data manifold <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>M</mi><mo>⊂</mo><msup><mi mathvariant="double-struck">R</mi><mi>n</mi></msup></mrow><annotation encoding="application/x-tex">M \subset \mathbb{R}^n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7224em;vertical-align:-0.0391em"></span><span class="mord mathnormal" style="margin-right:0.109em">M</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">⊂</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6889em"></span><span class="mord"><span class="mord mathbb">R</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6644em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">n</span></span></span></span></span></span></span></span></span></span></span> is a homeomorphism onto its image — distinct points stay distinct, topology is preserved, no rank collapse anywhere. If <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ϕ</mi></mrow><annotation encoding="application/x-tex">\phi</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em"></span><span class="mord mathnormal">ϕ</span></span></span></span> is also smooth, the pullback metric <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>g</mi><mi>M</mi></msub></mrow><annotation encoding="application/x-tex">g_M</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em">g</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.109em">M</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span></span></span></span> is a well-defined Riemannian metric (possibly ill-conditioned, but never singular).</p>
+<p>The test sorts the standard activations cleanly. Sigmoid, tanh, GELU, softplus, and the identity are all strictly monotone; under a full-rank <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">W</mi></mrow><annotation encoding="application/x-tex">\mathbf{W}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6861em"></span><span class="mord mathbf" style="margin-right:0.016em">W</span></span></span></span> they preserve topology, and their only sin is condition number. ReLU is <em>not</em> strictly monotone — it has a flat half-line, and that flat half-line is the source of every pathology above. Leaky ReLU with <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi><mo>&gt;</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\alpha &gt; 0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em"></span><span class="mord mathnormal" style="margin-right:0.0037em">α</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">&gt;</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">0</span></span></span></span> scrapes by: it is strictly monotone, so <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>g</mi><mi>M</mi></msub></mrow><annotation encoding="application/x-tex">g_M</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em">g</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.109em">M</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span></span></span></span> is well-defined, but <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>ϕ</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup></mrow><annotation encoding="application/x-tex">\phi&#39;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9463em;vertical-align:-0.1944em"></span><span class="mord"><span class="mord mathnormal">ϕ</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span></span></span></span> has a jump at zero, so <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>g</mi><mi>M</mi></msub></mrow><annotation encoding="application/x-tex">g_M</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em">g</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.109em">M</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span></span></span></span> is only piecewise smooth.</p>
+<p>The corollary is that the activation question is largely the question of strict monotonicity. Lose it, and you lose homeomorphism on a measurable region of input space. Keep it, and the only thing left to manage is conditioning.</p>
+<h2 id="what-the-activation-does-to-the-metric">What the activation does to the metric<a class="heading-anchor-link" aria-label="Link to heading" href="#what-the-activation-does-to-the-metric"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The pullback metric induced by the layer on a submanifold <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>M</mi><mo>⊂</mo><msup><mi mathvariant="double-struck">R</mi><mi>n</mi></msup></mrow><annotation encoding="application/x-tex">M \subset \mathbb{R}^n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7224em;vertical-align:-0.0391em"></span><span class="mord mathnormal" style="margin-right:0.109em">M</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">⊂</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6889em"></span><span class="mord"><span class="mord mathbb">R</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6644em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">n</span></span></span></span></span></span></span></span></span></span></span> is</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>g</mi><mi>M</mi></msub><mo stretchy="false">(</mo><mi mathvariant="bold">u</mi><mo separator="true">,</mo><mi mathvariant="bold">v</mi><mo stretchy="false">)</mo><mo>=</mo><msup><mi mathvariant="bold">u</mi><mi mathvariant="normal">⊤</mi></msup><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">(</mo><msup><mi mathvariant="bold">W</mi><mi mathvariant="normal">⊤</mi></msup><msubsup><mi mathvariant="bold">D</mi><mi>ϕ</mi><mn>2</mn></msubsup><mi mathvariant="bold">W</mi><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">)</mo><mi mathvariant="bold">v</mi><mi mathvariant="normal">.</mi></mrow><annotation encoding="application/x-tex">g_M(\mathbf{u}, \mathbf{v}) = \mathbf{u}^\top \big(\mathbf{W}^\top \mathbf{D}_\phi^2 \mathbf{W}\big) \mathbf{v}.</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em">g</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.109em">M</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathbf">u</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathbf" style="margin-right:0.016em">v</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1.2822em;vertical-align:-0.3831em"></span><span class="mord"><span class="mord mathbf">u</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8991em"><span style="top:-3.113em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">⊤</span></span></span></span></span></span></span></span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mord"><span class="mord mathbf" style="margin-right:0.016em">W</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8991em"><span style="top:-3.113em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">⊤</span></span></span></span></span></span></span></span><span class="mord"><span class="mord mathbf">D</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8641em"><span style="top:-2.453em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">ϕ</span></span></span><span style="top:-3.113em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3831em"><span></span></span></span></span></span></span><span class="mord mathbf" style="margin-right:0.016em">W</span><span class="mord"><span class="delimsizing size1">)</span></span><span class="mord mathbf" style="margin-right:0.016em">v</span><span class="mord">.</span></span></span></span></span>
+<p>This is the metric the network <em>thinks</em> the data lives in. <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="bold">D</mi><mi>ϕ</mi></msub></mrow><annotation encoding="application/x-tex">\mathbf{D}_\phi</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9722em;vertical-align:-0.2861em"></span><span class="mord"><span class="mord mathbf">D</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">ϕ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span></span></span></span> enters twice — squared — with two consequences worth naming.</p>
+<p><strong>Directional rescaling.</strong> Each row of <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">W</mi></mrow><annotation encoding="application/x-tex">\mathbf{W}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6861em"></span><span class="mord mathbf" style="margin-right:0.016em">W</span></span></span></span> is weighted by <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>ϕ</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mo stretchy="false">(</mo><msub><mi>z</mi><mi>i</mi></msub><msup><mo stretchy="false">)</mo><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">\phi&#39;(z_i)^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0641em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathnormal">ϕ</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.044em">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.044em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span> in <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>g</mi><mi>M</mi></msub></mrow><annotation encoding="application/x-tex">g_M</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em">g</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.109em">M</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span></span></span></span>. Sigmoid and tanh saturation, the leaky-ReLU <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi></mrow><annotation encoding="application/x-tex">\alpha</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em"></span><span class="mord mathnormal" style="margin-right:0.0037em">α</span></span></span></span> slope, every situation in which a <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>ϕ</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mo stretchy="false">(</mo><msub><mi>z</mi><mi>i</mi></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\phi&#39;(z_i)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0019em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathnormal">ϕ</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.044em">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.044em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span> goes small: all push the corresponding row’s contribution toward zero. The “learned distance” the layer imposes is dominated by the rows whose neurons haven’t saturated; the rest contribute almost nothing to perceived similarity.</p>
+<p><strong>Directional erasure.</strong> When <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>ϕ</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mo stretchy="false">(</mo><msub><mi>z</mi><mi>i</mi></msub><mo stretchy="false">)</mo><mo>=</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\phi&#39;(z_i) = 0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0019em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathnormal">ϕ</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.044em">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.044em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">0</span></span></span></span> exactly, the row drops from <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>g</mi><mi>M</mi></msub></mrow><annotation encoding="application/x-tex">g_M</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em">g</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.109em">M</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span></span></span></span> entirely. The metric becomes singular along directions in <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ker</mi><mo>⁡</mo><msub><mi mathvariant="bold">J</mi><mi>F</mi></msub><mo>∩</mo><msub><mi>T</mi><mi mathvariant="bold">x</mi></msub><mi>M</mi></mrow><annotation encoding="application/x-tex">\ker \mathbf{J}_F \cap T_\mathbf{x} M</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em"></span><span class="mop">ker</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathbf">J</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em">F</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">∩</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1611em"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathbf mtight">x</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mord mathnormal" style="margin-right:0.109em">M</span></span></span></span>: distances collapse to zero. This is the manifold-side picture of rank collapse — the geometric statement that the layer has stopped being a homeomorphism at <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">x</mi></mrow><annotation encoding="application/x-tex">\mathbf{x}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4444em"></span><span class="mord mathbf">x</span></span></span></span>.</p>
+<figure class="viz" data-astro-cid-3y66d3k2> <div class="viz-controls jw-controls" data-jw="jw-y63d51v" data-astro-cid-3y66d3k2> <div class="jw-row" data-astro-cid-3y66d3k2> <div class="jw-buttons" data-astro-cid-3y66d3k2> <button type="button" data-act="identity" class data-astro-cid-3y66d3k2>identity</button><button type="button" data-act="relu" class="active" data-astro-cid-3y66d3k2>ReLU</button><button type="button" data-act="sigmoid" class data-astro-cid-3y66d3k2>sigmoid</button><button type="button" data-act="tanh" class data-astro-cid-3y66d3k2>tanh</button><button type="button" data-act="gelu" class data-astro-cid-3y66d3k2>GELU</button> </div> <div class="jw-mode" role="group" aria-label="dimensionality" data-astro-cid-3y66d3k2> <button type="button" data-mode="2d" class="active" data-astro-cid-3y66d3k2>2D</button> <button type="button" data-mode="3d" data-astro-cid-3y66d3k2>3D</button> </div> </div> <label data-astro-cid-3y66d3k2> <span style="color:var(--fg)" data-astro-cid-3y66d3k2>W rotation θ</span> <input type="range" min="-0.7854" max="0.7854" step="0.02" value="0" id="jw-y63d51v-theta" aria-label="W rotation angle" data-astro-cid-3y66d3k2> <span class="readout" id="jw-y63d51v-readout" data-astro-cid-3y66d3k2>0°</span> </label> <span class="faint jw-hint" id="jw-y63d51v-hint" data-astro-cid-3y66d3k2>2D: grid + unit disk · drag with cursor disabled</span> </div> <div class="jw-pair" data-astro-cid-3y66d3k2> <div class="jw-cell" data-astro-cid-3y66d3k2> <h4 data-astro-cid-3y66d3k2>input space</h4> <canvas id="jw-y63d51v-in" height="280" aria-label="Input space" data-astro-cid-3y66d3k2></canvas> </div> <div class="jw-cell" data-astro-cid-3y66d3k2> <h4 data-astro-cid-3y66d3k2>output space φ(Wx)</h4> <canvas id="jw-y63d51v-out" height="280" aria-label="Output space after linear map and activation" data-astro-cid-3y66d3k2></canvas> </div> </div> <figcaption data-astro-cid-3y66d3k2>A regular grid and unit disk in input space, transformed by φ(Wx). The buttons select the activation; the slider rotates the linear part W (W is just a 2D rotation, for visual clarity). Identity warps nothing. GELU stretches the disk gently. Sigmoid and tanh compress everything toward the origin without folding. ReLU folds the negative half-planes onto the axes — exact rank collapse on a measurable region. Rotate W to see how the dead zone moves through input space: it is the learned W that decides which directions are at the mercy of the activation&#39;s zeros.</figcaption> </figure>  <script>(function(){const id = "jw-y63d51v";
+
+(() => {
+  const ACT = {
+    identity: (z) => z,
+    relu: (z) => (z > 0 ? z : 0),
+    sigmoid: (z) => 1 / (1 + Math.exp(-z)),
+    tanh: (z) => Math.tanh(z),
+    gelu: (z) => 0.5 * z * (1 + Math.tanh(Math.sqrt(2 / Math.PI) * (z + 0.044715 * z * z * z))),
+  };
+
+  const readColors = () => {
+    const s = getComputedStyle(document.documentElement);
+    const v = (n) => s.getPropertyValue(n).trim();
+    return {
+      accent: v('--accent') || '#b3661b',
+      muted: v('--fg-muted') || '#5a5f66',
+      faint: v('--fg-faint') || '#8d8d8d',
+      border: v('--border') || '#e4e1d6',
+      fg: v('--fg') || '#1a1a1a',
+    };
+  };
+  let colors = readColors();
+
+  const setup = () => {
+    const cIn = document.getElementById(id + '-in');
+    const cOut = document.getElementById(id + '-out');
+    if (!cIn || cIn.dataset.ready) return;
+    cIn.dataset.ready = '1';
+    cOut.dataset.ready = '1';
+    const ctxIn = cIn.getContext('2d');
+    const ctxOut = cOut.getContext('2d');
+    const slider = document.getElementById(id + '-theta');
+    const readout = document.getElementById(id + '-readout');
+    const hint = document.getElementById(id + '-hint');
+    const wrap = document.querySelector(`[data-jw="${id}"]`);
+    const actButtons = wrap.querySelectorAll('.jw-buttons button');
+    const modeButtons = wrap.querySelectorAll('.jw-mode button');
+
+    let act = 'relu';
+    let mode = '2d';
+    let theta = 0;
+    const view = { az: 0.55, el: 0.45 };
+    const state = { dpr: 1, w: 0, h: 0 };
+    let dragging = null;
+
+    const fit = () => {
+      const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+      state.dpr = dpr;
+      [cIn, cOut].forEach((c) => {
+        const rect = c.getBoundingClientRect();
+        state.w = rect.width;
+        state.h = rect.height;
+        c.width = Math.round(rect.width * dpr);
+        c.height = Math.round(rect.height * dpr);
+      });
+    };
+
+    const themeObs = new MutationObserver(() => { colors = readColors(); requestRedraw(); });
+    themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+    let rafScheduled = false;
+    let visible = false;
+    const requestRedraw = () => {
+      if (rafScheduled || !visible) return;
+      rafScheduled = true;
+      requestAnimationFrame(() => { rafScheduled = false; draw(); });
+    };
+
+    // ── 2D math ────────────────────────────────────────────────────
+    const rotate2 = (x, y) => {
+      const ct = Math.cos(theta), st = Math.sin(theta);
+      return [ct * x - st * y, st * x + ct * y];
+    };
+    const transform2 = (x, y) => {
+      const [zx, zy] = rotate2(x, y);
+      return [ACT[act](zx), ACT[act](zy)];
+    };
+
+    // ── 3D math ────────────────────────────────────────────────────
+    const rotate3 = (x, y, z) => {
+      // W is rotation around the z-axis by θ (matches the 2D case in the xy-plane)
+      const ct = Math.cos(theta), st = Math.sin(theta);
+      return [ct * x - st * y, st * x + ct * y, z];
+    };
+    const transform3 = (x, y, z) => {
+      const [zx, zy, zz] = rotate3(x, y, z);
+      return [ACT[act](zx), ACT[act](zy), ACT[act](zz)];
+    };
+    const project = (x, y, z) => {
+      // Camera: rotate around y-axis by az, then around x-axis by el. Orthographic.
+      const ca = Math.cos(view.az), sa = Math.sin(view.az);
+      const x1 = ca * x + sa * z;
+      const z1 = -sa * x + ca * z;
+      const ce = Math.cos(view.el), se = Math.sin(view.el);
+      const y2 = ce * y - se * z1;
+      const z2 = se * y + ce * z1;
+      return { x: x1, y: y2, depth: z2 };
+    };
+
+    // ── 2D rendering ───────────────────────────────────────────────
+    const project2 = (ctx, x, y, pad, plotW, plotH, xMin, xMax, yMin, yMax) =>
+      [pad + ((x - xMin) / (xMax - xMin)) * plotW, pad + ((yMax - y) / (yMax - yMin)) * plotH];
+
+    const drawPlot2D = (ctx, isOut) => {
+      const W = state.w, H = state.h;
+      ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+
+      const { accent, muted, faint, border } = colors;
+      const pad = 10;
+      const plotW = W - pad * 2;
+      const plotH = H - pad * 2;
+      const xMin = -1.6, xMax = 1.6, yMin = -1.6, yMax = 1.6;
+      const p = (x, y) => project2(ctx, x, y, pad, plotW, plotH, xMin, xMax, yMin, yMax);
+
+      ctx.strokeStyle = border;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(pad, pad, plotW, plotH);
+
+      ctx.beginPath();
+      ctx.moveTo(...p(xMin, 0)); ctx.lineTo(...p(xMax, 0));
+      ctx.moveTo(...p(0, yMin)); ctx.lineTo(...p(0, yMax));
+      ctx.stroke();
+
+      const N = 11;
+      const samples = 21;
+      const range = 1.2;
+      ctx.strokeStyle = muted + '55';
+      ctx.lineWidth = 0.8;
+      for (let i = 0; i < N; i++) {
+        const y = -range + (i / (N - 1)) * 2 * range;
+        ctx.beginPath();
+        for (let j = 0; j < samples; j++) {
+          const x = -range + (j / (samples - 1)) * 2 * range;
+          const [px, py] = isOut ? transform2(x, y) : [x, y];
+          const [sx, sy] = p(px, py);
+          if (j === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+        }
+        ctx.stroke();
+      }
+      for (let i = 0; i < N; i++) {
+        const x = -range + (i / (N - 1)) * 2 * range;
+        ctx.beginPath();
+        for (let j = 0; j < samples; j++) {
+          const y = -range + (j / (samples - 1)) * 2 * range;
+          const [px, py] = isOut ? transform2(x, y) : [x, y];
+          const [sx, sy] = p(px, py);
+          if (j === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+        }
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = accent + '1a';
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      const K = 96;
+      for (let i = 0; i <= K; i++) {
+        const a = (i / K) * Math.PI * 2;
+        const ix = Math.cos(a), iy = Math.sin(a);
+        const [px, py] = isOut ? transform2(ix, iy) : [ix, iy];
+        const [sx, sy] = p(px, py);
+        if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = faint;
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(isOut ? 'φ(Wx)₁' : 'x₁', W - pad - 2, p(0, 0)[1] - 2);
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText(isOut ? 'φ(Wx)₂' : 'x₂', p(0, 0)[0] + 4, pad + 2);
+    };
+
+    // ── 3D rendering ───────────────────────────────────────────────
+    const drawPlot3D = (ctx, isOut) => {
+      const W = state.w, H = state.h;
+      ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+
+      const { accent, muted, faint, border } = colors;
+      const pad = 10;
+      const plotW = W - pad * 2;
+      const plotH = H - pad * 2;
+      ctx.strokeStyle = border;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(pad, pad, plotW, plotH);
+
+      // World bounds [-1.6, 1.6] cube; centre at (0,0,0).
+      const halfW = 1.6;
+      const scale = Math.min(plotW, plotH) * 0.5 / halfW * 0.95;
+      const cx = W / 2, cy = H / 2;
+      const xform = isOut ? transform3 : (x, y, z) => [x, y, z];
+      const proj = (x, y, z) => {
+        const [tx, ty, tz] = xform(x, y, z);
+        const q = project(tx, ty, tz);
+        return { sx: cx + q.x * scale, sy: cy - q.y * scale, depth: q.depth };
+      };
+
+      // Collect line segments for painter's algorithm-ish sort.
+      const segs = [];
+      const push = (a, b, color, width, fade) => {
+        segs.push({ a, b, color, width, fade, z: (a.depth + b.depth) * 0.5 });
+      };
+
+      // Axis frame at origin (input only — output coord origin shifts with activation)
+      if (!isOut) {
+        const axis = (ax, ay, az) => {
+          const o = proj(0, 0, 0);
+          const e = proj(ax, ay, az);
+          push(o, e, faint, 1.0, false);
+        };
+        axis(1.4, 0, 0); axis(0, 1.4, 0); axis(0, 0, 1.4);
+      }
+
+      // Sphere wireframe: 7 latitude rings + 12 meridians.
+      const NLat = 7;
+      const NLon = 12;
+      const MPerRing = 48;
+      const MPerMer = 33;
+
+      // Latitudes
+      for (let i = 1; i < NLat; i++) {
+        const phi = -Math.PI / 2 + (i / NLat) * Math.PI;
+        const r = Math.cos(phi);
+        const yL = Math.sin(phi);
+        let prev = proj(r, yL, 0);
+        for (let j = 1; j <= MPerRing; j++) {
+          const a = (j / MPerRing) * Math.PI * 2;
+          const curr = proj(r * Math.cos(a), yL, r * Math.sin(a));
+          push(prev, curr, muted + '88', 0.9, true);
+          prev = curr;
+        }
+      }
+      // Meridians
+      for (let i = 0; i < NLon; i++) {
+        const lon = (i / NLon) * Math.PI * 2;
+        let prev = proj(0, -1, 0);
+        for (let j = 1; j <= MPerMer; j++) {
+          const t = -Math.PI / 2 + (j / MPerMer) * Math.PI;
+          const curr = proj(Math.cos(t) * Math.cos(lon), Math.sin(t), Math.cos(t) * Math.sin(lon));
+          push(prev, curr, muted + '88', 0.9, true);
+          prev = curr;
+        }
+      }
+
+      // Equator highlighted in accent (the disk in 2D)
+      {
+        const M = 96;
+        let prev = proj(1, 0, 0);
+        for (let j = 1; j <= M; j++) {
+          const a = (j / M) * Math.PI * 2;
+          const curr = proj(Math.cos(a), 0, Math.sin(a));
+          push(prev, curr, accent, 1.6, false);
+          prev = curr;
+        }
+      }
+
+      // Draw, sorted back-to-front so closer lines paint over distant ones.
+      segs.sort((a, b) => a.z - b.z);
+      for (const s of segs) {
+        ctx.strokeStyle = s.color;
+        ctx.lineWidth = s.width;
+        if (s.fade) {
+          // depth in roughly [-1.6, 1.6]; map to alpha 0.35..1.0
+          const f = Math.max(0, Math.min(1, (s.z + 1.6) / 3.2));
+          ctx.globalAlpha = 0.4 + 0.6 * f;
+        } else {
+          ctx.globalAlpha = 1;
+        }
+        ctx.beginPath();
+        ctx.moveTo(s.a.sx, s.a.sy);
+        ctx.lineTo(s.b.sx, s.b.sy);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+
+      // Label
+      ctx.fillStyle = faint;
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(isOut ? 'φ(Wx)' : 'x ∈ ℝ³', W - pad - 4, H - pad - 4);
+    };
+
+    const draw = () => {
+      if (mode === '2d') {
+        drawPlot2D(ctxIn, false);
+        drawPlot2D(ctxOut, true);
+      } else {
+        drawPlot3D(ctxIn, false);
+        drawPlot3D(ctxOut, true);
+      }
+      readout.textContent = Math.round((theta * 180) / Math.PI) + '°';
+      hint.textContent = mode === '3d'
+        ? '3D: unit sphere + equator · drag a canvas to orbit the camera'
+        : '2D: grid + unit disk';
+    };
+
+    actButtons.forEach((b) =>
+      b.addEventListener('click', () => {
+        act = b.dataset.act;
+        actButtons.forEach((other) => other.classList.toggle('active', other === b));
+        requestRedraw();
+      }),
+    );
+    modeButtons.forEach((b) =>
+      b.addEventListener('click', () => {
+        mode = b.dataset.mode;
+        modeButtons.forEach((other) => other.classList.toggle('active', other === b));
+        dragging = null;
+        requestRedraw();
+      }),
+    );
+    slider.addEventListener('input', () => {
+      theta = parseFloat(slider.value);
+      requestRedraw();
+    });
+
+    // Drag-to-orbit (3D only)
+    const onPointerDown = (e) => {
+      if (mode !== '3d') return;
+      dragging = { x: e.clientX, y: e.clientY, az: view.az, el: view.el };
+      e.target.setPointerCapture?.(e.pointerId);
+    };
+    const onPointerMove = (e) => {
+      if (!dragging || mode !== '3d') return;
+      const dx = e.clientX - dragging.x;
+      const dy = e.clientY - dragging.y;
+      view.az = dragging.az + dx * 0.01;
+      view.el = Math.max(-1.4, Math.min(1.4, dragging.el + dy * 0.01));
+      requestRedraw();
+    };
+    const onPointerUp = (e) => {
+      if (dragging) { try { e.target.releasePointerCapture?.(e.pointerId); } catch {} }
+      dragging = null;
+    };
+    [cIn, cOut].forEach((c) => {
+      c.addEventListener('pointerdown', onPointerDown);
+      c.addEventListener('pointermove', onPointerMove);
+      c.addEventListener('pointerup', onPointerUp);
+      c.addEventListener('pointercancel', onPointerUp);
+    });
+
+    const ro = new ResizeObserver(() => { fit(); requestRedraw(); });
+    ro.observe(cIn);
+    ro.observe(cOut);
+
+    const io = new IntersectionObserver((entries) => {
+      const wasVisible = visible;
+      visible = entries[0].isIntersecting;
+      if (visible && !wasVisible) { fit(); draw(); }
+    }, { rootMargin: '120px' });
+    io.observe(cIn);
+  };
+
+  setup();
+  document.addEventListener('astro:page-load', setup);
+  document.addEventListener('astro:after-swap', setup);
+})();
+})();</script>
+<p>The unit disk is the cleanest place to see it. Identity and GELU stretch it; sigmoid and tanh compress it without folding; ReLU folds the negative half-planes onto the axes and crushes entire wedges of the disk onto a 1D set. There is no separate metric tensor the network keeps somewhere — the post-activation grid spacing <em>is</em> the metric.</p>
+<h2 id="high-dimensions-make-this-worse-not-better">High dimensions make this worse, not better<a class="heading-anchor-link" aria-label="Link to heading" href="#high-dimensions-make-this-worse-not-better"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The intuition that “with a wide enough layer, ReLU sparsification is fine” survives in width but not in pressure. Under the simplest model — <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">z</mi><mo>∈</mo><msup><mi mathvariant="double-struck">R</mi><mi>n</mi></msup></mrow><annotation encoding="application/x-tex">\mathbf{z} \in \mathbb{R}^n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em"></span><span class="mord mathbf">z</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6889em"></span><span class="mord"><span class="mord mathbb">R</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6644em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">n</span></span></span></span></span></span></span></span></span></span></span> with each <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>z</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">z_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.044em">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.044em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span></span></span></span> independent and symmetric — the probability that <em>at least one</em> coordinate is zeroed is</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>P</mi><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">(</mo><mi mathvariant="normal">∃</mi><mtext> </mtext><mi>i</mi><mo>:</mo><msub><mi>z</mi><mi>i</mi></msub><mo>≤</mo><mn>0</mn><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">)</mo><mo>=</mo><mn>1</mn><mo>−</mo><msup><mn>2</mn><mrow><mo>−</mo><mi>n</mi></mrow></msup><mi mathvariant="normal">.</mi></mrow><annotation encoding="application/x-tex">P\big(\exists\, i : z_i \le 0\big) = 1 - 2^{-n}.</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em"></span><span class="mord mathnormal" style="margin-right:0.1389em">P</span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mord">∃</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal">i</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">:</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.786em;vertical-align:-0.15em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.044em">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.044em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">≤</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em"></span><span class="mord">0</span><span class="mord"><span class="delimsizing size1">)</span></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:0.8213em"></span><span class="mord"><span class="mord">2</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8213em"><span style="top:-3.113em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mathnormal mtight">n</span></span></span></span></span></span></span></span></span><span class="mord">.</span></span></span></span></span>
+<p>By <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>10</mn></mrow><annotation encoding="application/x-tex">n = 10</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">10</span></span></span></span> this is <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>99.9</mn><mi mathvariant="normal">%</mi></mrow><annotation encoding="application/x-tex">99.9\%</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8056em;vertical-align:-0.0556em"></span><span class="mord">99.9%</span></span></span></span>. In a transformer hidden layer of width <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>768</mn></mrow><annotation encoding="application/x-tex">768</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">768</span></span></span></span>, every forward pass has approximately half its coordinates zeroed at every point. Whether this turns into rank collapse depends on the structure of <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="bold">W</mi><mrow><mi>S</mi><mo stretchy="false">(</mo><mi mathvariant="bold">x</mi><mo stretchy="false">)</mo><mo separator="true">,</mo><mo>:</mo></mrow></msub></mrow><annotation encoding="application/x-tex">\mathbf{W}_{S(\mathbf{x}), :}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0413em;vertical-align:-0.3552em"></span><span class="mord"><span class="mord mathbf" style="margin-right:0.016em">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em"><span style="top:-2.5198em;margin-left:-0.016em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0576em">S</span><span class="mopen mtight">(</span><span class="mord mathbf mtight">x</span><span class="mclose mtight">)</span><span class="mpunct mtight">,</span><span class="mrel mtight">:</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3552em"><span></span></span></span></span></span></span></span></span></span>, but the pressure toward sparsification does not disappear in the limit — it becomes the operating regime, and the analysis above stops being worst-case and becomes typical.</p>
+<figure class="viz"> <canvas id="hdc-bp0eoar-c" height="220" aria-label="ReLU dead-coordinate probability versus layer width"></canvas> <figcaption>P(at least one ReLU-zeroed coordinate) = 1 − 2⁻ⁿ as a function of layer width n, under the iid symmetric pre-activation model. The expected active fraction stays at ½; the probability that at least one coordinate is dead approaches 1 exponentially. By n = 10 it is already 99.9%; by transformer widths it is indistinguishable from 1.</figcaption> </figure> <script>(function(){const id = "hdc-bp0eoar";
+
+(() => {
+  const readColors = () => {
+    const s = getComputedStyle(document.documentElement);
+    const v = (n) => s.getPropertyValue(n).trim();
+    return {
+      accent: v('--accent') || '#b3661b',
+      fg: v('--fg') || '#1a1a1a',
+      muted: v('--fg-muted') || '#5a5f66',
+      faint: v('--fg-faint') || '#8d8d8d',
+      border: v('--border') || '#e4e1d6',
+    };
+  };
+  let colors = readColors();
+
+  const setup = () => {
+    const c = document.getElementById(id + '-c');
+    if (!c || c.dataset.ready) return;
+    c.dataset.ready = '1';
+    const ctx = c.getContext('2d');
+    const state = { dpr: 1, w: 0, h: 0 };
+
+    const fit = () => {
+      const rect = c.getBoundingClientRect();
+      const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+      state.dpr = dpr;
+      state.w = rect.width;
+      state.h = rect.height;
+      c.width = Math.round(rect.width * dpr);
+      c.height = Math.round(rect.height * dpr);
+    };
+
+    const draw = () => {
+      const W = state.w, H = state.h;
+      if (W === 0) return;
+      ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+      const { accent, muted, faint, border } = colors;
+
+      const padL = 38, padR = 14, padT = 16, padB = 32;
+      const plotW = W - padL - padR;
+      const plotH = H - padT - padB;
+      const xMin = 1, xMax = 24, yMin = 0, yMax = 1.05;
+      const sx = (x) => padL + ((x - xMin) / (xMax - xMin)) * plotW;
+      const sy = (y) => padT + ((yMax - y) / (yMax - yMin)) * plotH;
+
+      // Gridlines
+      ctx.strokeStyle = border;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let k = 0; k <= 4; k++) {
+        const yy = (k / 4);
+        ctx.moveTo(padL, sy(yy));
+        ctx.lineTo(W - padR, sy(yy));
+      }
+      ctx.stroke();
+
+      // Axis ticks
+      ctx.fillStyle = faint;
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      for (let k = 0; k <= 4; k++) {
+        const yy = k / 4;
+        ctx.fillText(yy.toFixed(2), padL - 4, sy(yy));
+      }
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      for (const t of [1, 5, 10, 15, 20, 24]) {
+        ctx.fillText(String(t), sx(t), H - padB + 5);
+      }
+      // Axis labels
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = muted;
+      ctx.fillText('layer width n', padL + plotW / 2, H - padB + 18);
+      ctx.save();
+      ctx.translate(10, padT + plotH / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillText('P(≥ 1 zeroed)', 0, 0);
+      ctx.restore();
+
+      // Expected-fraction reference line at 0.5
+      ctx.strokeStyle = muted;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath();
+      ctx.moveTo(padL, sy(0.5));
+      ctx.lineTo(W - padR, sy(0.5));
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = faint;
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText('E[active fraction] = ½', W - padR - 4, sy(0.5) - 4);
+
+      // 1 - 2^-n curve
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      const M = 240;
+      for (let i = 0; i <= M; i++) {
+        const x = xMin + (i / M) * (xMax - xMin);
+        const y = 1 - Math.pow(0.5, x);
+        const px = sx(x), py = sy(y);
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+
+      // Annotate n=10
+      const ax = 10, ay = 1 - Math.pow(0.5, 10);
+      ctx.fillStyle = accent;
+      ctx.beginPath();
+      ctx.arc(sx(ax), sy(ay), 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = colors.fg;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.font = '11px ui-monospace, monospace';
+      ctx.fillText('n = 10 → 99.9%', sx(ax) + 8, sy(ay) - 2);
+    };
+
+    const themeObs = new MutationObserver(() => { colors = readColors(); requestRedraw(); });
+    themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+    let rafScheduled = false;
+    let visible = false;
+    const requestRedraw = () => {
+      if (rafScheduled || !visible) return;
+      rafScheduled = true;
+      requestAnimationFrame(() => { rafScheduled = false; draw(); });
+    };
+
+    const ro = new ResizeObserver(() => { fit(); requestRedraw(); });
+    ro.observe(c);
+
+    const io = new IntersectionObserver((entries) => {
+      const was = visible;
+      visible = entries[0].isIntersecting;
+      if (visible && !was) { fit(); draw(); }
+    }, { rootMargin: '120px' });
+    io.observe(c);
+  };
+
+  setup();
+  document.addEventListener('astro:page-load', setup);
+  document.addEventListener('astro:after-swap', setup);
+})();
+})();</script>
+<p>The point is not that ReLU is bad in high dimensions. It is that high dimensions are exactly where the geometric pathologies of pointwise activations live, and that handwaving about width does not make them go away.</p>
+<h2 id="the-expressivitygeometry-tradeoff">The expressivity–geometry tradeoff<a class="heading-anchor-link" aria-label="Link to heading" href="#the-expressivitygeometry-tradeoff"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Why have an activation at all? Without one, a stack of <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>L</mi></mrow><annotation encoding="application/x-tex">L</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em"></span><span class="mord mathnormal">L</span></span></span></span> layers is the single linear map <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="bold">W</mi><mi>L</mi></msub><mo>⋯</mo><msub><mi mathvariant="bold">W</mi><mn>1</mn></msub></mrow><annotation encoding="application/x-tex">\mathbf{W}_L \cdots \mathbf{W}_1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8361em;vertical-align:-0.15em"></span><span class="mord"><span class="mord mathbf" style="margin-right:0.016em">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em"><span style="top:-2.55em;margin-left:-0.016em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">L</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="minner">⋯</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathbf" style="margin-right:0.016em">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em"><span style="top:-2.55em;margin-left:-0.016em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span></span></span></span> — no nonlinear class boundary, no useful expressivity. The activation buys <em>selectivity</em>: <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>ϕ</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mo stretchy="false">(</mo><msub><mi>z</mi><mi>i</mi></msub><mo stretchy="false">)</mo><mo>≈</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">\phi&#39;(z_i) \approx 1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0019em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathnormal">ϕ</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.044em">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.044em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">1</span></span></span></span> when a neuron’s prototype matches the input and the projection passes through, <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>ϕ</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mo stretchy="false">(</mo><msub><mi>z</mi><mi>i</mi></msub><mo stretchy="false">)</mo><mo>≈</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\phi&#39;(z_i) \approx 0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0019em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathnormal">ϕ</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.044em">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.044em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">0</span></span></span></span> when it doesn’t. Selectivity is what the activation is for.</p>
+<p>But selectivity is exactly what damages geometry. Sharper activations — derivatives closer to <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">{</mo><mn>0</mn><mo separator="true">,</mo><mn>1</mn><mo stretchy="false">}</mo></mrow><annotation encoding="application/x-tex">\{0, 1\}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mopen">{</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord">1</span><span class="mclose">}</span></span></span></span> — separate classes better and lose more geometry. Smoother, never-zero activations preserve more geometry but suppress selectivity, leaving the layer near its linear part. The choice of activation is the choice of where to sit on this axis. ReLU is a corner solution: maximum selectivity, maximum geometric damage. GELU and softplus are middle solutions. Identity is the other corner — perfect geometry, no expressivity gain over a single linear layer.</p>
+<p>There is no escape from this tradeoff <em>as long as the nonlinearity is pointwise</em>. Every dimension spent on selectivity is taken from the metric.</p>
+<h2 id="reading-common-tricks-as-jacobian-regularization">Reading common tricks as Jacobian regularization<a class="heading-anchor-link" aria-label="Link to heading" href="#reading-common-tricks-as-jacobian-regularization"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Several standard practices in deep learning, usually treated as separate phenomena, are all variations on a single intervention: keep <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="bold">J</mi><mi>F</mi></msub></mrow><annotation encoding="application/x-tex">\mathbf{J}_F</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8361em;vertical-align:-0.15em"></span><span class="mord"><span class="mord mathbf">J</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em">F</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span></span></span></span> away from rank collapse and saturation.</p>
+<p><strong>Residual connections</strong> turn each layer into <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">x</mi><mo>+</mo><mi>F</mi><mo stretchy="false">(</mo><mi mathvariant="bold">x</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\mathbf{x} + F(\mathbf{x})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6667em;vertical-align:-0.0833em"></span><span class="mord mathbf">x</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord mathnormal" style="margin-right:0.1389em">F</span><span class="mopen">(</span><span class="mord mathbf">x</span><span class="mclose">)</span></span></span></span>, whose Jacobian is <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">I</mi><mo>+</mo><msub><mi mathvariant="bold">D</mi><mi>ϕ</mi></msub><mi mathvariant="bold">W</mi></mrow><annotation encoding="application/x-tex">\mathbf{I} + \mathbf{D}_\phi \mathbf{W}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7694em;vertical-align:-0.0833em"></span><span class="mord mathbf">I</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:0.9722em;vertical-align:-0.2861em"></span><span class="mord"><span class="mord mathbf">D</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">ϕ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span><span class="mord mathbf" style="margin-right:0.016em">W</span></span></span></span> instead of <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="bold">D</mi><mi>ϕ</mi></msub><mi mathvariant="bold">W</mi></mrow><annotation encoding="application/x-tex">\mathbf{D}_\phi \mathbf{W}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9722em;vertical-align:-0.2861em"></span><span class="mord"><span class="mord mathbf">D</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">ϕ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span><span class="mord mathbf" style="margin-right:0.016em">W</span></span></span></span>. The identity term gives the Jacobian a floor — full rank by construction, well-conditioned as long as <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">∥</mi><msub><mi mathvariant="bold">D</mi><mi>ϕ</mi></msub><mi mathvariant="bold">W</mi><mi mathvariant="normal">∥</mi></mrow><annotation encoding="application/x-tex">\|\mathbf{D}_\phi \mathbf{W}\|</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em"></span><span class="mord">∥</span><span class="mord"><span class="mord mathbf">D</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">ϕ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span><span class="mord mathbf" style="margin-right:0.016em">W</span><span class="mord">∥</span></span></span></span> stays modest. The cumulative rank decay that plagues stacked ReLU layers becomes a perturbation around <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">I</mi></mrow><annotation encoding="application/x-tex">\mathbf{I}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6861em"></span><span class="mord mathbf">I</span></span></span></span> instead of a multiplicative product of degenerate matrices.</p>
+<p><strong>Batch and layer normalization</strong> rescale the pre-activation <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">z</mi></mrow><annotation encoding="application/x-tex">\mathbf{z}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4444em"></span><span class="mord mathbf">z</span></span></span></span> to roughly zero mean and unit variance. This is exactly the regime in which sigmoid/tanh/GELU have their largest <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>ϕ</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup></mrow><annotation encoding="application/x-tex">\phi&#39;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9463em;vertical-align:-0.1944em"></span><span class="mord"><span class="mord mathnormal">ϕ</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span></span></span></span> and ReLU has its highest active fraction. Without normalization, <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">z</mi></mrow><annotation encoding="application/x-tex">\mathbf{z}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4444em"></span><span class="mord mathbf">z</span></span></span></span> drifts during training; the saturation set grows; <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="bold">D</mi><mi>ϕ</mi></msub></mrow><annotation encoding="application/x-tex">\mathbf{D}_\phi</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9722em;vertical-align:-0.2861em"></span><span class="mord"><span class="mord mathbf">D</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">ϕ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span></span></span></span> shrinks. Normalization holds the input distribution in the activation’s <em>live zone</em> — <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="bold">D</mi><mi>ϕ</mi></msub></mrow><annotation encoding="application/x-tex">\mathbf{D}_\phi</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9722em;vertical-align:-0.2861em"></span><span class="mord"><span class="mord mathbf">D</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">ϕ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span></span></span></span> stays away from zero.</p>
+<p><strong>Weight and spectral normalization</strong> bound the singular values of <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">W</mi></mrow><annotation encoding="application/x-tex">\mathbf{W}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6861em"></span><span class="mord mathbf" style="margin-right:0.016em">W</span></span></span></span>. They have no direct effect on <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="bold">D</mi><mi>ϕ</mi></msub></mrow><annotation encoding="application/x-tex">\mathbf{D}_\phi</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9722em;vertical-align:-0.2861em"></span><span class="mord"><span class="mord mathbf">D</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">ϕ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span></span></span></span>, but by keeping <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">W</mi></mrow><annotation encoding="application/x-tex">\mathbf{W}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6861em"></span><span class="mord mathbf" style="margin-right:0.016em">W</span></span></span></span>‘s spectrum tight they prevent the linear factor from compounding whatever damage <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="bold">D</mi><mi>ϕ</mi></msub></mrow><annotation encoding="application/x-tex">\mathbf{D}_\phi</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9722em;vertical-align:-0.2861em"></span><span class="mord"><span class="mord mathbf">D</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">ϕ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span></span></span></span> has already inflicted.</p>
+<p>These are not activation replacements. They are stabilizers — they keep the architecture in the regime where <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="bold">J</mi><mi>F</mi></msub></mrow><annotation encoding="application/x-tex">\mathbf{J}_F</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8361em;vertical-align:-0.15em"></span><span class="mord"><span class="mord mathbf">J</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em">F</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span></span></span></span> is least bad. The fact that the same analysis explains three different “tricks” is the content: each one holds a different piece of the Jacobian away from a different failure mode.</p>
+<h2 id="why-this-matters-for-evaluation">Why this matters for evaluation<a class="heading-anchor-link" aria-label="Link to heading" href="#why-this-matters-for-evaluation"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Downstream operations on representations — cosine similarity, <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi></mrow><annotation encoding="application/x-tex">k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em"></span><span class="mord mathnormal" style="margin-right:0.0315em">k</span></span></span></span>-nearest neighbors, clustering, retrieval — all assume the representation space carries the geometry they’re reading. If the layer has collapsed rank, cosine similarity compares vectors whose angles are artifacts of the surviving directions rather than properties of the data manifold. If the layer has saturated, small distances in representation space correspond to entirely different scales of input distance depending on which coordinates were saturated where. The metric you evaluate with is not the metric the network actually exposed.</p>
+<p>The conclusion is not “don’t use cosine similarity.” It is that cosine similarity (and every other downstream metric) is only meaningful when the network has preserved the geometric structure the metric is reading. Choose activations that preserve Jacobian rank where the task requires it. Control input magnitudes via normalization so the activation does not saturate. Match the evaluation metric to the geometry the architecture actually preserves. None of this is optional if the goal is to compare representations rather than collateral.</p>
+<h2 id="the-kernel-alternative">The kernel alternative<a class="heading-anchor-link" aria-label="Link to heading" href="#the-kernel-alternative"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The tradeoff exists because the architecture has separated geometry (carried by <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">W</mi></mrow><annotation encoding="application/x-tex">\mathbf{W}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6861em"></span><span class="mord mathbf" style="margin-right:0.016em">W</span></span></span></span>) from selectivity (provided by <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ϕ</mi></mrow><annotation encoding="application/x-tex">\phi</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em"></span><span class="mord mathnormal">ϕ</span></span></span></span>), and each piece can do its job only at the other’s expense. A kernel-machine layer dissolves the separation. A symmetric positive-definite kernel <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi><mo stretchy="false">(</mo><mi mathvariant="bold">z</mi><mo separator="true">,</mo><msup><mi mathvariant="bold">z</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">K(\mathbf{z}, \mathbf{z}&#39;)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0019em;vertical-align:-0.25em"></span><span class="mord mathnormal" style="margin-right:0.0715em">K</span><span class="mopen">(</span><span class="mord mathbf">z</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathbf">z</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span> provides selectivity (sharper kernels are more selective) and geometry (a Gram matrix is a metric) at the same time. The function the layer computes is a finite expansion in kernel sections,</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>f</mi><mo stretchy="false">(</mo><mo>⋅</mo><mo stretchy="false">)</mo><mo>=</mo><munder><mo>∑</mo><mi>j</mi></munder><msub><mi>α</mi><mi>j</mi></msub><mtext> </mtext><mi>K</mi><mo stretchy="false">(</mo><mo>⋅</mo><mo separator="true">,</mo><msub><mi mathvariant="bold">z</mi><mi>j</mi></msub><mo stretchy="false">)</mo><mo separator="true">,</mo></mrow><annotation encoding="application/x-tex">f(\cdot) = \sum_j \alpha_j \, K(\cdot, \mathbf{z}_j),</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord mathnormal" style="margin-right:0.1076em">f</span><span class="mopen">(</span><span class="mord">⋅</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:2.4638em;vertical-align:-1.4138em"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.05em"><span style="top:-1.8723em;margin-left:0em"><span class="pstrut" style="height:3.05em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em">j</span></span></span><span style="top:-3.05em"><span class="pstrut" style="height:3.05em"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.4138em"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0037em">α</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.0037em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0715em">K</span><span class="mopen">(</span><span class="mord">⋅</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathbf">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mpunct">,</span></span></span></span></span>
+<p>with a closed-form RKHS norm <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">∥</mi><mi>f</mi><msubsup><mi mathvariant="normal">∥</mi><msub><mi mathvariant="script">H</mi><mi>K</mi></msub><mn>2</mn></msubsup><mo>=</mo><msup><mi mathvariant="bold-italic">α</mi><mi mathvariant="normal">⊤</mi></msup><mi mathvariant="bold">K</mi><mi mathvariant="bold-italic">α</mi></mrow><annotation encoding="application/x-tex">\|f\|^2_{\mathcal{H}_K} = \boldsymbol{\alpha}^\top \mathbf{K} \boldsymbol{\alpha}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.1897em;vertical-align:-0.3756em"></span><span class="mord">∥</span><span class="mord mathnormal" style="margin-right:0.1076em">f</span><span class="mord"><span class="mord">∥</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8141em"><span style="top:-2.4247em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathcal mtight" style="margin-right:0.0097em">H</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em"><span style="top:-2.3567em;margin-left:-0.0097em;margin-right:0.0714em"><span class="pstrut" style="height:2.5em"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0715em">K</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1433em"><span></span></span></span></span></span></span></span></span></span><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3756em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.8491em"></span><span class="mord"><span class="mord"><span class="mord"><span class="mord boldsymbol">α</span></span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">⊤</span></span></span></span></span></span></span></span><span class="mord mathbf">K</span><span class="mord"><span class="mord"><span class="mord boldsymbol">α</span></span></span></span></span></span>. There is no <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="bold">D</mi><mi>ϕ</mi></msub></mrow><annotation encoding="application/x-tex">\mathbf{D}_\phi</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9722em;vertical-align:-0.2861em"></span><span class="mord"><span class="mord mathbf">D</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">ϕ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span></span></span></span> sitting in the middle to collapse rank or saturate the metric. The primitive <em>is</em> the geometry; selectivity is implemented <em>as</em> geometry; kernel similarity <em>is</em> the score.</p>
+<p>The pointwise activation is not the price of expressivity. It is the price of refusing to make the primitive a kernel. Pick activations with the same care you pick a loss. They are not there for nonlinearity, and they are not free.</p>  </article> <nav class="post-nav" aria-label="Adjacent posts"><a href="/blog/ai-illiteracy-pt1/" class="prev" rel="prev"><div class="label">← Previous</div><div class="title">Morocco and AI Illiteracy — Part I</div></a><a href="/blog/attention-is-a-kernel/" class="next" rel="next"><div class="label">Next →</div><div class="title">Attention is Explainable Because it is a Kernel</div></a></nav> <section aria-label="Comments" id="giscus-mount" style="margin-top:3rem" data-giscus="{&#34;repo&#34;:&#34;mlnomadpy/blog&#34;,&#34;repoId&#34;:&#34;MDEwOlJlcG9zaXRvcnk0MDQ4MzY2NDU=&#34;,&#34;category&#34;:&#34;Announcements&#34;,&#34;categoryId&#34;:&#34;DIC_kwDOGCFRJc4C9EiR&#34;,&#34;mapping&#34;:&#34;pathname&#34;,&#34;reactionsEnabled&#34;:&#34;1&#34;,&#34;emitMetadata&#34;:&#34;0&#34;,&#34;inputPosition&#34;:&#34;top&#34;,&#34;theme&#34;:&#34;preferred_color_scheme&#34;,&#34;lang&#34;:&#34;en&#34;}"></section><script>
+    (() => {
+      const load = () => {
+        const mount = document.getElementById('giscus-mount');
+        if (!mount || mount.dataset.loaded === '1') return;
+        const cfg = JSON.parse(mount.dataset.giscus);
+        const theme = document.documentElement.getAttribute('data-theme')
+          || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        const s = document.createElement('script');
+        s.src = 'https://giscus.app/client.js';
+        s.async = true;
+        s.crossOrigin = 'anonymous';
+        const attrs = {
+          'data-repo': cfg.repo,
+          'data-repo-id': cfg.repoId,
+          'data-category': cfg.category,
+          'data-category-id': cfg.categoryId,
+          'data-mapping': cfg.mapping,
+          'data-strict': '0',
+          'data-reactions-enabled': cfg.reactionsEnabled,
+          'data-emit-metadata': cfg.emitMetadata,
+          'data-input-position': cfg.inputPosition,
+          'data-theme': theme,
+          'data-lang': cfg.lang,
+          'data-loading': 'lazy',
+        };
+        for (const k in attrs) s.setAttribute(k, attrs[k]);
+        mount.appendChild(s);
+        mount.dataset.loaded = '1';
+      };
+      load();
+      document.addEventListener('astro:page-load', load);
+      document.addEventListener('astro:after-swap', load);
+    })();
+  </script> <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('pre').forEach((pre) => {
+        if (pre.dataset.copyEnhanced) return;
+        pre.dataset.copyEnhanced = '1';
+        const btn = document.createElement('button');
+        btn.className = 'code-copy';
+        btn.type = 'button';
+        btn.textContent = 'copy';
+        btn.setAttribute('aria-label', 'Copy code');
+        btn.addEventListener('click', async () => {
+          const code = pre.querySelector('code');
+          const text = (code ? code.innerText : pre.innerText) || '';
+          try {
+            await navigator.clipboard.writeText(text);
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = 'copy';
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+        pre.appendChild(btn);
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>  </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> </span> </footer> </body></html>
