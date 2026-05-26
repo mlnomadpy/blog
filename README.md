@@ -1,173 +1,70 @@
 # Records of the !mmortal Data Scientist
 
-Astro + MDX blog. Math via KaTeX. Comments via giscus. Hosted on GitHub Pages at
-`https://tahabouhsine.com/blog`.
+A blog about machine learning, geometry, and what neural networks are actually
+doing under the hood. Most posts share a thread: take a familiar piece of a
+modern model — attention, MLPs, contrastive losses, activations — and ask
+*what mathematical object is it, really?* The answers usually point at kernels,
+RKHS geometry, or the shape of the loss landscape.
 
-## Local development
+Live at <https://tahabouhsine.com/blog/>.
 
-```bash
-npm install
-npm run dev      # http://localhost:4321/blog/
-npm run build    # outputs to ./dist
-npm run preview  # serve ./dist locally
-```
+## Posts
 
-## Writing a post
+### [What an MLP Knows, When It's a Kernel](https://tahabouhsine.com/blog/what-an-mlp-knows/)
 
-Drop an `.mdx` (or `.md`) file in `src/content/blog/`. The filename becomes the URL slug.
+The MLP block is illegible because its primitive — affine + pointwise
+nonlinearity — does not carry a kernel. Replace it with a Yat unit (a quadratic
+similarity divided by an induced distance) and the four objects that make
+attention legible follow for free: pairwise scores, normalised contributions,
+named geometry, prototype units. Ships with animated stage-by-stage diagrams of
+the transformer / attention / MLP blocks and a kernel playground.
 
-```mdx
----
-title: My new post
-description: One-line summary used for SEO and the index page.
-pubDate: 2026-05-14
-tags: [math, ai]
-draft: false
----
+### [Not All Infinities Are Equal](https://tahabouhsine.com/blog/not-all-infinities-are-equal/)
 
-Inline math: $e^{i\pi} + 1 = 0$.
+Cross-entropy has a singularity at $p \to 0$, not at $p \to 1$. That asymmetry
+is not a quirk of the loss surface — it's the reason language models
+hallucinate, the reason CLIP-style contrastive training needs enormous batches,
+and the reason the modality gap is geometrically inevitable. The post separates
+what's a theorem from what's a hypothesis, and visualises the growth rates,
+asymmetry, and vector-vs-probability gradients side by side.
 
-$$
-\int_0^\infty e^{-x^2}\,dx = \frac{\sqrt{\pi}}{2}
-$$
-```
+### [Opposite Is Not Different](https://tahabouhsine.com/blog/opposite-is-not-different/)
 
-### Theorems, lemmas, proofs
+The cosine-similarity scale has *three* landmarks, not two. Maximum difference
+between two unit vectors is orthogonality, not opposition. The most influential
+contrastive losses spent years optimizing for the wrong target — pushing
+negatives toward $-1$ when they should have been pushing toward $0$. Includes
+a simplex-packing viz showing why $k$ classes want $k-1$ dimensions, not $k$.
 
-```mdx
-import Theorem from '../../components/Theorem.astro';
+### [Activations Are Bad for Geometry](https://tahabouhsine.com/blog/activations-are-bad-for-geometry/)
 
-<Theorem kind="theorem" number="2.1" title="Spectral theorem">
-Every Hermitian operator has a real spectrum.
-</Theorem>
+Pointwise activations factor into the layer's Jacobian as a diagonal modulation.
+The same modulation that buys selectivity destroys geometric structure on the
+data manifold. With a 3D Jacobian-warp viz showing exactly how ReLU and friends
+crumple the input space.
 
-<Theorem kind="proof">
-Standard; see Reed & Simon.
-</Theorem>
-```
+### [Attention is Explainable Because it is a Kernel](https://tahabouhsine.com/blog/attention-is-a-kernel/)
 
-`kind` accepts: `theorem`, `lemma`, `definition`, `proposition`, `corollary`,
-`remark`, `example`, `proof`.
+Self-attention is a Nadaraya–Watson smoother. The score $QK^\top / \sqrt{d}$ is
+a kernel, the softmax row is a normalised contribution, and the output is a
+kernel-weighted average of values. RKHS framing explains why attention is
+inherently more interpretable than the MLP that follows it.
 
-### Custom JS / visualizations
+### [Morocco and AI Illiteracy — Part I](https://tahabouhsine.com/blog/ai-illiteracy-pt1/)
 
-Any `<script is:inline>` block in an MDX file is shipped verbatim. Drop in
-D3, Three.js, Observable Plot, or hand-rolled canvas code. See
-`src/content/blog/hello-math.mdx` for a working example.
+On AI education in Morocco and the cost of staying behind.
 
-For heavier visualizations, install a UI framework integration (`npx astro add react`)
-and import `.tsx` components directly into MDX.
+## Companion papers
 
-## What you need to do
+A few posts have longer write-ups as PDFs in [`papers/`](./papers):
 
-These steps must happen outside the repo — I can't do them for you:
+- *Painting Arithmetic with Kernel MLPs* — the experiment behind *What an MLP Knows*
+- *Not All Infinities Are Equal* — the cross-entropy asymmetry result
+- *Opposite Is Not Different* — the three-landmark argument
+- *Activations Are Bad for Geometry* — the Jacobian-modulation theorem
 
-### 1. Point the custom domain at GitHub Pages
+## Stack
 
-In your DNS for `tahabouhsine.com`, add **A records** at the apex pointing to:
-
-```
-185.199.108.153
-185.199.109.153
-185.199.110.153
-185.199.111.153
-```
-
-(Or a single **ALIAS/ANAME** record to `mlnomadpy.github.io.` if your DNS host supports it.)
-
-The repo already contains `public/CNAME` with `tahabouhsine.com`, so GitHub Pages
-will serve the site at `https://tahabouhsine.com/`. Because `astro.config.mjs`
-sets `base: '/blog'`, every page lives under `/blog/...` — i.e. the home page
-is `https://tahabouhsine.com/blog/`. A request to `https://tahabouhsine.com/`
-will 404 unless something else (e.g. a separate root site repo) serves it.
-
-> **If you want a different URL** (e.g. `blog.tahabouhsine.com` on a subdomain,
-> or the blog at the root `tahabouhsine.com/`), change `base` in `astro.config.mjs`
-> and the DNS records accordingly. Subdomain is simpler — just a `CNAME` record
-> pointing `blog` → `mlnomadpy.github.io.` and set `base: '/'`.
-
-### 2. Enable GitHub Pages
-
-On `github.com/mlnomadpy/blog` → **Settings → Pages**:
-
-- **Source**: *Deploy from a branch*
-- **Branch**: `gh-pages` / `/ (root)`
-- Save.
-
-When the domain field shows your CNAME, tick **Enforce HTTPS**.
-
-### Deploying
-
-Deploys are run from your machine — no CI involved:
-
-```bash
-npm run deploy
-```
-
-That command builds the site (`npm run build` → `dist/`), then pushes the
-contents of `dist/` to the remote `gh-pages` branch via the `gh-pages` npm
-package. GitHub Pages serves whatever sits on that branch.
-
-Because `astro.config.mjs` sets `base: '/blog'`, the `postbuild` script
-rearranges `dist/` so that:
-
-- `dist/CNAME`, `dist/.nojekyll`, `dist/robots.txt` sit at the deploy root
-- `dist/blog/` contains the site (`index.html`, `_astro/`, `pagefind/`, etc.)
-
-Final URL: `https://tahabouhsine.com/blog/`.
-
-### 3. Enable comments (giscus)
-
-1. On `github.com/mlnomadpy/blog`, go to **Settings → General → Features** and
-   enable **Discussions**.
-2. Install the [giscus GitHub App](https://github.com/apps/giscus) on the repo.
-3. Visit <https://giscus.app>, plug in `mlnomadpy/blog`, choose a Discussion
-   category (e.g. create one called `Comments`), and copy the
-   `data-repo-id` and `data-category-id` values it generates.
-4. Paste them into `src/consts.ts`:
-
-   ```ts
-   export const GISCUS = {
-     repo: 'mlnomadpy/blog',
-     repoId: 'R_kgD...',           // ← from giscus.app
-     category: 'Comments',
-     categoryId: 'DIC_kwDO...',    // ← from giscus.app
-     ...
-   };
-   ```
-
-   Until both IDs are filled in, posts render a placeholder note instead of the
-   comments widget.
-
-## Project layout
-
-```
-.
-├── astro.config.mjs          # site URL, base path, MDX, KaTeX
-├── src/
-│   ├── consts.ts             # site title, giscus IDs
-│   ├── content.config.ts     # blog collection schema
-│   ├── content/blog/         # posts (.mdx)
-│   ├── components/
-│   │   ├── BaseHead.astro
-│   │   ├── Header.astro
-│   │   ├── Footer.astro
-│   │   ├── Theorem.astro     # theorem/lemma/proof boxes
-│   │   ├── Callout.astro
-│   │   └── Giscus.astro      # comments
-│   ├── layouts/
-│   │   ├── BaseLayout.astro
-│   │   └── PostLayout.astro
-│   ├── pages/
-│   │   ├── index.astro       # post list
-│   │   ├── about.astro
-│   │   ├── rss.xml.ts        # RSS feed
-│   │   └── [...slug].astro   # dynamic post route
-│   └── styles/global.css
-├── public/
-│   ├── CNAME                 # tahabouhsine.com
-│   ├── .nojekyll
-│   ├── robots.txt
-│   └── favicon.svg
-└── scripts/postbuild.mjs     # rearranges dist + runs pagefind
-```
+Astro 5 + MDX, KaTeX for math, giscus for comments, hand-rolled canvas viz.
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md) if you want to know how to build
+and deploy.
