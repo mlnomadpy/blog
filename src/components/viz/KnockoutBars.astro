@@ -1,0 +1,272 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 320 } = Astro.props;
+const id = `kb-${Math.random().toString(36).slice(2, 9)}`;
+---
+<figure class="viz">
+  <div class="viz-controls kb-controls" data-kb={id}>
+    <div class="kb-row">
+      <span class="faint">knock out:</span>
+      <div class="kb-buttons" data-group="subset">
+        <button type="button" data-subset="times" class="active">×</button>
+        <button type="button" data-subset="plus">+</button>
+        <button type="button" data-subset="minus">−</button>
+        <button type="button" data-subset="div">÷</button>
+      </div>
+      <span class="faint" style="margin-left:1.2rem">how:</span>
+      <div class="kb-buttons" data-group="mode">
+        <button type="button" data-mode="row" class="active">row</button>
+        <button type="button" data-mode="slot">slot</button>
+        <button type="button" data-mode="random">random</button>
+      </div>
+    </div>
+    <div class="kb-readout" id={`${id}-readout`}>—</div>
+  </div>
+  <canvas id={`${id}-c`} height={height} aria-label="Per-operator OCR change bar chart"></canvas>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+  .kb-controls { flex-direction: column; align-items: stretch; gap: 0.5rem; }
+  .kb-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+  .kb-buttons { display: inline-flex; gap: 0.3rem; }
+  .kb-buttons button {
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    padding: 0.3rem 0.7rem;
+    background: var(--bg);
+    color: var(--fg-muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    min-width: 34px;
+  }
+  .kb-buttons button:hover { color: var(--accent); border-color: var(--accent); }
+  .kb-buttons button.active { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+  .kb-readout {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--accent);
+  }
+</style>
+
+<script is:inline define:vars={{ id }}>
+(() => {
+  const setup = () => {
+    const c = document.getElementById(id + '-c');
+    if (!c || c.dataset.ready) return;
+    c.dataset.ready = '1';
+    const ctx = c.getContext('2d');
+    const wrap = document.querySelector(`[data-kb="${id}"]`);
+    const subBtns = wrap.querySelectorAll('[data-group="subset"] button');
+    const modeBtns = wrap.querySelectorAll('[data-group="mode"] button');
+    const readout = document.getElementById(id + '-readout');
+
+    // Baseline OCR per operator from Painting Arithmetic phased curriculum.
+    // (Approximations consistent with paper text: × baseline 86.5%.)
+    const baseline = { plus: 92.0, minus: 92.0, times: 86.5, div: 92.0 };
+    // ΔOCR (pp) from the paper's intervention table.
+    const deltas = {
+      times: {
+        row:    { plus: -14.4, minus: -13.8, times: -43.7, div:  -1.6, N: 30 },
+        slot:   { plus:  -1.9, minus:  -3.6, times: -40.0, div:  -0.6, N: 30 },
+        random: { plus:  -8.9, minus:  -9.8, times:  -9.2, div:  -2.6, N: 30 },
+      },
+      plus: {
+        row:    { plus: -13.6, minus: -5.1, times: -1.9, div: -2.3, N: 32 },
+        slot:   { plus:  -4.5, minus: +0.6, times: -1.2, div: -0.4, N: 32 },
+        random: { plus: -12.5, minus: -8.2, times: -20.0, div: -3.9, N: 32 },
+      },
+      minus: {
+        row:    { plus: -3.5, minus: -4.4, times: -3.2, div: -0.8, N: 14 },
+        slot:   { plus: -1.5, minus: -2.1, times: -1.0, div: -0.4, N: 14 },
+        random: { plus: -4.9, minus: -5.6, times: -3.4, div: -1.5, N: 14 },
+      },
+      div: {
+        row:    { plus: -13.1, minus: -18.3, times:  -9.7, div: -15.8, N: 47 },
+        slot:   { plus:  -3.0, minus:  -4.8, times:  -2.0, div: -12.0, N: 47 },
+        random: { plus: -10.3, minus: -11.4, times: -10.0, div:  -6.5, N: 47 },
+      },
+    };
+    const opLabel = { plus: '+', minus: '−', times: '×', div: '÷' };
+    const opOrder = ['plus', 'minus', 'times', 'div'];
+
+    let subset = 'times';
+    let mode = 'row';
+    const state = { dpr: 1, w: 0, h: 0 };
+
+    let colors = readColors();
+    function readColors() {
+      const s = getComputedStyle(document.documentElement);
+      const v = (n) => s.getPropertyValue(n).trim();
+      return {
+        accent: v('--accent') || '#b3661b',
+        accentSoft: v('--accent-soft') || '#b3661b14',
+        bg: v('--bg') || '#fbfaf6',
+        bgSunken: v('--bg-sunken') || '#f1efe7',
+        fg: v('--fg') || '#1a1a1a',
+        muted: v('--fg-muted') || '#5a5f66',
+        faint: v('--fg-faint') || '#8d8d8d',
+        border: v('--border') || '#e4e1d6',
+      };
+    }
+    const themeObs = new MutationObserver(() => { colors = readColors(); requestRedraw(); });
+    themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+    const fit = () => {
+      const rect = c.getBoundingClientRect();
+      const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+      state.dpr = dpr;
+      state.w = rect.width;
+      state.h = rect.height;
+      c.width = Math.round(rect.width * dpr);
+      c.height = Math.round(rect.height * dpr);
+    };
+
+    let rafScheduled = false;
+    let visible = false;
+    const requestRedraw = () => {
+      if (rafScheduled || !visible) return;
+      rafScheduled = true;
+      requestAnimationFrame(() => { rafScheduled = false; draw(); });
+    };
+
+    const draw = () => {
+      const W = state.w, H = state.h;
+      if (W === 0) return;
+      ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+
+      const padL = 50, padR = 16, padT = 18, padB = 60;
+      const plotW = W - padL - padR;
+      const plotH = H - padT - padB;
+      const yMin = 0, yMax = 100;
+      const sy = (v) => padT + (yMax - v) / (yMax - yMin) * plotH;
+
+      // Grid + axis ticks (every 20 pp)
+      ctx.strokeStyle = colors.border;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let v = 0; v <= 100; v += 20) {
+        const y = sy(v);
+        ctx.moveTo(padL, y); ctx.lineTo(W - padR, y);
+      }
+      ctx.stroke();
+      ctx.fillStyle = colors.faint;
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      for (let v = 0; v <= 100; v += 20) {
+        ctx.fillText(v + '%', padL - 4, sy(v));
+      }
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.save();
+      ctx.translate(14, padT + plotH / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillStyle = colors.muted;
+      ctx.fillText('OCR per operator (%)', 0, 0);
+      ctx.restore();
+
+      const groupW = plotW / opOrder.length;
+      const barPad = groupW * 0.18;
+      const innerW = groupW - 2 * barPad;
+      const barW = innerW / 2 - 4;
+      const d = deltas[subset][mode];
+
+      opOrder.forEach((op, i) => {
+        const cx = padL + groupW * i + groupW / 2;
+        const base = baseline[op];
+        const after = Math.max(0, Math.min(100, base + d[op]));
+        const isTargeted = (subset === op);
+
+        // Baseline bar
+        const bx1 = cx - innerW / 2;
+        const baseY = sy(base);
+        ctx.fillStyle = colors.bgSunken;
+        ctx.strokeStyle = colors.muted;
+        ctx.lineWidth = 1;
+        ctx.fillRect(bx1, baseY, barW, sy(0) - baseY);
+        ctx.strokeRect(bx1, baseY, barW, sy(0) - baseY);
+
+        // After bar
+        const bx2 = cx + 4 - barW;
+        const afterY = sy(after);
+        ctx.fillStyle = isTargeted ? colors.accent : colors.accent + '88';
+        ctx.strokeStyle = isTargeted ? colors.accent : colors.muted;
+        ctx.fillRect(bx2 + barW + 0, afterY, barW, sy(0) - afterY);
+        ctx.strokeRect(bx2 + barW + 0, afterY, barW, sy(0) - afterY);
+
+        // Δ label below the after bar
+        const dlabel = (d[op] > 0 ? '+' : '') + d[op].toFixed(1) + ' pp';
+        ctx.fillStyle = isTargeted ? colors.accent : colors.muted;
+        ctx.font = '11px ui-monospace, monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(dlabel, cx, sy(0) + 4);
+
+        // Operator label
+        ctx.fillStyle = colors.fg;
+        ctx.font = 'bold 14px ' + (getComputedStyle(document.body).fontFamily || 'serif');
+        ctx.fillText(opLabel[op], cx, sy(0) + 22);
+
+        // small after-value tick text on top of after bar
+        ctx.fillStyle = colors.fg;
+        ctx.font = '10px ui-monospace, monospace';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(Math.round(after) + '%', bx2 + barW + barW / 2, afterY - 3);
+      });
+
+      // Legend
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      const lyTop = padT - 6;
+      ctx.fillStyle = colors.bgSunken;
+      ctx.strokeStyle = colors.muted;
+      ctx.fillRect(padL, lyTop - 5, 10, 10);
+      ctx.strokeRect(padL, lyTop - 5, 10, 10);
+      ctx.fillStyle = colors.faint;
+      ctx.fillText(' baseline', padL + 12, lyTop);
+      ctx.fillStyle = colors.accent;
+      ctx.fillRect(padL + 88, lyTop - 5, 10, 10);
+      ctx.fillStyle = colors.faint;
+      ctx.fillText(' after knock-out', padL + 100, lyTop);
+
+      // Compute and show specificity (targeted Δ minus mean of others)
+      const otherOps = opOrder.filter((o) => o !== subset);
+      const meanOther = otherOps.reduce((a, o) => a + d[o], 0) / otherOps.length;
+      const spec = d[subset] - meanOther;
+      readout.textContent = `subset = ${opLabel[subset]} (N=${d.N}) · intervention = ${mode} · Δ on target = ${d[subset].toFixed(1)} pp · mean Δ on others = ${meanOther.toFixed(1)} pp · specificity = ${spec.toFixed(1)} pp`;
+    };
+
+    subBtns.forEach((b) => b.addEventListener('click', () => {
+      subset = b.dataset.subset;
+      subBtns.forEach((o) => o.classList.toggle('active', o === b));
+      requestRedraw();
+    }));
+    modeBtns.forEach((b) => b.addEventListener('click', () => {
+      mode = b.dataset.mode;
+      modeBtns.forEach((o) => o.classList.toggle('active', o === b));
+      requestRedraw();
+    }));
+
+    const ro = new ResizeObserver(() => { fit(); requestRedraw(); });
+    ro.observe(c);
+    const io = new IntersectionObserver((entries) => {
+      const was = visible;
+      visible = entries[0].isIntersecting;
+      if (visible && !was) { fit(); draw(); }
+    }, { rootMargin: '120px' });
+    io.observe(c);
+  };
+
+  setup();
+  document.addEventListener('astro:page-load', setup);
+  document.addEventListener('astro:after-swap', setup);
+})();
+</script>

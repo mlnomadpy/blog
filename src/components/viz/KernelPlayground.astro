@@ -1,0 +1,723 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 460 } = Astro.props;
+const id = `kp-${Math.random().toString(36).slice(2, 9)}`;
+---
+<figure class="viz">
+  <div class="viz-controls kp-controls" data-kp={id}>
+    <div class="kp-row">
+      <span class="faint">dataset:</span>
+      <div class="kp-buttons" data-group="dataset">
+        <button type="button" data-set="moons" class="active">moons</button>
+        <button type="button" data-set="circles">circles</button>
+        <button type="button" data-set="xor">XOR</button>
+        <button type="button" data-set="spirals">spirals</button>
+        <button type="button" data-set="blobs">blobs</button>
+      </div>
+      <span class="faint" style="margin-left:1rem">kernel:</span>
+      <div class="kp-buttons" data-group="kernel">
+        <button type="button" data-kernel="gauss" class="active">Gaussian</button>
+        <button type="button" data-kernel="yat">Yat</button>
+      </div>
+    </div>
+    <div class="kp-row">
+      <label>
+        width σ
+        <input type="range" min="-1" max="0.4" step="0.04" value="-0.3" id={`${id}-sigma`} aria-label="kernel width" />
+        <span class="readout" id={`${id}-sigma-readout`}>0.50</span>
+      </label>
+      <button type="button" class="kp-action" data-action="autofit">auto-fit α</button>
+      <button type="button" class="kp-action" data-action="clear">clear prototypes</button>
+      <button type="button" class="kp-action" data-action="resample">resample data</button>
+      <span class="kp-acc" id={`${id}-acc`}>accuracy — · 0 prototypes</span>
+    </div>
+    <span class="faint kp-hint">click empty space to place a prototype · drag a prototype to move · shift-click a prototype to delete · use sliders below to set each α</span>
+  </div>
+  <div class="kp-canvas-wrap">
+    <canvas id={`${id}-c`} aria-label="Interactive 2D classifier with Yat/Gaussian prototypes"></canvas>
+  </div>
+  <div class="kp-list" id={`${id}-list`}></div>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+  .kp-canvas-wrap {
+    width: 100%;
+    max-width: 560px;
+    margin: 0 auto;
+  }
+  .kp-canvas-wrap canvas {
+    aspect-ratio: 1 / 1;
+    width: 100% !important;
+    height: auto !important;
+  }
+  .viz:fullscreen .kp-canvas-wrap,
+  .viz:-webkit-full-screen .kp-canvas-wrap {
+    max-width: min(calc(100vh - 280px), 720px);
+    flex: 0 0 auto;
+  }
+  .kp-controls { flex-direction: column; align-items: stretch; gap: 0.45rem; }
+  .kp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; }
+  .kp-buttons { display: inline-flex; gap: 0.3rem; flex-wrap: wrap; }
+  .kp-buttons button {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    padding: 0.25rem 0.65rem;
+    background: var(--bg);
+    color: var(--fg-muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+  .kp-buttons button:hover { color: var(--accent); border-color: var(--accent); }
+  .kp-buttons button.active { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+  .kp-action {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    padding: 0.22rem 0.55rem;
+    background: var(--bg);
+    color: var(--fg-muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+  .kp-action:hover { color: var(--accent); border-color: var(--accent); }
+  .kp-acc {
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    color: var(--accent);
+    margin-left: auto;
+  }
+  .kp-hint { font-size: 0.78rem; }
+  .kp-list {
+    margin-top: 0.55rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 0.4rem 0.7rem;
+  }
+  .kp-row-proto {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--fg-muted);
+    padding: 0.25rem 0.4rem;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+  }
+  .kp-row-proto .kp-name { color: var(--fg); min-width: 1.7em; }
+  .kp-row-proto input[type='range'] { flex: 1; min-width: 60px; }
+  .kp-row-proto .kp-val { color: var(--accent); min-width: 3em; text-align: right; font-variant-numeric: tabular-nums; }
+  .kp-row-proto .kp-del {
+    cursor: pointer;
+    color: var(--fg-muted);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: var(--mono);
+    font-size: 0.74rem;
+    padding: 0.05rem 0.3rem;
+    line-height: 1;
+  }
+  .kp-row-proto .kp-del:hover { color: var(--accent); border-color: var(--accent); }
+</style>
+
+<script is:inline define:vars={{ id }}>
+(() => {
+  const setup = () => {
+    const c = document.getElementById(id + '-c');
+    if (!c || c.dataset.ready) return;
+    c.dataset.ready = '1';
+    const ctx = c.getContext('2d');
+    const wrap = document.querySelector(`[data-kp="${id}"]`);
+    const datasetBtns = wrap.querySelectorAll('[data-group="dataset"] button');
+    const kernelBtns = wrap.querySelectorAll('[data-group="kernel"] button');
+    const actionBtns = wrap.querySelectorAll('button.kp-action');
+    const sigmaSlider = document.getElementById(id + '-sigma');
+    const sigmaReadout = document.getElementById(id + '-sigma-readout');
+    const accReadout = document.getElementById(id + '-acc');
+    const protoList = document.getElementById(id + '-list');
+
+    // Deterministic per-dataset RNG so the data is reproducible.
+    const makeRng = (seed) => {
+      let s = seed | 0;
+      return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+    };
+
+    // Dataset generators. All return [{x, y, label ∈ {+1, -1}}, ...].
+    const datasets = {
+      moons: (seedOffset = 0) => {
+        const r = makeRng(12345 + seedOffset);
+        const pts = [];
+        const noise = 0.12;
+        const N = 28;
+        for (let i = 0; i < N; i++) {
+          const t = Math.PI * (i + 0.5) / N;
+          pts.push({ x: -0.3 + Math.cos(t) + (r() - 0.5) * noise * 2, y: 0.3 + Math.sin(t) + (r() - 0.5) * noise * 2, label: 1 });
+          pts.push({ x: 0.3 - Math.cos(t) + (r() - 0.5) * noise * 2, y: -0.3 - Math.sin(t) + (r() - 0.5) * noise * 2, label: -1 });
+        }
+        return pts;
+      },
+      circles: (seedOffset = 0) => {
+        const r = makeRng(23456 + seedOffset);
+        const pts = [];
+        const N = 28;
+        for (let i = 0; i < N; i++) {
+          const t = (i + 0.5) * 2 * Math.PI / N;
+          pts.push({ x: 0.55 * Math.cos(t) + (r() - 0.5) * 0.18, y: 0.55 * Math.sin(t) + (r() - 0.5) * 0.18, label: 1 });
+          pts.push({ x: 1.45 * Math.cos(t) + (r() - 0.5) * 0.22, y: 1.45 * Math.sin(t) + (r() - 0.5) * 0.22, label: -1 });
+        }
+        return pts;
+      },
+      xor: (seedOffset = 0) => {
+        const r = makeRng(34567 + seedOffset);
+        const pts = [];
+        const corners = [
+          { cx: -1, cy: -1, label:  1 },
+          { cx:  1, cy:  1, label:  1 },
+          { cx: -1, cy:  1, label: -1 },
+          { cx:  1, cy: -1, label: -1 },
+        ];
+        for (const cc of corners) {
+          for (let i = 0; i < 14; i++) {
+            pts.push({ x: cc.cx + (r() - 0.5) * 0.7, y: cc.cy + (r() - 0.5) * 0.7, label: cc.label });
+          }
+        }
+        return pts;
+      },
+      spirals: (seedOffset = 0) => {
+        const r = makeRng(45678 + seedOffset);
+        const pts = [];
+        const N = 36;
+        const noise = 0.08;
+        for (let i = 0; i < N; i++) {
+          const f = (i + 1) / (N + 1);
+          const rr = 0.25 + 1.35 * f;
+          const t = 3.6 * Math.PI * f;
+          pts.push({ x:  rr * Math.cos(t) + (r() - 0.5) * noise, y:  rr * Math.sin(t) + (r() - 0.5) * noise, label: 1 });
+          pts.push({ x: -rr * Math.cos(t) + (r() - 0.5) * noise, y: -rr * Math.sin(t) + (r() - 0.5) * noise, label: -1 });
+        }
+        return pts;
+      },
+      blobs: (seedOffset = 0) => {
+        const r = makeRng(56789 + seedOffset);
+        const pts = [];
+        const centers = [
+          { cx: -0.9, cy: -0.5, label:  1 },
+          { cx:  0.9, cy:  0.5, label: -1 },
+        ];
+        for (const cc of centers) {
+          for (let i = 0; i < 28; i++) {
+            pts.push({ x: cc.cx + (r() - 0.5) * 0.8, y: cc.cy + (r() - 0.5) * 0.8, label: cc.label });
+          }
+        }
+        return pts;
+      },
+    };
+
+    let datasetName = 'moons';
+    let dataSeedOffset = 0;
+    let points = datasets[datasetName]();
+    let protos = [];
+    let sigma = 0.5;
+    let kernelName = 'gauss';
+
+    const Kgauss = (x1, y1, x2, y2, s) => Math.exp(-((x1 - x2) ** 2 + (y1 - y2) ** 2) / (2 * s * s));
+    const Kyat   = (x1, y1, x2, y2, s) => {
+      const dot = x1 * x2 + y1 * y2;
+      const d2 = (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2);
+      return (dot * dot) / (d2 + s * s * 0.2);
+    };
+    const K = (x1, y1, x2, y2, s) => (kernelName === 'gauss' ? Kgauss : Kyat)(x1, y1, x2, y2, s);
+
+    const f = (x, y) => protos.reduce((acc, p) => acc + p.alpha * K(x, y, p.x, p.y, sigma), 0);
+
+    const computeAccuracy = () => {
+      if (!protos.length) return null;
+      let correct = 0;
+      for (const p of points) {
+        const v = f(p.x, p.y);
+        const pred = v >= 0 ? 1 : -1;
+        if (pred === p.label) correct++;
+      }
+      return correct / points.length;
+    };
+
+    // Solve (K^T K + λI) α = K^T y for ridge-style auto-fit.
+    const autoFit = () => {
+      const n = points.length;
+      const m = protos.length;
+      if (m === 0) return;
+      const lambda = 0.06;
+      // Build Φ (n x m): Φ[i][j] = K(x_i, W_j)
+      const Phi = [];
+      for (let i = 0; i < n; i++) {
+        const row = new Array(m);
+        for (let j = 0; j < m; j++) row[j] = K(points[i].x, points[i].y, protos[j].x, protos[j].y, sigma);
+        Phi.push(row);
+      }
+      // A = Φ^T Φ + λ I  (m x m), b = Φ^T y (length m)
+      const A = [];
+      const b = new Array(m).fill(0);
+      for (let j = 0; j < m; j++) {
+        const row = new Array(m).fill(0);
+        for (let k = 0; k < m; k++) {
+          let s = 0;
+          for (let i = 0; i < n; i++) s += Phi[i][j] * Phi[i][k];
+          row[k] = s + (j === k ? lambda : 0);
+        }
+        let sb = 0;
+        for (let i = 0; i < n; i++) sb += Phi[i][j] * points[i].label;
+        A.push(row);
+        b[j] = sb;
+      }
+      const alpha = solveLinear(A, b);
+      for (let j = 0; j < m; j++) protos[j].alpha = Math.max(-2.5, Math.min(2.5, alpha[j]));
+      renderProtoList();
+      requestRedraw();
+    };
+
+    // Gauss–Jordan; reduces M = [A | b] to identity | x.
+    const solveLinear = (A, b) => {
+      const n = b.length;
+      const M = A.map((row, i) => [...row, b[i]]);
+      for (let i = 0; i < n; i++) {
+        let piv = i;
+        for (let r = i + 1; r < n; r++) {
+          if (Math.abs(M[r][i]) > Math.abs(M[piv][i])) piv = r;
+        }
+        if (piv !== i) { const t = M[i]; M[i] = M[piv]; M[piv] = t; }
+        const d = M[i][i];
+        if (Math.abs(d) < 1e-12) continue;
+        for (let cc = i; cc <= n; cc++) M[i][cc] /= d;
+        for (let r = 0; r < n; r++) {
+          if (r === i) continue;
+          const fac = M[r][i];
+          if (fac === 0) continue;
+          for (let cc = i; cc <= n; cc++) M[r][cc] -= fac * M[i][cc];
+        }
+      }
+      return M.map((row) => row[n]);
+    };
+
+    // ── Drawing ──────────────────────────────────────────────────────
+    let colors = readColors();
+    function readColors() {
+      const s = getComputedStyle(document.documentElement);
+      const v = (n) => s.getPropertyValue(n).trim();
+      return {
+        accent: v('--accent') || '#b3661b',
+        bg: v('--bg') || '#fbfaf6',
+        bgSunken: v('--bg-sunken') || '#f1efe7',
+        bgElev: v('--bg-elev') || '#ffffff',
+        fg: v('--fg') || '#1a1a1a',
+        muted: v('--fg-muted') || '#5a5f66',
+        faint: v('--fg-faint') || '#8d8d8d',
+        border: v('--border') || '#e4e1d6',
+      };
+    }
+    const parseColor = (str) => {
+      str = (str || '').trim();
+      if (str.startsWith('#')) {
+        let s = str.slice(1);
+        if (s.length === 3) s = s.split('').map((cc) => cc + cc).join('');
+        return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
+      }
+      const m = str.match(/\d+/g);
+      return m ? [parseInt(m[0], 10), parseInt(m[1], 10), parseInt(m[2], 10)] : [0, 0, 0];
+    };
+    const themeObs = new MutationObserver(() => { colors = readColors(); requestRedraw(); });
+    themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+    const state = { dpr: 1, w: 0, h: 0 };
+    const fit = () => {
+      const rect = c.getBoundingClientRect();
+      const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+      state.dpr = dpr;
+      state.w = rect.width;
+      state.h = rect.height;
+      c.width = Math.round(rect.width * dpr);
+      c.height = Math.round(rect.height * dpr);
+    };
+
+    let rafScheduled = false;
+    let visible = false;
+    const requestRedraw = () => {
+      if (rafScheduled || !visible) return;
+      rafScheduled = true;
+      requestAnimationFrame(() => { rafScheduled = false; draw(); });
+    };
+
+    const xMin = -2, xMax = 2, yMin = -2, yMax = 2;
+
+    // The world is square. Compute a centered square plot area inside the canvas
+    // so the data isn't squashed when the canvas itself is wider than tall.
+    const plotLayout = (W, H) => {
+      const pad = 10;
+      const plotSize = Math.max(80, Math.min(W - pad * 2, H - pad * 2));
+      const plotX = (W - plotSize) / 2;
+      const plotY = (H - plotSize) / 2;
+      return { pad, plotX, plotY, plotW: plotSize, plotH: plotSize };
+    };
+
+    const draw = () => {
+      const W = state.w, H = state.h;
+      if (W === 0) return;
+      ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+
+      const { pad, plotX, plotY, plotW, plotH } = plotLayout(W, H);
+      const sx = (x) => plotX + ((x - xMin) / (xMax - xMin)) * plotW;
+      const sy = (y) => plotY + ((yMax - y) / (yMax - yMin)) * plotH;
+      const xWorld = (px) => xMin + ((px - plotX) / plotW) * (xMax - xMin);
+      const yWorld = (py) => yMax - ((py - plotY) / plotH) * (yMax - yMin);
+
+      // Diverging heatmap of f(x) — only if there are prototypes
+      if (protos.length > 0) {
+        const HM = 80;
+        const vals = new Float32Array(HM * HM);
+        let absMax = 0;
+        for (let py = 0; py < HM; py++) {
+          const yw = yWorld(plotY + (py / HM) * plotH);
+          for (let px = 0; px < HM; px++) {
+            const xw = xWorld(plotX + (px / HM) * plotW);
+            const v = f(xw, yw);
+            vals[py * HM + px] = v;
+            const a = Math.abs(v);
+            if (a > absMax) absMax = a;
+          }
+        }
+        const bgCol = parseColor(colors.bgSunken);
+        const posCol = parseColor(colors.accent);
+        const negCol = parseColor(colors.fg);
+        const cap = absMax > 0 ? absMax : 1;
+        const img = ctx.createImageData(HM, HM);
+        for (let i = 0; i < HM * HM; i++) {
+          const v = vals[i];
+          const t = Math.min(1, Math.pow(Math.abs(v) / cap, 0.55));
+          const target = v >= 0 ? posCol : negCol;
+          const o = i * 4;
+          img.data[o] = Math.round(bgCol[0] + (target[0] - bgCol[0]) * t * 0.85);
+          img.data[o + 1] = Math.round(bgCol[1] + (target[1] - bgCol[1]) * t * 0.85);
+          img.data[o + 2] = Math.round(bgCol[2] + (target[2] - bgCol[2]) * t * 0.85);
+          img.data[o + 3] = 255;
+        }
+        const tmp = document.createElement('canvas');
+        tmp.width = HM; tmp.height = HM;
+        tmp.getContext('2d').putImageData(img, 0, 0);
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(tmp, plotX, plotY, plotW, plotH);
+
+        // Decision boundary: contour at f(x) = 0 via marching squares (coarse).
+        ctx.strokeStyle = colors.fg;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        const stepX = plotW / HM;
+        const stepY = plotH / HM;
+        for (let py = 0; py < HM - 1; py++) {
+          for (let px = 0; px < HM - 1; px++) {
+            const v00 = vals[py * HM + px];
+            const v10 = vals[py * HM + (px + 1)];
+            const v01 = vals[(py + 1) * HM + px];
+            const v11 = vals[(py + 1) * HM + (px + 1)];
+            const sgn = (v) => (v >= 0 ? 1 : 0);
+            const mask = (sgn(v00) << 0) | (sgn(v10) << 1) | (sgn(v11) << 2) | (sgn(v01) << 3);
+            if (mask === 0 || mask === 15) continue;
+            // Interpolated edge points (within cell)
+            const x0 = plotX + px * stepX, y0 = plotY + py * stepY;
+            const interp = (a, b) => Math.abs(b - a) < 1e-12 ? 0.5 : -a / (b - a);
+            const e0 = { x: x0 + interp(v00, v10) * stepX, y: y0 };          // top edge
+            const e1 = { x: x0 + stepX, y: y0 + interp(v10, v11) * stepY };  // right edge
+            const e2 = { x: x0 + interp(v01, v11) * stepX, y: y0 + stepY };  // bottom edge
+            const e3 = { x: x0, y: y0 + interp(v00, v01) * stepY };          // left edge
+            const lines = {
+              1: [e0, e3],
+              2: [e0, e1],
+              3: [e1, e3],
+              4: [e1, e2],
+              5: [e0, e3, e1, e2], // ambiguous
+              6: [e0, e2],
+              7: [e2, e3],
+              8: [e2, e3],
+              9: [e0, e2],
+              10: [e0, e1, e2, e3], // ambiguous (other orientation)
+              11: [e1, e2],
+              12: [e1, e3],
+              13: [e0, e1],
+              14: [e0, e3],
+            };
+            const segs = lines[mask] || [];
+            for (let k = 0; k < segs.length; k += 2) {
+              ctx.moveTo(segs[k].x, segs[k].y);
+              ctx.lineTo(segs[k + 1].x, segs[k + 1].y);
+            }
+          }
+        }
+        ctx.stroke();
+      } else {
+        // No prototypes yet: paint the sunken plot background + invite the user in.
+        ctx.fillStyle = colors.bgSunken;
+        ctx.fillRect(plotX, plotY, plotW, plotH);
+      }
+
+      // Frame & axes (around the square plot only)
+      ctx.strokeStyle = colors.border;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(plotX, plotY, plotW, plotH);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(plotX, plotY, plotW, plotH);
+      ctx.clip();
+      ctx.strokeStyle = colors.faint;
+      ctx.setLineDash([2, 4]);
+      ctx.beginPath();
+      ctx.moveTo(plotX, sy(0)); ctx.lineTo(plotX + plotW, sy(0));
+      ctx.moveTo(sx(0), plotY); ctx.lineTo(sx(0), plotY + plotH);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+
+      // Data points
+      for (const p of points) {
+        const cx = sx(p.x), cy = sy(p.y);
+        const pred = protos.length > 0 ? (f(p.x, p.y) >= 0 ? 1 : -1) : null;
+        const isWrong = pred !== null && pred !== p.label;
+        ctx.fillStyle = p.label === 1 ? colors.accent : colors.fg;
+        ctx.strokeStyle = isWrong ? colors.fg : colors.bg;
+        ctx.lineWidth = isWrong ? 2.4 : 1;
+        ctx.beginPath();
+        ctx.arc(cx, cy, isWrong ? 5.5 : 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      // Prototypes
+      for (let i = 0; i < protos.length; i++) {
+        const p = protos[i];
+        const cx = sx(p.x), cy = sy(p.y);
+        const target = p.alpha >= 0 ? colors.accent : colors.fg;
+        ctx.fillStyle = target;
+        ctx.globalAlpha = 0.85;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = colors.fg;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = colors.bg;
+        ctx.font = 'bold 11px ' + (getComputedStyle(document.body).fontFamily || 'serif');
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('u' + (i + 1), cx, cy);
+      }
+
+      // Empty-state hint: tell the reader what to do.
+      if (protos.length === 0) {
+        ctx.fillStyle = colors.muted;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = '600 13px ' + (getComputedStyle(document.body).fontFamily || 'serif');
+        ctx.fillText('click anywhere on the chart to drop a prototype', plotX + plotW / 2, plotY + plotH / 2 - 9);
+        ctx.fillStyle = colors.faint;
+        ctx.font = '11px ui-monospace, monospace';
+        ctx.fillText('then drag, set its α, or hit auto-fit α', plotX + plotW / 2, plotY + plotH / 2 + 10);
+      }
+
+      // Bottom-right caption (under the plot)
+      ctx.fillStyle = colors.faint;
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'bottom';
+      const acc = computeAccuracy();
+      ctx.fillText(
+        'decision boundary · f(x) = Σᵤ αᵤ K(x, Wᵤ) = 0  ·  outlined points are misclassified',
+        plotX + plotW, plotY + plotH + 14,
+      );
+
+      // Acc readout in the controls
+      sigmaReadout.textContent = sigma.toFixed(2);
+      accReadout.textContent = (acc === null ? 'accuracy — · 0 prototypes' :
+        'accuracy = ' + (acc * 100).toFixed(1) + '%  ·  ' + protos.length + ' prototype' + (protos.length === 1 ? '' : 's'));
+    };
+
+    // ── Pointer interactions on canvas ─────────────────────────────
+    const screenToWorld = (e) => {
+      const rect = c.getBoundingClientRect();
+      const { plotX, plotY, plotW, plotH } = plotLayout(rect.width, rect.height);
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+      if (px < plotX || px > plotX + plotW || py < plotY || py > plotY + plotH) return null;
+      return {
+        wx: xMin + ((px - plotX) / plotW) * (xMax - xMin),
+        wy: yMax - ((py - plotY) / plotH) * (yMax - yMin),
+      };
+    };
+
+    let dragging = -1;
+    c.addEventListener('pointerdown', (e) => {
+      const w = screenToWorld(e);
+      if (!w) return;
+      // Find nearest prototype within grab radius
+      let nearest = -1;
+      let nearestD = Infinity;
+      for (let i = 0; i < protos.length; i++) {
+        const d = Math.hypot(w.wx - protos[i].x, w.wy - protos[i].y);
+        if (d < nearestD) { nearestD = d; nearest = i; }
+      }
+      if (nearest >= 0 && nearestD < 0.2) {
+        if (e.shiftKey) {
+          // shift-click on a prototype: delete it
+          protos.splice(nearest, 1);
+          renderProtoList();
+          requestRedraw();
+          return;
+        }
+        dragging = nearest;
+        c.setPointerCapture?.(e.pointerId);
+        return;
+      }
+      // Else add a new prototype.
+      // Choose initial α: +1 if nearest point's label is +1, else -1.
+      let nearestPoint = null;
+      let nearestPD = Infinity;
+      for (const p of points) {
+        const d = Math.hypot(w.wx - p.x, w.wy - p.y);
+        if (d < nearestPD) { nearestPD = d; nearestPoint = p; }
+      }
+      const initialAlpha = nearestPoint ? nearestPoint.label * 0.8 : 0.8;
+      protos.push({ x: w.wx, y: w.wy, alpha: initialAlpha });
+      dragging = protos.length - 1;
+      c.setPointerCapture?.(e.pointerId);
+      renderProtoList();
+      requestRedraw();
+    });
+    c.addEventListener('pointermove', (e) => {
+      if (dragging < 0) return;
+      const w = screenToWorld(e);
+      if (!w) return;
+      protos[dragging].x = w.wx;
+      protos[dragging].y = w.wy;
+      requestRedraw();
+    });
+    c.addEventListener('pointerup', (e) => {
+      dragging = -1;
+      try { c.releasePointerCapture?.(e.pointerId); } catch {}
+    });
+    c.addEventListener('contextmenu', (e) => {
+      const w = screenToWorld(e);
+      if (!w) return;
+      // Right-click also deletes nearest prototype
+      let nearest = -1;
+      let nearestD = Infinity;
+      for (let i = 0; i < protos.length; i++) {
+        const d = Math.hypot(w.wx - protos[i].x, w.wy - protos[i].y);
+        if (d < nearestD) { nearestD = d; nearest = i; }
+      }
+      if (nearest >= 0 && nearestD < 0.2) {
+        e.preventDefault();
+        protos.splice(nearest, 1);
+        renderProtoList();
+        requestRedraw();
+      }
+    });
+
+    // ── Per-prototype α slider list ────────────────────────────────
+    const renderProtoList = () => {
+      protoList.innerHTML = '';
+      protos.forEach((p, i) => {
+        const row = document.createElement('div');
+        row.className = 'kp-row-proto';
+        const name = document.createElement('span');
+        name.className = 'kp-name';
+        name.textContent = 'u' + (i + 1);
+        const slider = document.createElement('input');
+        slider.type = 'range';
+        slider.min = '-2.5';
+        slider.max = '2.5';
+        slider.step = '0.05';
+        slider.value = String(p.alpha);
+        slider.setAttribute('aria-label', 'readout α for u' + (i + 1));
+        const val = document.createElement('span');
+        val.className = 'kp-val';
+        val.textContent = (p.alpha >= 0 ? '+' : '') + p.alpha.toFixed(2);
+        slider.addEventListener('input', () => {
+          p.alpha = parseFloat(slider.value);
+          val.textContent = (p.alpha >= 0 ? '+' : '') + p.alpha.toFixed(2);
+          requestRedraw();
+        });
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'kp-del';
+        del.textContent = '×';
+        del.title = 'delete this prototype';
+        del.addEventListener('click', () => {
+          protos.splice(i, 1);
+          renderProtoList();
+          requestRedraw();
+        });
+        row.appendChild(name);
+        row.appendChild(slider);
+        row.appendChild(val);
+        row.appendChild(del);
+        protoList.appendChild(row);
+      });
+    };
+
+    // ── Top-control hookups ────────────────────────────────────────
+    datasetBtns.forEach((b) => b.addEventListener('click', () => {
+      datasetName = b.dataset.set;
+      datasetBtns.forEach((o) => o.classList.toggle('active', o === b));
+      dataSeedOffset = 0;
+      points = datasets[datasetName](dataSeedOffset);
+      requestRedraw();
+    }));
+    kernelBtns.forEach((b) => b.addEventListener('click', () => {
+      kernelName = b.dataset.kernel;
+      kernelBtns.forEach((o) => o.classList.toggle('active', o === b));
+      requestRedraw();
+    }));
+    actionBtns.forEach((b) => b.addEventListener('click', () => {
+      const kind = b.dataset.action;
+      if (kind === 'clear') {
+        protos = [];
+        renderProtoList();
+      } else if (kind === 'autofit') {
+        autoFit();
+      } else if (kind === 'resample') {
+        dataSeedOffset = (dataSeedOffset + 1) | 0;
+        points = datasets[datasetName](dataSeedOffset);
+      }
+      requestRedraw();
+    }));
+    sigmaSlider.addEventListener('input', () => {
+      sigma = Math.pow(10, parseFloat(sigmaSlider.value));
+      requestRedraw();
+    });
+
+    const ro = new ResizeObserver(() => { fit(); requestRedraw(); });
+    ro.observe(c);
+    const io = new IntersectionObserver((entries) => {
+      const was = visible;
+      visible = entries[0].isIntersecting;
+      if (visible && !was) { fit(); draw(); }
+    }, { rootMargin: '120px' });
+    io.observe(c);
+
+    renderProtoList();
+  };
+
+  setup();
+  document.addEventListener('astro:page-load', setup);
+  document.addEventListener('astro:after-swap', setup);
+})();
+</script>

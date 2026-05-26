@@ -1,0 +1,892 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 460 } = Astro.props;
+const id = `arch-${Math.random().toString(36).slice(2, 9)}`;
+---
+<figure class="viz" tabindex="0">
+  <div class="viz-controls anim-controls" data-anim={id}>
+    <div class="anim-row">
+      <span class="faint">painting-arithmetic · single nonlinear Yat trunk between encoder and decoder</span>
+      <span class="anim-zoom-group" data-zoom-group>
+        <button type="button" data-zoom="-" title="zoom out">−</button>
+        <button type="button" data-zoom="0" title="reset zoom &amp; pan">⤢</button>
+        <button type="button" data-zoom="+" title="zoom in">+</button>
+      </span>
+    </div>
+    <span class="faint arch-hint">hover any block for its tensor shape · hover a Yat prototype to see which symbol it tags in each slot · drag to pan · wheel to zoom</span>
+  </div>
+  <canvas id={`${id}-c`} height={height} aria-label="Architecture: three image inputs → shared CNN encoder → concatenated [a, op, b] embedding → Yat trunk → ConvTranspose decoder → painted output"></canvas>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+  .arch-hint { font-size: 0.78rem; }
+</style>
+
+<script is:inline define:vars={{ id }}>
+(() => {
+  const setup = () => {
+    const c = document.getElementById(id + '-c');
+    if (!c || c.dataset.ready) return;
+    c.dataset.ready = '1';
+    const ctx = c.getContext('2d');
+    const wrap = document.querySelector(`[data-anim="${id}"]`);
+    const zoomGroup = wrap.querySelector('[data-zoom-group]');
+
+    // ── Scene / zoom / pan ──
+    const scene = { w: 1040, h: 440 };
+    let zoom = 1, panX = 0, panY = 0;
+    const minZoom = 0.5, maxZoom = 4;
+    const computeTransform = () => {
+      const W = state.w, H = state.h;
+      const bs = Math.min((W - 8) / scene.w, (H - 8) / scene.h);
+      const s = bs * zoom;
+      const overflowX = Math.max(0, (scene.w * s - W) / 2);
+      const overflowY = Math.max(0, (scene.h * s - H) / 2);
+      panX = Math.max(-overflowX, Math.min(overflowX, panX));
+      panY = Math.max(-overflowY, Math.min(overflowY, panY));
+      return { s, tx: (W - scene.w * s) / 2 + panX, ty: (H - scene.h * s) / 2 + panY };
+    };
+    const clientToScene = (cx, cy) => {
+      const rect = c.getBoundingClientRect();
+      const { s, tx, ty } = computeTransform();
+      return { x: (cx - rect.left - tx) / s, y: (cy - rect.top - ty) / s };
+    };
+
+    // ── Canvas fit ──
+    const state = { dpr: 1, w: 0, h: 0 };
+    const fit = () => {
+      const rect = c.getBoundingClientRect();
+      const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+      state.dpr = dpr;
+      state.w = rect.width;
+      state.h = rect.height;
+      c.width = Math.round(rect.width * dpr);
+      c.height = Math.round(rect.height * dpr);
+    };
+
+    let colors = readColors();
+    function readColors() {
+      const s = getComputedStyle(document.documentElement);
+      const v = (n) => s.getPropertyValue(n).trim();
+      return {
+        accent: v('--accent') || '#b3661b',
+        accentSoft: v('--accent-soft') || '#b3661b14',
+        bg: v('--bg') || '#fbfaf6',
+        bgSunken: v('--bg-sunken') || '#f1efe7',
+        bgElev: v('--bg-elev') || '#ffffff',
+        fg: v('--fg') || '#1a1a1a',
+        muted: v('--fg-muted') || '#5a5f66',
+        faint: v('--fg-faint') || '#8d8d8d',
+        border: v('--border') || '#e4e1d6',
+      };
+    }
+    const themeObs = new MutationObserver(() => { colors = readColors(); requestRedraw(); });
+    themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+    let rafScheduled = false, visible = false;
+    const requestRedraw = () => {
+      if (rafScheduled || !visible) return;
+      rafScheduled = true;
+      requestAnimationFrame(() => { rafScheduled = false; draw(); });
+    };
+
+    // ── Concrete "demo" input: 3 × 7 = 21 ──
+    // 28×28 glyphs as small pixel arrays. Hand-traced to look right enough.
+    const G = (rows) => rows.map((r) => r.split('').map((c) => c === '#' ? 1 : 0));
+    const glyph3 = G([
+      '............................',
+      '............................',
+      '............................',
+      '...........#####............',
+      '..........#######...........',
+      '.........##.....##..........',
+      '........##.......##.........',
+      '.................##.........',
+      '................##..........',
+      '...............##...........',
+      '..............##............',
+      '............####............',
+      '............####............',
+      '..............##............',
+      '...............##...........',
+      '................##..........',
+      '.................##.........',
+      '........##.......##.........',
+      '.........##.....##..........',
+      '..........#######...........',
+      '...........#####............',
+      '............................',
+      '............................',
+      '............................',
+      '............................',
+      '............................',
+      '............................',
+      '............................',
+    ]);
+    const glyphTimes = G([
+      '............................',
+      '............................',
+      '............................',
+      '............................',
+      '............................',
+      '............................',
+      '............................',
+      '............................',
+      '..........#........#........',
+      '...........#......#.........',
+      '............#....#..........',
+      '.............#..#...........',
+      '..............##............',
+      '..............##............',
+      '.............#..#...........',
+      '............#....#..........',
+      '...........#......#.........',
+      '..........#........#........',
+      '............................',
+      '............................',
+      '............................',
+      '............................',
+      '............................',
+      '............................',
+      '............................',
+      '............................',
+      '............................',
+      '............................',
+    ]);
+    const glyph7 = G([
+      '............................',
+      '............................',
+      '............................',
+      '..........############......',
+      '..........############......',
+      '......................#.....',
+      '.....................#......',
+      '....................#.......',
+      '...................#........',
+      '..................#.........',
+      '.................#..........',
+      '................#...........',
+      '...............#............',
+      '.............###............',
+      '............##..............',
+      '...........##...............',
+      '..........##................',
+      '.........##.................',
+      '........##..................',
+      '........##..................',
+      '.......##...................',
+      '.......##...................',
+      '............................',
+      '............................',
+      '............................',
+      '............................',
+      '............................',
+      '............................',
+    ]);
+    // Output: a painted "21" in three slots: sign( ) | tens(2) | units(1)
+    const slotBlank = () => G(Array(28).fill('.'.repeat(28)));
+    const slot2 = G([
+      '............................',
+      '............................',
+      '............................',
+      '............#####...........',
+      '..........#########.........',
+      '.........###.....###........',
+      '........###.......###.......',
+      '.......###.........###......',
+      '.......##..........###......',
+      '....................###.....',
+      '....................###.....',
+      '...................###......',
+      '..................###.......',
+      '.................###........',
+      '................###.........',
+      '..............###...........',
+      '............###.............',
+      '..........###...............',
+      '........###.................',
+      '......###...................',
+      '.....###...................#',
+      '.....##############.........',
+      '.....################.......',
+      '............................',
+      '............................',
+      '............................',
+      '............................',
+      '............................',
+    ]);
+    const slot1 = G([
+      '............................',
+      '............................',
+      '..............##............',
+      '.............###............',
+      '............####............',
+      '...........#####............',
+      '..........######............',
+      '.........#######............',
+      '............####............',
+      '............####............',
+      '............####............',
+      '............####............',
+      '............####............',
+      '............####............',
+      '............####............',
+      '............####............',
+      '............####............',
+      '............####............',
+      '............####............',
+      '............####............',
+      '............####............',
+      '.......##############.......',
+      '.......##############.......',
+      '............................',
+      '............................',
+      '............................',
+      '............................',
+      '............................',
+    ]);
+    const inputs = [
+      { name: 'a', label: '3', glyph: glyph3 },
+      { name: 'op', label: '×', glyph: glyphTimes },
+      { name: 'b', label: '7', glyph: glyph7 },
+    ];
+    const outputSlots = [
+      { name: 'sign', glyph: slotBlank() },
+      { name: 'tens', glyph: slot2 },
+      { name: 'units', glyph: slot1 },
+    ];
+
+    // ── Stylised Yat-trunk prototypes ──
+    // We display 32 of the 256 units; each is one row of 3 small cells
+    // (one per input slot). The cells are tinted to suggest which symbol
+    // the slot prototype's nearest-neighbour is in the library.
+    const trunkSampleCount = 32;
+    const trunkSampleSeed = 42;
+    const tagsLibrary = {
+      a:  ['0','1','2','3','4','5','6','7','8','9'],
+      op: ['+','−','×','÷','·'],
+      b:  ['0','1','2','3','4','5','6','7','8','9'],
+    };
+    // Deterministic rng for stable tag assignment
+    const rng = (seed) => { let s = seed | 0; return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; }; };
+    const trng = rng(trunkSampleSeed);
+    const trunkUnits = Array.from({ length: trunkSampleCount }, (_, idx) => ({
+      idx,
+      tags: {
+        a:  tagsLibrary.a [Math.floor(trng() * tagsLibrary.a.length)],
+        op: tagsLibrary.op[Math.floor(trng() * tagsLibrary.op.length)],
+        b:  tagsLibrary.b [Math.floor(trng() * tagsLibrary.b.length)],
+      },
+      // a "selectivity" per slot — used to set cell saturation
+      sel: { a: 0.4 + 0.6 * trng(), op: 0.4 + 0.6 * trng(), b: 0.4 + 0.6 * trng() },
+    }));
+
+    // ── Layout (in scene coordinates) ──
+    // Blocks store their own hit rect so hover hit-testing is uniform.
+    const blocks = {};
+    const margin = 18;
+    const yMid = scene.h / 2;
+    // Input previews — 3 stacked
+    const inputW = 70, inputH = 70;
+    const inputGap = 14;
+    const inputColX = margin + 6;
+    const inputColY = yMid - (3 * inputH + 2 * inputGap) / 2;
+    inputs.forEach((inp, i) => {
+      blocks['in_' + inp.name] = {
+        kind: 'input', name: inp.name, label: inp.label, glyph: inp.glyph,
+        x: inputColX, y: inputColY + i * (inputH + inputGap), w: inputW, h: inputH,
+      };
+    });
+    // CNN encoder (shared)
+    blocks.encoder = {
+      kind: 'block', title: 'shared CNN', sub: 'conv → pool → conv → flatten',
+      shape: '[28×28] → [64]',
+      x: inputColX + inputW + 60, y: yMid - 90, w: 116, h: 180,
+    };
+    // 64-d embeddings, one per input (small thin matrices stacked)
+    const embW = 16, embH = 70;
+    inputs.forEach((inp, i) => {
+      blocks['emb_' + inp.name] = {
+        kind: 'embedding', name: inp.name,
+        x: blocks.encoder.x + blocks.encoder.w + 28,
+        y: inputColY + i * (inputH + inputGap),
+        w: embW, h: embH,
+      };
+    });
+    // Concat block — 3 named-slot 64-cell bars stacked
+    blocks.concat = {
+      kind: 'concat', title: 'concatenate', sub: '[a · op · b]',
+      shape: '[192]',
+      x: blocks.encoder.x + blocks.encoder.w + 80,
+      y: yMid - 56, w: 110, h: 112,
+    };
+    // Yat trunk — wide block with the sample prototype grid
+    blocks.yat = {
+      kind: 'yat', title: 'Yat trunk · single layer', sub: 'y_u(x) = α_u · (x · W_u + b)² / (‖x − W_u‖² + ε)',
+      shape: '[192] → [256]',
+      x: blocks.concat.x + blocks.concat.w + 40,
+      y: yMid - 130, w: 280, h: 260,
+    };
+    // Activations vector (256)
+    blocks.acts = {
+      kind: 'bar', title: 'unit activations', sub: '256 ⌷',
+      x: blocks.yat.x + blocks.yat.w + 24, y: yMid - 60, w: 24, h: 120,
+    };
+    // Decoder
+    blocks.decoder = {
+      kind: 'block', title: 'ConvTranspose decoder', sub: '256 → 28 × 84',
+      shape: '[256] → [28, 84]',
+      x: blocks.acts.x + blocks.acts.w + 24, y: yMid - 70, w: 110, h: 140,
+    };
+    // Output composed of 3 slots
+    const outSlotW = 38, outSlotH = 56;
+    const outX0 = blocks.decoder.x + blocks.decoder.w + 30;
+    const outY0 = yMid - outSlotH / 2;
+    outputSlots.forEach((s, i) => {
+      blocks['out_' + s.name] = {
+        kind: 'output', name: s.name, glyph: s.glyph,
+        x: outX0 + i * (outSlotW + 4), y: outY0, w: outSlotW, h: outSlotH,
+      };
+    });
+
+    // ── Hover state ──
+    let hover = null;          // { kind: 'block' | 'proto' | ..., id, sub }
+    const sameHover = (a, b) => a === b || (a && b && a.kind === b.kind && a.id === b.id && a.subId === b.subId);
+
+    // ── Drawing primitives ──
+    const roundedRect = (x, y, w, h, r) => {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    };
+
+    const drawArrow = (x0, y0, x1, y1, label, highlight) => {
+      ctx.strokeStyle = highlight ? colors.accent : colors.muted;
+      ctx.lineWidth = highlight ? 1.7 : 1.2;
+      ctx.beginPath();
+      // bezier with horizontal tangents — nicer joins between columns
+      const dx = x1 - x0;
+      ctx.moveTo(x0, y0);
+      ctx.bezierCurveTo(x0 + dx * 0.45, y0, x1 - dx * 0.45, y1, x1, y1);
+      ctx.stroke();
+      const a = Math.atan2(y1 - y0, dx);
+      const sz = 6;
+      ctx.fillStyle = highlight ? colors.accent : colors.muted;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x1 - sz * Math.cos(a - 0.4), y1 - sz * Math.sin(a - 0.4));
+      ctx.lineTo(x1 - sz * Math.cos(a + 0.4), y1 - sz * Math.sin(a + 0.4));
+      ctx.closePath();
+      ctx.fill();
+      if (label) {
+        ctx.fillStyle = colors.faint;
+        ctx.font = '9px ui-monospace, monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(label, (x0 + x1) / 2, Math.min(y0, y1) - 4);
+      }
+    };
+
+    const drawGlyph = (block, hi, alpha = 1) => {
+      ctx.globalAlpha = alpha;
+      // Background tile
+      ctx.fillStyle = colors.bgSunken;
+      roundedRect(block.x, block.y, block.w, block.h, 4);
+      ctx.fill();
+      // Glyph pixels
+      const g = block.glyph;
+      const px = block.w / 28, py = block.h / 28;
+      ctx.fillStyle = hi ? colors.accent : colors.fg;
+      for (let i = 0; i < 28; i++) {
+        for (let j = 0; j < 28; j++) {
+          if (g[i][j]) {
+            ctx.globalAlpha = alpha * (hi ? 0.95 : 0.78);
+            ctx.fillRect(block.x + j * px, block.y + i * py, Math.ceil(px), Math.ceil(py));
+          }
+        }
+      }
+      ctx.globalAlpha = alpha;
+      // Frame
+      ctx.strokeStyle = hi ? colors.accent : colors.border;
+      ctx.lineWidth = hi ? 1.5 : 1;
+      roundedRect(block.x, block.y, block.w, block.h, 4);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    };
+
+    const drawBlock = (block, hi) => {
+      ctx.fillStyle = hi ? colors.accentSoft : colors.bgElev;
+      ctx.strokeStyle = hi ? colors.accent : colors.border;
+      ctx.lineWidth = hi ? 1.6 : 1;
+      roundedRect(block.x, block.y, block.w, block.h, 8);
+      ctx.fill();
+      ctx.stroke();
+      // For visual sugar, show the encoder as 3 stacked diminishing rectangles
+      if (block.title === 'shared CNN') {
+        const cx = block.x + block.w / 2;
+        const stages = 3;
+        for (let i = 0; i < stages; i++) {
+          const w = block.w * (0.75 - i * 0.15);
+          const h = block.h * 0.18;
+          const yy = block.y + 24 + i * (h + 8);
+          ctx.fillStyle = colors.bgSunken;
+          ctx.strokeStyle = hi ? colors.accent : colors.border;
+          ctx.lineWidth = 1;
+          roundedRect(cx - w / 2, yy, w, h, 3);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = colors.muted;
+          ctx.font = '9px ui-monospace, monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(['conv 3×3', 'maxpool', 'conv 3×3'][i], cx, yy + h / 2);
+        }
+      } else if (block.title === 'ConvTranspose decoder') {
+        // Reverse-pyramid stack
+        const cx = block.x + block.w / 2;
+        const stages = 3;
+        for (let i = 0; i < stages; i++) {
+          const w = block.w * (0.45 + i * 0.15);
+          const h = block.h * 0.2;
+          const yy = block.y + 14 + i * (h + 6);
+          ctx.fillStyle = colors.bgSunken;
+          ctx.strokeStyle = hi ? colors.accent : colors.border;
+          ctx.lineWidth = 1;
+          roundedRect(cx - w / 2, yy, w, h, 3);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = colors.muted;
+          ctx.font = '9px ui-monospace, monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(['linear', 'convT 4×4', 'convT 4×4'][i], cx, yy + h / 2);
+        }
+      }
+      // Title bottom
+      ctx.fillStyle = hi ? colors.accent : colors.fg;
+      ctx.font = '600 11px ' + (getComputedStyle(document.body).fontFamily || 'serif');
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(block.title, block.x + block.w / 2, block.y + block.h + 6);
+      if (block.shape) {
+        ctx.fillStyle = colors.faint;
+        ctx.font = '9px ui-monospace, monospace';
+        ctx.fillText(block.shape, block.x + block.w / 2, block.y + block.h + 22);
+      }
+    };
+
+    const drawEmbedding = (block, hi) => {
+      // A vertical bar of 16 cells (representing 64-d).
+      const cells = 16;
+      const cellH = block.h / cells;
+      for (let i = 0; i < cells; i++) {
+        const v = 0.25 + 0.7 * Math.abs(Math.sin(i * 1.3 + (block.name === 'a' ? 0.3 : block.name === 'op' ? 1.7 : 2.9)));
+        ctx.fillStyle = colors.accent;
+        ctx.globalAlpha = hi ? 0.2 + 0.65 * v : 0.1 + 0.45 * v;
+        ctx.fillRect(block.x, block.y + i * cellH, block.w, cellH - 0.5);
+      }
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = hi ? colors.accent : colors.border;
+      ctx.lineWidth = hi ? 1.4 : 1;
+      ctx.strokeRect(block.x, block.y, block.w, block.h);
+      ctx.fillStyle = hi ? colors.accent : colors.faint;
+      ctx.font = '9px ui-monospace, monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText('h_' + block.name, block.x + block.w / 2, block.y - 4);
+      ctx.fillStyle = colors.faint;
+      ctx.textBaseline = 'top';
+      ctx.fillText('[64]', block.x + block.w / 2, block.y + block.h + 3);
+    };
+
+    const drawConcat = (block, hi, hoverSlot) => {
+      const slotH = block.h / 3;
+      const slotNames = ['a', 'op', 'b'];
+      const slotColors = [
+        // a, op, b — tinted via varying mix toward accent
+        { tint: 0.65 }, { tint: 0.85 }, { tint: 0.55 },
+      ];
+      for (let i = 0; i < 3; i++) {
+        const y = block.y + i * slotH;
+        const sHi = hi || hoverSlot === slotNames[i];
+        ctx.fillStyle = colors.accent;
+        ctx.globalAlpha = sHi ? 0.35 + 0.4 * slotColors[i].tint : 0.15 + 0.3 * slotColors[i].tint;
+        ctx.fillRect(block.x, y, block.w, slotH - 0.5);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = sHi ? colors.accent : colors.border;
+        ctx.lineWidth = sHi ? 1.4 : 1;
+        ctx.strokeRect(block.x, y, block.w, slotH);
+        ctx.fillStyle = sHi ? colors.bg : colors.fg;
+        ctx.font = '600 11px ui-monospace, monospace';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('h_' + slotNames[i] + ' · [64]', block.x + 10, y + slotH / 2);
+      }
+      ctx.fillStyle = hi ? colors.accent : colors.fg;
+      ctx.font = '600 11px ' + (getComputedStyle(document.body).fontFamily || 'serif');
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(block.title, block.x + block.w / 2, block.y + block.h + 6);
+      ctx.fillStyle = colors.faint;
+      ctx.font = '9px ui-monospace, monospace';
+      ctx.fillText(block.shape, block.x + block.w / 2, block.y + block.h + 22);
+    };
+
+    const drawBar = (block, hi) => {
+      // Vertical bar of 24 cells (representing 256 activations)
+      const cells = 24;
+      const cellH = block.h / cells;
+      for (let i = 0; i < cells; i++) {
+        const v = Math.max(0, Math.sin(i * 0.5 + 1.3) * 0.6 + 0.4);
+        ctx.fillStyle = colors.accent;
+        ctx.globalAlpha = hi ? 0.25 + 0.65 * v : 0.12 + 0.5 * v;
+        ctx.fillRect(block.x, block.y + i * cellH, block.w, cellH - 0.5);
+      }
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = hi ? colors.accent : colors.border;
+      ctx.lineWidth = hi ? 1.4 : 1;
+      ctx.strokeRect(block.x, block.y, block.w, block.h);
+      ctx.fillStyle = hi ? colors.accent : colors.fg;
+      ctx.font = '600 11px ' + (getComputedStyle(document.body).fontFamily || 'serif');
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(block.title, block.x + block.w / 2, block.y + block.h + 6);
+      ctx.fillStyle = colors.faint;
+      ctx.font = '9px ui-monospace, monospace';
+      ctx.fillText(block.sub, block.x + block.w / 2, block.y + block.h + 22);
+    };
+
+    // Yat trunk: a grid of sample prototypes. Each prototype is one row of
+    // 3 small cells (the named slots a, op, b). Cell saturation = "selectivity".
+    let trunkLayout = null;
+    const computeTrunkLayout = () => {
+      const block = blocks.yat;
+      const cols = 8, rows = 4;
+      const inner = { x: block.x + 10, y: block.y + 22, w: block.w - 20, h: block.h - 64 };
+      const cellPad = 4;
+      const cellW = (inner.w - (cols - 1) * cellPad) / cols;
+      const cellH = (inner.h - (rows - 1) * cellPad) / rows;
+      // Each "unit" cell is split into 3 slot cells horizontally
+      const slotW = cellW / 3;
+      const units = [];
+      for (let i = 0; i < trunkSampleCount; i++) {
+        const r = Math.floor(i / cols);
+        const cc = i % cols;
+        const ux = inner.x + cc * (cellW + cellPad);
+        const uy = inner.y + r * (cellH + cellPad);
+        units.push({ idx: i, x: ux, y: uy, w: cellW, h: cellH, slotW });
+      }
+      trunkLayout = { inner, units, cellW, cellH, slotW };
+    };
+    computeTrunkLayout();
+
+    const drawYatTrunk = (hi, hoverProto) => {
+      const block = blocks.yat;
+      drawBlock(block, hi);
+      // Inline title formula
+      ctx.fillStyle = colors.muted;
+      ctx.font = '9px ui-monospace, monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(block.sub, block.x + block.w / 2, block.y + 6);
+      // Compute and draw units
+      const slotPalette = ['a', 'op', 'b'];
+      trunkLayout.units.forEach((u, i) => {
+        const unit = trunkUnits[i];
+        const isHover = hoverProto === i;
+        for (let k = 0; k < 3; k++) {
+          const sx = u.x + k * u.slotW;
+          const sy = u.y;
+          const sel = unit.sel[slotPalette[k]];
+          ctx.fillStyle = colors.accent;
+          ctx.globalAlpha = isHover ? 0.45 + 0.55 * sel : 0.15 + 0.45 * sel;
+          ctx.fillRect(sx, sy, u.slotW - 0.5, u.h);
+          ctx.globalAlpha = 1;
+        }
+        // Cell frame
+        ctx.strokeStyle = isHover ? colors.accent : colors.border;
+        ctx.lineWidth = isHover ? 1.6 : 0.6;
+        ctx.strokeRect(u.x, u.y, u.w, u.h);
+        if (isHover) {
+          ctx.fillStyle = colors.fg;
+          ctx.font = '8px ui-monospace, monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('u' + (i + 1), u.x + u.w / 2, u.y + u.h / 2);
+        }
+      });
+      // Footer hint inside the trunk
+      ctx.fillStyle = colors.faint;
+      ctx.font = '9px ui-monospace, monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText('showing 32 of 256 units · each row is one prototype W_u, split into 3 slot prototypes',
+        block.x + block.w / 2, block.y + block.h - 8);
+    };
+
+    // ── Hit-testing ──
+    const hitTest = (x, y) => {
+      // Trunk has unit-level granularity
+      if (x >= blocks.yat.x && x <= blocks.yat.x + blocks.yat.w &&
+          y >= blocks.yat.y && y <= blocks.yat.y + blocks.yat.h) {
+        for (let i = 0; i < trunkLayout.units.length; i++) {
+          const u = trunkLayout.units[i];
+          if (x >= u.x && x <= u.x + u.w && y >= u.y && y <= u.y + u.h) {
+            return { kind: 'proto', id: 'yat', subId: i };
+          }
+        }
+        return { kind: 'block', id: 'yat' };
+      }
+      // Concat — slot granularity
+      const cb = blocks.concat;
+      if (x >= cb.x && x <= cb.x + cb.w && y >= cb.y && y <= cb.y + cb.h) {
+        const i = Math.min(2, Math.max(0, Math.floor((y - cb.y) / (cb.h / 3))));
+        return { kind: 'concatSlot', id: 'concat', subId: ['a','op','b'][i] };
+      }
+      // Generic block hit
+      for (const [name, b] of Object.entries(blocks)) {
+        if (b.kind === 'concat' || name === 'yat') continue;
+        if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
+          return { kind: 'block', id: name };
+        }
+      }
+      return null;
+    };
+
+    // ── Main draw ──
+    const draw = () => {
+      if (state.w === 0) return;
+      ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+      ctx.clearRect(0, 0, state.w, state.h);
+      const { s, tx, ty } = computeTransform();
+      ctx.setTransform(state.dpr * s, 0, 0, state.dpr * s, state.dpr * tx, state.dpr * ty);
+
+      // Section title
+      ctx.fillStyle = colors.faint;
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText('painting-arithmetic · 3 image inputs → shared CNN → concat → Yat trunk → ConvT decoder → painted answer image',
+        margin, 8);
+
+      // ── Inputs ──
+      const inputHi = (name) => hover && hover.kind === 'block' && hover.id === 'in_' + name;
+      inputs.forEach((inp, i) => {
+        const block = blocks['in_' + inp.name];
+        drawGlyph(block, inputHi(inp.name));
+        // Slot name + symbol label
+        ctx.fillStyle = inputHi(inp.name) ? colors.accent : colors.faint;
+        ctx.font = '9px ui-monospace, monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(inp.name + '  ·  ' + inp.label, block.x + block.w / 2, block.y + block.h + 4);
+        ctx.fillStyle = colors.faint;
+        ctx.fillText('[28, 28]', block.x + block.w / 2, block.y + block.h + 16);
+      });
+
+      // ── Arrows: 3 inputs → shared encoder ──
+      const encHi = hover && hover.kind === 'block' && hover.id === 'encoder';
+      inputs.forEach((inp) => {
+        const b = blocks['in_' + inp.name];
+        drawArrow(b.x + b.w + 2, b.y + b.h / 2, blocks.encoder.x - 2, b.y + b.h / 2, '', encHi || inputHi(inp.name));
+      });
+
+      // ── Encoder ──
+      drawBlock(blocks.encoder, encHi);
+
+      // ── Arrows: encoder → embeddings ──
+      inputs.forEach((inp) => {
+        const e = blocks['emb_' + inp.name];
+        drawArrow(blocks.encoder.x + blocks.encoder.w + 2, e.y + e.h / 2,
+                  e.x - 2, e.y + e.h / 2, '', encHi);
+      });
+
+      // ── Embeddings ──
+      inputs.forEach((inp) => {
+        const e = blocks['emb_' + inp.name];
+        const eHi = hover && hover.kind === 'block' && hover.id === 'emb_' + inp.name;
+        drawEmbedding(e, eHi);
+      });
+
+      // ── Arrows: embeddings → concat slots ──
+      const concatHi = hover && (hover.kind === 'concatSlot' || (hover.kind === 'block' && hover.id === 'concat'));
+      const hoveredSlot = hover && hover.kind === 'concatSlot' ? hover.subId : null;
+      inputs.forEach((inp, i) => {
+        const e = blocks['emb_' + inp.name];
+        const cy = blocks.concat.y + (i + 0.5) * (blocks.concat.h / 3);
+        drawArrow(e.x + e.w + 2, e.y + e.h / 2,
+                  blocks.concat.x - 2, cy, '',
+                  concatHi || hoveredSlot === inp.name);
+      });
+
+      // ── Concat ──
+      drawConcat(blocks.concat, false, hoveredSlot);
+
+      // ── Arrow: concat → Yat ──
+      const yatHi = hover && (hover.kind === 'proto' || (hover.kind === 'block' && hover.id === 'yat'));
+      drawArrow(blocks.concat.x + blocks.concat.w + 2, blocks.concat.y + blocks.concat.h / 2,
+                blocks.yat.x - 2, blocks.yat.y + blocks.yat.h / 2, 'W ∈ ℝ²⁵⁶ˣ¹⁹²', yatHi);
+
+      // ── Yat trunk ──
+      const hoverProto = hover && hover.kind === 'proto' ? hover.subId : -1;
+      drawYatTrunk(yatHi, hoverProto);
+
+      // ── Arrow: Yat → activations ──
+      drawArrow(blocks.yat.x + blocks.yat.w + 2, blocks.yat.y + blocks.yat.h / 2,
+                blocks.acts.x - 2, blocks.acts.y + blocks.acts.h / 2, '', yatHi);
+
+      // ── Activations ──
+      const actsHi = hover && hover.kind === 'block' && hover.id === 'acts';
+      drawBar(blocks.acts, actsHi || yatHi);
+
+      // ── Arrow: activations → decoder ──
+      const decHi = hover && hover.kind === 'block' && hover.id === 'decoder';
+      drawArrow(blocks.acts.x + blocks.acts.w + 2, blocks.acts.y + blocks.acts.h / 2,
+                blocks.decoder.x - 2, blocks.decoder.y + blocks.decoder.h / 2, '', decHi || actsHi);
+
+      // ── Decoder ──
+      drawBlock(blocks.decoder, decHi);
+
+      // ── Arrows + outputs ──
+      outputSlots.forEach((s, i) => {
+        const ob = blocks['out_' + s.name];
+        const oHi = hover && hover.kind === 'block' && hover.id === 'out_' + s.name;
+        drawArrow(blocks.decoder.x + blocks.decoder.w + 2, blocks.decoder.y + blocks.decoder.h / 2,
+                  ob.x - 2, ob.y + ob.h / 2, '', oHi || decHi);
+        drawGlyph(ob, oHi);
+        ctx.fillStyle = oHi ? colors.accent : colors.faint;
+        ctx.font = '9px ui-monospace, monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(s.name, ob.x + ob.w / 2, ob.y + ob.h + 4);
+      });
+      // Output composite label
+      ctx.fillStyle = colors.faint;
+      ctx.font = '9px ui-monospace, monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText('[28, 84]',
+        (blocks.out_sign.x + blocks.out_units.x + blocks.out_units.w) / 2,
+        blocks.out_units.y + blocks.out_units.h + 16);
+
+      // ── Hover annotation box ──
+      if (hover) {
+        let txt = '';
+        if (hover.kind === 'proto') {
+          const u = trunkUnits[hover.subId];
+          txt = 'u' + (hover.subId + 1) + ' · W_u = (W_a → \"' + u.tags.a + '\",  W_op → \"' + u.tags.op + '\",  W_b → \"' + u.tags.b + '\")';
+        } else if (hover.kind === 'concatSlot') {
+          txt = 'slot ' + hover.subId + ' · the 64-d encoder embedding of the ' + ({ a: 'first digit', op: 'operator', b: 'second digit' })[hover.subId] + ' image';
+        } else if (hover.kind === 'block') {
+          const map = {
+            'in_a': '\"a\" image input · 28×28 grayscale digit',
+            'in_op': '\"op\" image input · 28×28 grayscale operator glyph',
+            'in_b': '\"b\" image input · 28×28 grayscale digit',
+            encoder: 'shared CNN encoder · same weights for all three images',
+            'emb_a': 'h_a ∈ ℝ⁶⁴ · encoder output for the a image',
+            'emb_op': 'h_op ∈ ℝ⁶⁴ · encoder output for the operator image',
+            'emb_b': 'h_b ∈ ℝ⁶⁴ · encoder output for the b image',
+            yat: 'Yat trunk · the only nonlinearity between encoder and decoder',
+            acts: 'unit activations ∈ ℝ²⁵⁶ · what the decoder reads',
+            decoder: 'ConvTranspose decoder · 256 → 28×84 answer image',
+            'out_sign': 'sign slot · blank when the answer is non-negative',
+            'out_tens': 'tens slot · the tens digit of the answer (3 × 7 = 21)',
+            'out_units': 'units slot · the units digit of the answer',
+          };
+          txt = map[hover.id] || hover.id;
+        }
+        if (txt) {
+          ctx.font = '600 11px ui-monospace, monospace';
+          const padX = 10, padY = 6;
+          const tw = ctx.measureText(txt).width;
+          const bw = Math.min(scene.w - margin * 2, tw + padX * 2);
+          const bh = 22;
+          const bx = (scene.w - bw) / 2;
+          const by = scene.h - bh - 6;
+          ctx.fillStyle = colors.accentSoft;
+          ctx.strokeStyle = colors.accent;
+          ctx.lineWidth = 1;
+          roundedRect(bx, by, bw, bh, 6);
+          ctx.fill(); ctx.stroke();
+          ctx.fillStyle = colors.accent;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(txt, bx + bw / 2, by + bh / 2);
+        }
+      }
+    };
+
+    // ── Interaction ──
+    if (zoomGroup) {
+      zoomGroup.querySelectorAll('button[data-zoom]').forEach((b) => b.addEventListener('click', () => {
+        const k = b.dataset.zoom;
+        if (k === '+') zoom = Math.min(maxZoom, zoom * 1.25);
+        else if (k === '-') zoom = Math.max(minZoom, zoom / 1.25);
+        else { zoom = 1; panX = 0; panY = 0; }
+        requestRedraw();
+      }));
+    }
+    let panning = false;
+    let panStart = null;
+    c.addEventListener('pointerdown', (e) => {
+      panning = true;
+      panStart = { x: e.clientX, y: e.clientY, px: panX, py: panY };
+      c.setPointerCapture?.(e.pointerId);
+      c.style.cursor = 'grabbing';
+    });
+    c.addEventListener('pointermove', (e) => {
+      if (panning) {
+        panX = panStart.px + (e.clientX - panStart.x);
+        panY = panStart.py + (e.clientY - panStart.y);
+        requestRedraw();
+        return;
+      }
+      const p = clientToScene(e.clientX, e.clientY);
+      const h = hitTest(p.x, p.y);
+      if (!sameHover(h, hover)) { hover = h; requestRedraw(); }
+    });
+    const endPan = (e) => {
+      panning = false;
+      c.style.cursor = 'grab';
+      try { c.releasePointerCapture?.(e.pointerId); } catch {}
+    };
+    c.addEventListener('pointerup', endPan);
+    c.addEventListener('pointercancel', endPan);
+    c.addEventListener('pointerleave', () => { if (hover) { hover = null; requestRedraw(); } });
+    c.style.cursor = 'grab';
+    c.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const f = e.deltaY > 0 ? 0.9 : 1.1;
+      zoom = Math.max(minZoom, Math.min(maxZoom, zoom * f));
+      requestRedraw();
+    }, { passive: false });
+
+    const ro = new ResizeObserver(() => { fit(); requestRedraw(); });
+    ro.observe(c);
+    const io = new IntersectionObserver((entries) => {
+      const was = visible;
+      visible = entries[0].isIntersecting;
+      if (visible && !was) { fit(); draw(); }
+    }, { rootMargin: '120px' });
+    io.observe(c);
+  };
+
+  setup();
+  document.addEventListener('astro:page-load', setup);
+  document.addEventListener('astro:after-swap', setup);
+})();
+</script>
+</content>
+</invoke>

@@ -1,0 +1,280 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 380 } = Astro.props;
+const id = `kc-${Math.random().toString(36).slice(2, 9)}`;
+const cells = [
+  { id: `${id}-gauss`, name: 'Gaussian', formula: 'exp(−‖x − W‖² / 2σ²)' },
+  { id: `${id}-lap`,   name: 'Laplace',  formula: 'exp(−‖x − W‖ / σ)' },
+  { id: `${id}-yat`,   name: 'Yat',      formula: '(x · W)² / (‖x − W‖² + ε)' },
+  { id: `${id}-poly`,  name: 'polynomial',formula: '(x · W + 1)²' },
+];
+---
+<figure class="viz">
+  <div class="viz-controls">
+    <label>
+      width σ
+      <input type="range" min="-0.7" max="0.4" step="0.04" value="-0.3" id={`${id}-sigma`} aria-label="kernel width" />
+      <span class="readout" id={`${id}-sigma-readout`}>0.50</span>
+    </label>
+    <span class="faint">click any panel to set the input x · the prototype W is shared across all four kernels</span>
+  </div>
+  <div class="kc-grid">
+    {cells.map((cell) => (
+      <div class="kc-cell">
+        <h4>{cell.name}</h4>
+        <canvas id={cell.id} data-name={cell.name} aria-label={`${cell.name} kernel heatmap`}></canvas>
+        <div class="kc-formula">{cell.formula}</div>
+        <div class="kc-readout" id={`${cell.id}-readout`}>—</div>
+      </div>
+    ))}
+  </div>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+  .kc-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem 0.7rem;
+  }
+  .kc-cell h4 {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--fg);
+    margin: 0 0 0.3rem;
+    font-weight: 600;
+    text-align: center;
+  }
+  .kc-formula {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--fg-muted);
+    text-align: center;
+    margin-top: 0.25rem;
+  }
+  .kc-readout {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--accent);
+    text-align: center;
+    margin-top: 0.15rem;
+  }
+  @media (max-width: 760px) {
+    .kc-grid { grid-template-columns: 1fr; }
+  }
+</style>
+
+<script is:inline define:vars={{ ids: cells.map((c) => c.id) }}>
+(() => {
+  const setup = () => {
+    const canvases = ids.map((cid) => document.getElementById(cid));
+    if (canvases.some((c) => !c)) return;
+    if (canvases[0].dataset.ready) return;
+    canvases.forEach((c) => { c.dataset.ready = '1'; });
+
+    const root = canvases[0];
+    const wrap = root.closest('figure');
+    const slider = wrap.querySelector('input[type="range"]');
+    const sigmaReadout = slider.parentElement.querySelector('.readout');
+
+    // Shared state: prototype, input x, sigma
+    const Wx = 0.6, Wy = 0.5;
+    let inputX = -0.4, inputY = 0.2;
+    let sigma = 0.5;
+
+    let colors = readColors();
+    function readColors() {
+      const s = getComputedStyle(document.documentElement);
+      const v = (n) => s.getPropertyValue(n).trim();
+      return {
+        accent: v('--accent') || '#b3661b',
+        bg: v('--bg-sunken') || '#f1efe7',
+        fg: v('--fg') || '#1a1a1a',
+        muted: v('--fg-muted') || '#5a5f66',
+        faint: v('--fg-faint') || '#8d8d8d',
+        border: v('--border') || '#e4e1d6',
+      };
+    }
+    const themeObs = new MutationObserver(() => { colors = readColors(); requestRedraw(); });
+    themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+    const parseColor = (str) => {
+      str = str.trim();
+      if (str.startsWith('#')) {
+        let s = str.slice(1);
+        if (s.length === 3) s = s.split('').map((c) => c + c).join('');
+        return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
+      }
+      const m = str.match(/\d+/g);
+      return m ? [parseInt(m[0], 10), parseInt(m[1], 10), parseInt(m[2], 10)] : [0, 0, 0];
+    };
+
+    const state = { dpr: 1, w: 0, h: 0 };
+    const fit = () => {
+      const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+      state.dpr = dpr;
+      canvases.forEach((c) => {
+        const rect = c.getBoundingClientRect();
+        // Square-ish canvas based on width.
+        const size = Math.min(rect.width, 220);
+        c.style.height = size + 'px';
+        c.width = Math.round(rect.width * dpr);
+        c.height = Math.round(size * dpr);
+      });
+    };
+
+    const xMin = -2, xMax = 2, yMin = -2, yMax = 2;
+
+    const kernels = {
+      Gaussian:  (x, y, s) => Math.exp(-((x - Wx) ** 2 + (y - Wy) ** 2) / (2 * s * s)),
+      Laplace:   (x, y, s) => Math.exp(-Math.sqrt((x - Wx) ** 2 + (y - Wy) ** 2) / s),
+      Yat:       (x, y, s) => {
+        const dot = x * Wx + y * Wy;
+        const d2 = (x - Wx) * (x - Wx) + (y - Wy) * (y - Wy);
+        return dot * dot / (d2 + s * s * 0.2);
+      },
+      polynomial:(x, y, _s) => Math.pow(x * Wx + y * Wy + 1, 2),
+    };
+
+    let rafScheduled = false;
+    let visible = false;
+    const requestRedraw = () => {
+      if (rafScheduled || !visible) return;
+      rafScheduled = true;
+      requestAnimationFrame(() => { rafScheduled = false; draw(); });
+    };
+
+    const drawOne = (c) => {
+      const rect = c.getBoundingClientRect();
+      const W = rect.width, H = rect.height;
+      const ctx = c.getContext('2d');
+      ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+      const pad = 6;
+      const plotW = W - pad * 2;
+      const plotH = H - pad * 2;
+      const sx = (x) => pad + ((x - xMin) / (xMax - xMin)) * plotW;
+      const sy = (y) => pad + ((yMax - y) / (yMax - yMin)) * plotH;
+      const xWorld = (px) => xMin + ((px - pad) / plotW) * (xMax - xMin);
+      const yWorld = (py) => yMax - ((py - pad) / plotH) * (yMax - yMin);
+
+      const kname = c.dataset.name;
+      const fn = kernels[kname];
+
+      // Heatmap
+      const HM = 56;
+      const vals = new Float32Array(HM * HM);
+      let maxV = 0;
+      for (let py = 0; py < HM; py++) {
+        const yw = yWorld(pad + (py / HM) * plotH);
+        for (let px = 0; px < HM; px++) {
+          const xw = xWorld(pad + (px / HM) * plotW);
+          const v = fn(xw, yw, sigma);
+          vals[py * HM + px] = v;
+          if (v > maxV) maxV = v;
+        }
+      }
+      const bg = parseColor(colors.bg);
+      const accent = parseColor(colors.accent);
+      const cap = maxV > 0 ? maxV : 1;
+      const img = ctx.createImageData(HM, HM);
+      for (let i = 0; i < HM * HM; i++) {
+        const t = Math.min(1, Math.pow(Math.max(0, vals[i]) / cap, 0.55));
+        img.data[i * 4] = Math.round(bg[0] + (accent[0] - bg[0]) * t);
+        img.data[i * 4 + 1] = Math.round(bg[1] + (accent[1] - bg[1]) * t);
+        img.data[i * 4 + 2] = Math.round(bg[2] + (accent[2] - bg[2]) * t);
+        img.data[i * 4 + 3] = 255;
+      }
+      const tmp = document.createElement('canvas');
+      tmp.width = HM; tmp.height = HM;
+      tmp.getContext('2d').putImageData(img, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(tmp, pad, pad, plotW, plotH);
+      ctx.strokeStyle = colors.border;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(pad, pad, plotW, plotH);
+      // Axes
+      ctx.strokeStyle = colors.faint;
+      ctx.setLineDash([2, 4]);
+      ctx.beginPath();
+      ctx.moveTo(pad, sy(0)); ctx.lineTo(W - pad, sy(0));
+      ctx.moveTo(sx(0), pad); ctx.lineTo(sx(0), H - pad);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Prototype marker
+      ctx.fillStyle = colors.accent;
+      ctx.strokeStyle = colors.fg;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(sx(Wx), sy(Wy), 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      // Input marker
+      ctx.fillStyle = colors.bg;
+      ctx.strokeStyle = colors.fg;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(sx(inputX), sy(inputY), 4.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Readout for this kernel at x
+      const v = fn(inputX, inputY, sigma);
+      const readout = document.getElementById(c.id + '-readout');
+      if (readout) readout.textContent = 'K(x, W) = ' + v.toFixed(3);
+    };
+
+    const draw = () => {
+      sigmaReadout.textContent = sigma.toFixed(2);
+      canvases.forEach(drawOne);
+    };
+
+    const setFromPointer = (canvas, e) => {
+      const rect = canvas.getBoundingClientRect();
+      const pad = 6;
+      const plotW = rect.width - pad * 2;
+      const plotH = rect.height - pad * 2;
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+      inputX = Math.max(-2, Math.min(2, xMin + ((px - pad) / plotW) * (xMax - xMin)));
+      inputY = Math.max(-2, Math.min(2, yMax - ((py - pad) / plotH) * (yMax - yMin)));
+      requestRedraw();
+    };
+    let dragging = null;
+    canvases.forEach((canvas) => {
+      canvas.addEventListener('pointerdown', (e) => {
+        dragging = canvas;
+        canvas.setPointerCapture?.(e.pointerId);
+        setFromPointer(canvas, e);
+      });
+      canvas.addEventListener('pointermove', (e) => { if (dragging) setFromPointer(canvas, e); });
+      canvas.addEventListener('pointerup', (e) => {
+        dragging = null;
+        try { canvas.releasePointerCapture?.(e.pointerId); } catch {}
+      });
+    });
+
+    slider.addEventListener('input', () => {
+      sigma = Math.pow(10, parseFloat(slider.value));
+      requestRedraw();
+    });
+
+    const ro = new ResizeObserver(() => { fit(); requestRedraw(); });
+    canvases.forEach((c) => ro.observe(c));
+    const io = new IntersectionObserver((entries) => {
+      const was = visible;
+      visible = entries[0].isIntersecting;
+      if (visible && !was) { fit(); draw(); }
+    }, { rootMargin: '120px' });
+    io.observe(canvases[0]);
+  };
+
+  setup();
+  document.addEventListener('astro:page-load', setup);
+  document.addEventListener('astro:after-swap', setup);
+})();
+</script>

@@ -1,0 +1,271 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 360 } = Astro.props;
+const id = `yk-${Math.random().toString(36).slice(2, 9)}`;
+---
+<figure class="viz">
+  <div class="viz-controls">
+    <label>
+      ε <input type="range" min="-3" max="0" step="0.05" value="-1.3" id={`${id}-eps`} aria-label="epsilon" />
+      <span class="readout" id={`${id}-eps-readout`}>0.05</span>
+    </label>
+    <span class="faint">click on the chart to move the prototype W · this is one kernel section K(·, W); the readout α is downstream</span>
+  </div>
+  <canvas id={`${id}-c`} height={height} aria-label="Yat unit activation y_u(x) as a heatmap over a 2D input space"></canvas>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<script is:inline define:vars={{ id }}>
+(() => {
+  const setup = () => {
+    const c = document.getElementById(id + '-c');
+    if (!c || c.dataset.ready) return;
+    c.dataset.ready = '1';
+    const ctx = c.getContext('2d');
+    const epsSlider = document.getElementById(id + '-eps');
+    const epsReadout = document.getElementById(id + '-eps-readout');
+
+    // World coordinates roughly [-2, 2] x [-2, 2]
+    const xMin = -2, xMax = 2, yMin = -2, yMax = 2;
+    let Wx = 0.7, Wy = 0.5; // prototype location in world coords
+    let cursor = null; // { x, y } in world coords
+
+    const state = { dpr: 1, w: 0, h: 0 };
+    const fit = () => {
+      const rect = c.getBoundingClientRect();
+      const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+      state.dpr = dpr;
+      state.w = rect.width;
+      state.h = rect.height;
+      c.width = Math.round(rect.width * dpr);
+      c.height = Math.round(rect.height * dpr);
+    };
+
+    const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    let colors = readColors();
+    function readColors() {
+      const s = getComputedStyle(document.documentElement);
+      const v = (n) => s.getPropertyValue(n).trim();
+      return {
+        accent: v('--accent') || '#b3661b',
+        bg: v('--bg-sunken') || '#f1efe7',
+        fg: v('--fg') || '#1a1a1a',
+        muted: v('--fg-muted') || '#5a5f66',
+        faint: v('--fg-faint') || '#8d8d8d',
+        border: v('--border') || '#e4e1d6',
+      };
+    }
+    const themeObs = new MutationObserver(() => { colors = readColors(); requestRedraw(); });
+    themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+    const parseColor = (str) => {
+      str = str.trim();
+      if (str.startsWith('#')) {
+        let s = str.slice(1);
+        if (s.length === 3) s = s.split('').map((c) => c + c).join('');
+        return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
+      }
+      const m = str.match(/\d+/g);
+      return m ? [parseInt(m[0], 10), parseInt(m[1], 10), parseInt(m[2], 10)] : [0, 0, 0];
+    };
+
+    const yat = (x, y, eps, alpha) => {
+      const dot = x * Wx + y * Wy;
+      const dist2 = (x - Wx) * (x - Wx) + (y - Wy) * (y - Wy);
+      return alpha * dot * dot / (dist2 + eps);
+    };
+
+    let rafScheduled = false;
+    let visible = false;
+    const requestRedraw = () => {
+      if (rafScheduled || !visible) return;
+      rafScheduled = true;
+      requestAnimationFrame(() => { rafScheduled = false; draw(); });
+    };
+
+    const draw = () => {
+      const W = state.w, H = state.h;
+      if (W === 0) return;
+      ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+
+      const pad = 12;
+      const plotW = W - pad * 2;
+      const plotH = H - pad * 2;
+      const sx = (x) => pad + ((x - xMin) / (xMax - xMin)) * plotW;
+      const sy = (y) => pad + ((yMax - y) / (yMax - yMin)) * plotH;
+      const xWorld = (px) => xMin + ((px - pad) / plotW) * (xMax - xMin);
+      const yWorld = (py) => yMax - ((py - pad) / plotH) * (yMax - yMin);
+
+      const eps = Math.pow(10, parseFloat(epsSlider.value));
+      const alpha = 1;
+      epsReadout.textContent = eps.toFixed(eps < 0.01 ? 4 : eps < 0.1 ? 3 : 2);
+
+      // Render heatmap into a small offscreen ImageData, then upscale via drawImage
+      const HM_RES = 72;
+      const img = ctx.createImageData(HM_RES, HM_RES);
+      // First pass: compute values + find max for normalisation
+      const vals = new Float32Array(HM_RES * HM_RES);
+      let maxV = 0;
+      for (let py = 0; py < HM_RES; py++) {
+        const yw = yWorld(pad + (py / HM_RES) * plotH);
+        for (let px = 0; px < HM_RES; px++) {
+          const xw = xWorld(pad + (px / HM_RES) * plotW);
+          const v = yat(xw, yw, eps, alpha);
+          vals[py * HM_RES + px] = v;
+          if (v > maxV) maxV = v;
+        }
+      }
+      const bg = parseColor(colors.bg);
+      const accent = parseColor(colors.accent);
+      const cap = maxV > 0 ? maxV : 1;
+      for (let i = 0; i < HM_RES * HM_RES; i++) {
+        const t = Math.min(1, Math.pow(Math.max(0, vals[i]) / cap, 0.55));
+        const r = Math.round(bg[0] + (accent[0] - bg[0]) * t);
+        const g = Math.round(bg[1] + (accent[1] - bg[1]) * t);
+        const b = Math.round(bg[2] + (accent[2] - bg[2]) * t);
+        const o = i * 4;
+        img.data[o] = r; img.data[o + 1] = g; img.data[o + 2] = b; img.data[o + 3] = 255;
+      }
+      // Draw the heatmap via createImageBitmap-free path: putImageData to a temp canvas then drawImage
+      const tmp = document.createElement('canvas');
+      tmp.width = HM_RES;
+      tmp.height = HM_RES;
+      tmp.getContext('2d').putImageData(img, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(tmp, pad, pad, plotW, plotH);
+
+      // Frame
+      ctx.strokeStyle = colors.border;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(pad, pad, plotW, plotH);
+
+      // Axes
+      ctx.strokeStyle = colors.faint;
+      ctx.setLineDash([2, 4]);
+      ctx.beginPath();
+      ctx.moveTo(pad, sy(0)); ctx.lineTo(W - pad, sy(0));
+      ctx.moveTo(sx(0), pad); ctx.lineTo(sx(0), H - pad);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Prototype marker
+      const pX = sx(Wx), pY = sy(Wy);
+      ctx.strokeStyle = colors.fg;
+      ctx.fillStyle = colors.accent;
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.arc(pX, pY, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = colors.fg;
+      ctx.font = 'bold 13px ' + (getComputedStyle(document.body).fontFamily || 'serif');
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(' W', pX + 8, pY - 8);
+
+      // Cursor + readout
+      if (cursor) {
+        const v = yat(cursor.x, cursor.y, eps, alpha);
+        const cX = sx(cursor.x), cY = sy(cursor.y);
+        ctx.strokeStyle = colors.fg;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(cX, cY, 4, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = colors.fg;
+        ctx.font = '11px ui-monospace, monospace';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        const label = ' K(x, W) = ' + v.toFixed(2);
+        ctx.fillText(label, cX + 8, cY + 12);
+      }
+
+      // Axis labels
+      ctx.fillStyle = colors.faint;
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText('x ∈ ℝ²', pad + 4, pad + 4);
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText('K(x, W) = (x·W)² / (‖x−W‖² + ε)', W - pad - 4, H - pad - 4);
+    };
+
+    const setCursor = (e) => {
+      const rect = c.getBoundingClientRect();
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+      const pad = 12;
+      const plotW = rect.width - pad * 2;
+      const plotH = rect.height - pad * 2;
+      const cx = xMin + ((px - pad) / plotW) * (xMax - xMin);
+      const cy = yMax - ((py - pad) / plotH) * (yMax - yMin);
+      cursor = { x: cx, y: cy };
+      requestRedraw();
+    };
+
+    let dragging = null;
+    c.addEventListener('pointerdown', (e) => {
+      const rect = c.getBoundingClientRect();
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+      const pad = 12;
+      const plotW = rect.width - pad * 2;
+      const plotH = rect.height - pad * 2;
+      const cx = xMin + ((px - pad) / plotW) * (xMax - xMin);
+      const cy = yMax - ((py - pad) / plotH) * (yMax - yMin);
+      // Decide: if near prototype, drag prototype; otherwise drop prototype here
+      const dist = Math.hypot(cx - Wx, cy - Wy);
+      if (dist < 0.25) {
+        dragging = 'proto';
+      } else {
+        Wx = cx; Wy = cy;
+        dragging = 'proto';
+      }
+      c.setPointerCapture?.(e.pointerId);
+      requestRedraw();
+    });
+    c.addEventListener('pointermove', (e) => {
+      const rect = c.getBoundingClientRect();
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+      const pad = 12;
+      const plotW = rect.width - pad * 2;
+      const plotH = rect.height - pad * 2;
+      const cx = xMin + ((px - pad) / plotW) * (xMax - xMin);
+      const cy = yMax - ((py - pad) / plotH) * (yMax - yMin);
+      if (dragging === 'proto') {
+        Wx = Math.max(xMin + 0.1, Math.min(xMax - 0.1, cx));
+        Wy = Math.max(yMin + 0.1, Math.min(yMax - 0.1, cy));
+      }
+      cursor = { x: cx, y: cy };
+      requestRedraw();
+    });
+    c.addEventListener('pointerup', (e) => {
+      dragging = null;
+      try { c.releasePointerCapture?.(e.pointerId); } catch {}
+    });
+    c.addEventListener('pointerleave', () => { cursor = null; requestRedraw(); });
+
+    epsSlider.addEventListener('input', requestRedraw);
+
+    const ro = new ResizeObserver(() => { fit(); requestRedraw(); });
+    ro.observe(c);
+
+    const io = new IntersectionObserver((entries) => {
+      const was = visible;
+      visible = entries[0].isIntersecting;
+      if (visible && !was) { fit(); draw(); }
+    }, { rootMargin: '120px' });
+    io.observe(c);
+  };
+
+  setup();
+  document.addEventListener('astro:page-load', setup);
+  document.addEventListener('astro:after-swap', setup);
+})();
+</script>
