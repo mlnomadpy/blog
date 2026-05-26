@@ -90,7 +90,7 @@ const dateFmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long
         <em> {paper.title}</em>.
         {paper.arxiv && <> arXiv:<a href={`https://arxiv.org/abs/${paper.arxiv}`}>{paper.arxiv}</a>.</>}
         {paper.venue && !paper.arxiv && <> {paper.venue}.</>}
-        {paperUrl && !paper.arxiv && <> <a href={paperUrl}>{paperUrl}</a></>}
+        {paperUrl && (paperUrl.endsWith('.pdf') ? <> <a href={paperUrl}>[PDF]</a></> : (!paper.arxiv && <> <a href={paperUrl}>{paperUrl}</a></>))}
       </p>
       <details class="cite-bib">
         <summary>BibTeX</summary>
