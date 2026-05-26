@@ -1,0 +1,762 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 420 } = Astro.props;
+const id = `aba-${Math.random().toString(36).slice(2, 9)}`;
+const stages = [
+  { label: 'token sequence X' },
+  { label: 'project to Q, K, V' },
+  { label: 'S = Q Kᵀ / √dₖ' },
+  { label: 'α = softmax(S)' },
+  { label: 'output = α V' },
+];
+---
+<figure class="viz" tabindex="0">
+  <div class="viz-controls anim-controls" data-anim={id}>
+    <div class="anim-row">
+      <button type="button" class="anim-step" data-act="prev" title="previous stage (←)">◀ prev</button>
+      <button type="button" class="anim-play" data-act="play" title="play / pause (space)">▶ play</button>
+      <button type="button" class="anim-step" data-act="next" title="next stage (→)">next ▶</button>
+      <button type="button" class="anim-step" data-act="reset" title="reset to first stage">reset</button>
+      <span class="anim-spd-group" data-spd-group>
+        <button type="button" data-spd="0.5">0.5×</button>
+        <button type="button" data-spd="1" class="active">1×</button>
+        <button type="button" data-spd="2">2×</button>
+      </span>
+      <span class="anim-zoom-group" data-zoom-group>
+        <button type="button" data-zoom="-" title="zoom out">−</button>
+        <button type="button" data-zoom="0" title="reset zoom & pan">⤢</button>
+        <button type="button" data-zoom="+" title="zoom in">+</button>
+      </span>
+    </div>
+    <input type="range" class="anim-scrub" min="0" max="1000" value="0" step="1" data-scrub aria-label="scrub through the animation" />
+    <div class="anim-progress">
+      {stages.map((s, i) => (
+        <button type="button" class="anim-dot" data-step={i} aria-label={`stage ${i + 1}: ${s.label}`}>
+          <span class="anim-dot-num">{i + 1}</span>
+          <span class="anim-dot-label">{s.label}</span>
+        </button>
+      ))}
+    </div>
+    <span class="faint anim-stage-readout" id={`${id}-stage`}>—</span>
+  </div>
+  <canvas id={`${id}-c`} height={height} aria-label="Animated attention block: tokens, Q K V projections, similarity matrix, softmax, output"></canvas>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<script is:inline define:vars={{ id }}>
+(() => {
+  const setup = () => {
+    const c = document.getElementById(id + '-c');
+    if (!c || c.dataset.ready) return;
+    c.dataset.ready = '1';
+    const ctx = c.getContext('2d');
+    const wrap = document.querySelector(`[data-anim="${id}"]`);
+    const stageReadout = document.getElementById(id + '-stage');
+    const dots = wrap.querySelectorAll('.anim-dot');
+    const stageNames = [
+      'token sequence X — N rows of d-dim embeddings',
+      'project: Q = XW_Q,  K = XW_K,  V = XW_V — three [N, dₖ] matrices',
+      'similarity S = Q Kᵀ / √dₖ — an [N, N] kernel between every pair',
+      'α = softmax(S) row-wise — each row a distribution over keys',
+      'output = α V — each output row is a convex mix of value rows',
+    ];
+
+    // ── State ──
+    let step = 0;
+    let prog = 0;
+    let playing = false;
+    let lastTs = 0;
+    let speedMul = 1;
+    const stepDur = 1500;
+    const totalSteps = stageNames.length;
+    const figure = c.closest('figure');
+    const scrub = wrap.querySelector('[data-scrub]');
+    const spdGroup = wrap.querySelector('[data-spd-group]');
+    const zoomGroup = wrap.querySelector('[data-zoom-group]');
+
+    // Hovered (i, j) cell on the S or α matrix — drives the highlight overlay
+    // showing which Q row and K row produced that score.
+    let hover = null; // { which: 'S' | 'A' | 'O', i, j }
+
+    // ── Zoom / pan ──
+    const scene = { w: 940, h: 380 };
+    let zoom = 1;
+    let panX = 0;
+    let panY = 0;
+    const minZoom = 0.6, maxZoom = 4;
+    const computeTransform = () => {
+      const W = state.w, H = state.h;
+      const bs = Math.min((W - 8) / scene.w, (H - 8) / scene.h);
+      const s = bs * zoom;
+      const overflowX = Math.max(0, (scene.w * s - W) / 2);
+      const overflowY = Math.max(0, (scene.h * s - H) / 2);
+      panX = Math.max(-overflowX, Math.min(overflowX, panX));
+      panY = Math.max(-overflowY, Math.min(overflowY, panY));
+      return { s, tx: (W - scene.w * s) / 2 + panX, ty: (H - scene.h * s) / 2 + panY };
+    };
+    // Inverse: client px → scene coords (for cell-hover hit-testing)
+    const clientToScene = (clientX, clientY) => {
+      const rect = c.getBoundingClientRect();
+      const { s, tx, ty } = computeTransform();
+      const px = clientX - rect.left;
+      const py = clientY - rect.top;
+      return { x: (px - tx) / s, y: (py - ty) / s };
+    };
+
+    const updateScrub = () => {
+      if (!scrub || scrub.matches(':active')) return;
+      const frac = (step + prog) / totalSteps;
+      scrub.value = String(Math.round(frac * 1000));
+    };
+
+    const state = { dpr: 1, w: 0, h: 0 };
+    const fit = () => {
+      const rect = c.getBoundingClientRect();
+      const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+      state.dpr = dpr;
+      state.w = rect.width;
+      state.h = rect.height;
+      c.width = Math.round(rect.width * dpr);
+      c.height = Math.round(rect.height * dpr);
+    };
+
+    let colors = readColors();
+    function readColors() {
+      const s = getComputedStyle(document.documentElement);
+      const v = (n) => s.getPropertyValue(n).trim();
+      return {
+        accent: v('--accent') || '#b3661b',
+        accentSoft: v('--accent-soft') || '#b3661b14',
+        bg: v('--bg') || '#fbfaf6',
+        bgSunken: v('--bg-sunken') || '#f1efe7',
+        bgElev: v('--bg-elev') || '#ffffff',
+        fg: v('--fg') || '#1a1a1a',
+        muted: v('--fg-muted') || '#5a5f66',
+        faint: v('--fg-faint') || '#8d8d8d',
+        border: v('--border') || '#e4e1d6',
+      };
+    }
+    const themeObs = new MutationObserver(() => { colors = readColors(); requestRedraw(); });
+    themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+    const ease = (t) => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    let rafScheduled = false;
+    let visible = false;
+    const requestRedraw = () => {
+      if (rafScheduled || !visible) return;
+      rafScheduled = true;
+      requestAnimationFrame(() => { rafScheduled = false; draw(); });
+    };
+
+    // ── Data: a small concrete example so the maths is checkable ──
+    const N = 5;             // sequence length
+    const D_K = 4;           // shown projection dim
+    const D_V = 4;           // shown value dim
+    const tokenLabels = ['the', 'cat', 'sat', 'on', 'mat'];
+    // Q, K, V populated from a fixed-seed rng so the picture is stable.
+    const rng = (() => { let s = 12345; return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; }; })();
+    const randMat = (rows, cols) => {
+      const m = [];
+      for (let i = 0; i < rows; i++) {
+        const r = [];
+        for (let j = 0; j < cols; j++) r.push(rng() * 2 - 1);
+        m.push(r);
+      }
+      return m;
+    };
+    const Q = randMat(N, D_K);
+    const K = randMat(N, D_K);
+    const V = randMat(N, D_V);
+    // Bias Q,K so the "natural" attention pattern is interpretable:
+    // each token attends most to itself and to its right neighbour.
+    for (let i = 0; i < N; i++) {
+      Q[i] = Q[i].map((x) => x * 0.4);
+      K[i] = K[i].map((x) => x * 0.4);
+      // Give each i a signature direction; same direction for K_i so Q_i·K_i is large.
+      const sig = [Math.cos(i * 1.1), Math.sin(i * 1.1), Math.cos(i * 0.7), Math.sin(i * 0.7)];
+      for (let d = 0; d < D_K; d++) {
+        Q[i][d] += 0.9 * sig[d];
+        K[i][d] += 0.9 * sig[d];
+      }
+    }
+    const dk = D_K;
+    const S = [];
+    for (let i = 0; i < N; i++) {
+      const row = [];
+      for (let j = 0; j < N; j++) {
+        let s = 0;
+        for (let d = 0; d < dk; d++) s += Q[i][d] * K[j][d];
+        row.push(s / Math.sqrt(dk));
+      }
+      S.push(row);
+    }
+    const A = S.map((row) => {
+      const max = Math.max(...row);
+      const ex = row.map((v) => Math.exp(v - max));
+      const sum = ex.reduce((a, b) => a + b, 0);
+      return ex.map((v) => v / sum);
+    });
+    const O = [];
+    for (let i = 0; i < N; i++) {
+      const row = new Array(D_V).fill(0);
+      for (let j = 0; j < N; j++) for (let d = 0; d < D_V; d++) row[d] += A[i][j] * V[j][d];
+      O.push(row);
+    }
+
+    // ── Layout (in scene coordinates) ──
+    // Horizontal flow: tokens | Q | K | V | S | α | output
+    // Each block centered vertically at yMid. Wide gaps for arrows.
+    const yMid = scene.h / 2;
+    const tokensW = 56;       // token label cells are wider for readability
+    const cellTokens = 26;
+    const cellProj = 14;      // Q/K/V cell width
+    const cellProjH = 22;     // Q/K/V cell height
+    const cellS = 22;         // S, α cell size
+    const cellOut = 14;       // output cell width
+    const cellOutH = 22;      // output cell height
+
+    const layout = (() => {
+      const projW = D_K * cellProj;
+      const matrixW = N * cellS;
+      const outW = D_V * cellOut;
+      // x positions are left edges of each block
+      const xTokens = 22;
+      const xQ      = xTokens + tokensW + 36;
+      const xK      = xQ + projW + 14;
+      const xV      = xK + projW + 14;
+      const xS      = xV + projW + 40;
+      const xA      = xS + matrixW + 50;
+      const xO      = xA + matrixW + 40;
+      return {
+        tokens: { x: xTokens, y: yMid - (N * cellTokens) / 2, w: tokensW, h: N * cellTokens },
+        Q:      { x: xQ,      y: yMid - (N * cellProjH) / 2,  w: projW,   h: N * cellProjH },
+        K:      { x: xK,      y: yMid - (N * cellProjH) / 2,  w: projW,   h: N * cellProjH },
+        V:      { x: xV,      y: yMid - (N * cellProjH) / 2,  w: projW,   h: N * cellProjH },
+        S:      { x: xS,      y: yMid - (N * cellS) / 2,      w: matrixW, h: N * cellS },
+        A:      { x: xA,      y: yMid - (N * cellS) / 2,      w: matrixW, h: N * cellS },
+        O:      { x: xO,      y: yMid - (N * cellOutH) / 2,   w: outW,    h: N * cellOutH },
+      };
+    })();
+
+    // ── Drawing primitives ──
+    const drawBoxLabel = (block, title, shape, highlight, alpha = 1) => {
+      ctx.globalAlpha = alpha;
+      // Title above
+      ctx.fillStyle = highlight ? colors.accent : colors.muted;
+      ctx.font = '600 11px ui-monospace, monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(title, block.x + block.w / 2, block.y - 16);
+      // Shape below (e.g. "[N, dₖ]")
+      ctx.fillStyle = colors.faint;
+      ctx.font = '9px ui-monospace, monospace';
+      ctx.textBaseline = 'top';
+      ctx.fillText(shape, block.x + block.w / 2, block.y + block.h + 4);
+      ctx.globalAlpha = 1;
+    };
+
+    const drawTokens = (block, highlight, alpha = 1) => {
+      ctx.globalAlpha = alpha;
+      for (let i = 0; i < N; i++) {
+        const y = block.y + i * cellTokens;
+        ctx.fillStyle = colors.bgSunken;
+        ctx.strokeStyle = highlight ? colors.accent : colors.border;
+        ctx.lineWidth = highlight ? 1.4 : 1;
+        ctx.fillRect(block.x, y, block.w, cellTokens - 2);
+        ctx.strokeRect(block.x, y, block.w, cellTokens - 2);
+        ctx.fillStyle = highlight ? colors.accent : colors.fg;
+        ctx.font = 'bold 12px ' + (getComputedStyle(document.body).fontFamily || 'serif');
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(tokenLabels[i], block.x + block.w / 2, y + (cellTokens - 2) / 2);
+      }
+      ctx.globalAlpha = 1;
+    };
+
+    const drawProjection = (M, block, highlightedRow, highlight, alpha = 1) => {
+      ctx.globalAlpha = alpha;
+      const cellW = block.w / D_K;
+      const cellH = block.h / N;
+      // Find max magnitude per matrix for value-to-shade normalisation
+      let maxV = 0;
+      for (let i = 0; i < N; i++) for (let d = 0; d < D_K; d++) if (Math.abs(M[i][d]) > maxV) maxV = Math.abs(M[i][d]);
+      maxV = maxV > 0 ? maxV : 1;
+      for (let i = 0; i < N; i++) {
+        for (let d = 0; d < D_K; d++) {
+          const v = M[i][d];
+          const t = Math.min(1, Math.abs(v) / maxV);
+          const col = v >= 0 ? colors.accent : colors.fg;
+          ctx.fillStyle = col;
+          ctx.globalAlpha = alpha * (highlight ? 0.15 + 0.6 * t : 0.08 + 0.4 * t);
+          ctx.fillRect(block.x + d * cellW, block.y + i * cellH, cellW - 0.5, cellH - 1);
+        }
+      }
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = highlight ? colors.accent : colors.border;
+      ctx.lineWidth = highlight ? 1.4 : 1;
+      ctx.strokeRect(block.x, block.y, block.w, block.h);
+      // Per-row separator strokes
+      ctx.strokeStyle = colors.border;
+      ctx.lineWidth = 0.5;
+      for (let i = 1; i < N; i++) {
+        ctx.beginPath();
+        ctx.moveTo(block.x, block.y + i * cellH);
+        ctx.lineTo(block.x + block.w, block.y + i * cellH);
+        ctx.stroke();
+      }
+      // Highlighted row overlay (the row tied to a hovered S/α/O cell)
+      if (highlightedRow != null && highlightedRow >= 0 && highlightedRow < N) {
+        ctx.strokeStyle = colors.accent;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(block.x - 1, block.y + highlightedRow * cellH - 1, block.w + 2, cellH + 1);
+      }
+      ctx.globalAlpha = 1;
+    };
+
+    // Draw an [N, N] matrix M. valueMode: 'raw' = raw S, 'prob' = α (rows sum to 1).
+    const drawMatrix = (M, block, valueMode, highlight, alpha = 1) => {
+      ctx.globalAlpha = alpha;
+      const cellW = block.w / N;
+      const cellH = block.h / N;
+      let maxV = 0;
+      for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) if (Math.abs(M[i][j]) > maxV) maxV = Math.abs(M[i][j]);
+      maxV = maxV > 0 ? maxV : 1;
+      for (let i = 0; i < N; i++) {
+        for (let j = 0; j < N; j++) {
+          const v = M[i][j];
+          const t = valueMode === 'prob' ? v : Math.min(1, Math.abs(v) / maxV);
+          ctx.fillStyle = v >= 0 ? colors.accent : colors.fg;
+          ctx.globalAlpha = alpha * (highlight ? 0.1 + 0.85 * t : 0.05 + 0.55 * t);
+          ctx.fillRect(block.x + j * cellW, block.y + i * cellH, cellW - 0.5, cellH - 0.5);
+          ctx.globalAlpha = alpha;
+          if (highlight || hover) {
+            // numeric label
+            ctx.fillStyle = t > 0.55 ? colors.bg : colors.fg;
+            ctx.font = '9px ui-monospace, monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const label = valueMode === 'prob' ? v.toFixed(2) : v.toFixed(1);
+            ctx.fillText(label, block.x + j * cellW + cellW / 2, block.y + i * cellH + cellH / 2);
+          }
+        }
+      }
+      ctx.strokeStyle = highlight ? colors.accent : colors.border;
+      ctx.lineWidth = highlight ? 1.5 : 1;
+      ctx.strokeRect(block.x, block.y, block.w, block.h);
+      ctx.globalAlpha = 1;
+    };
+
+    const drawOutput = (block, highlightedRow, highlight, alpha = 1) => {
+      ctx.globalAlpha = alpha;
+      const cellW = block.w / D_V;
+      const cellH = block.h / N;
+      let maxV = 0;
+      for (let i = 0; i < N; i++) for (let d = 0; d < D_V; d++) if (Math.abs(O[i][d]) > maxV) maxV = Math.abs(O[i][d]);
+      maxV = maxV > 0 ? maxV : 1;
+      for (let i = 0; i < N; i++) {
+        for (let d = 0; d < D_V; d++) {
+          const v = O[i][d];
+          const t = Math.min(1, Math.abs(v) / maxV);
+          ctx.fillStyle = v >= 0 ? colors.accent : colors.fg;
+          ctx.globalAlpha = alpha * (highlight ? 0.15 + 0.65 * t : 0.08 + 0.4 * t);
+          ctx.fillRect(block.x + d * cellW, block.y + i * cellH, cellW - 0.5, cellH - 1);
+        }
+      }
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = highlight ? colors.accent : colors.border;
+      ctx.lineWidth = highlight ? 1.4 : 1;
+      ctx.strokeRect(block.x, block.y, block.w, block.h);
+      if (highlightedRow != null && highlightedRow >= 0) {
+        ctx.strokeStyle = colors.accent;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(block.x - 1, block.y + highlightedRow * cellH - 1, block.w + 2, cellH + 1);
+      }
+      ctx.globalAlpha = 1;
+    };
+
+    // Arrow with optional running-glow dot at t∈(0,1) and a label above.
+    const flowArrow = (x0, y0, x1, y1, label, t, highlight) => {
+      ctx.strokeStyle = highlight ? colors.accent : colors.muted;
+      ctx.lineWidth = highlight ? 1.6 : 1.2;
+      ctx.beginPath();
+      ctx.moveTo(x0, y0); ctx.lineTo(x1, y1);
+      ctx.stroke();
+      const a = Math.atan2(y1 - y0, x1 - x0);
+      const sz = 6;
+      ctx.fillStyle = highlight ? colors.accent : colors.muted;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x1 - sz * Math.cos(a - 0.4), y1 - sz * Math.sin(a - 0.4));
+      ctx.lineTo(x1 - sz * Math.cos(a + 0.4), y1 - sz * Math.sin(a + 0.4));
+      ctx.closePath();
+      ctx.fill();
+      if (t > 0 && t < 1) {
+        const px = x0 + (x1 - x0) * t;
+        const py = y0 + (y1 - y0) * t;
+        ctx.fillStyle = colors.accent;
+        ctx.beginPath();
+        ctx.arc(px, py, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (label) {
+        ctx.fillStyle = colors.faint;
+        ctx.font = '9px ui-monospace, monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(label, (x0 + x1) / 2, Math.min(y0, y1) - 4);
+      }
+    };
+
+    // ── Hit-testing for hover ──
+    const hitTest = (x, y) => {
+      // Only the visible matrices participate.
+      const inside = (b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
+      if (step >= 2 && inside(layout.S)) {
+        const i = Math.floor((y - layout.S.y) / (layout.S.h / N));
+        const j = Math.floor((x - layout.S.x) / (layout.S.w / N));
+        return { which: 'S', i, j };
+      }
+      if (step >= 3 && inside(layout.A)) {
+        const i = Math.floor((y - layout.A.y) / (layout.A.h / N));
+        const j = Math.floor((x - layout.A.x) / (layout.A.w / N));
+        return { which: 'A', i, j };
+      }
+      if (step >= 4 && inside(layout.O)) {
+        const i = Math.floor((y - layout.O.y) / (layout.O.h / N));
+        return { which: 'O', i, j: -1 };
+      }
+      return null;
+    };
+
+    // ── Main draw ──
+    const draw = () => {
+      if (state.w === 0) return;
+      // Clear pixel buffer
+      ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+      ctx.clearRect(0, 0, state.w, state.h);
+      const { s, tx, ty } = computeTransform();
+      ctx.setTransform(state.dpr * s, 0, 0, state.dpr * s, state.dpr * tx, state.dpr * ty);
+
+      const t = ease(prog);
+      const margin = 14;
+
+      // Subtitle (top-left of scene)
+      ctx.fillStyle = colors.faint;
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText('attention block · output = softmax(Q Kᵀ / √dₖ) V', margin, 8);
+
+      // Hovered-row drives row highlights on Q/K/V/O
+      const hoverActive = hover && (
+        (hover.which === 'S' && step >= 2) ||
+        (hover.which === 'A' && step >= 3) ||
+        (hover.which === 'O' && step >= 4)
+      );
+      const hRowQ = hoverActive ? (hover.which === 'O' ? hover.i : hover.i) : null;
+      const hRowK = hoverActive && (hover.which === 'S' || hover.which === 'A') ? hover.j : null;
+      const hRowV = hoverActive && hover.which === 'O' ? null : null; // V row tied to softmax weight; shown via arrows below
+
+      // ── Tokens (X) ──
+      const xAlpha = step === 0 ? 1 : 1;
+      drawTokens(layout.tokens, step === 0, xAlpha);
+      drawBoxLabel(layout.tokens, 'X · tokens', '[N=' + N + ', d]', step === 0, 1);
+
+      // ── Q, K, V ──
+      if (step >= 1) {
+        const a = step === 1 ? Math.max(0.2, t) : 1;
+        drawProjection(Q, layout.Q, hRowQ, step === 1, a);
+        drawBoxLabel(layout.Q, 'Q', '[N, dₖ=' + D_K + ']', step === 1, a);
+        drawProjection(K, layout.K, hRowK, step === 1, a);
+        drawBoxLabel(layout.K, 'K', '[N, dₖ=' + D_K + ']', step === 1, a);
+        drawProjection(V, layout.V, hoverActive && hover.which === 'O' ? null : null, step === 1, a);
+        drawBoxLabel(layout.V, 'V', '[N, dᵥ=' + D_V + ']', step === 1, a);
+      }
+
+      // tokens → projection arrows (one per Q/K/V), label each with its weight
+      const f1 = step === 0 ? t : (step >= 1 ? 1 : 0);
+      const txEnd = layout.tokens.x + layout.tokens.w;
+      flowArrow(txEnd + 2, yMid - 18, layout.Q.x - 4, yMid - 18, 'W_Q', f1, step === 1);
+      flowArrow(txEnd + 2, yMid,      layout.Q.x - 4, yMid,      'W_K', f1, step === 1);
+      flowArrow(txEnd + 2, yMid + 18, layout.Q.x - 4, yMid + 18, 'W_V', f1, step === 1);
+
+      // ── S = Q Kᵀ / √dₖ ──
+      if (step >= 2) {
+        const a = step === 2 ? Math.max(0.2, t) : 1;
+        drawMatrix(S, layout.S, 'raw', step === 2, a);
+        drawBoxLabel(layout.S, 'S = Q Kᵀ / √dₖ', '[N, N]', step === 2, a);
+      }
+      // arrows from Q+K → S
+      const f2 = step === 1 ? t : (step >= 2 ? 1 : 0);
+      flowArrow(layout.V.x + layout.V.w + 4, yMid - 8, layout.S.x - 4, yMid - 8, 'Q · Kᵀ', f2, step === 2);
+
+      // ── α = softmax(S) ──
+      if (step >= 3) {
+        const a = step === 3 ? Math.max(0.2, t) : 1;
+        drawMatrix(A, layout.A, 'prob', step === 3, a);
+        drawBoxLabel(layout.A, 'α = softmax(S)', '[N, N], rows sum to 1', step === 3, a);
+      }
+      const f3 = step === 2 ? t : (step >= 3 ? 1 : 0);
+      flowArrow(layout.S.x + layout.S.w + 4, yMid, layout.A.x - 4, yMid, 'softmax/row', f3, step === 3);
+
+      // ── output = α V ──
+      if (step >= 4) {
+        const a = step === 4 ? Math.max(0.2, t) : 1;
+        const hRowO = hoverActive && hover.which === 'O' ? hover.i : null;
+        drawOutput(layout.O, hRowO, step === 4, a);
+        drawBoxLabel(layout.O, 'output = α V', '[N, dᵥ]', step === 4, a);
+      }
+      const f4 = step === 3 ? t : (step >= 4 ? 1 : 0);
+      flowArrow(layout.A.x + layout.A.w + 4, yMid, layout.O.x - 4, yMid, '× V', f4, step === 4);
+
+      // ── Hover overlay: connect the highlighted S/α cell to the producing Q/K rows ──
+      if (hoverActive && (hover.which === 'S' || hover.which === 'A')) {
+        const { i, j } = hover;
+        const sBlock = hover.which === 'S' ? layout.S : layout.A;
+        const cellW = sBlock.w / N;
+        const cellH = sBlock.h / N;
+        const cellCx = sBlock.x + j * cellW + cellW / 2;
+        const cellCy = sBlock.y + i * cellH + cellH / 2;
+        const qRowY = layout.Q.y + (i + 0.5) * (layout.Q.h / N);
+        const kRowY = layout.K.y + (j + 0.5) * (layout.K.h / N);
+        // Highlight the picked cell first
+        ctx.strokeStyle = colors.accent;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(sBlock.x + j * cellW - 1, sBlock.y + i * cellH - 1, cellW + 2, cellH + 2);
+        // Connector lines Q[i] → cell, K[j] → cell
+        ctx.strokeStyle = colors.accent;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(layout.Q.x + layout.Q.w + 2, qRowY);
+        ctx.lineTo(cellCx - 4, cellCy);
+        ctx.moveTo(layout.K.x + layout.K.w + 2, kRowY);
+        ctx.lineTo(cellCx - 4, cellCy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Annotation
+        const expr = hover.which === 'S'
+          ? 'S[' + i + ',' + j + '] = Q[' + i + ']·K[' + j + ']/√dₖ = ' + S[i][j].toFixed(2)
+          : 'α[' + i + ',' + j + '] = softmax(S[' + i + ',·])[' + j + '] = ' + A[i][j].toFixed(2);
+        ctx.fillStyle = colors.accent;
+        ctx.font = '600 11px ui-monospace, monospace';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText(expr, layout.S.x - 2, layout.S.y - 30);
+      } else if (hoverActive && hover.which === 'O') {
+        const { i } = hover;
+        // Connect each V row j to output row i, line opacity ∝ α[i][j]
+        const outRowY = layout.O.y + (i + 0.5) * (layout.O.h / N);
+        ctx.strokeStyle = colors.accent;
+        ctx.setLineDash([3, 3]);
+        for (let j = 0; j < N; j++) {
+          ctx.globalAlpha = 0.2 + 0.8 * A[i][j];
+          ctx.lineWidth = 0.5 + 2 * A[i][j];
+          const vRowY = layout.V.y + (j + 0.5) * (layout.V.h / N);
+          ctx.beginPath();
+          ctx.moveTo(layout.V.x + layout.V.w + 2, vRowY);
+          ctx.lineTo(layout.O.x - 2, outRowY);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+        ctx.setLineDash([]);
+        ctx.fillStyle = colors.accent;
+        ctx.font = '600 11px ui-monospace, monospace';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        const weights = A[i].map((v, j) => '' + v.toFixed(2)).join('  ');
+        ctx.fillText('out[' + i + '] = Σⱼ α[' + i + ',j] · V[j]  ·  α[' + i + '] = (' + weights + ')', layout.S.x - 2, layout.S.y - 30);
+      }
+
+      // ── In-canvas stage banner ──
+      const banner = 'stage ' + (step + 1) + '/' + totalSteps + ' · ' + stageNames[step];
+      ctx.font = '600 11px ui-monospace, monospace';
+      const bw = Math.min(scene.w - margin * 2, ctx.measureText(banner).width + 16);
+      const bh = 22;
+      const bx = scene.w - margin - bw;
+      const by = scene.h - 28;
+      ctx.fillStyle = colors.accentSoft;
+      ctx.strokeStyle = colors.accent;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      const br = 6;
+      ctx.moveTo(bx + br, by);
+      ctx.lineTo(bx + bw - br, by);
+      ctx.quadraticCurveTo(bx + bw, by, bx + bw, by + br);
+      ctx.lineTo(bx + bw, by + bh - br);
+      ctx.quadraticCurveTo(bx + bw, by + bh, bx + bw - br, by + bh);
+      ctx.lineTo(bx + br, by + bh);
+      ctx.quadraticCurveTo(bx, by + bh, bx, by + bh - br);
+      ctx.lineTo(bx, by + br);
+      ctx.quadraticCurveTo(bx, by, bx + br, by);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = colors.accent;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(banner, bx + bw / 2, by + bh / 2);
+
+      // Footer hint
+      ctx.fillStyle = colors.faint;
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(step >= 2
+        ? 'hover an S or α cell to see which Q and K rows produced it · hover an output row to see its α weights over V'
+        : 'play / scrub / arrow keys · zoom with wheel · drag to pan',
+        margin, scene.h - 8);
+
+      // Sync chrome
+      dots.forEach((d, i) => {
+        d.classList.toggle('active', i === step);
+        d.classList.toggle('passed', i < step);
+      });
+      stageReadout.textContent = banner;
+      updateScrub();
+    };
+
+    // ── Stepping / playback ──
+    const setStep = (s) => {
+      step = Math.max(0, Math.min(totalSteps - 1, s));
+      prog = 0;
+      requestRedraw();
+    };
+    const setPlaying = (p) => {
+      playing = p;
+      const btn = wrap.querySelector('[data-act="play"]');
+      if (btn) btn.textContent = playing ? '❚❚ pause' : '▶ play';
+      if (playing) { lastTs = 0; requestAnimationFrame(tick); }
+    };
+    const tick = (ts) => {
+      if (!playing) return;
+      if (!lastTs) lastTs = ts;
+      const dt = ts - lastTs;
+      lastTs = ts;
+      prog += (dt * speedMul) / stepDur;
+      if (prog >= 1) {
+        prog = 0;
+        if (step + 1 >= totalSteps) { setPlaying(false); requestRedraw(); return; }
+        step += 1;
+      }
+      requestRedraw();
+      requestAnimationFrame(tick);
+    };
+
+    wrap.querySelectorAll('button[data-act]').forEach((b) => b.addEventListener('click', () => {
+      const k = b.dataset.act;
+      if (k === 'prev') setStep(step - 1);
+      else if (k === 'next') setStep(step + 1);
+      else if (k === 'reset') { setStep(0); setPlaying(false); }
+      else if (k === 'play') setPlaying(!playing);
+    }));
+    dots.forEach((d, i) => d.addEventListener('click', () => setStep(i)));
+
+    if (spdGroup) {
+      spdGroup.querySelectorAll('button[data-spd]').forEach((b) => b.addEventListener('click', () => {
+        speedMul = parseFloat(b.dataset.spd);
+        spdGroup.querySelectorAll('button').forEach((o) => o.classList.toggle('active', o === b));
+      }));
+    }
+
+    if (scrub) {
+      scrub.addEventListener('input', () => {
+        const frac = parseFloat(scrub.value) / 1000;
+        const pos = frac * totalSteps;
+        const newStep = Math.min(totalSteps - 1, Math.floor(pos));
+        const newProg = Math.min(1, pos - newStep);
+        step = newStep;
+        prog = newProg;
+        if (playing) setPlaying(false);
+        requestRedraw();
+      });
+    }
+
+    if (figure) {
+      figure.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+        if (e.key === 'ArrowLeft') { setStep(step - 1); e.preventDefault(); }
+        else if (e.key === 'ArrowRight') { setStep(step + 1); e.preventDefault(); }
+        else if (e.key === ' ' || e.key === 'Spacebar') { setPlaying(!playing); e.preventDefault(); }
+      });
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && playing) setPlaying(false);
+    });
+
+    // ── Zoom + pan + hover ──
+    if (zoomGroup) {
+      zoomGroup.querySelectorAll('button[data-zoom]').forEach((b) => b.addEventListener('click', () => {
+        const k = b.dataset.zoom;
+        if (k === '+') zoom = Math.min(maxZoom, zoom * 1.25);
+        else if (k === '-') zoom = Math.max(minZoom, zoom / 1.25);
+        else { zoom = 1; panX = 0; panY = 0; }
+        requestRedraw();
+      }));
+    }
+    let panning = false;
+    let panStart = null;
+    let didPan = false;
+    c.addEventListener('pointerdown', (e) => {
+      panning = true;
+      didPan = false;
+      panStart = { x: e.clientX, y: e.clientY, px: panX, py: panY };
+      c.setPointerCapture?.(e.pointerId);
+      c.style.cursor = 'grabbing';
+    });
+    c.addEventListener('pointermove', (e) => {
+      if (panning) {
+        const dx = e.clientX - panStart.x;
+        const dy = e.clientY - panStart.y;
+        if (Math.abs(dx) + Math.abs(dy) > 4) didPan = true;
+        panX = panStart.px + dx;
+        panY = panStart.py + dy;
+        requestRedraw();
+        return;
+      }
+      // Hover hit-test in scene coords
+      const p = clientToScene(e.clientX, e.clientY);
+      const h = hitTest(p.x, p.y);
+      const same = (a, b) => a === b || (a && b && a.which === b.which && a.i === b.i && a.j === b.j);
+      if (!same(h, hover)) {
+        hover = h;
+        requestRedraw();
+      }
+    });
+    const endPan = (e) => {
+      panning = false;
+      c.style.cursor = 'grab';
+      try { c.releasePointerCapture?.(e.pointerId); } catch {}
+    };
+    c.addEventListener('pointerup', endPan);
+    c.addEventListener('pointercancel', endPan);
+    c.addEventListener('pointerleave', () => { if (hover) { hover = null; requestRedraw(); } });
+    c.style.cursor = 'grab';
+    c.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const f = e.deltaY > 0 ? 0.9 : 1.1;
+      zoom = Math.max(minZoom, Math.min(maxZoom, zoom * f));
+      requestRedraw();
+    }, { passive: false });
+
+    const ro = new ResizeObserver(() => { fit(); requestRedraw(); });
+    ro.observe(c);
+    const io = new IntersectionObserver((entries) => {
+      const was = visible;
+      visible = entries[0].isIntersecting;
+      if (visible && !was) { fit(); draw(); }
+    }, { rootMargin: '120px' });
+    io.observe(c);
+  };
+
+  setup();
+  document.addEventListener('astro:page-load', setup);
+  document.addEventListener('astro:after-swap', setup);
+})();
+</script>
+</content>
+</invoke>

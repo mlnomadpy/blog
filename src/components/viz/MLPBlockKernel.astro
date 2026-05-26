@@ -1,0 +1,557 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 360 } = Astro.props;
+const id = `mbk-${Math.random().toString(36).slice(2, 9)}`;
+---
+<figure class="viz">
+  <div class="viz-controls">
+    <label>
+      kernel width σ
+      <input type="range" min="-1" max="0.2" step="0.05" value="-0.4" id={`${id}-sigma`} aria-label="kernel width sigma" />
+      <span class="readout" id={`${id}-sigma-readout`}>0.40</span>
+    </label>
+    <div class="mbk-presets" data-mbk={id}>
+      <button type="button" data-preset="reset">reset</button>
+      <button type="button" data-preset="random">randomise α</button>
+      <button type="button" data-preset="alt">alternating ±</button>
+      <button type="button" data-preset="positive">all positive</button>
+      <button type="button" data-preset="scatter">scatter W</button>
+    </div>
+    <span class="faint mbk-hint">drag x · drag a prototype to move W_u · sliders below control each readout α_u</span>
+  </div>
+  <canvas id={`${id}-c`} height={height} aria-label="MLP block as kernel expansion: prototypes, input, contributions, output"></canvas>
+  <div class="mbk-alphas" id={`${id}-alphas`}>
+    <span class="faint mbk-alphas-label">readouts α<sub>u</sub> · each is learned per-neuron and acts as a linear projection from the kernel-similarity vector to the layer output:</span>
+    <div class="mbk-alpha-grid"></div>
+  </div>
+  <div class="mbk-readout" id={`${id}-output`}>—</div>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+  .mbk-readout {
+    font-family: var(--mono);
+    font-size: 0.84rem;
+    color: var(--accent);
+    margin: 0.55rem 0 0;
+  }
+  .mbk-presets {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-left: 0.4rem;
+  }
+  .mbk-presets button {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    padding: 0.22rem 0.6rem;
+    background: var(--bg);
+    color: var(--fg-muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+  .mbk-presets button:hover { color: var(--accent); border-color: var(--accent); }
+  .mbk-hint { display: block; margin-top: 0.25rem; font-size: 0.78rem; }
+  .mbk-alphas { margin: 0.6rem 0 0; }
+  .mbk-alphas-label {
+    display: block;
+    font-family: var(--sans);
+    font-size: 0.82rem;
+    color: var(--fg-muted);
+    margin-bottom: 0.4rem;
+  }
+  .mbk-alpha-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.45rem 0.9rem;
+  }
+  .mbk-alpha-row {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    color: var(--fg-muted);
+  }
+  .mbk-alpha-row .mbk-name { color: var(--fg); min-width: 1.6em; }
+  .mbk-alpha-row input[type='range'] { flex: 1; min-width: 60px; }
+  .mbk-alpha-row .mbk-val { color: var(--accent); font-variant-numeric: tabular-nums; min-width: 3em; text-align: right; }
+</style>
+
+<script is:inline define:vars={{ id }}>
+(() => {
+  const setup = () => {
+    const c = document.getElementById(id + '-c');
+    if (!c || c.dataset.ready) return;
+    c.dataset.ready = '1';
+    const ctx = c.getContext('2d');
+    const slider = document.getElementById(id + '-sigma');
+    const sigmaReadout = document.getElementById(id + '-sigma-readout');
+    const outReadout = document.getElementById(id + '-output');
+
+    // Prototype set: positions in 2D input space and readout coefficients.
+    // Mix of positive and negative α to show the kernel-expansion view honestly.
+    const DEFAULT_PROTOS = [
+      { name: 'u₁', x: -1.2, y:  0.6, alpha: +0.85 },
+      { name: 'u₂', x:  1.1, y:  0.9, alpha: +1.00 },
+      { name: 'u₃', x:  0.3, y: -0.95, alpha: +0.65 },
+      { name: 'u₄', x: -0.5, y: -0.35, alpha: -0.55 },
+      { name: 'u₅', x:  1.4, y: -1.10, alpha: +0.40 },
+      { name: 'u₆', x: -1.0, y:  1.30, alpha: -0.70 },
+    ];
+    const protos = DEFAULT_PROTOS.map((p) => ({ ...p }));
+
+    let inputX = 0.4;
+    let inputY = 0.1;
+    let sigma = 0.4;
+
+    const state = { dpr: 1, w: 0, h: 0 };
+    // dragging: null | { kind: 'x' } | { kind: 'proto', idx: number }
+    let dragging = null;
+
+    let colors = readColors();
+    function readColors() {
+      const s = getComputedStyle(document.documentElement);
+      const v = (n) => s.getPropertyValue(n).trim();
+      return {
+        accent: v('--accent') || '#b3661b',
+        accentSoft: v('--accent-soft') || '#b3661b14',
+        bg: v('--bg') || '#fbfaf6',
+        bgSunken: v('--bg-sunken') || '#f1efe7',
+        fg: v('--fg') || '#1a1a1a',
+        muted: v('--fg-muted') || '#5a5f66',
+        faint: v('--fg-faint') || '#8d8d8d',
+        border: v('--border') || '#e4e1d6',
+      };
+    }
+    const themeObs = new MutationObserver(() => { colors = readColors(); requestRedraw(); });
+    themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+    const parseColor = (str) => {
+      str = str.trim();
+      if (str.startsWith('#')) {
+        let s = str.slice(1);
+        if (s.length === 3) s = s.split('').map((c) => c + c).join('');
+        return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
+      }
+      const m = str.match(/\d+/g);
+      return m ? [parseInt(m[0], 10), parseInt(m[1], 10), parseInt(m[2], 10)] : [0, 0, 0];
+    };
+
+    const fit = () => {
+      const rect = c.getBoundingClientRect();
+      const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+      state.dpr = dpr;
+      state.w = rect.width;
+      state.h = rect.height;
+      c.width = Math.round(rect.width * dpr);
+      c.height = Math.round(rect.height * dpr);
+    };
+
+    let rafScheduled = false;
+    let visible = false;
+    const requestRedraw = () => {
+      if (rafScheduled || !visible) return;
+      rafScheduled = true;
+      requestAnimationFrame(() => { rafScheduled = false; draw(); });
+    };
+
+    const K = (x1, y1, x2, y2, s) => {
+      const d2 = (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2);
+      return Math.exp(-d2 / (2 * s * s));
+    };
+
+    const draw = () => {
+      const W = state.w, H = state.h;
+      if (W === 0) return;
+      ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+
+      // Split into left (input space) and right (bars).
+      const padX = 14;
+      const leftW = Math.max(220, Math.min(W * 0.6, H - 32));
+      const leftH = H - 28;
+      const leftX = padX;
+      const leftY = 14;
+      const rightX = leftX + leftW + 18;
+      const rightW = W - rightX - padX;
+      const rightY = leftY;
+      const rightH = leftH;
+
+      // === LEFT: 2D input space ===
+      const xMin = -2, xMax = 2, yMin = -2, yMax = 2;
+      const sx = (x) => leftX + ((x - xMin) / (xMax - xMin)) * leftW;
+      const sy = (y) => leftY + ((yMax - y) / (yMax - yMin)) * leftH;
+      const xWorld = (px) => xMin + ((px - leftX) / leftW) * (xMax - xMin);
+      const yWorld = (py) => yMax - ((py - leftY) / leftH) * (yMax - yMin);
+
+      // Background heatmap of f(x) = Σ α_u K(x, W_u) over the 2D space
+      const HM = 64;
+      const vals = new Float32Array(HM * HM);
+      let absMax = 0;
+      for (let py = 0; py < HM; py++) {
+        const yw = yWorld(leftY + (py / HM) * leftH);
+        for (let px = 0; px < HM; px++) {
+          const xw = xWorld(leftX + (px / HM) * leftW);
+          let s = 0;
+          for (const p of protos) s += p.alpha * K(xw, yw, p.x, p.y, sigma);
+          vals[py * HM + px] = s;
+          const a = Math.abs(s);
+          if (a > absMax) absMax = a;
+        }
+      }
+      // Diverging colour map: bg → accent (positive), bg → muted-fg (negative).
+      const bgCol = parseColor(colors.bgSunken);
+      const posCol = parseColor(colors.accent);
+      // Use fg as the negative-saturation pole.
+      const negCol = parseColor(colors.fg);
+      const cap = absMax > 0 ? absMax : 1;
+      const img = ctx.createImageData(HM, HM);
+      for (let i = 0; i < HM * HM; i++) {
+        const v = vals[i];
+        const t = Math.min(1, Math.pow(Math.abs(v) / cap, 0.6));
+        let target = v >= 0 ? posCol : negCol;
+        const r = Math.round(bgCol[0] + (target[0] - bgCol[0]) * t);
+        const g = Math.round(bgCol[1] + (target[1] - bgCol[1]) * t);
+        const b = Math.round(bgCol[2] + (target[2] - bgCol[2]) * t);
+        const o = i * 4;
+        img.data[o] = r; img.data[o + 1] = g; img.data[o + 2] = b; img.data[o + 3] = 255;
+      }
+      const tmp = document.createElement('canvas');
+      tmp.width = HM; tmp.height = HM;
+      tmp.getContext('2d').putImageData(img, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(tmp, leftX, leftY, leftW, leftH);
+
+      // Frame
+      ctx.strokeStyle = colors.border;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(leftX, leftY, leftW, leftH);
+      // Axes
+      ctx.strokeStyle = colors.faint;
+      ctx.setLineDash([2, 4]);
+      ctx.beginPath();
+      ctx.moveTo(leftX, sy(0)); ctx.lineTo(leftX + leftW, sy(0));
+      ctx.moveTo(sx(0), leftY); ctx.lineTo(sx(0), leftY + leftH);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Lines from input x to each prototype, thickness = |α_u · K(x, W_u)|
+      const contribs = protos.map((p) => ({ p, k: K(inputX, inputY, p.x, p.y, sigma) }));
+      const ix = sx(inputX), iy = sy(inputY);
+      contribs.forEach(({ p, k }) => {
+        const v = p.alpha * k;
+        const lw = 0.5 + Math.min(4, Math.abs(v) * 4.5);
+        ctx.strokeStyle = (p.alpha >= 0 ? colors.accent : colors.fg) + 'cc';
+        ctx.lineWidth = lw;
+        ctx.beginPath();
+        ctx.moveTo(ix, iy); ctx.lineTo(sx(p.x), sy(p.y));
+        ctx.stroke();
+      });
+
+      // Prototypes
+      contribs.forEach(({ p, k }) => {
+        const px = sx(p.x), py = sy(p.y);
+        const target = p.alpha >= 0 ? posCol : negCol;
+        const tAlpha = Math.min(1, Math.abs(p.alpha));
+        ctx.fillStyle = `rgb(${Math.round(bgCol[0] + (target[0] - bgCol[0]) * tAlpha)},${Math.round(bgCol[1] + (target[1] - bgCol[1]) * tAlpha)},${Math.round(bgCol[2] + (target[2] - bgCol[2]) * tAlpha)})`;
+        ctx.strokeStyle = colors.fg;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.arc(px, py, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        // Label
+        ctx.fillStyle = colors.fg;
+        ctx.font = 'bold 11px ' + (getComputedStyle(document.body).fontFamily || 'serif');
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(' ' + p.name, px + 8, py - 6);
+        // α value
+        ctx.fillStyle = colors.muted;
+        ctx.font = '10px ui-monospace, monospace';
+        ctx.fillText(' α = ' + (p.alpha >= 0 ? '+' : '') + p.alpha.toFixed(2), px + 8, py + 7);
+      });
+
+      // Input marker
+      ctx.fillStyle = colors.bg;
+      ctx.strokeStyle = colors.fg;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(ix, iy, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = colors.fg;
+      ctx.font = 'bold 12px ' + (getComputedStyle(document.body).fontFamily || 'serif');
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(' x', ix + 8, iy);
+
+      // Title labels
+      ctx.fillStyle = colors.faint;
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText('input space (heatmap shows f(x) = Σᵤ αᵤ K(x, Wᵤ))', leftX + 4, leftY + 4);
+
+      // === RIGHT: bar chart of per-unit contributions ===
+      ctx.strokeStyle = colors.border;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(rightX, rightY, rightW, rightH);
+      ctx.fillStyle = colors.faint;
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText('contribution αᵤ · K(x, Wᵤ)   ·   thin bars: raw similarity K(x, Wᵤ)', rightX + 4, rightY + 4);
+
+      const bPadL = 28, bPadR = 8, bPadT = 26, bPadB = 28;
+      const bX = rightX + bPadL, bY = rightY + bPadT;
+      const bW = rightW - bPadL - bPadR, bH = rightH - bPadT - bPadB;
+      // Y axis from -1.2 to +1.2 (contributions normalised by max |α| ≈ 1)
+      const yMaxBar = 1.2, yMinBar = -1.2;
+      const bsy = (v) => bY + (yMaxBar - v) / (yMaxBar - yMinBar) * bH;
+      // Zero line
+      ctx.strokeStyle = colors.muted;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(bX, bsy(0)); ctx.lineTo(bX + bW, bsy(0));
+      ctx.stroke();
+      // tick marks
+      ctx.fillStyle = colors.faint;
+      ctx.font = '9px ui-monospace, monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('+1', bX - 2, bsy(1));
+      ctx.fillText('0', bX - 2, bsy(0));
+      ctx.fillText('−1', bX - 2, bsy(-1));
+
+      const n = contribs.length + 1; // last column is the sum f(x)
+      const slot = bW / n;
+      const barW = Math.min(28, slot * 0.6);
+      const simW = Math.min(10, slot * 0.22);
+      // Identify the winning neuron (largest |α · K|).
+      let winner = -1;
+      let winnerMag = 0;
+      contribs.forEach(({ p, k }, i) => {
+        const v = Math.abs(p.alpha * k);
+        if (v > winnerMag) { winnerMag = v; winner = i; }
+      });
+      let sumF = 0;
+      contribs.forEach(({ p, k }, i) => {
+        const v = p.alpha * k;
+        sumF += v;
+        const cx = bX + slot * (i + 0.5);
+        const target = v >= 0 ? colors.accent : colors.fg;
+        ctx.fillStyle = target;
+        const top = bsy(Math.min(yMaxBar, Math.max(yMinBar, v)));
+        const zeroY = bsy(0);
+        const x0 = cx - barW / 2;
+        if (v >= 0) ctx.fillRect(x0, top, barW, zeroY - top);
+        else ctx.fillRect(x0, zeroY, barW, top - zeroY);
+
+        // Thin raw-similarity bar to the right of the αK bar (always positive).
+        const kY = bsy(Math.min(yMaxBar, k));
+        const sx0 = cx + barW / 2 + 2;
+        ctx.fillStyle = colors.muted + '88';
+        ctx.fillRect(sx0, kY, simW, zeroY - kY);
+
+        // Winner badge: small triangle above the highest-magnitude bar.
+        if (i === winner && winnerMag > 0.02) {
+          const wx = cx;
+          const wy = bsy(Math.min(yMaxBar, Math.max(yMinBar, v))) + (v >= 0 ? -6 : 6);
+          ctx.fillStyle = colors.accent;
+          ctx.beginPath();
+          if (v >= 0) {
+            ctx.moveTo(wx, wy);
+            ctx.lineTo(wx - 5, wy - 8);
+            ctx.lineTo(wx + 5, wy - 8);
+          } else {
+            ctx.moveTo(wx, wy);
+            ctx.lineTo(wx - 5, wy + 8);
+            ctx.lineTo(wx + 5, wy + 8);
+          }
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        ctx.fillStyle = colors.faint;
+        ctx.font = '10px ui-monospace, monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(p.name, cx, bY + bH + 4);
+      });
+      // Sum bar (f(x))
+      const cx = bX + slot * (n - 0.5);
+      const target = sumF >= 0 ? colors.accent : colors.fg;
+      ctx.fillStyle = target;
+      const top = bsy(Math.min(yMaxBar, Math.max(yMinBar, sumF)));
+      const zeroY = bsy(0);
+      const x0 = cx - barW / 2;
+      ctx.globalAlpha = 0.55;
+      if (sumF >= 0) ctx.fillRect(x0, top, barW, zeroY - top);
+      else ctx.fillRect(x0, zeroY, barW, top - zeroY);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = target;
+      ctx.lineWidth = 1.4;
+      if (sumF >= 0) ctx.strokeRect(x0, top, barW, zeroY - top);
+      else ctx.strokeRect(x0, zeroY, barW, top - zeroY);
+      ctx.fillStyle = colors.fg;
+      ctx.font = 'bold 10px ui-monospace, monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText('f(x)', cx, bY + bH + 4);
+
+      // sigma readout
+      sigmaReadout.textContent = sigma.toFixed(2);
+      // total
+      outReadout.textContent = `at x = (${inputX.toFixed(2)}, ${inputY.toFixed(2)}) :  f(x) = Σᵤ αᵤ · K(x, Wᵤ) = ${sumF.toFixed(3)}`;
+    };
+
+    // Map screen coordinates to world coordinates in the left (input space) panel.
+    const screenToWorld = (px, py, rect) => {
+      const padX = 14;
+      const leftW = Math.max(220, Math.min(rect.width * 0.6, rect.height - 32));
+      const leftH = rect.height - 28;
+      const leftX = padX;
+      const leftY = 14;
+      if (px < leftX || px > leftX + leftW || py < leftY || py > leftY + leftH) return null;
+      const wx = Math.max(-2, Math.min(2, -2 + (px - leftX) / leftW * 4));
+      const wy = Math.max(-2, Math.min(2, 2 - (py - leftY) / leftH * 4));
+      return { wx, wy };
+    };
+
+    c.addEventListener('pointerdown', (e) => {
+      const rect = c.getBoundingClientRect();
+      const w = screenToWorld(e.clientX - rect.left, e.clientY - rect.top, rect);
+      if (!w) return;
+      // Try grabbing the nearest prototype within a small radius (in world units).
+      let nearest = -1;
+      let nearestD = Infinity;
+      for (let i = 0; i < protos.length; i++) {
+        const d = Math.hypot(w.wx - protos[i].x, w.wy - protos[i].y);
+        if (d < nearestD) { nearestD = d; nearest = i; }
+      }
+      if (nearest >= 0 && nearestD < 0.25) {
+        dragging = { kind: 'proto', idx: nearest };
+      } else {
+        dragging = { kind: 'x' };
+        inputX = w.wx; inputY = w.wy;
+      }
+      c.setPointerCapture?.(e.pointerId);
+      requestRedraw();
+    });
+    c.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      const rect = c.getBoundingClientRect();
+      const w = screenToWorld(e.clientX - rect.left, e.clientY - rect.top, rect);
+      if (!w) return;
+      if (dragging.kind === 'x') {
+        inputX = w.wx; inputY = w.wy;
+      } else if (dragging.kind === 'proto') {
+        protos[dragging.idx].x = w.wx;
+        protos[dragging.idx].y = w.wy;
+      }
+      requestRedraw();
+    });
+    c.addEventListener('pointerup', (e) => {
+      dragging = null;
+      try { c.releasePointerCapture?.(e.pointerId); } catch {}
+    });
+
+    slider.addEventListener('input', () => {
+      sigma = Math.pow(10, parseFloat(slider.value));
+      requestRedraw();
+    });
+
+    // Per-unit readout sliders: one slider per prototype, drives p.alpha.
+    const alphaWrap = document.getElementById(id + '-alphas');
+    const grid = alphaWrap.querySelector('.mbk-alpha-grid');
+    const valueRefs = [];
+    protos.forEach((p, idx) => {
+      const row = document.createElement('div');
+      row.className = 'mbk-alpha-row';
+      const name = document.createElement('span');
+      name.className = 'mbk-name';
+      name.textContent = p.name;
+      const input = document.createElement('input');
+      input.type = 'range';
+      input.min = '-1.5';
+      input.max = '1.5';
+      input.step = '0.05';
+      input.value = String(p.alpha);
+      input.setAttribute('aria-label', 'readout coefficient for ' + p.name);
+      const val = document.createElement('span');
+      val.className = 'mbk-val';
+      val.textContent = (p.alpha >= 0 ? '+' : '') + p.alpha.toFixed(2);
+      input.addEventListener('input', () => {
+        p.alpha = parseFloat(input.value);
+        val.textContent = (p.alpha >= 0 ? '+' : '') + p.alpha.toFixed(2);
+        requestRedraw();
+      });
+      row.appendChild(name);
+      row.appendChild(input);
+      row.appendChild(val);
+      grid.appendChild(row);
+      valueRefs.push({ input, val });
+    });
+
+    // Sync α slider DOM to current proto state.
+    const syncAlphaUI = () => {
+      protos.forEach((p, i) => {
+        valueRefs[i].input.value = String(p.alpha);
+        valueRefs[i].val.textContent = (p.alpha >= 0 ? '+' : '') + p.alpha.toFixed(2);
+      });
+    };
+
+    // Preset buttons.
+    const presetWrap = document.querySelector(`[data-mbk="${id}"]`);
+    presetWrap.querySelectorAll('button[data-preset]').forEach((b) => {
+      b.addEventListener('click', () => {
+        const kind = b.dataset.preset;
+        if (kind === 'reset') {
+          protos.forEach((p, i) => {
+            p.x = DEFAULT_PROTOS[i].x;
+            p.y = DEFAULT_PROTOS[i].y;
+            p.alpha = DEFAULT_PROTOS[i].alpha;
+          });
+          inputX = 0.4; inputY = 0.1;
+          sigma = 0.4;
+          slider.value = '-0.4';
+        } else if (kind === 'random') {
+          protos.forEach((p) => { p.alpha = Math.round((Math.random() * 2.6 - 1.3) * 100) / 100; });
+        } else if (kind === 'alt') {
+          protos.forEach((p, i) => { p.alpha = (i % 2 === 0 ? 1 : -1) * 0.9; });
+        } else if (kind === 'positive') {
+          protos.forEach((p) => { p.alpha = Math.abs(p.alpha) || 0.8; });
+        } else if (kind === 'scatter') {
+          // Scatter prototypes uniformly in [-1.6, 1.6]^2, keep current alphas.
+          protos.forEach((p) => {
+            p.x = (Math.random() * 3.2 - 1.6);
+            p.y = (Math.random() * 3.2 - 1.6);
+          });
+        }
+        syncAlphaUI();
+        requestRedraw();
+      });
+    });
+
+    const ro = new ResizeObserver(() => { fit(); requestRedraw(); });
+    ro.observe(c);
+    const io = new IntersectionObserver((entries) => {
+      const was = visible;
+      visible = entries[0].isIntersecting;
+      if (visible && !was) { fit(); draw(); }
+    }, { rootMargin: '120px' });
+    io.observe(c);
+  };
+
+  setup();
+  document.addEventListener('astro:page-load', setup);
+  document.addEventListener('astro:after-swap', setup);
+})();
+</script>

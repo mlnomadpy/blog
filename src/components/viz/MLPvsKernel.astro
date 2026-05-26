@@ -1,0 +1,310 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 320 } = Astro.props;
+const id = `mvk-${Math.random().toString(36).slice(2, 9)}`;
+---
+<figure class="viz">
+  <div class="viz-controls">
+    <label>
+      direction θ
+      <input type="range" min="-3.14" max="3.14" step="0.05" value="0.5" id={`${id}-theta`} aria-label="weight/prototype direction" />
+      <span class="readout" id={`${id}-theta-readout`}>29°</span>
+    </label>
+    <span class="faint">click either chart to set θ · hover to read the activation at the cursor</span>
+  </div>
+  <div class="mvk-pair">
+    <div class="mvk-cell">
+      <h4>standard MLP unit · max(0, w · x + b)</h4>
+      <canvas id={`${id}-relu`} height={height} aria-label="ReLU activation heatmap over 2D input"></canvas>
+      <div class="mvk-readout" id={`${id}-relu-readout`}>—</div>
+    </div>
+    <div class="mvk-cell">
+      <h4>kernel unit · (x · W)² / (‖x − W‖² + ε)</h4>
+      <canvas id={`${id}-yat`} height={height} aria-label="Yat kernel activation heatmap over 2D input"></canvas>
+      <div class="mvk-readout" id={`${id}-yat-readout`}>—</div>
+    </div>
+  </div>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+  .mvk-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+  .mvk-cell h4 {
+    font-family: var(--mono);
+    font-size: 0.74rem;
+    color: var(--fg-muted);
+    letter-spacing: 0.04em;
+    margin: 0 0 0.35rem;
+    font-weight: 500;
+    text-align: center;
+  }
+  .mvk-readout {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--accent);
+    margin-top: 0.35rem;
+    text-align: center;
+  }
+  @media (max-width: 720px) { .mvk-pair { grid-template-columns: 1fr; } }
+</style>
+
+<script is:inline define:vars={{ id }}>
+(() => {
+  const setup = () => {
+    const cR = document.getElementById(id + '-relu');
+    const cY = document.getElementById(id + '-yat');
+    if (!cR || cR.dataset.ready) return;
+    cR.dataset.ready = '1';
+    cY.dataset.ready = '1';
+    const slider = document.getElementById(id + '-theta');
+    const readout = document.getElementById(id + '-theta-readout');
+    const reluReadout = document.getElementById(id + '-relu-readout');
+    const yatReadout = document.getElementById(id + '-yat-readout');
+
+    let theta = 0.5;
+    // Shared cursor in world coordinates; null when not hovering.
+    let cursor = null;
+    const state = { dpr: 1, w: 0, h: 0 };
+    const xMin = -2, xMax = 2, yMin = -2, yMax = 2;
+
+    let colors = readColors();
+    function readColors() {
+      const s = getComputedStyle(document.documentElement);
+      const v = (n) => s.getPropertyValue(n).trim();
+      return {
+        accent: v('--accent') || '#b3661b',
+        bg: v('--bg-sunken') || '#f1efe7',
+        fg: v('--fg') || '#1a1a1a',
+        muted: v('--fg-muted') || '#5a5f66',
+        faint: v('--fg-faint') || '#8d8d8d',
+        border: v('--border') || '#e4e1d6',
+      };
+    }
+    const themeObs = new MutationObserver(() => { colors = readColors(); requestRedraw(); });
+    themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+    const parseColor = (str) => {
+      str = str.trim();
+      if (str.startsWith('#')) {
+        let s = str.slice(1);
+        if (s.length === 3) s = s.split('').map((c) => c + c).join('');
+        return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
+      }
+      const m = str.match(/\d+/g);
+      return m ? [parseInt(m[0], 10), parseInt(m[1], 10), parseInt(m[2], 10)] : [0, 0, 0];
+    };
+
+    const fit = () => {
+      const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+      state.dpr = dpr;
+      [cR, cY].forEach((c) => {
+        const rect = c.getBoundingClientRect();
+        state.w = rect.width;
+        state.h = rect.height;
+        c.width = Math.round(rect.width * dpr);
+        c.height = Math.round(rect.height * dpr);
+      });
+    };
+
+    const drawHeat = (canvas, fn) => {
+      const ctx = canvas.getContext('2d');
+      const W = state.w, H = state.h;
+      ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+      const pad = 10;
+      const plotW = W - pad * 2;
+      const plotH = H - pad * 2;
+      const sx = (x) => pad + ((x - xMin) / (xMax - xMin)) * plotW;
+      const sy = (y) => pad + ((yMax - y) / (yMax - yMin)) * plotH;
+      const xWorld = (px) => xMin + ((px - pad) / plotW) * (xMax - xMin);
+      const yWorld = (py) => yMax - ((py - pad) / plotH) * (yMax - yMin);
+
+      const HM = 64;
+      const vals = new Float32Array(HM * HM);
+      let maxV = 0;
+      for (let py = 0; py < HM; py++) {
+        const yw = yWorld(pad + (py / HM) * plotH);
+        for (let px = 0; px < HM; px++) {
+          const xw = xWorld(pad + (px / HM) * plotW);
+          const v = fn(xw, yw);
+          vals[py * HM + px] = v;
+          if (v > maxV) maxV = v;
+        }
+      }
+      const bg = parseColor(colors.bg);
+      const accent = parseColor(colors.accent);
+      const cap = maxV > 0 ? maxV : 1;
+      const img = ctx.createImageData(HM, HM);
+      for (let i = 0; i < HM * HM; i++) {
+        const t = Math.min(1, Math.pow(Math.max(0, vals[i]) / cap, 0.55));
+        img.data[i * 4] = Math.round(bg[0] + (accent[0] - bg[0]) * t);
+        img.data[i * 4 + 1] = Math.round(bg[1] + (accent[1] - bg[1]) * t);
+        img.data[i * 4 + 2] = Math.round(bg[2] + (accent[2] - bg[2]) * t);
+        img.data[i * 4 + 3] = 255;
+      }
+      const tmp = document.createElement('canvas');
+      tmp.width = HM; tmp.height = HM;
+      tmp.getContext('2d').putImageData(img, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(tmp, pad, pad, plotW, plotH);
+      ctx.strokeStyle = colors.border;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(pad, pad, plotW, plotH);
+      // Axes
+      ctx.strokeStyle = colors.faint;
+      ctx.setLineDash([2, 4]);
+      ctx.beginPath();
+      ctx.moveTo(pad, sy(0)); ctx.lineTo(W - pad, sy(0));
+      ctx.moveTo(sx(0), pad); ctx.lineTo(sx(0), H - pad);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      return { sx, sy, pad, plotW, plotH };
+    };
+
+    let rafScheduled = false;
+    let visible = false;
+    const requestRedraw = () => {
+      if (rafScheduled || !visible) return;
+      rafScheduled = true;
+      requestAnimationFrame(() => { rafScheduled = false; draw(); });
+    };
+
+    const draw = () => {
+      const wx = Math.cos(theta);
+      const wy = Math.sin(theta);
+      // ReLU side: y = max(0, w·x + b)  with b = 0 for clarity
+      const reluFn = (x, y) => Math.max(0, wx * x + wy * y);
+      const layoutR = drawHeat(cR, reluFn);
+
+      // Yat side: prototype at unit distance along (wx, wy)
+      const Wx = wx, Wy = wy;
+      const eps = 0.05, alpha = 1;
+      const yatFn = (x, y) => {
+        const dot = x * Wx + y * Wy;
+        const d2 = (x - Wx) * (x - Wx) + (y - Wy) * (y - Wy);
+        return alpha * dot * dot / (d2 + eps);
+      };
+      const layoutY = drawHeat(cY, yatFn);
+
+      // Draw weight/prototype indicators
+      const ctxR = cR.getContext('2d');
+      ctxR.strokeStyle = colors.fg;
+      ctxR.lineWidth = 1.8;
+      ctxR.fillStyle = colors.accent;
+      // ReLU: arrow representing w from origin to (wx, wy)
+      const arrow = (ctx, layout, x0, y0, x1, y1) => {
+        const p0x = layout.sx(x0), p0y = layout.sy(y0);
+        const p1x = layout.sx(x1), p1y = layout.sy(y1);
+        ctx.beginPath();
+        ctx.moveTo(p0x, p0y); ctx.lineTo(p1x, p1y);
+        ctx.stroke();
+        const a = Math.atan2(p1y - p0y, p1x - p0x);
+        const s = 7;
+        ctx.beginPath();
+        ctx.moveTo(p1x, p1y);
+        ctx.lineTo(p1x - s * Math.cos(a - 0.4), p1y - s * Math.sin(a - 0.4));
+        ctx.lineTo(p1x - s * Math.cos(a + 0.4), p1y - s * Math.sin(a + 0.4));
+        ctx.closePath();
+        ctx.fill();
+      };
+      ctxR.strokeStyle = colors.fg;
+      ctxR.fillStyle = colors.fg;
+      arrow(ctxR, layoutR, 0, 0, wx, wy);
+      ctxR.fillStyle = colors.fg;
+      ctxR.font = 'bold 12px ' + (getComputedStyle(document.body).fontFamily || 'serif');
+      ctxR.textAlign = 'left';
+      ctxR.textBaseline = 'middle';
+      ctxR.fillText(' w', layoutR.sx(wx) + 6, layoutR.sy(wy) - 4);
+
+      // Yat: marker at prototype
+      const ctxY = cY.getContext('2d');
+      ctxY.fillStyle = colors.accent;
+      ctxY.strokeStyle = colors.fg;
+      ctxY.lineWidth = 1.5;
+      ctxY.beginPath();
+      ctxY.arc(layoutY.sx(Wx), layoutY.sy(Wy), 6, 0, Math.PI * 2);
+      ctxY.fill();
+      ctxY.stroke();
+      ctxY.fillStyle = colors.fg;
+      ctxY.font = 'bold 12px ' + (getComputedStyle(document.body).fontFamily || 'serif');
+      ctxY.textAlign = 'left';
+      ctxY.textBaseline = 'middle';
+      ctxY.fillText(' W', layoutY.sx(Wx) + 7, layoutY.sy(Wy) - 4);
+
+      // Draw cursor on both panels if hovering, and update numeric readouts.
+      if (cursor) {
+        const drawCursor = (ctx, layout, label) => {
+          const cx = layout.sx(cursor.x), cy = layout.sy(cursor.y);
+          ctx.strokeStyle = colors.fg;
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.arc(cx, cy, 4.5, 0, Math.PI * 2);
+          ctx.stroke();
+        };
+        drawCursor(ctxR, layoutR, 'r');
+        drawCursor(ctxY, layoutY, 'y');
+        const dot = cursor.x * wx + cursor.y * wy;
+        const reluVal = Math.max(0, dot);
+        const d2 = (cursor.x - wx) * (cursor.x - wx) + (cursor.y - wy) * (cursor.y - wy);
+        const yatVal = dot * dot / (d2 + 0.05);
+        reluReadout.textContent = `(x₁, x₂) = (${cursor.x.toFixed(2)}, ${cursor.y.toFixed(2)})  ·  ReLU = ${reluVal.toFixed(2)}`;
+        yatReadout.textContent  = `(x₁, x₂) = (${cursor.x.toFixed(2)}, ${cursor.y.toFixed(2)})  ·  K(x, W) = ${yatVal.toFixed(2)}`;
+      } else {
+        reluReadout.textContent = 'hover the chart for a numeric value';
+        yatReadout.textContent  = 'hover the chart for a numeric value';
+      }
+      readout.textContent = Math.round(theta * 180 / Math.PI) + '°';
+    };
+
+    const worldOf = (canvas, e) => {
+      const rect = canvas.getBoundingClientRect();
+      const pad = 10;
+      const plotW = rect.width - pad * 2;
+      const plotH = rect.height - pad * 2;
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+      return {
+        x: xMin + ((px - pad) / plotW) * (xMax - xMin),
+        y: yMax - ((py - pad) / plotH) * (yMax - yMin),
+      };
+    };
+
+    const onMove = (canvas) => (e) => {
+      const w = worldOf(canvas, e);
+      cursor = w;
+      requestRedraw();
+    };
+    const onLeave = () => { cursor = null; requestRedraw(); };
+    const onClick = (canvas) => (e) => {
+      const w = worldOf(canvas, e);
+      const r = Math.hypot(w.x, w.y);
+      if (r < 0.05) return;
+      theta = Math.atan2(w.y, w.x);
+      slider.value = theta.toFixed(2);
+      requestRedraw();
+    };
+    [cR, cY].forEach((canvas) => {
+      canvas.addEventListener('pointermove', onMove(canvas));
+      canvas.addEventListener('pointerleave', onLeave);
+      canvas.addEventListener('click', onClick(canvas));
+    });
+    slider.addEventListener('input', () => { theta = parseFloat(slider.value); requestRedraw(); });
+
+    const ro = new ResizeObserver(() => { fit(); requestRedraw(); });
+    ro.observe(cR); ro.observe(cY);
+    const io = new IntersectionObserver((entries) => {
+      const was = visible;
+      visible = entries[0].isIntersecting;
+      if (visible && !was) { fit(); draw(); }
+    }, { rootMargin: '120px' });
+    io.observe(cR);
+  };
+
+  setup();
+  document.addEventListener('astro:page-load', setup);
+  document.addEventListener('astro:after-swap', setup);
+})();
+</script>
