@@ -4,16 +4,22 @@ import BaseHead from '../components/BaseHead.astro';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 
+interface BlogPostRef { url: string; title: string; description?: string; pubDate: Date }
+
 interface Props {
   title: string;
   description?: string;
   image?: string;
-  type?: 'website' | 'article';
+  type?: 'website' | 'article' | 'profile';
   pubDate?: Date;
   updatedDate?: Date;
   tags?: string[];
+  keywords?: string[];
+  wordCount?: number;
   author?: string;
   noindex?: boolean;
+  blogPosts?: BlogPostRef[];
+  profile?: { bio?: string; knowsAbout?: string[] };
 }
 const props = Astro.props;
 ---

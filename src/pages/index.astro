@@ -1,7 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { getCollection } from 'astro:content';
-import { SITE_TITLE, SITE_DESCRIPTION } from '../consts';
+import { SITE_TITLE, SITE_DESCRIPTION, SITE_TAGLINE } from '../consts';
 
 const posts = (await getCollection('blog', ({ data }) => !data.draft))
   .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
@@ -14,11 +14,31 @@ const byYear = posts.reduce<Record<number, typeof posts>>((acc, p) => {
 const years = Object.keys(byYear).map(Number).sort((a, b) => b - a);
 const fmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: '2-digit' });
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const siteBase = (Astro.site?.toString() ?? '').replace(/\/+$/, '') + base + '/';
+
+// Blog schema for home page: top 10 most recent posts as blogPost array.
+const blogPosts = posts.slice(0, 10).map((p) => ({
+  url: `${siteBase}${p.id}/`,
+  title: p.data.title,
+  description: p.data.description,
+  pubDate: p.data.pubDate,
+}));
 ---
-<BaseLayout title={SITE_TITLE} description={SITE_DESCRIPTION}>
+<BaseLayout
+  title={SITE_TITLE}
+  description={SITE_DESCRIPTION}
+  blogPosts={blogPosts}
+>
   <section class="intro">
     <h1>{SITE_TITLE}</h1>
-    <p class="lead">{SITE_DESCRIPTION}</p>
+    <p class="lead">{SITE_TAGLINE}</p>
+    <p class="intro-blurb">
+      Long-form pieces on <strong>machine learning interpretability</strong>,
+      <strong>kernel methods</strong>, <strong>contrastive learning</strong>,
+      and the <strong>geometry of neural network representations</strong>.
+      Most posts ship with interactive visualisations you can play with in the
+      browser.
+    </p>
   </section>
 
   <section class="archive">
@@ -48,6 +68,14 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 </BaseLayout>
 
 <style>
+  .intro-blurb {
+    margin: 0.85rem 0 0.5rem;
+    font-size: 0.96rem;
+    line-height: 1.6;
+    color: var(--fg-muted);
+    max-width: 56ch;
+  }
+  .intro-blurb strong { color: var(--fg); font-weight: 600; }
   .archive { margin-top: 1.5rem; }
   .archive-year { margin-bottom: 1.75rem; }
   .archive-year h2 {

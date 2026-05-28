@@ -1,6 +1,25 @@
 export const SITE_TITLE = 'Records of the !mmortal Data Scientist';
-export const SITE_DESCRIPTION = 'Notes on AI, math, and the long road. Live slow, die whenever.';
+export const SITE_TAGLINE = 'Notes on AI, math, and the long road. Live slow, die whenever.';
+// Long-form description used in <meta name="description">, OG, and JSON-LD on
+// the homepage. Keywords here are what SERPs index for the root URL.
+export const SITE_DESCRIPTION =
+  "Machine learning research notes by Taha Bouhsine — neural network interpretability, kernel methods, contrastive learning, attention mechanisms, RKHS, and transformer architectures. Long-form pieces with interactive visualisations.";
 export const SITE_AUTHOR = 'Taha Bouhsine';
+export const SITE_AUTHOR_URL = 'https://github.com/mlnomadpy';
+export const SITE_AUTHOR_JOB_TITLE = 'Machine Learning Researcher';
+
+// sameAs URLs — used in JSON-LD Person/Publisher schema and as <link rel="me">
+// for IndieWeb / Mastodon verification and Google's author-discovery signal.
+export const SITE_SAMEAS: readonly string[] = [
+  'https://github.com/mlnomadpy',
+  'https://www.linkedin.com/in/tahabsn/',
+  'https://scholar.google.com/citations?user=IsBjb3EAAAAJ',
+  'https://g.dev/tahabsn',
+];
+
+// Default Open Graph image, served from public/ at the site base path.
+// Relative to BASE_URL — see src/components/BaseHead.astro for the URL build.
+export const SITE_OG_IMAGE = 'og-default.svg';
 
 // giscus — comments via GitHub Discussions on mlnomadpy/blog.
 // IDs fetched via the GitHub GraphQL API; "Announcements" category chosen

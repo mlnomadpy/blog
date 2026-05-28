@@ -7,18 +7,43 @@ export async function getStaticPaths() {
   const posts = (await getCollection('blog', ({ data }) => !data.draft))
     .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
 
-  return posts.map((post, i) => ({
-    params: { slug: post.id },
-    props: {
-      post,
-      // sorted desc → i+1 is older (previous in time), i-1 is newer (next in time)
-      next: i > 0 ? { slug: posts[i - 1].id, title: posts[i - 1].data.title } : undefined,
-      prev: i < posts.length - 1 ? { slug: posts[i + 1].id, title: posts[i + 1].data.title } : undefined,
-    },
-  }));
+  return posts.map((post, i) => {
+    // Score every other post by tag overlap with this one, then prefer the
+    // most-recent at the same score. Top 3 surface as Related posts.
+    const myTags = new Set((post.data.tags ?? []).map((t) => t.toLowerCase()));
+    const related = posts
+      .filter((p) => p.id !== post.id)
+      .map((p) => ({
+        post: p,
+        score: (p.data.tags ?? []).reduce((n, t) => n + (myTags.has(t.toLowerCase()) ? 1 : 0), 0),
+      }))
+      .filter((x) => x.score > 0)
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return b.post.data.pubDate.valueOf() - a.post.data.pubDate.valueOf();
+      })
+      .slice(0, 3)
+      .map((x) => ({
+        slug: x.post.id,
+        title: x.post.data.title,
+        description: x.post.data.description,
+        pubDate: x.post.data.pubDate,
+      }));
+
+    return {
+      params: { slug: post.id },
+      props: {
+        post,
+        // sorted desc → i+1 is older (previous in time), i-1 is newer (next in time)
+        next: i > 0 ? { slug: posts[i - 1].id, title: posts[i - 1].data.title } : undefined,
+        prev: i < posts.length - 1 ? { slug: posts[i + 1].id, title: posts[i + 1].data.title } : undefined,
+        related,
+      },
+    };
+  });
 }
 
-const { post, prev, next } = Astro.props;
+const { post, prev, next, related } = Astro.props;
 const { Content } = await render(post);
 const stats = readingTime(post.body ?? '');
 ---
@@ -28,10 +53,13 @@ const stats = readingTime(post.body ?? '');
   pubDate={post.data.pubDate}
   updatedDate={post.data.updatedDate}
   tags={post.data.tags}
+  keywords={post.data.keywords}
   heroImage={post.data.heroImage}
   readingTimeText={stats.text}
+  wordCount={stats.words}
   prev={prev}
   next={next}
+  related={related}
 >
   <Content />
 </PostLayout>

@@ -1,8 +1,24 @@
 ---
-title: Opposite Is Not Different
-description: The cosine-similarity scale has three landmarks, not two. Maximum difference is orthogonality, not opposition — and the most influential contrastive losses spent years optimizing for the wrong target.
+title: 'Opposite Is Not Different: The Cosine-Similarity Bug in CLIP and Contrastive Learning'
+description: Maximum difference between two unit vectors is orthogonality (cos = 0), not opposition (cos = −1). CLIP, InfoNCE, and SimCLR have been optimizing for the wrong target for years.
 pubDate: 2026-02-22
-tags: [ml, geometry, contrastive, embeddings]
+tags: [ml, geometry, contrastive, embeddings, cosine-similarity, clip, siglip, infonce, orthogonality, simplex-packing]
+keywords:
+  - cosine similarity
+  - contrastive learning
+  - CLIP
+  - SigLIP
+  - orthogonality
+  - simplex packing
+  - InfoNCE
+  - NT-Xent
+  - SimCLR
+  - SupCon
+  - embedding geometry
+  - cosine loss
+  - unit hypersphere embeddings
+  - negative sampling contrastive
+  - modality gap
 ---
 import OppositionVsOrthogonality from '../../components/viz/OppositionVsOrthogonality.astro';
 import SharedInfoCurve from '../../components/viz/SharedInfoCurve.astro';
