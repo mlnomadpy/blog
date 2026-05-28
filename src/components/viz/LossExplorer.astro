@@ -1,0 +1,993 @@
+---
+interface Props {
+  loss: 'hadsell' | 'triplet' | 'infonce' | 'clip' | 'supcon' | 'siglip' | 'alignunif' | 'orthog';
+  preset?: string;
+  dataset?: string;
+  caption?: string;
+  height?: number;
+}
+const { loss, preset = 'default', dataset = 'moons', caption, height = 360 } = Astro.props;
+const id = `le-${Math.random().toString(36).slice(2, 9)}`;
+---
+<figure class="viz le-figure" tabindex="0">
+  <div class="viz-cell">
+    <div class="le-controls">
+      <div class="le-row">
+        <label>preset
+          <select id={`${id}-preset`} data-init={preset}></select>
+        </label>
+        <label>data
+          <select id={`${id}-data`}>
+            <option value="moons">two-moons</option>
+            <option value="blobs">overlapping blobs</option>
+            <option value="rings">concentric rings</option>
+            <option value="four">four classes</option>
+            <option value="eight">eight classes</option>
+            <option value="spiral">two spirals</option>
+            <option value="imbalanced">imbalanced moons (80/20)</option>
+            <option value="noisy">noisy moons (10% flip)</option>
+            <option value="random">random (2 classes, no spatial signal)</option>
+            <option value="random-4">random (4 classes, no spatial signal)</option>
+          </select>
+        </label>
+        <label class="le-slider">
+          <span id={`${id}-paramName`}>τ</span>
+          <input type="range" id={`${id}-param`} step="0.01" />
+          <span class="le-paramval" id={`${id}-paramval`}></span>
+        </label>
+      </div>
+      <div class="le-row">
+        <button data-act="play" id={`${id}-play`}>▶ Play</button>
+        <button data-act="step" id={`${id}-step`}>Step</button>
+        <button data-act="reset" id={`${id}-reset`}>Reset</button>
+        <div class="anim-spd-group">
+          <span>speed</span>
+          <button data-spd="0.5">0.5×</button>
+          <button data-spd="1" class="active">1×</button>
+          <button data-spd="2">2×</button>
+          <button data-spd="4">4×</button>
+        </div>
+        <span class="anim-stage-readout" id={`${id}-iter`}>iter 0 · acc 0%</span>
+      </div>
+    </div>
+    <div class="le-grid">
+      <canvas id={`${id}-scatter`} height={height} class="le-scatter" aria-label="2D embedding scatter"></canvas>
+      <canvas id={`${id}-plots`} height={height} class="le-plots" aria-label="Loss and accuracy plots"></canvas>
+    </div>
+    <div class="le-annotation" id={`${id}-ann`}></div>
+    {caption && <figcaption>{caption}</figcaption>}
+  </div>
+</figure>
+
+<script is:inline define:vars={{ id, loss, preset, dataset }}>
+(() => {
+  // ─── colors ──────────────────────────────────────────────────────────
+  const readColors = () => {
+    const s = getComputedStyle(document.documentElement);
+    const v = (n, f) => (s.getPropertyValue(n).trim() || f);
+    return {
+      accent: v('--accent', '#b3661b'),
+      muted: v('--fg-muted', '#5a5f66'),
+      faint: v('--fg-faint', '#8d8d8d'),
+      border: v('--border', '#e4e1d6'),
+      fg: v('--fg', '#1a1a1a'),
+      bg: v('--bg', '#fbf8f1'),
+      cellBg: v('--bg-elev', '#fff'),
+    };
+  };
+  let colors = readColors();
+  const classPalette = ['#b3661b', '#4a7fb3', '#3a8f5e', '#9a4f9c', '#c14b4b', '#5f8da8', '#c08b3c', '#7160a8'];
+  const classColor = (y, alpha = 1) => {
+    const hex = classPalette[y % classPalette.length];
+    const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
+
+  // ─── RNG ─────────────────────────────────────────────────────────────
+  const mulberry32 = (seed) => {
+    let s = seed >>> 0;
+    return () => {
+      s |= 0; s = (s + 0x6D2B79F5) | 0;
+      let t = Math.imul(s ^ (s >>> 15), 1 | s);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  };
+  const randn = (rng) => {
+    let u = 0, v = 0;
+    while (u === 0) u = rng();
+    while (v === 0) v = rng();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  };
+
+  // ─── datasets ────────────────────────────────────────────────────────
+  const makeData = (kind, n, seed) => {
+    const rng = mulberry32(seed);
+    const pts = [], labels = [];
+    if (kind === 'moons') {
+      const half = Math.floor(n / 2);
+      for (let i = 0; i < half; i++) {
+        const t = Math.PI * (i / Math.max(1, half - 1));
+        pts.push([Math.cos(t) + randn(rng) * 0.07, Math.sin(t) + randn(rng) * 0.07]);
+        labels.push(0);
+      }
+      for (let i = 0; i < n - half; i++) {
+        const t = Math.PI * (i / Math.max(1, n - half - 1));
+        pts.push([1 - Math.cos(t) + randn(rng) * 0.07, 0.4 - Math.sin(t) + randn(rng) * 0.07]);
+        labels.push(1);
+      }
+    } else if (kind === 'blobs') {
+      const half = Math.floor(n / 2);
+      for (let i = 0; i < half; i++) { pts.push([0.35 + randn(rng) * 0.45, 0.0 + randn(rng) * 0.45]); labels.push(0); }
+      for (let i = 0; i < n - half; i++) { pts.push([-0.35 + randn(rng) * 0.45, 0.0 + randn(rng) * 0.45]); labels.push(1); }
+    } else if (kind === 'rings') {
+      const half = Math.floor(n / 2);
+      for (let i = 0; i < half; i++) {
+        const t = 2 * Math.PI * rng();
+        pts.push([0.4 * Math.cos(t) + randn(rng) * 0.05, 0.4 * Math.sin(t) + randn(rng) * 0.05]);
+        labels.push(0);
+      }
+      for (let i = 0; i < n - half; i++) {
+        const t = 2 * Math.PI * rng();
+        pts.push([1.1 * Math.cos(t) + randn(rng) * 0.05, 1.1 * Math.sin(t) + randn(rng) * 0.05]);
+        labels.push(1);
+      }
+    } else if (kind === 'four') {
+      const per = Math.floor(n / 4);
+      const centers = [[0.6, 0.6], [-0.6, 0.6], [-0.6, -0.6], [0.6, -0.6]];
+      for (let c = 0; c < 4; c++) {
+        const k = (c === 3) ? (n - 3 * per) : per;
+        for (let i = 0; i < k; i++) { pts.push([centers[c][0] + randn(rng) * 0.18, centers[c][1] + randn(rng) * 0.18]); labels.push(c); }
+      }
+    } else if (kind === 'eight') {
+      const per = Math.floor(n / 8);
+      for (let c = 0; c < 8; c++) {
+        const k = (c === 7) ? (n - 7 * per) : per;
+        const a = (c / 8) * 2 * Math.PI;
+        const cx = 0.9 * Math.cos(a), cy = 0.9 * Math.sin(a);
+        for (let i = 0; i < k; i++) { pts.push([cx + randn(rng) * 0.12, cy + randn(rng) * 0.12]); labels.push(c); }
+      }
+    } else if (kind === 'spiral') {
+      const half = Math.floor(n / 2);
+      for (let i = 0; i < half; i++) {
+        const t = 0.2 + 2.5 * (i / Math.max(1, half - 1));
+        const r = 0.15 * t;
+        pts.push([r * Math.cos(t * 2) + randn(rng) * 0.04, r * Math.sin(t * 2) + randn(rng) * 0.04]);
+        labels.push(0);
+      }
+      for (let i = 0; i < n - half; i++) {
+        const t = 0.2 + 2.5 * (i / Math.max(1, n - half - 1));
+        const r = 0.15 * t;
+        pts.push([-r * Math.cos(t * 2) + randn(rng) * 0.04, -r * Math.sin(t * 2) + randn(rng) * 0.04]);
+        labels.push(1);
+      }
+    } else if (kind === 'imbalanced') {
+      const minority = Math.floor(n * 0.2);
+      for (let i = 0; i < n - minority; i++) {
+        const t = Math.PI * (i / Math.max(1, n - minority - 1));
+        pts.push([Math.cos(t) + randn(rng) * 0.07, Math.sin(t) + randn(rng) * 0.07]);
+        labels.push(0);
+      }
+      for (let i = 0; i < minority; i++) {
+        const t = Math.PI * (i / Math.max(1, minority - 1));
+        pts.push([1 - Math.cos(t) + randn(rng) * 0.07, 0.4 - Math.sin(t) + randn(rng) * 0.07]);
+        labels.push(1);
+      }
+    } else if (kind === 'noisy') {
+      const half = Math.floor(n / 2);
+      for (let i = 0; i < half; i++) {
+        const t = Math.PI * (i / Math.max(1, half - 1));
+        pts.push([Math.cos(t) + randn(rng) * 0.07, Math.sin(t) + randn(rng) * 0.07]);
+        labels.push(rng() < 0.1 ? 1 : 0);
+      }
+      for (let i = 0; i < n - half; i++) {
+        const t = Math.PI * (i / Math.max(1, n - half - 1));
+        pts.push([1 - Math.cos(t) + randn(rng) * 0.07, 0.4 - Math.sin(t) + randn(rng) * 0.07]);
+        labels.push(rng() < 0.1 ? 0 : 1);
+      }
+    } else if (kind === 'random' || kind === 'random-4') {
+      const k = (kind === 'random-4') ? 4 : 2;
+      for (let i = 0; i < n; i++) {
+        pts.push([(rng() * 2 - 1) * 1.5, (rng() * 2 - 1) * 1.5]);
+        labels.push(i % k); // balanced label assignment, then shuffled
+      }
+      for (let i = n - 1; i > 0; i--) {
+        const j = Math.floor(rng() * (i + 1));
+        [labels[i], labels[j]] = [labels[j], labels[i]];
+      }
+    }
+    return { pts, labels };
+  };
+
+  // ─── helpers ─────────────────────────────────────────────────────────
+  const projectSphere = (pts) => {
+    for (let i = 0; i < pts.length; i++) {
+      const n = Math.hypot(pts[i][0], pts[i][1]) + 1e-9;
+      pts[i][0] /= n; pts[i][1] /= n;
+    }
+  };
+  const applyGrad = (pts, grad, lr, n) => {
+    for (let i = 0; i < pts.length; i++) {
+      pts[i][0] -= lr * grad[i][0] / n;
+      pts[i][1] -= lr * grad[i][1] / n;
+    }
+  };
+  const newGrad = (n) => { const g = new Array(n); for (let i = 0; i < n; i++) g[i] = [0, 0]; return g; };
+
+  // ─── losses (parametrised) ──────────────────────────────────────────
+  const stepHadsell = (pts, labels, lr, rng, p) => {
+    const n = pts.length, margin = p.margin;
+    const grad = newGrad(n);
+    let lp = 0, ln = 0, cp = 0, cn = 0;
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const dx = pts[i][0] - pts[j][0], dy = pts[i][1] - pts[j][1];
+        const d2 = dx * dx + dy * dy;
+        const d = Math.sqrt(d2 + 1e-9);
+        if (labels[i] === labels[j]) {
+          lp += d2; cp++;
+          grad[i][0] += 2 * dx; grad[i][1] += 2 * dy;
+          grad[j][0] -= 2 * dx; grad[j][1] -= 2 * dy;
+        } else if (d < margin) {
+          ln += (margin - d) * (margin - d); cn++;
+          const f = -2 * (margin - d) / d;
+          grad[i][0] += f * dx; grad[i][1] += f * dy;
+          grad[j][0] -= f * dx; grad[j][1] -= f * dy;
+        }
+      }
+    }
+    applyGrad(pts, grad, lr, n);
+    return (cp ? lp / cp : 0) + (cn ? ln / cn : 0);
+  };
+
+  const stepTriplet = (pts, labels, lr, rng, p) => {
+    const n = pts.length, margin = p.margin;
+    const grad = newGrad(n);
+    let loss = 0, cnt = 0;
+    const byClass = {};
+    for (let i = 0; i < n; i++) (byClass[labels[i]] = byClass[labels[i]] || []).push(i);
+    for (let i = 0; i < n; i++) {
+      const pos = byClass[labels[i]].filter((j) => j !== i);
+      const neg = []; for (const k in byClass) if (+k !== labels[i]) for (const j of byClass[k]) neg.push(j);
+      if (!pos.length || !neg.length) continue;
+      const pp = pos[Math.floor(rng() * pos.length)];
+      const nd = neg[Math.floor(rng() * neg.length)];
+      const dap = (pts[i][0] - pts[pp][0]) ** 2 + (pts[i][1] - pts[pp][1]) ** 2;
+      const dan = (pts[i][0] - pts[nd][0]) ** 2 + (pts[i][1] - pts[nd][1]) ** 2;
+      const slack = dap - dan + margin;
+      if (slack > 0) {
+        loss += slack; cnt++;
+        grad[i][0] += 2 * (pts[nd][0] - pts[pp][0]); grad[i][1] += 2 * (pts[nd][1] - pts[pp][1]);
+        grad[pp][0] -= 2 * (pts[i][0] - pts[pp][0]); grad[pp][1] -= 2 * (pts[i][1] - pts[pp][1]);
+        grad[nd][0] += 2 * (pts[i][0] - pts[nd][0]); grad[nd][1] += 2 * (pts[i][1] - pts[nd][1]);
+      }
+    }
+    applyGrad(pts, grad, lr, n);
+    return cnt ? loss / cnt : 0;
+  };
+
+  const stepInfoNCE = (pts, labels, lr, rng, p) => {
+    const n = pts.length, tau = p.tau;
+    const grad = newGrad(n);
+    projectSphere(pts);
+    let loss = 0;
+    const sim = []; for (let i = 0; i < n; i++) { sim[i] = []; for (let j = 0; j < n; j++) sim[i][j] = (pts[i][0] * pts[j][0] + pts[i][1] * pts[j][1]) / tau; }
+    const byClass = {};
+    for (let i = 0; i < n; i++) (byClass[labels[i]] = byClass[labels[i]] || []).push(i);
+    for (let i = 0; i < n; i++) {
+      const pos = byClass[labels[i]].filter((j) => j !== i);
+      if (!pos.length) continue;
+      const pp = pos[Math.floor(rng() * pos.length)];
+      let mx = -Infinity; for (let j = 0; j < n; j++) if (j !== i && sim[i][j] > mx) mx = sim[i][j];
+      let denom = 0; const w = new Array(n).fill(0);
+      for (let j = 0; j < n; j++) if (j !== i) { w[j] = Math.exp(sim[i][j] - mx); denom += w[j]; }
+      loss += -(sim[i][pp] - mx - Math.log(denom));
+      let gx = 0, gy = 0;
+      for (let j = 0; j < n; j++) {
+        if (j === i) continue;
+        const pij = w[j] / denom;
+        gx += pij * pts[j][0]; gy += pij * pts[j][1];
+      }
+      gx -= pts[pp][0]; gy -= pts[pp][1];
+      grad[i][0] += gx / tau; grad[i][1] += gy / tau;
+    }
+    applyGrad(pts, grad, lr, n);
+    projectSphere(pts);
+    return loss / n;
+  };
+
+  const stepSupCon = (pts, labels, lr, rng, p) => {
+    const n = pts.length, tau = p.tau;
+    const grad = newGrad(n);
+    projectSphere(pts);
+    let loss = 0;
+    const sim = []; for (let i = 0; i < n; i++) { sim[i] = []; for (let j = 0; j < n; j++) sim[i][j] = (pts[i][0] * pts[j][0] + pts[i][1] * pts[j][1]) / tau; }
+    const byClass = {};
+    for (let i = 0; i < n; i++) (byClass[labels[i]] = byClass[labels[i]] || []).push(i);
+    for (let i = 0; i < n; i++) {
+      const P = byClass[labels[i]].filter((j) => j !== i);
+      if (!P.length) continue;
+      let mx = -Infinity; for (let j = 0; j < n; j++) if (j !== i && sim[i][j] > mx) mx = sim[i][j];
+      let denom = 0; const w = new Array(n).fill(0);
+      for (let j = 0; j < n; j++) if (j !== i) { w[j] = Math.exp(sim[i][j] - mx); denom += w[j]; }
+      let lloss = 0;
+      for (const pp of P) lloss += -(sim[i][pp] - mx - Math.log(denom));
+      lloss /= P.length;
+      loss += lloss;
+      let gx = 0, gy = 0;
+      for (let j = 0; j < n; j++) {
+        if (j === i) continue;
+        const pij = w[j] / denom;
+        gx += pij * pts[j][0]; gy += pij * pts[j][1];
+      }
+      let pmx = 0, pmy = 0;
+      for (const pp of P) { pmx += pts[pp][0]; pmy += pts[pp][1]; }
+      pmx /= P.length; pmy /= P.length;
+      gx -= pmx; gy -= pmy;
+      grad[i][0] += gx / tau; grad[i][1] += gy / tau;
+    }
+    applyGrad(pts, grad, lr, n);
+    projectSphere(pts);
+    return loss / n;
+  };
+
+  const stepAlignUnif = (pts, labels, lr, rng, p) => {
+    const n = pts.length, t = 2.0, lam = p.lambda;
+    const grad = newGrad(n);
+    projectSphere(pts);
+    let lossA = 0, pairsA = 0;
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        if (labels[i] !== labels[j]) continue;
+        const dx = pts[i][0] - pts[j][0], dy = pts[i][1] - pts[j][1];
+        lossA += dx * dx + dy * dy; pairsA++;
+        grad[i][0] += 2 * dx; grad[i][1] += 2 * dy;
+        grad[j][0] -= 2 * dx; grad[j][1] -= 2 * dy;
+      }
+    }
+    let sumExp = 0;
+    const E = [];
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const dx = pts[i][0] - pts[j][0], dy = pts[i][1] - pts[j][1];
+        const d2 = dx * dx + dy * dy;
+        const e = Math.exp(-t * d2);
+        E.push([i, j, e, dx, dy]); sumExp += e;
+      }
+    }
+    const lossU = Math.log(sumExp / Math.max(1, E.length) + 1e-12);
+    for (const [i, j, e, dx, dy] of E) {
+      const fac = (lam * (-t)) * (e / sumExp);
+      grad[i][0] += fac * 2 * dx; grad[i][1] += fac * 2 * dy;
+      grad[j][0] -= fac * 2 * dx; grad[j][1] -= fac * 2 * dy;
+    }
+    applyGrad(pts, grad, lr, n);
+    projectSphere(pts);
+    return (pairsA ? lossA / pairsA : 0) + lam * lossU;
+  };
+
+  const stepCLIP = (pts, labels, lr, rng, p) => {
+    // Symmetrised InfoNCE: anchor↔positive both directions. CLIP-style.
+    const n = pts.length, tau = p.tau;
+    const grad = newGrad(n);
+    projectSphere(pts);
+    let loss = 0;
+    const sim = []; for (let i = 0; i < n; i++) { sim[i] = []; for (let j = 0; j < n; j++) sim[i][j] = (pts[i][0] * pts[j][0] + pts[i][1] * pts[j][1]) / tau; }
+    const byClass = {};
+    for (let i = 0; i < n; i++) (byClass[labels[i]] = byClass[labels[i]] || []).push(i);
+    const oneDir = (anchorIdx, posIdx) => {
+      let mx = -Infinity;
+      for (let j = 0; j < n; j++) if (j !== anchorIdx && sim[anchorIdx][j] > mx) mx = sim[anchorIdx][j];
+      let denom = 0; const w = new Array(n).fill(0);
+      for (let j = 0; j < n; j++) if (j !== anchorIdx) { w[j] = Math.exp(sim[anchorIdx][j] - mx); denom += w[j]; }
+      loss += 0.5 * -(sim[anchorIdx][posIdx] - mx - Math.log(denom));
+      let gx = 0, gy = 0;
+      for (let j = 0; j < n; j++) {
+        if (j === anchorIdx) continue;
+        const pij = w[j] / denom;
+        gx += pij * pts[j][0]; gy += pij * pts[j][1];
+      }
+      gx -= pts[posIdx][0]; gy -= pts[posIdx][1];
+      grad[anchorIdx][0] += 0.5 * gx / tau; grad[anchorIdx][1] += 0.5 * gy / tau;
+    };
+    for (let i = 0; i < n; i++) {
+      const pos = byClass[labels[i]].filter((j) => j !== i);
+      if (!pos.length) continue;
+      const pp = pos[Math.floor(rng() * pos.length)];
+      oneDir(i, pp);
+      oneDir(pp, i);
+    }
+    applyGrad(pts, grad, lr, n);
+    projectSphere(pts);
+    return loss / n;
+  };
+
+  const stepSigLIP = (pts, labels, lr, rng, p) => {
+    // Pairwise sigmoid with learnable bias. Slider controls where negatives equilibrate.
+    const n = pts.length;
+    const targetCos = p.target; // cos value where negatives should stop being pushed (range [-1, 0])
+    const t = 10.0;
+    const b = -t * targetCos;
+    const grad = newGrad(n);
+    projectSphere(pts);
+    let loss = 0;
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const y_ij = (labels[i] === labels[j]) ? 1 : -1;
+        const s = pts[i][0] * pts[j][0] + pts[i][1] * pts[j][1];
+        const arg = t * s + b;
+        const z = -y_ij * arg;
+        // numerically stable log(1+e^z)
+        let lz;
+        if (z > 30) lz = z;
+        else if (z < -30) lz = 0;
+        else lz = Math.log(1 + Math.exp(z));
+        loss += lz;
+        const sig = 1 / (1 + Math.exp(-z));
+        const dsim = -y_ij * t * sig;
+        grad[i][0] += dsim * pts[j][0]; grad[i][1] += dsim * pts[j][1];
+        grad[j][0] += dsim * pts[i][0]; grad[j][1] += dsim * pts[i][1];
+      }
+    }
+    applyGrad(pts, grad, lr, n);
+    projectSphere(pts);
+    return loss / (n * (n - 1) / 2);
+  };
+
+  const stepOrthog = (pts, labels, lr, rng, p) => {
+    const n = pts.length;
+    const grad = newGrad(n);
+    projectSphere(pts);
+    let loss = 0;
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const c = pts[i][0] * pts[j][0] + pts[i][1] * pts[j][1];
+        if (labels[i] === labels[j]) {
+          loss += 1 - c;
+          grad[i][0] += -pts[j][0]; grad[i][1] += -pts[j][1];
+          grad[j][0] += -pts[i][0]; grad[j][1] += -pts[i][1];
+        } else {
+          loss += c * c;
+          grad[i][0] += 2 * c * pts[j][0]; grad[i][1] += 2 * c * pts[j][1];
+          grad[j][0] += 2 * c * pts[i][0]; grad[j][1] += 2 * c * pts[i][1];
+        }
+      }
+    }
+    applyGrad(pts, grad, lr, n);
+    projectSphere(pts);
+    return loss / (n * (n - 1) / 2);
+  };
+
+  // ─── loss configs ────────────────────────────────────────────────────
+  const CONFIG = {
+    hadsell: {
+      name: 'Pair contrastive (Hadsell)',
+      param: 'margin', paramName: 'margin m', step: stepHadsell,
+      paramRange: [0.1, 4.0], paramDefault: 1.2, paramStep: 0.05,
+      onSphere: false, lr: 0.4,
+    },
+    triplet: {
+      name: 'Triplet',
+      param: 'margin', paramName: 'margin m', step: stepTriplet,
+      paramRange: [0.02, 1.5], paramDefault: 0.3, paramStep: 0.02,
+      onSphere: false, lr: 0.4,
+    },
+    infonce: {
+      name: 'InfoNCE (NT-Xent)',
+      param: 'tau', paramName: 'temperature τ', step: stepInfoNCE,
+      paramRange: [0.05, 1.5], paramDefault: 0.2, paramStep: 0.01,
+      onSphere: true, lr: 0.05,
+    },
+    clip: {
+      name: 'CLIP (bidirectional InfoNCE)',
+      param: 'tau', paramName: 'temperature τ', step: stepCLIP,
+      paramRange: [0.05, 1.5], paramDefault: 0.2, paramStep: 0.01,
+      onSphere: true, lr: 0.05,
+    },
+    siglip: {
+      name: 'SigLIP (pairwise sigmoid)',
+      param: 'target', paramName: 'negatives target cos θ', step: stepSigLIP,
+      paramRange: [-1.0, 0.0], paramDefault: -0.3, paramStep: 0.02,
+      onSphere: true, lr: 0.01,
+    },
+    supcon: {
+      name: 'Supervised Contrastive (SupCon)',
+      param: 'tau', paramName: 'temperature τ', step: stepSupCon,
+      paramRange: [0.05, 1.5], paramDefault: 0.2, paramStep: 0.01,
+      onSphere: true, lr: 0.05,
+    },
+    alignunif: {
+      name: 'Alignment + Uniformity',
+      param: 'lambda', paramName: 'λ (uniformity weight)', step: stepAlignUnif,
+      paramRange: [0.0, 10.0], paramDefault: 1.0, paramStep: 0.1,
+      onSphere: true, lr: 0.04,
+    },
+    orthog: {
+      name: 'Cosine→0 (orthogonality)',
+      param: 'unused', paramName: '—', step: stepOrthog,
+      paramRange: [0, 1], paramDefault: 0, paramStep: 1,
+      onSphere: true, lr: 0.08,
+    },
+  };
+
+  // ─── presets ─────────────────────────────────────────────────────────
+  const PRESETS = {
+    hadsell: [
+      { id: 'default', name: 'default — random data', dataset: 'random', param: 1.2,
+        note: 'Random positions, random labels — no spatial signal. The loss must impose all the geometry itself. Pair contrastive collapses each class to a tight blob and pushes the two blobs to margin distance, then stops. The final geometry is the law of pair contrastive in its simplest form.' },
+      { id: 'moons', name: 'two-moons', dataset: 'moons', param: 1.2,
+        note: 'Same loss, structured data. Initial positions already carry some class signal (the moons), so the loss has less work to do. Useful for comparison with the random default.' },
+      { id: 'small-margin', name: 'failure: margin too small', dataset: 'blobs', param: 0.2,
+        note: 'With margin m = 0.2 there is almost no reward for separating classes. Negatives barely move, classes stay tangled, accuracy hovers near chance. The loss looks low because there is nothing left to push apart.' },
+      { id: 'large-margin', name: 'failure: margin too large', dataset: 'blobs', param: 3.5,
+        note: 'With m = 3.5 the repulsion never saturates. Negatives keep getting pushed outward forever, the embedding blows up, and the loss curve never stabilises. In practice this causes gradient explosions.' },
+      { id: 'imbalanced', name: 'failure: imbalanced classes', dataset: 'imbalanced', param: 1.2,
+        note: '80/20 split. Pair contrastive treats every pair equally, so the majority class dominates the gradient. The minority gets pushed around but never gets its own region. A weighted variant fixes this; vanilla does not.' },
+    ],
+    triplet: [
+      { id: 'default', name: 'default — random data', dataset: 'random', param: 0.3,
+        note: 'Random positions, random labels. Each step samples one anchor/positive/negative; active only when the triplet is violated. Watch the cloud slowly fracture into two loose clusters — but stop as soon as the margin is satisfied for most triplets. The end state is only as tight as the margin demanded.' },
+      { id: 'moons', name: 'two-moons', dataset: 'moons', param: 0.3,
+        note: 'Same loss, structured initial data. Useful for comparison with the random default. The trajectory wobbles because each step sees a different triplet.' },
+      { id: 'easy-triplets', name: 'failure: easy triplets', dataset: 'blobs', param: 0.05,
+        note: 'Margin = 0.05 means almost every random triplet is satisfied at initialisation. The loss is near zero from step one and no learning happens. This is why production triplet pipelines spend enormous engineering effort on hard-negative mining.' },
+      { id: 'huge-margin', name: 'failure: margin too aggressive', dataset: 'rings', param: 1.3,
+        note: 'Margin = 1.3 is bigger than the typical distance between classes on this dataset. The loss never saturates and the gradient keeps pushing — but in stochastic directions, so the embedding wanders and accuracy oscillates.' },
+      { id: 'imbalanced', name: 'failure: imbalanced classes', dataset: 'imbalanced', param: 0.3,
+        note: 'With 80/20, most randomly sampled anchors come from the majority class. The minority is rarely seen as anchor and gets dragged passively. Standard fix: balanced batch sampling.' },
+    ],
+    infonce: [
+      { id: 'default', name: 'default — random data', dataset: 'random', param: 0.2,
+        note: 'Random positions, random labels. Cosine similarity over a softmax — every other point is a negative weighted by similarity to the anchor. Points project to the unit circle, then settle into two opposing arcs. The gradient never vanishes; expect micro-adjustments to continue past visible convergence.' },
+      { id: 'moons', name: 'two-moons', dataset: 'moons', param: 0.2,
+        note: 'Same loss, structured initial data. Useful for comparison.' },
+      { id: 'low-tau', name: 'failure: τ too low', dataset: 'moons', param: 0.05,
+        note: 'τ = 0.05 makes the softmax extremely peaky. Gradients are dominated by the single hardest negative, and any noisy step destabilises everything. The loss curve is sharp and saw-toothed.' },
+      { id: 'high-tau', name: 'failure: τ too high', dataset: 'moons', param: 1.2,
+        note: 'τ = 1.2 flattens the softmax — all negatives contribute roughly equally and the gradient is weak. Classes never sharpen, accuracy creeps up over hundreds of iterations.' },
+      { id: 'rings', name: 'rings', dataset: 'rings', param: 0.2,
+        note: 'On concentric rings, InfoNCE on the unit sphere maps the inner and outer rings to nearby angles. The dataset is angularly indistinguishable after projection — try this with the Euclidean losses for comparison.' },
+    ],
+    clip: [
+      { id: 'default', name: 'default — random data', dataset: 'random', param: 0.2,
+        note: 'Random positions, random labels. CLIP is bidirectional InfoNCE — every anchor↔positive pair contributes gradient in both directions. In a single-modality 2D demo this means a symmetrised version of the InfoNCE update. The geometry it converges to is the same; the gradient signal at each step is exactly twice as strong.' },
+      { id: 'low-tau', name: 'failure: τ too low', dataset: 'random', param: 0.05,
+        note: 'τ = 0.05 — the regime where CLIP-style training caused famous instabilities. Softmax becomes peaky, one hard negative dominates the gradient, every step destabilises the embedding. Real CLIP training compensates with batch sizes in the tens of thousands.' },
+      { id: 'rings', name: 'failure: cosine kills rings', dataset: 'rings', param: 0.2,
+        note: 'CLIP lives on the sphere. Concentric rings have the same angular distribution per class, so after projection they are indistinguishable. The norm carried the class signal; cosine threw it away. Same defect as InfoNCE.' },
+    ],
+    supcon: [
+      { id: 'default', name: 'default — random data (4 classes)', dataset: 'random-4', param: 0.2,
+        note: 'Random positions, random labels, four classes. SupCon averages InfoNCE over all positives in the batch, so each class is pulled toward its centroid every step. Watch all four classes condense to four sharp points on the circle, then spread to maximise their inter-class angle. The richest signal of any loss here — but most aggressive about throwing away within-class variation.' },
+      { id: 'four', name: 'structured (four blobs)', dataset: 'four', param: 0.2,
+        note: 'Same loss, structured initial data. Each class begins as a tight blob; SupCon then arranges the four blobs on the sphere.' },
+      { id: 'low-tau', name: 'failure: representation collapse', dataset: 'moons', param: 0.05,
+        note: 'τ = 0.05 with many positives → each class collapses to a single point on the circle. Linearly separable, but anything you cared about within a class (style, pose, lighting) is gone.' },
+      { id: 'imbalanced', name: 'failure: imbalanced classes', dataset: 'imbalanced', param: 0.2,
+        note: 'When |P(i)| varies wildly across classes, the per-anchor average changes scale. The majority class drowns out the minority in the softmax denominator. Fix: re-weight or sub-sample.' },
+      { id: 'noisy', name: 'failure: label noise', dataset: 'noisy', param: 0.2,
+        note: '10% label flips. SupCon trusts its labels completely — flipped points get pulled toward the wrong centroid every step, dragging the cluster boundary with them. Robust SupCon variants exist; vanilla does not handle this.' },
+    ],
+    siglip: [
+      { id: 'default', name: 'default — target orthogonality (cos = 0)', dataset: 'random', param: -0.05,
+        note: 'Random positions, random labels. SigLIP replaces InfoNCE\'s softmax with a pairwise sigmoid that has a learnable bias. The bias controls where negatives equilibrate. Default here targets cosine ≈ 0 — negatives stop being pushed once they reach orthogonality. The classes settle on perpendicular axes and stop, no overshoot to opposition.' },
+      { id: 'opposition', name: 'failure: target opposition (cos = −1)', dataset: 'random', param: -1.0,
+        note: 'Setting the negatives target to cos = −1 recovers the geometric bug that all the other softmax losses inherit. Negatives are pushed past orthogonality toward opposition. The 2D case is degenerate (only two orthogonal axes available) but in higher dimensions this is the same wasted-spreading pathology InfoNCE has.' },
+      { id: 'shallow', name: 'shallow target (cos = −0.5)', dataset: 'random-4', param: -0.5,
+        note: 'Four classes, equilibrium target halfway between orthogonality and opposition. SigLIP\'s configurability is its real innovation — you pick where to stop pushing, and the loss obediently stops.' },
+      { id: 'rings', name: 'failure: cosine kills rings', dataset: 'rings', param: -0.3,
+        note: 'SigLIP still lives on the sphere. Concentric rings stay indistinguishable after projection. The fix for the geometric bug does not fix the fact that cosine throws away the norm.' },
+    ],
+    alignunif: [
+      { id: 'default', name: 'default — random data', dataset: 'random', param: 1.0,
+        note: 'Random positions, random labels. Two explicit terms: alignment pulls positives together, uniformity (log-MMD of a Gaussian kernel) spreads everything else evenly. From chaos, the two terms cooperate to settle the points into two arcs on the sphere — cleanly, because the terms are balanced rather than entangled in a softmax.' },
+      { id: 'moons', name: 'two-moons', dataset: 'moons', param: 1.0,
+        note: 'Same loss, structured initial data.' },
+      { id: 'no-uniform', name: 'failure: λ = 0 (alignment only)', dataset: 'moons', param: 0.0,
+        note: 'Without the uniformity term the loss is minimised by collapsing everyone to a single point. Classes still merge — alignment alone cannot tell them apart.' },
+      { id: 'no-align', name: 'failure: λ very high (uniformity only)', dataset: 'moons', param: 8.0,
+        note: 'With λ = 8.0 the uniformity term dominates. Points spread evenly across the sphere with no regard for class. Accuracy at chance.' },
+      { id: 'four', name: 'four classes', dataset: 'four', param: 1.0,
+        note: 'Same balanced regime, four classes. Each class lands on its own arc with roughly equal spacing — the uniformity term enforces near-simplex packing.' },
+    ],
+    orthog: [
+      { id: 'default', name: 'default — random data (4 classes)', dataset: 'random-4', param: 0,
+        note: 'Random positions, random labels, four classes. Pull positives to cosine 1, push negatives to cosine 0 (not −1). Watch all four classes find the four orthogonal axes (±x, ±y) — every inter-class cosine collapses to 0, matching the (k−1)-simplex bound in 2D. No wasted geometry.' },
+      { id: 'two', name: 'two classes (random)', dataset: 'random', param: 0,
+        note: 'Two classes from chaos. In 2D the only two orthogonal directions are the axes, so the classes settle on perpendicular axes.' },
+      { id: 'eight', name: 'failure: too many classes for the dimension', dataset: 'eight', param: 0,
+        note: 'Eight classes in 2D cannot all be mutually orthogonal — only two orthogonal directions exist. The loss has to compromise, and the classes settle to a near-uniform angular spacing of π/4. The accuracy bottleneck is geometric, not algorithmic.' },
+      { id: 'rings', name: 'rings', dataset: 'rings', param: 0,
+        note: 'Concentric rings have the same angular distribution per class — pure cosine cannot tell them apart, so accuracy stays at chance. This is why "throw away the norm" is a real cost, not free.' },
+    ],
+  };
+
+  // ─── separability ────────────────────────────────────────────────────
+  const accuracy = (pts, labels) => {
+    const sum = {}, cnt = {};
+    for (let i = 0; i < pts.length; i++) {
+      const y = labels[i];
+      if (!(y in sum)) { sum[y] = [0, 0]; cnt[y] = 0; }
+      sum[y][0] += pts[i][0]; sum[y][1] += pts[i][1]; cnt[y]++;
+    }
+    const cents = {};
+    for (const y in sum) cents[y] = [sum[y][0] / cnt[y], sum[y][1] / cnt[y]];
+    let correct = 0;
+    for (let i = 0; i < pts.length; i++) {
+      let best = null, bd = Infinity;
+      for (const y in cents) {
+        const d = (pts[i][0] - cents[y][0]) ** 2 + (pts[i][1] - cents[y][1]) ** 2;
+        if (d < bd) { bd = d; best = +y; }
+      }
+      if (best === labels[i]) correct++;
+    }
+    return correct / pts.length;
+  };
+
+  // ─── setup ───────────────────────────────────────────────────────────
+  const setup = () => {
+    const cfg = CONFIG[loss];
+    const presets = PRESETS[loss];
+    const cScatter = document.getElementById(id + '-scatter');
+    const cPlots = document.getElementById(id + '-plots');
+    if (!cScatter || cScatter.dataset.ready) return;
+    cScatter.dataset.ready = '1';
+    const ctxS = cScatter.getContext('2d');
+    const ctxP = cPlots.getContext('2d');
+
+    const presetSel = document.getElementById(id + '-preset');
+    const dataSel = document.getElementById(id + '-data');
+    const paramName = document.getElementById(id + '-paramName');
+    const paramInput = document.getElementById(id + '-param');
+    const paramVal = document.getElementById(id + '-paramval');
+    const playBtn = document.getElementById(id + '-play');
+    const stepBtn = document.getElementById(id + '-step');
+    const resetBtn = document.getElementById(id + '-reset');
+    const iterRO = document.getElementById(id + '-iter');
+    const annEl = document.getElementById(id + '-ann');
+
+    // populate preset dropdown
+    presets.forEach((p) => {
+      const opt = document.createElement('option');
+      opt.value = p.id; opt.textContent = p.name;
+      presetSel.appendChild(opt);
+    });
+    presetSel.value = preset;
+    if (!presets.find((p) => p.id === preset)) presetSel.value = 'default';
+    paramName.textContent = cfg.paramName;
+    paramInput.min = cfg.paramRange[0];
+    paramInput.max = cfg.paramRange[1];
+    paramInput.step = cfg.paramStep;
+    if (cfg.param === 'unused') paramInput.disabled = true;
+
+    const state = {
+      dpr: 1, sw: 0, sh: 0, pw: 0, ph: 0,
+      pts: [], labels: [],
+      rng: null,
+      iter: 0,
+      paramVal: cfg.paramDefault,
+      playing: false,
+      speed: 1,
+      lossHistory: [],
+      accHistory: [],
+      lastLoss: NaN, lastAcc: 0,
+    };
+
+    const fit = () => {
+      const rectS = cScatter.getBoundingClientRect();
+      const rectP = cPlots.getBoundingClientRect();
+      const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+      state.dpr = dpr;
+      state.sw = rectS.width; state.sh = rectS.height;
+      state.pw = rectP.width; state.ph = rectP.height;
+      cScatter.width = Math.round(state.sw * dpr); cScatter.height = Math.round(state.sh * dpr);
+      cPlots.width = Math.round(state.pw * dpr); cPlots.height = Math.round(state.ph * dpr);
+    };
+
+    const applyPreset = (pid) => {
+      const p = presets.find((x) => x.id === pid) || presets[0];
+      dataSel.value = p.dataset;
+      state.paramVal = p.param;
+      paramInput.value = p.param;
+      paramVal.textContent = (cfg.param === 'unused') ? '—' : (+p.param).toFixed(2);
+      annEl.textContent = p.note;
+      rebuild();
+    };
+
+    const rebuild = () => {
+      const ds = dataSel.value;
+      const n = (ds === 'eight') ? 80 : 60;
+      const seed = 7;
+      const { pts, labels } = makeData(ds, n, seed);
+      if (cfg.onSphere) projectSphere(pts);
+      state.pts = pts; state.labels = labels;
+      state.rng = mulberry32(seed * 17 + loss.charCodeAt(0));
+      state.iter = 0;
+      state.lossHistory = []; state.accHistory = [];
+      state.lastLoss = NaN; state.lastAcc = accuracy(pts, labels);
+      state.accHistory.push(state.lastAcc);
+      iterRO.textContent = 'iter 0 · acc ' + (state.lastAcc * 100).toFixed(0) + '%';
+      draw();
+    };
+
+    const stepOnce = () => {
+      const param = { margin: state.paramVal, tau: state.paramVal, lambda: state.paramVal, target: state.paramVal };
+      state.lastLoss = cfg.step(state.pts, state.labels, cfg.lr, state.rng, param);
+      state.lastAcc = accuracy(state.pts, state.labels);
+      state.iter++;
+      state.lossHistory.push(state.lastLoss);
+      state.accHistory.push(state.lastAcc);
+      if (state.lossHistory.length > 400) state.lossHistory.shift();
+      if (state.accHistory.length > 400) state.accHistory.shift();
+      iterRO.textContent = 'iter ' + state.iter + ' · acc ' + (state.lastAcc * 100).toFixed(0) + '% · L ' + (isFinite(state.lastLoss) ? state.lastLoss.toFixed(3) : '—');
+    };
+
+    // ─── drawing ────────────────────────────────────────────────────────
+    const drawScatter = () => {
+      const W = state.sw, H = state.sh;
+      ctxS.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+      ctxS.clearRect(0, 0, W, H);
+      const { border, faint, fg, cellBg } = colors;
+
+      ctxS.fillStyle = cellBg;
+      ctxS.fillRect(0, 0, W, H);
+      ctxS.strokeStyle = border;
+      ctxS.lineWidth = 1;
+      ctxS.strokeRect(0.5, 0.5, W - 1, H - 1);
+
+      const pad = 12;
+      const cx = pad + (W - 2 * pad) / 2;
+      const cy = pad + (H - 2 * pad) / 2;
+      const range = cfg.onSphere ? 1.25 : 2.6;
+      const s = Math.min(W, H) / (range * 2) - pad / range;
+
+      // sphere ref
+      if (cfg.onSphere) {
+        ctxS.strokeStyle = border;
+        ctxS.setLineDash([2, 3]);
+        ctxS.beginPath(); ctxS.arc(cx, cy, s, 0, Math.PI * 2); ctxS.stroke();
+        ctxS.setLineDash([]);
+      }
+      // axes
+      ctxS.strokeStyle = border;
+      ctxS.lineWidth = 1;
+      ctxS.beginPath();
+      ctxS.moveTo(pad, cy); ctxS.lineTo(W - pad, cy);
+      ctxS.moveTo(cx, pad); ctxS.lineTo(cx, H - pad);
+      ctxS.stroke();
+
+      // class centroids (cross)
+      const sum = {}, cnt = {};
+      for (let i = 0; i < state.pts.length; i++) {
+        const y = state.labels[i];
+        if (!(y in sum)) { sum[y] = [0, 0]; cnt[y] = 0; }
+        sum[y][0] += state.pts[i][0]; sum[y][1] += state.pts[i][1]; cnt[y]++;
+      }
+      for (const y in sum) {
+        const mx = sum[y][0] / cnt[y], my = sum[y][1] / cnt[y];
+        const px = cx + mx * s, py = cy - my * s;
+        ctxS.strokeStyle = classColor(+y, 1);
+        ctxS.lineWidth = 2;
+        ctxS.beginPath();
+        ctxS.moveTo(px - 6, py); ctxS.lineTo(px + 6, py);
+        ctxS.moveTo(px, py - 6); ctxS.lineTo(px, py + 6);
+        ctxS.stroke();
+      }
+
+      // points
+      for (let i = 0; i < state.pts.length; i++) {
+        const x = cx + state.pts[i][0] * s, y = cy - state.pts[i][1] * s;
+        ctxS.fillStyle = classColor(state.labels[i], 0.85);
+        ctxS.beginPath();
+        ctxS.arc(x, y, 3.2, 0, Math.PI * 2);
+        ctxS.fill();
+      }
+
+      // title
+      ctxS.fillStyle = fg;
+      ctxS.font = '600 12px ui-sans-serif, system-ui';
+      ctxS.textAlign = 'left';
+      ctxS.textBaseline = 'top';
+      ctxS.fillText(cfg.name, 10, 8);
+      ctxS.fillStyle = faint;
+      ctxS.font = '10px ui-monospace, monospace';
+      ctxS.fillText(cfg.onSphere ? 'embeddings constrained to unit circle' : 'Euclidean embeddings', 10, 24);
+
+      // start hint — only when idle at iter 0
+      if (state.iter === 0 && !state.playing) {
+        const hint = '▶ press Play to optimize';
+        ctxS.font = '600 13px ui-sans-serif, system-ui';
+        ctxS.textAlign = 'center';
+        ctxS.textBaseline = 'middle';
+        const tm = ctxS.measureText(hint);
+        const bw = tm.width + 20, bh = 26;
+        const bx = cx - bw / 2, by = H - pad - bh - 4;
+        ctxS.fillStyle = colors.accent;
+        ctxS.globalAlpha = 0.92;
+        ctxS.beginPath();
+        if (ctxS.roundRect) ctxS.roundRect(bx, by, bw, bh, 6); else ctxS.rect(bx, by, bw, bh);
+        ctxS.fill();
+        ctxS.globalAlpha = 1;
+        ctxS.fillStyle = colors.bg;
+        ctxS.fillText(hint, cx, by + bh / 2);
+      }
+    };
+
+    const drawPlots = () => {
+      const W = state.pw, H = state.ph;
+      ctxP.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+      ctxP.clearRect(0, 0, W, H);
+      const { border, faint, fg, cellBg, accent } = colors;
+
+      ctxP.fillStyle = cellBg;
+      ctxP.fillRect(0, 0, W, H);
+      ctxP.strokeStyle = border;
+      ctxP.lineWidth = 1;
+      ctxP.strokeRect(0.5, 0.5, W - 1, H - 1);
+
+      const padL = 36, padR = 14, padT = 18, padB = 18;
+      const halfH = (H - 2 * padT - padB - 8) / 2;
+      const top = { x: padL, y: padT, w: W - padL - padR, h: halfH };
+      const bot = { x: padL, y: padT + halfH + 16, w: W - padL - padR, h: halfH };
+
+      const drawPanel = (R, data, label, ymin, ymax, color, axisFmt) => {
+        // border
+        ctxP.strokeStyle = border;
+        ctxP.lineWidth = 1;
+        ctxP.strokeRect(R.x + 0.5, R.y + 0.5, R.w - 1, R.h - 1);
+        // title
+        ctxP.fillStyle = fg;
+        ctxP.font = '600 11px ui-sans-serif, system-ui';
+        ctxP.textAlign = 'left';
+        ctxP.textBaseline = 'bottom';
+        ctxP.fillText(label, R.x, R.y - 4);
+        // ticks
+        ctxP.fillStyle = faint;
+        ctxP.font = '10px ui-monospace, monospace';
+        ctxP.textAlign = 'right';
+        ctxP.textBaseline = 'middle';
+        const yTicks = 4;
+        ctxP.strokeStyle = border;
+        ctxP.setLineDash([2, 3]);
+        for (let k = 0; k <= yTicks; k++) {
+          const yv = ymin + (k / yTicks) * (ymax - ymin);
+          const yy = R.y + R.h - (k / yTicks) * R.h;
+          ctxP.beginPath();
+          ctxP.moveTo(R.x, yy); ctxP.lineTo(R.x + R.w, yy);
+          ctxP.stroke();
+          ctxP.fillText(axisFmt(yv), R.x - 4, yy);
+        }
+        ctxP.setLineDash([]);
+        // line
+        if (data.length > 1) {
+          const xMax = Math.max(60, data.length);
+          ctxP.strokeStyle = color;
+          ctxP.lineWidth = 1.5;
+          ctxP.beginPath();
+          for (let k = 0; k < data.length; k++) {
+            const xx = R.x + (k / (xMax - 1)) * R.w;
+            const v = data[k];
+            const t = (v - ymin) / (ymax - ymin);
+            const yy = R.y + R.h - t * R.h;
+            if (k === 0) ctxP.moveTo(xx, yy); else ctxP.lineTo(xx, yy);
+          }
+          ctxP.stroke();
+        }
+      };
+
+      // determine y-range for loss dynamically (last 200 values)
+      const recent = state.lossHistory.slice(-200);
+      let lmin = 0, lmax = 1;
+      if (recent.length) {
+        lmin = Math.min(0, ...recent);
+        lmax = Math.max(...recent, 0.001);
+        if (lmax - lmin < 1e-6) lmax = lmin + 1;
+      }
+
+      drawPanel(top, state.lossHistory, 'loss', lmin, lmax, accent, (v) => v.toFixed(2));
+      drawPanel(bot, state.accHistory, 'nearest-centroid accuracy', 0, 1, '#3a8f5e', (v) => (v * 100).toFixed(0) + '%');
+    };
+
+    const draw = () => { drawScatter(); drawPlots(); };
+
+    // ─── loop ───────────────────────────────────────────────────────────
+    let lastTick = 0;
+    const loop = (now) => {
+      if (!state.playing) return;
+      if (!lastTick) lastTick = now;
+      const target = 1000 / 30;
+      if (now - lastTick >= target / state.speed) {
+        lastTick = now;
+        const n = Math.max(1, Math.round(state.speed));
+        for (let k = 0; k < n; k++) stepOnce();
+        draw();
+      }
+      requestAnimationFrame(loop);
+    };
+    const play = () => { if (state.playing) return; state.playing = true; lastTick = 0; playBtn.textContent = '❚❚ Pause'; requestAnimationFrame(loop); };
+    const pause = () => { state.playing = false; playBtn.textContent = '▶ Play'; };
+
+    // ─── events ─────────────────────────────────────────────────────────
+    playBtn.addEventListener('click', () => state.playing ? pause() : play());
+    stepBtn.addEventListener('click', () => { pause(); stepOnce(); draw(); });
+    resetBtn.addEventListener('click', () => { pause(); rebuild(); });
+    presetSel.addEventListener('change', () => { pause(); applyPreset(presetSel.value); });
+    dataSel.addEventListener('change', () => { pause(); rebuild(); });
+    paramInput.addEventListener('input', () => {
+      state.paramVal = parseFloat(paramInput.value);
+      paramVal.textContent = state.paramVal.toFixed(2);
+    });
+
+    const spdBtns = cScatter.parentElement.parentElement.querySelectorAll('[data-spd]');
+    spdBtns.forEach((b) => b.addEventListener('click', () => {
+      spdBtns.forEach((x) => x.classList.remove('active'));
+      b.classList.add('active');
+      state.speed = parseFloat(b.dataset.spd);
+    }));
+
+    const fig = cScatter.closest('figure');
+    fig.addEventListener('keydown', (e) => {
+      if (e.key === ' ') { e.preventDefault(); state.playing ? pause() : play(); }
+      else if (e.key === 's') { pause(); stepOnce(); draw(); }
+      else if (e.key === 'r') { pause(); rebuild(); }
+    });
+
+    const themeObs = new MutationObserver(() => { colors = readColors(); draw(); });
+    themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    const ro = new ResizeObserver(() => { fit(); draw(); });
+    ro.observe(cScatter); ro.observe(cPlots);
+    const io = new IntersectionObserver((entries) => {
+      const vis = entries[0].isIntersecting;
+      if (vis) { fit(); draw(); } else { pause(); }
+    }, { rootMargin: '120px' });
+    io.observe(cScatter);
+
+    // ─── init ───────────────────────────────────────────────────────────
+    fit();
+    applyPreset(presetSel.value);
+  };
+
+  setup();
+  document.addEventListener('astro:page-load', setup);
+  document.addEventListener('astro:after-swap', setup);
+})();
+</script>
+
+<style>
+.le-figure { margin: 1.8em 0; }
+.le-controls { padding: 8px 10px; border: 1px solid var(--border); border-bottom: none; background: var(--bg-elev, #fff); border-radius: 6px 6px 0 0; }
+.le-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 0; }
+.le-row + .le-row { border-top: 1px dashed var(--border); }
+.le-row > label { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-muted); font-size: 12px; font-family: ui-monospace, monospace; }
+.le-row select, .le-row input[type="number"] {
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: 4px;
+  padding: 2px 4px; font: inherit; font-size: 12px;
+}
+.le-slider { min-width: 220px; }
+.le-slider input[type="range"] { flex: 1; min-width: 100px; accent-color: var(--accent); }
+.le-paramval { font-family: ui-monospace, monospace; color: var(--fg); min-width: 32px; text-align: right; }
+.le-row button { background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 4px; padding: 3px 9px; font: inherit; font-size: 12px; cursor: pointer; }
+.le-row button:hover { background: var(--bg-elev, #fff); border-color: var(--accent); }
+.le-row .anim-spd-group { display: inline-flex; align-items: center; gap: 4px; }
+.le-row .anim-spd-group > span { font-size: 11px; color: var(--fg-muted); margin-right: 4px; }
+.le-row .anim-spd-group button { padding: 2px 6px; font-size: 11px; }
+.le-row .anim-spd-group button.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+.le-row .anim-stage-readout { margin-left: auto; font-family: ui-monospace, monospace; font-size: 11px; color: var(--fg-muted); }
+.le-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 0; border: 1px solid var(--border); border-top: none; }
+.le-scatter, .le-plots { display: block; width: 100%; background: var(--bg-elev, #fff); }
+.le-plots { border-left: 1px solid var(--border); }
+.le-annotation {
+  border: 1px solid var(--border); border-top: none;
+  padding: 10px 14px;
+  background: var(--bg);
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--fg);
+  border-radius: 0 0 6px 6px;
+}
+@media (max-width: 720px) {
+  .le-grid { grid-template-columns: 1fr; }
+  .le-plots { border-left: none; border-top: 1px solid var(--border); }
+}
+</style>
