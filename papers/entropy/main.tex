@@ -1,0 +1,758 @@
+\documentclass[11pt,a4paper]{article}
+
+% ─── PACKAGES ──────────────────────────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage{geometry}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{microtype}
+\usepackage{titlesec}
+
+\geometry{margin=1in}
+\pgfplotsset{compat=1.18}
+\usetikzlibrary{patterns,decorations.markings,arrows.meta,calc,positioning}
+
+% ─── COLORS ────────────────────────────────────────────────────────────────────
+\definecolor{accent}{HTML}{e8624a}
+\definecolor{accentblue}{HTML}{5b8dee}
+\definecolor{accentgreen}{HTML}{52c98d}
+\definecolor{gold}{HTML}{d4a84b}
+\definecolor{darkbg}{HTML}{0d0d0f}
+\definecolor{mutedtext}{HTML}{7a7590}
+
+% ─── THEOREM ENVIRONMENTS ──────────────────────────────────────────────────────
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{definition}[theorem]{Definition}
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}
+
+% ─── TCOLORBOX STYLES ─────────────────────────────────────────────────────────
+\tcbuselibrary{skins,breakable}
+
+% Render the legacy coloured environments as plain remarks so the body
+% retains its labelling syntax while reading as a mathematical paper.
+\newenvironment{keyresult}{\par\medskip\noindent\textit{Remark.}\ }{\par\medskip}
+\newenvironment{geometricinsight}{\par\medskip\noindent\textit{Remark.}\ }{\par\medskip}
+\newenvironment{critique}{\par\medskip\noindent\textit{Remark.}\ }{\par\medskip}
+\newenvironment{casestudy}{\par\medskip\noindent\textit{Example.}\ }{\par\medskip}
+
+% ─── HYPERREF SETUP ────────────────────────────────────────────────────────────
+\hypersetup{
+  colorlinks=true,
+  linkcolor=accent,
+  citecolor=accentblue,
+  urlcolor=accentblue
+}
+
+% ─── TITLE ─────────────────────────────────────────────────────────────────────
+\title{%
+  \vspace{-1cm}
+  {\Large\scshape On the Singularity Structure of Information-Theoretic Losses}\\[0.6em]
+  \textbf{Beyond Binary Finiteness:\\
+  The Geometry of Cross-Entropy Divergence}
+}
+\author{Taha Bouhsine\\[0.3em]{\normalsize\textit{azetta.ai}}}
+\date{23 February 2026}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\begin{document}
+\maketitle
+
+% ─── ABSTRACT ──────────────────────────────────────────────────────────────────
+\begin{abstract}
+For discrete distributions $p, q$ on a finite alphabet $\mathcal{X}$, the cross-entropy $H(p,q) = -\sum_{x} p(x) \log q(x)$ is infinite precisely when the violating set $V_{p,q} = \{x : p(x) > 0,\ q(x) = 0\}$ is non-empty, a strictly weaker condition than disjointness of supports.
+We classify this singularity by the combinatorial size $|V_{p,q}|$, the mass severity $S(p,q) = \sum_{x \in V_{p,q}} p(x)$, and the asymptotic growth rate.
+Under uniform smoothing $q^{(\varepsilon)} = (1-\varepsilon)q + \varepsilon u$, where $u$ is uniform on $|\mathcal{X}| = n$,
+\[
+  H(p, q^{(\varepsilon)}) = S(p,q)\,(-\log\varepsilon) + S(p,q)\log n + C_{p,q} + O(\varepsilon),
+\]
+so the rate of divergence equals the violating mass.
+The Kullback--Leibler divergence inherits the singularity directly and is undefined at disjoint support---the probabilistic analog of vector orthogonality on $\mathbb{S}^{d-1}$, where the Euclidean distance is finite but the information-theoretic distance is not.
+We further establish a per-coordinate asymmetry: contributions of the form $-p(x) \log q(x)$ are unbounded at $q(x) = 0,\ p(x) > 0$ and vanish at $p(x) = 0,\ q(x) > 0$.
+Section~\ref{sec:alternatives} surveys divergences that are finite at the boundary.
+A closing discussion (Section~\ref{sec:discussion}) examines how these properties bear on the design and behaviour of contemporary losses, treating that material as motivation and consequence rather than as further theorems.
+\end{abstract}
+
+\tableofcontents
+\vspace{1em}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{Introduction}
+\label{sec:intro}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+The cross-entropy $H(p,q) = -\sum_x p(x) \log q(x)$ between discrete distributions is the standard divergence used to train statistical models, with the well-known property that minimisation in $q$ is equivalent to maximum likelihood and admits a unique minimiser $q = p$.
+On the interior of the probability simplex it is a smooth and well-behaved functional.
+On the boundary it is not: if $q$ assigns zero mass to a point where $p$ has positive mass, $H(p,q)$ is infinite.
+
+Standard treatments record this only as a dichotomy: $H(p,q)$ is either finite or infinite, well-defined or undefined.
+The present paper studies the structure of the singularity beyond this binary.
+We show that the condition for divergence is strictly weaker than disjoint support; that the rate of divergence under smoothing is a real-valued function of the violating mass; that the per-coordinate contributions are infinitely asymmetric; and that the Kullback--Leibler divergence inherits these properties and fails to extend continuously to the configuration of disjoint support, which is the probabilistic analog of vector orthogonality.
+
+The paper is organised as follows.
+Section~\ref{sec:prelim} fixes notation.
+Section~\ref{sec:taxonomy} states the divergence condition and the growth-rate identity under uniform smoothing.
+Section~\ref{sec:asymmetry} establishes the per-coordinate asymmetry.
+Section~\ref{sec:kl} treats the Kullback--Leibler divergence and its singularity at disjoint support, including the parallel with vector orthogonality.
+Section~\ref{sec:alternatives} surveys divergence measures that remain finite at the boundary.
+A closing discussion (Section~\ref{sec:discussion}) examines how the structure bears on losses used in contrastive and multimodal learning; that material is offered as motivation and consequence rather than as further theorems.
+
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{Preliminaries}
+\label{sec:prelim}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+\begin{definition}[Cross-entropy]
+\label{def:cross-entropy}
+For discrete distributions $p$ and $q$ over a finite alphabet $\mathcal{X}$:
+\begin{equation}
+  H(p, q) = -\sum_{x \in \mathcal{X}} p(x) \log q(x),
+  \label{eq:cross-entropy}
+\end{equation}
+with the convention $0 \log 0 = 0$ and $p(x) \log 0 = +\infty$ when $p(x) > 0$.
+\end{definition}
+
+\begin{definition}[KL divergence]
+\label{def:kl}
+The Kullback--Leibler divergence from $q$ to $p$ is:
+\begin{equation}
+  D_\mathrm{KL}(p \| q) = \sum_{x \in \mathcal{X}} p(x) \log \frac{p(x)}{q(x)} = H(p, q) - H(p),
+  \label{eq:kl}
+\end{equation}
+where $H(p) = -\sum_x p(x) \log p(x)$ is the Shannon entropy.
+\end{definition}
+
+\begin{definition}[Support and violating set]
+\label{def:support}
+The \emph{support} of a distribution $p$ is $\mathrm{supp}(p) = \{x : p(x) > 0\}$.
+The \emph{violating set} of $p$ with respect to $q$ is:
+\begin{equation}
+  V_{p,q} = \{x \in \mathcal{X} : p(x) > 0 \text{ and } q(x) = 0\} = \mathrm{supp}(p) \setminus \mathrm{supp}(q).
+  \label{eq:violating}
+\end{equation}
+The \emph{violating mass} is $S(p,q) = \sum_{x \in V_{p,q}} p(x)$.
+\end{definition}
+
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{The Taxonomy of Singularities}
+\label{sec:taxonomy}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+\begin{theorem}[Necessary and sufficient condition for divergence]
+\label{thm:divergence}
+$H(p, q) = +\infty$ if and only if $V_{p,q} \neq \varnothing$, i.e., $\mathrm{supp}(p) \not\subseteq \mathrm{supp}(q)$.
+\end{theorem}
+
+\begin{proof}
+($\Rightarrow$) If $V_{p,q} \neq \varnothing$, there exists $x_0$ with $p(x_0) > 0$ and $q(x_0) = 0$.
+Then $-p(x_0) \log q(x_0) = +\infty$, so $H(p,q) = +\infty$.
+
+($\Leftarrow$) If $V_{p,q} = \varnothing$, then $\mathrm{supp}(p) \subseteq \mathrm{supp}(q)$, so $q(x) > 0$ whenever $p(x) > 0$.
+Each term $-p(x) \log q(x)$ is finite, and the sum over finite $\mathcal{X}$ is finite.
+\end{proof}
+
+\begin{critique}
+The condition $V_{p,q} \neq \varnothing$ is strictly weaker than $\mathrm{supp}(p) \cap \mathrm{supp}(q) = \varnothing$.
+Two distributions can share $99\%$ of their mass and still give $H(p,q) = +\infty$ provided a single coordinate exists where $p$ has positive mass and $q$ has none.
+The textbook gloss ``cross-entropy diverges at disjoint support'' is a sufficient condition presented as if it were necessary and sufficient---and the distinction matters in practice, because models routinely produce $q$ with broadly overlapping but not subsuming support.
+\end{critique}
+
+\subsection{Example: Overlapping but Infinite}
+
+\begin{casestudy}
+Consider distributions over $\{A, B, C\}$:
+\[
+  p = (0.5,\; 0.3,\; 0.2), \qquad q = (0.7,\; 0.3,\; 0).
+\]
+The supports overlap on $\{A, B\}$, sharing $80\%$ of $p$'s mass.
+But $V_{p,q} = \{C\}$ with $p(C) = 0.2 > 0$ and $q(C) = 0$:
+\[
+  H(p,q) = -0.5\log 0.7 - 0.3\log 0.3 - 0.2 \log 0 = +\infty.
+\]
+The supports are far from disjoint.
+The infinity comes from a single uncovered coordinate.
+\end{casestudy}
+
+\subsection{The Three Tiers}
+
+We propose a tiered classification of the singularity, going beyond the binary finite/infinite distinction.
+
+\begin{definition}[Singularity tiers]
+\label{def:tiers}
+For distributions $p, q$ with $V_{p,q} \neq \varnothing$, define:
+\begin{enumerate}[label=(\roman*)]
+  \item \textbf{Combinatorial tier}: $|V_{p,q}|$ --- the number of violating coordinates.
+  \item \textbf{Mass tier}: $S(p,q) = \sum_{x \in V_{p,q}} p(x)$ --- the total target mass on violating coordinates.
+  \item \textbf{Rate tier}: the asymptotic growth rate of $H(p, q^{(\varepsilon)})$ as $\varepsilon \to 0^+$, where $q^{(\varepsilon)}$ is a smoothed approximation.
+\end{enumerate}
+\end{definition}
+
+\begin{theorem}[Growth rate under uniform smoothing]
+\label{thm:growth}
+Let $q^{(\varepsilon)} = (1-\varepsilon)q + \varepsilon u$, where $u$ is the uniform distribution over $\mathcal{X}$ with $|\mathcal{X}| = n$.
+Then as $\varepsilon \to 0^+$:
+\begin{equation}
+  \boxed{\;H(p, q^{(\varepsilon)}) = S(p,q)(-\log \varepsilon) + S(p,q)\log n + C_{p,q} + O(\varepsilon)\;}
+  \label{eq:growth}
+\end{equation}
+where $C_{p,q} = -\sum_{x \notin V_{p,q}} p(x) \log q(x)$ is the finite part of the cross-entropy.
+\end{theorem}
+
+\begin{proof}
+For $x \in V_{p,q}$: $q^{(\varepsilon)}(x) = \varepsilon/n$, so $-p(x)\log q^{(\varepsilon)}(x) = p(x)(-\log\varepsilon + \log n)$.
+Summing over $V_{p,q}$: $S(p,q)(-\log\varepsilon + \log n)$.
+
+For $x \notin V_{p,q}$: $q^{(\varepsilon)}(x) = (1-\varepsilon)q(x) + \varepsilon/n \to q(x)$ as $\varepsilon \to 0$, and $-p(x)\log q^{(\varepsilon)}(x) \to -p(x)\log q(x) = C_{p,q}^{(x)}$ with $O(\varepsilon)$ error.
+\end{proof}
+
+\begin{keyresult}
+The divergence rate is exactly $S(p,q)$, the violating mass.
+Not all infinities are equal:
+\begin{center}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Scenario & $|V|$ & $S(p,q)$ & Growth as $\varepsilon \to 0$ \\
+\midrule
+Single tail miss & 1 & 0.01 & $0.01(-\log\varepsilon)$ \\
+Single mode miss & 1 & 0.90 & $0.90(-\log\varepsilon)$ \\
+Complete disjoint & $n$ & 1.00 & $1.00(-\log\varepsilon)$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+A model that misses a tail with $1\%$ mass diverges 100$\times$ slower than a model with completely disjoint support.
+The violating mass $S(p,q)$ is the precise measure of singularity severity.
+\end{keyresult}
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}
+  \begin{axis}[
+    width=0.88\textwidth,
+    height=6.5cm,
+    xlabel={Smoothing $\varepsilon$ (log scale)},
+    ylabel={$H(p, q^{(\varepsilon)})$},
+    xmin=0.001, xmax=1,
+    ymin=0, ymax=16,
+    xmode=log,
+    grid=major,
+    grid style={gray!20},
+    axis line style={gray!50},
+    tick style={gray!50},
+    every axis label/.style={font=\footnotesize},
+    every tick label/.style={font=\footnotesize},
+    legend pos=north east,
+    legend style={font=\scriptsize, fill=white, fill opacity=0.9, draw=gray!30},
+  ]
+    % S = 1.0 (complete disjoint)
+    \addplot[accent, thick, domain=0.001:1, samples=200] {1.0*(-ln(x)/ln(2)) + 1.5};
+    \addlegendentry{$S=1.0$ (disjoint)}
+
+    % S = 0.5 (half mass violating)
+    \addplot[gold, thick, domain=0.001:1, samples=200] {0.5*(-ln(x)/ln(2)) + 1.2};
+    \addlegendentry{$S=0.5$ (half miss)}
+
+    % S = 0.1 (small tail miss)
+    \addplot[accentblue, thick, domain=0.001:1, samples=200] {0.1*(-ln(x)/ln(2)) + 0.8};
+    \addlegendentry{$S=0.1$ (tail miss)}
+
+    % S = 0 (finite)
+    \addplot[accentgreen, thick, dashed, domain=0.001:1] {1.5};
+    \addlegendentry{$S=0$ (finite)}
+
+  \end{axis}
+\end{tikzpicture}
+\caption{Cross-entropy under uniform smoothing $q^{(\varepsilon)}$ for varying violating mass $S(p,q)$.
+The slope of the divergence as $\varepsilon \to 0$ is exactly $S(p,q)$.
+Complete disjoint support ($S=1$) diverges fastest; a small tail miss ($S=0.1$) diverges slowly but still reaches $+\infty$.
+When $S=0$ (green dashed), the loss is finite and independent of $\varepsilon$.}
+\label{fig:growth-rates}
+\end{figure}
+
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{The Asymmetry of Cross-Entropy}
+\label{sec:asymmetry}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+Cross-entropy is not symmetric in its arguments: $H(p,q) \neq H(q,p)$ in general.
+The asymmetry is not a notational curiosity.
+It produces a sharp operational distinction at the boundary of the simplex, and it is the mechanism by which models trained under cross-entropy learn to prefer overcoverage to silence.
+
+\begin{proposition}[Directional asymmetry]
+\label{prop:asymmetry}
+For distributions $p$ and $q$:
+\begin{enumerate}[label=(\alph*)]
+  \item If $q(x) = 0$ and $p(x) > 0$: \quad $-p(x)\log q(x) = +\infty$ \quad (infinite penalty).
+  \item If $p(x) = 0$ and $q(x) > 0$: \quad $-p(x)\log q(x) = 0$ \quad (zero penalty).
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+(a) follows from $\log 0 = -\infty$ and $p(x) > 0$.
+(b) follows from $0 \cdot \log q(x) = 0$ by convention.
+\end{proof}
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[
+  bar/.style={minimum width=1.2cm, minimum height=0.3cm, draw, inner sep=0},
+  lbl/.style={font=\footnotesize\sffamily, text=mutedtext},
+]
+  % ── LEFT: H(p,q) ──
+  \begin{scope}[shift={(-4.5,0)}]
+    \node[font=\footnotesize\bfseries, anchor=south] at (0,2.8) {$H(p,q)$: model $q$ evaluated by truth $p$};
+
+    % p bars
+    \node[lbl, anchor=east] at (-1.8, 2) {$p$};
+    \fill[accent!70] (-1.5,1.8) rectangle (-0.3, 2.2);  % A
+    \fill[accent!50] (-0.2,1.8) rectangle (0.4, 2.2);    % B
+    \fill[accent!30] (0.5,1.8) rectangle (0.9, 2.2);     % C
+
+    % q bars
+    \node[lbl, anchor=east] at (-1.8, 1) {$q$};
+    \fill[accentblue!70] (-1.5,0.8) rectangle (0.0, 1.2);  % A
+    \fill[accentblue!50] (-0.2,0.8) rectangle (0.4, 1.2);   % B
+    % C = 0
+
+    % Labels under bars
+    \node[font=\tiny, text=mutedtext] at (-0.9, 0.5) {A};
+    \node[font=\tiny, text=mutedtext] at (0.1, 0.5) {B};
+    \node[font=\tiny, text=mutedtext] at (0.7, 0.5) {C};
+
+    % Violating coordinate
+    \draw[accent, thick, ->] (0.7, 1.4) -- (0.7, 1.8);
+    \node[font=\tiny, text=accent, anchor=west] at (1.0, 1.6) {$p_C > 0$, $q_C = 0$};
+    \node[font=\scriptsize, text=accent, anchor=north] at (0, -0.1) {$= +\infty$};
+  \end{scope}
+
+  % ── RIGHT: H(q,p) ──
+  \begin{scope}[shift={(4.5,0)}]
+    \node[font=\footnotesize\bfseries, anchor=south] at (0,2.8) {$H(q,p)$: truth $p$ evaluated by model $q$};
+
+    % q bars (now the "p" role)
+    \node[lbl, anchor=east] at (-1.8, 2) {$q$};
+    \fill[accentblue!70] (-1.5,1.8) rectangle (0.0, 2.2);
+    \fill[accentblue!50] (-0.2,1.8) rectangle (0.4, 2.2);
+
+    % p bars (now the "q" role)
+    \node[lbl, anchor=east] at (-1.8, 1) {$p$};
+    \fill[accent!70] (-1.5,0.8) rectangle (-0.3, 1.2);
+    \fill[accent!50] (-0.2,0.8) rectangle (0.4, 1.2);
+    \fill[accent!30] (0.5,0.8) rectangle (0.9, 1.2);
+
+    % Labels
+    \node[font=\tiny, text=mutedtext] at (-0.9, 0.5) {A};
+    \node[font=\tiny, text=mutedtext] at (0.1, 0.5) {B};
+    \node[font=\tiny, text=mutedtext] at (0.7, 0.5) {C};
+
+    % No violation
+    \node[font=\tiny, text=accentgreen, anchor=west] at (1.0, 1.6) {$q_C = 0$: no penalty};
+    \node[font=\scriptsize, text=accentgreen, anchor=north] at (0, -0.1) {$< \infty$};
+  \end{scope}
+
+  % Central divider
+  \draw[gray!30, dashed] (0,-0.5) -- (0,3.2);
+\end{tikzpicture}
+\caption{The asymmetry of cross-entropy.
+\textbf{Left}: $H(p,q)$ diverges because the model $q$ assigns zero mass to coordinate $C$ where the truth $p$ has positive mass.
+\textbf{Right}: $H(q,p)$ is finite because the truth $p$ covers all of $q$'s support---the extra mass $p_C$ costs nothing.
+Missing truth is catastrophic; adding falsehood is free.}
+\label{fig:asymmetry}
+\end{figure}
+
+\begin{geometricinsight}
+This asymmetry has a clear operational interpretation:
+\begin{itemize}
+  \item \textbf{Missing truth ($q=0$ where $p>0$)}: The model is overconfident---it assigns zero probability to something that can happen.
+  This is an infinite penalty.
+  One missing coordinate is enough.
+  \item \textbf{Adding falsehood ($q>0$ where $p=0$)}: The model is underconfident---it assigns probability to something that cannot happen.
+  This is \emph{zero} penalty.
+  The model can hallucinate with impunity.
+\end{itemize}
+Cross-entropy enforces \emph{coverage} with infinite force but imposes \emph{no constraint} on precision.
+\end{geometricinsight}
+
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{KL Divergence and the Impossible Zero}
+\label{sec:kl}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+Because $D_\mathrm{KL}(p\|q) = H(p,q) - H(p)$ and $H(p)$ is finite for any distribution on a finite alphabet, the singularity structure of KL divergence inherits directly from that of cross-entropy.
+
+\begin{theorem}[KL divergence is undefined at disjoint support]
+\label{thm:kl-undefined}
+If $\mathrm{supp}(p) \cap \mathrm{supp}(q) = \varnothing$, then $D_\mathrm{KL}(p \| q) = +\infty$.
+More generally, $D_\mathrm{KL}(p\|q) = +\infty$ if and only if $V_{p,q} \neq \varnothing$.
+\end{theorem}
+
+\begin{proposition}[Gradient explosion near the boundary]
+\label{prop:gradient}
+The gradient of $D_\mathrm{KL}(p\|q)$ with respect to $q_i$ (under the simplex constraint) is:
+\begin{equation}
+  \frac{\partial D_\mathrm{KL}}{\partial q_i} = -\frac{p_i}{q_i}.
+  \label{eq:kl-gradient}
+\end{equation}
+As $q_i \to 0^+$ with $p_i > 0$, this gradient diverges: $|\nabla_{q_i}| \to +\infty$.
+\end{proposition}
+
+\begin{proof}
+$D_\mathrm{KL}(p\|q) = \sum_x p(x)\log p(x) - \sum_x p(x)\log q(x)$.
+Differentiating with respect to $q_i$: $\partial D_\mathrm{KL}/\partial q_i = -p_i/q_i$.
+\end{proof}
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}
+  \begin{axis}[
+    width=0.85\textwidth,
+    height=6cm,
+    xlabel={$q_i$},
+    ylabel={},
+    xmin=0, xmax=1,
+    ymin=-1, ymax=12,
+    grid=major,
+    grid style={gray!20},
+    axis line style={gray!50},
+    tick style={gray!50},
+    every axis label/.style={font=\footnotesize},
+    every tick label/.style={font=\footnotesize},
+    legend pos=north east,
+    legend style={font=\scriptsize, fill=white, fill opacity=0.9, draw=gray!30},
+  ]
+    % -p log q for p=0.3
+    \addplot[accent, thick, domain=0.005:1, samples=200] {0.3*(-ln(x)/ln(2))};
+    \addlegendentry{$-p_i\log q_i$, $p_i = 0.3$}
+
+    % gradient -p/q
+    \addplot[accentblue, thick, dashed, domain=0.04:1, samples=200] {0.3/x};
+    \addlegendentry{$|\nabla_{q_i}| = p_i/q_i$}
+
+    % Singularity marker
+    \draw[accent, thick, dashed] (0,0) -- (0,12);
+    \node[font=\tiny, text=accent, anchor=south west, rotate=90] at (0.01,6) {singularity at $q_i = 0$};
+
+  \end{axis}
+\end{tikzpicture}
+\caption{The contribution $-p_i \log q_i$ (solid red) and its gradient magnitude $p_i/q_i$ (dashed blue) as functions of $q_i$.
+Both diverge as $q_i \to 0^+$: the loss becomes infinite and the gradient explodes.
+Any optimization that pushes $q_i$ toward zero faces unbounded gradients near the boundary.}
+\label{fig:kl-singularity}
+\end{figure}
+
+\subsection{The Geometric Interpretation}
+
+Disjoint support is the probabilistic analog of vector orthogonality.
+Two distributions whose supports don't intersect are like two vectors with zero dot product: they share no common events, they occupy independent regions of the sample space.
+
+\begin{keyresult}
+\begin{center}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+& \textbf{Vector space} & \textbf{Probability space} \\
+\midrule
+Same & $\cos\theta = +1$ & $p = q$ \\
+Independent & $\cos\theta = 0$ (orthogonal) & $\mathrm{supp}(p) \cap \mathrm{supp}(q) = \varnothing$ \\
+\midrule
+Distance at ``same'' & $d = 0$ (well-defined) & $D_\mathrm{KL} = 0$ (well-defined) \\
+Distance at ``independent'' & $d = \sqrt{2}$ (well-defined) & $D_\mathrm{KL} = +\infty$ (\textbf{undefined}) \\
+\bottomrule
+\end{tabular}
+\end{center}
+Geometric orthogonality is a perfectly reachable configuration with a well-defined distance.
+Probabilistic orthogonality is a singularity: the distance metric breaks at the very point that represents genuine independence.
+\end{keyresult}
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[scale=1.8]
+  % ── LEFT: Vector space ──
+  \begin{scope}[shift={(-2.8,0)}]
+    \node[font=\footnotesize\bfseries, anchor=south] at (0,1.8) {Vector Space};
+
+    % Unit circle
+    \draw[gray!25, thick] (0,0) circle (1);
+
+    % u vector
+    \draw[accent, ultra thick, ->, >=stealth] (0,0) -- (1,0);
+    \node[accent, font=\scriptsize\bfseries, anchor=south west] at (1,0.02) {$\mathbf{u}$};
+
+    % v vector (orthogonal)
+    \draw[accentgreen, ultra thick, ->, >=stealth] (0,0) -- (0,1);
+    \node[accentgreen, font=\scriptsize\bfseries, anchor=south west] at (0.02,1) {$\mathbf{v}$};
+
+    % Right angle
+    \draw[accentgreen, thick] (0.15,0) -- (0.15,0.15) -- (0,0.15);
+
+    % Distance label
+    \draw[gold, thick, <->] (1.05,0.05) -- (0.05,1.05);
+    \node[gold, font=\tiny, anchor=south west, rotate=-45] at (0.6,0.6) {$d = \sqrt{2}$};
+
+    % Reachable label
+    \node[accentgreen, font=\tiny\bfseries, anchor=north] at (0,-1.25) {Reachable, well-defined};
+  \end{scope}
+
+  % ── RIGHT: Probability space ──
+  \begin{scope}[shift={(2.8,0)}]
+    \node[font=\footnotesize\bfseries, anchor=south] at (0,1.8) {Probability Space};
+
+    % Simplex (triangle)
+    \draw[gray!25, thick] (-1,-0.8) -- (1,-0.8) -- (0,1.2) -- cycle;
+
+    % p distribution
+    \fill[accent] (-0.3,0.2) circle (2pt);
+    \node[accent, font=\scriptsize, anchor=east] at (-0.4,0.2) {$p$};
+
+    % q distribution (disjoint support)
+    \fill[accentblue] (0.5,-0.4) circle (2pt);
+    \node[accentblue, font=\scriptsize, anchor=west] at (0.6,-0.4) {$q$};
+
+    % Divergence arrow (broken)
+    \draw[gold, thick, dashed, ->] (-0.25,0.15) -- (0.4,-0.3);
+    \node[accent, font=\tiny, anchor=west, rotate=-30] at (0.15,-0.15) {$D_\mathrm{KL} = \infty$};
+
+    % Singular label
+    \node[accent, font=\tiny\bfseries, anchor=north] at (0,-1.25) {Singular, undefined};
+  \end{scope}
+
+  % Central label
+  \node[font=\scriptsize, text=mutedtext, anchor=center] at (0,-0.2) {vs.};
+\end{tikzpicture}
+\caption{The fundamental asymmetry between vector geometry and probability geometry.
+\textbf{Left}: Orthogonal vectors have a well-defined Euclidean distance ($\sqrt{2}$ on the unit circle).
+\textbf{Right}: Distributions with disjoint support (the probabilistic analog of orthogonality) have $D_\mathrm{KL} = +\infty$.
+The geometric framework handles independence naturally; the information-theoretic framework breaks at the same point.}
+\label{fig:vector-vs-probability}
+\end{figure}
+
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{Divergences Finite at the Boundary}
+\label{sec:alternatives}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+The singularity at disjoint support is not an inevitable feature of all divergence measures.
+Several alternatives are well-defined at the boundary; we record their behaviour for reference.
+
+\begin{table}[ht]
+\centering
+\caption{Divergence measures and their behaviour at disjoint support.}
+\label{tab:alternatives}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Divergence} & \textbf{At disjoint supp.} & \textbf{Symmetric} & \textbf{Diff'able} \\
+\midrule
+Cross-entropy $H(p,q)$ & $+\infty$ & No & Yes (interior) \\
+$D_\mathrm{KL}(p\|q)$ & $+\infty$ & No & Yes (interior) \\
+Jensen--Shannon $\mathrm{JSD}$ & $\leq \log 2$ & Yes & Yes \\
+Wasserstein $W_1(p,q)$ & Finite & Yes & Subgradient \\
+MMD $\mathrm{MMD}^2(p,q)$ & Finite & Yes & Yes \\
+Total variation $\mathrm{TV}(p,q)$ & $\leq 1$ & Yes & Subgradient \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Jensen--Shannon divergence is bounded by $\log 2$ and is well-defined everywhere; it was used in the original GAN formulation~\cite{goodfellow2014gan}.
+Wasserstein distance~\cite{villani2009transport} does not require overlapping support and metrises weak convergence, making it the natural candidate for losses that need to measure distances at the boundary.
+Maximum Mean Discrepancy operates in a reproducing kernel Hilbert space and is finite for any pair of distributions.
+The cost paid for finiteness at the boundary differs across these alternatives---computational, statistical, and in terms of the gradient signal available to first-order optimisation---and a thorough comparison is beyond the scope of the present paper.
+
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{Discussion}
+\label{sec:discussion}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+The preceding sections are mathematical content; this one is interpretive.
+Three of the most persistent failure modes of modern multimodal and contrastive systems---the modality gap, hallucination, and InfoNCE's batch-size hunger---admit a natural reading in terms of that structure.
+We present each as a \emph{hypothesis} unifying observed behaviour with the singularity, not as a derivation that displaces the existing accounts in the literature.
+Each of these phenomena has competing explanations that any complete analysis must engage with; the singularity-shadow lens is one factor among them, offered here for its unifying value rather than as sole cause.
+
+\subsection{The Modality Gap}
+
+CLIP~\cite{radford2021clip} and SigLIP~\cite{zhai2023siglip} train image and text encoders to produce embeddings in a shared space.
+Empirically, image and text embeddings do not overlap---they form two disjoint clusters separated by a persistent \emph{modality gap}~\cite{liang2022modality}.
+
+\begin{remark}[The modality gap]
+\label{rem:modality-gap}
+Let $p_\text{img}$ and $p_\text{txt}$ denote the distributions of image and text embeddings on $\mathbb{S}^{d-1}$.
+The contrastive loss wants mismatched pairs to have orthogonal embeddings, which in the distributional sense corresponds to pushing toward $\mathrm{supp}(p_\text{img}) \cap \mathrm{supp}(p_\text{txt}) = \varnothing$.
+The cross-entropy-based loss diverges at this configuration (Theorem~\ref{thm:divergence}).
+The optimisation therefore cannot reach orthogonal separation as a limit point; the residual ``safe distance'' it settles for is consistent with the empirically observed modality gap.
+\end{remark}
+
+\begin{geometricinsight}
+The reading above is offered as a unifying hypothesis, not a sole-cause explanation.
+The modality gap has at least three other live accounts in the literature.
+\textbf{(i)} Liang et al.~\cite{liang2022modality} document a gap present at \emph{initialisation}, before any contrastive training, attributable to the geometry of randomly initialised deep encoders.
+\textbf{(ii)} Cone effects in deep networks concentrate embeddings in narrow regions of the sphere irrespective of the contrastive objective.
+\textbf{(iii)} Optimisation dynamics around the temperature parameter shape how aggressively the loss drives negatives across the equator.
+The singularity-shadow account is consistent with each of these and may compose with them; a clean separation is, at this stage, an open empirical question.
+\end{geometricinsight}
+
+\subsection{Hallucination Under the Asymmetric Loss}
+
+Large multimodal models hallucinate: they describe objects that do not exist in the image, invent facts, and produce confidently wrong outputs.
+
+\begin{remark}[Overcoverage bias]
+\label{rem:hallucination}
+Let $p$ be the true distribution over outputs and $q$ the model's distribution.
+At the coordinate level, cross-entropy contributions decompose into:
+\begin{enumerate}[label=(\alph*)]
+  \item if $q(x) = 0$ and $p(x) > 0$, the penalty is $+\infty$;
+  \item if $q(x) > 0$ and $p(x) = 0$, the penalty is $0$.
+\end{enumerate}
+Per coordinate, putting mass on a real outcome that the model had zeroed eliminates the only unbounded term in the loss, while putting mass on an impossible outcome is, term by term, free.
+This produces a systematic bias toward overcoverage under uncertainty.
+\end{remark}
+
+\begin{remark}[The simplex constraint qualifies the ``optimal strategy'' framing]
+The per-coordinate result above is exact, but it does not on its own characterise an unconstrained optimum.
+Under the softmax that produces $q$, the coordinates are coupled by the simplex constraint $\sum_x q(x) = 1$.
+Mass placed on a falsehood necessarily comes from somewhere, including, in general, from real outcomes; ``adding falsehood'' is not literally free once one accounts for the displaced mass on truth.
+The proposition therefore characterises a \emph{bias} rather than an \emph{optimum}: the direction in which gradients push under coverage-vs-precision tradeoffs, not the loss-minimising configuration of the model.
+Stronger versions of the claim---such as ``hallucination is the optimal strategy under the loss''---require either dropping the simplex constraint or coupling the loss with regularisation that breaks the symmetry.
+\end{remark}
+
+\begin{casestudy}
+The bias is recognisable in practice.
+A model that distributes its output mass across 10 described objects in an image of 5 real objects pays a smaller marginal cross-entropy for the 5 hallucinated descriptions than the cost of zeroing out any of the 5 real ones.
+The asymmetry is one mechanism among the empirical reasons multimodal models tend to overgenerate rather than undergenerate; it is consistent with the observed pattern but does not exhaust it.
+\end{casestudy}
+
+\subsection{The Computational Cost of Fighting the Singularity}
+
+InfoNCE~\cite{oord2018infonce}---the loss behind CLIP and SimCLR~\cite{chen2020simclr}---computes a softmax cross-entropy over the batch similarity matrix.
+For negative pairs, the loss pushes similarities toward the boundary where the singularity lives.
+
+\begin{remark}[Singularity flatness and batch-size requirements]
+\label{rem:batch-cost}
+The InfoNCE gradient for negative pair $k$ is weighted by:
+\begin{equation}
+  w_k = \frac{\exp(\mathrm{sim}_k / \tau)}{\sum_j \exp(\mathrm{sim}_j / \tau)}.
+\end{equation}
+As negative similarities approach the singularity boundary (near orthogonality, $\mathrm{sim} \approx 0$), the softmax weights become approximately uniform, $w_k \approx 1/N$, and each negative contributes $O(1/N)$ gradient.
+Accumulating useful signal in this regime requires $N$ large.
+This is consistent with the large batches used in practice---for example, CLIP's $N = 32{,}768$---though it is one contributing factor among several.
+\end{remark}
+
+\begin{remark}
+Other factors known to drive contrastive batch-size requirements compose with the singularity-flatness effect described above.
+Hard-negative mining benefits from larger batches because the chance of seeing genuinely informative negatives grows with $N$; gradient variance reduction benefits from larger batches because the InfoNCE estimator's variance scales with $1/N$; the temperature schedule, the embedding dimension, and the choice of similarity function all shape the regime in which the softmax operates.
+The proposition above identifies one mechanism within this composition; it does not claim to be the dominant one.
+\end{remark}
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}
+  \begin{axis}[
+    width=0.85\textwidth,
+    height=5.5cm,
+    xlabel={Region of similarity space},
+    ylabel={Gradient signal per negative},
+    xmin=-1, xmax=1,
+    ymin=0, ymax=3,
+    xtick={-1, -0.5, 0, 0.5, 1},
+    xticklabels={$-1$, $-0.5$, $0$, $0.5$, $+1$},
+    ytick={0, 1, 2, 3},
+    grid=major,
+    grid style={gray!20},
+    axis line style={gray!50},
+    tick style={gray!50},
+    every axis label/.style={font=\footnotesize},
+    every tick label/.style={font=\footnotesize},
+  ]
+    % Gradient signal (exponential in similarity)
+    \addplot[accent, thick, domain=-1:0.8, samples=200] {exp(3*x)};
+    \addlegendentry{InfoNCE gradient weight}
+
+    % Near-zero region (flat)
+    \fill[accentblue!15] (axis cs:-0.15,0) rectangle (axis cs:0.15,3);
+    \node[font=\tiny, text=accentblue, rotate=90, anchor=south] at (axis cs:0.0,1.5) {concentration zone};
+
+    % Singularity region
+    \draw[gold, thick, dashed] (axis cs:0,-0.1) -- (axis cs:0,3);
+    \node[font=\tiny, text=gold, anchor=south west] at (axis cs:0.05,2.5) {orthogonality};
+
+  \end{axis}
+\end{tikzpicture}
+\caption{InfoNCE gradient weight as a function of pairwise similarity.
+Near orthogonality ($\cos \approx 0$), where most high-dimensional random vectors concentrate, the gradient weight is exponentially small.
+The loss needs enormous batches to accumulate signal from this flat region.}
+\label{fig:gradient-weight}
+\end{figure}
+
+\begin{keyresult}
+The three phenomena---modality gap, hallucination bias, contrastive batch-size hunger---admit a unifying reading:
+\begin{center}
+\emph{Cross-entropy diverges at the configuration its consumers are trying to achieve.}
+\end{center}
+The modality gap is consistent with the optimisation maintaining a safe distance from the singularity, the asymmetry of cross-entropy biases models toward overcoverage under uncertainty, and the singularity-flatness effect is one driver of the gradient-signal pressure that demands large batches.
+These are hypothesised structural causes; each phenomenon also has independent contributing accounts in the literature, with which the singularity reading composes rather than competes.
+\end{keyresult}
+
+
+
+
+% ═══════════════════════════════════════════════════════════════════════════════
+% REFERENCES
+% ═══════════════════════════════════════════════════════════════════════════════
+\begin{thebibliography}{10}
+
+\bibitem{radford2021clip}
+A.~Radford, J.~W. Kim, C.~Hallacy, A.~Ramesh, G.~Goh, S.~Agarwal, G.~Sastry, A.~Askell, P.~Mishkin, J.~Clark, G.~Krueger, and I.~Sutskever.
+\newblock Learning transferable visual models from natural language supervision.
+\newblock In \emph{Proceedings of ICML}, 2021.
+\newblock \url{https://arxiv.org/abs/2103.00020}
+
+\bibitem{zhai2023siglip}
+X.~Zhai, B.~Mustafa, A.~Kolesnikov, and L.~Beyer.
+\newblock Sigmoid loss for language image pre-training.
+\newblock In \emph{Proceedings of ICCV}, 2023.
+\newblock \url{https://arxiv.org/abs/2303.15343}
+
+\bibitem{oord2018infonce}
+A.~van~den~Oord, Y.~Li, and O.~Vinyals.
+\newblock Representation learning with contrastive predictive coding.
+\newblock \emph{arXiv preprint arXiv:1807.03748}, 2018.
+\newblock \url{https://arxiv.org/abs/1807.03748}
+
+\bibitem{chen2020simclr}
+T.~Chen, S.~Kornblith, M.~Norouzi, and G.~Hinton.
+\newblock A simple framework for contrastive learning of visual representations.
+\newblock In \emph{Proceedings of ICML}, 2020.
+\newblock \url{https://arxiv.org/abs/2002.05709}
+
+\bibitem{liang2022modality}
+V.~W. Liang, Y.~Zhang, Y.~Kwon, S.~Yeung, and J.~Y. Zou.
+\newblock Mind the gap: Understanding the modality gap in multi-modal contrastive representation learning.
+\newblock In \emph{Advances in NeurIPS}, 2022.
+\newblock \url{https://arxiv.org/abs/2203.02053}
+
+\bibitem{goodfellow2014gan}
+I.~Goodfellow, J.~Pouget-Abadie, M.~Mirza, B.~Xu, D.~Warde-Farley, S.~Ozair, A.~Courville, and Y.~Bengio.
+\newblock Generative adversarial nets.
+\newblock In \emph{Advances in NeurIPS}, 2014.
+
+\bibitem{villani2009transport}
+C.~Villani.
+\newblock \emph{Optimal Transport: Old and New}.
+\newblock Springer, 2009.
+
+\end{thebibliography}
+
+\end{document}
