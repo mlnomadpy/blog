@@ -164,6 +164,9 @@ I use Google Analytics to see which posts get read. It sets cookies only
   </script>
 
   <style>
+    /* Author `display:flex` below would otherwise override the UA [hidden]
+       rule, leaving the banner visible after a choice. This wins on specificity. */
+    .consent-banner[hidden] { display: none !important; }
     .consent-banner {
       position: fixed;
       bottom: 1rem;
