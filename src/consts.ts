@@ -21,6 +21,13 @@ export const SITE_SAMEAS: readonly string[] = [
 // Relative to BASE_URL — see src/components/BaseHead.astro for the URL build.
 export const SITE_OG_IMAGE = 'og-default.svg';
 
+// Google Analytics 4 Measurement ID, e.g. 'G-XXXXXXXXXX'. Leave empty to
+// disable. The tag only loads in production builds (see BaseHead.astro), so
+// local dev traffic never reaches GA. Per-post numbers come for free: every
+// post is its own URL, so the GA "Pages and screens" report breaks down by
+// post path automatically.
+export const GA4_MEASUREMENT_ID = '';
+
 // giscus — comments via GitHub Discussions on mlnomadpy/blog.
 // IDs fetched via the GitHub GraphQL API; "Announcements" category chosen
 // because only maintainers + the giscus app can create top-level threads.

@@ -15,7 +15,12 @@ import {
   SITE_AUTHOR_JOB_TITLE,
   SITE_SAMEAS,
   SITE_OG_IMAGE,
+  GA4_MEASUREMENT_ID,
 } from '../consts';
+
+// Load GA4 only in production and only when an ID is configured, so local
+// dev never pollutes the analytics property.
+const enableGA = import.meta.env.PROD && !!GA4_MEASUREMENT_ID;
 
 interface BlogPostRef { url: string; title: string; description?: string; pubDate: Date }
 
@@ -294,6 +299,33 @@ const jsonLdNodes = [blogPosting, breadcrumb, website, blogIndex, profilePage].f
 {jsonLdNodes.map((node) => (
   <script type="application/ld+json" set:html={JSON.stringify(node)} />
 ))}
+
+{/* Google Analytics 4 — production only. send_page_view is disabled and we
+    fire page_view on astro:page-load so client-side view-transition
+    navigations are counted (exactly once; the listener is registered once
+    and lives on document, surviving head swaps). */}
+{enableGA && (
+  <>
+    <script is:inline async src={`https://www.googletagmanager.com/gtag/js?id=${GA4_MEASUREMENT_ID}`}></script>
+    <script is:inline set:html={`
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ dataLayer.push(arguments); }
+      window.gtag = window.gtag || gtag;
+      if (!window.__ga4Init) {
+        window.__ga4Init = true;
+        gtag('js', new Date());
+        gtag('config', '${GA4_MEASUREMENT_ID}', { send_page_view: false });
+        document.addEventListener('astro:page-load', function () {
+          gtag('event', 'page_view', {
+            page_title: document.title,
+            page_location: location.href,
+            page_path: location.pathname + location.search,
+          });
+        });
+      }
+    `} />
+  </>
+)}
 
 {/* Theme bootstrap — runs before paint to avoid FOUC */}
 <script is:inline>
