@@ -26,7 +26,7 @@ export const SITE_OG_IMAGE = 'og-default.svg';
 // local dev traffic never reaches GA. Per-post numbers come for free: every
 // post is its own URL, so the GA "Pages and screens" report breaks down by
 // post path automatically.
-export const GA4_MEASUREMENT_ID = '';
+export const GA4_MEASUREMENT_ID = 'G-373438VHJB';
 
 // giscus — comments via GitHub Discussions on mlnomadpy/blog.
 // IDs fetched via the GitHub GraphQL API; "Announcements" category chosen
