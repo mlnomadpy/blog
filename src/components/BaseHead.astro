@@ -16,6 +16,7 @@ import {
   SITE_SAMEAS,
   SITE_OG_IMAGE,
   GA4_MEASUREMENT_ID,
+  GOOGLE_SITE_VERIFICATION,
 } from '../consts';
 
 // Load GA4 only in production and only when an ID is configured, so local
@@ -256,6 +257,7 @@ const jsonLdNodes = [blogPosting, breadcrumb, website, blogIndex, profilePage].f
 <meta name="description" content={description} />
 {seoKeywords.length > 0 && <meta name="keywords" content={seoKeywords.join(', ')} />}
 <meta name="author" content={author} />
+{GOOGLE_SITE_VERIFICATION && <meta name="google-site-verification" content={GOOGLE_SITE_VERIFICATION} />}
 {noindex && <meta name="robots" content="noindex, nofollow" />}
 <link rel="canonical" href={canonical} />
 <link rel="icon" href={`${import.meta.env.BASE_URL}/favicon.svg`} type="image/svg+xml" />
@@ -300,31 +302,54 @@ const jsonLdNodes = [blogPosting, breadcrumb, website, blogIndex, profilePage].f
   <script type="application/ld+json" set:html={JSON.stringify(node)} />
 ))}
 
-{/* Google Analytics 4 — production only. send_page_view is disabled and we
-    fire page_view on astro:page-load so client-side view-transition
-    navigations are counted (exactly once; the listener is registered once
-    and lives on document, surviving head swaps). */}
+{/* Google Analytics 4 — production only, and consent-gated: gtag.js is not
+    loaded and no cookie is set until the visitor accepts (see ConsentBanner).
+    send_page_view is disabled; we fire page_view on astro:page-load so
+    client-side view-transition navigations count exactly once. window.__loadGA
+    is the entry point the banner calls on Accept; it also auto-runs here if a
+    prior visit already granted consent. */}
 {enableGA && (
-  <>
-    <script is:inline async src={`https://www.googletagmanager.com/gtag/js?id=${GA4_MEASUREMENT_ID}`}></script>
-    <script is:inline set:html={`
+  <script is:inline set:html={`
+    (function () {
+      if (window.__gaSetup) return;
+      window.__gaSetup = true;
+      var GA_ID = '${GA4_MEASUREMENT_ID}';
       window.dataLayer = window.dataLayer || [];
       function gtag(){ dataLayer.push(arguments); }
       window.gtag = window.gtag || gtag;
-      if (!window.__ga4Init) {
-        window.__ga4Init = true;
+
+      // Track whether the first astro:page-load has fired, so a mid-session
+      // Accept can still record the current page.
+      window.__gaFirstLoadDone = window.__gaFirstLoadDone || false;
+      document.addEventListener('astro:page-load', function () { window.__gaFirstLoadDone = true; });
+
+      window.__loadGA = function () {
+        if (window.__gaLoaded) return;
+        window.__gaLoaded = true;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+        document.head.appendChild(s);
         gtag('js', new Date());
-        gtag('config', '${GA4_MEASUREMENT_ID}', { send_page_view: false });
-        document.addEventListener('astro:page-load', function () {
+        gtag('config', GA_ID, { send_page_view: false });
+        function sendPV() {
           gtag('event', 'page_view', {
             page_title: document.title,
             page_location: location.href,
             page_path: location.pathname + location.search,
           });
-        });
-      }
-    `} />
-  </>
+        }
+        document.addEventListener('astro:page-load', sendPV);
+        // If the initial page-load already happened (accept mid-session),
+        // record this page now; otherwise the listener catches the first one.
+        if (window.__gaFirstLoadDone) sendPV();
+      };
+
+      try {
+        if (localStorage.getItem('analytics-consent') === 'granted') window.__loadGA();
+      } catch (e) {}
+    })();
+  `} />
 )}
 
 {/* Theme bootstrap — runs before paint to avoid FOUC */}
