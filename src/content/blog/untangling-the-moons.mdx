@@ -1,0 +1,280 @@
+---
+title: 'Untangling the Moons: A Visual History of Contrastive Learning'
+description: Eight contrastive losses, twenty years of history, one interactive playground. Watch pair, triplet, InfoNCE, CLIP, SupCon, SigLIP, alignment+uniformity, and cosine→0 race in 2D.
+pubDate: 2026-05-26
+tags: [ml, contrastive, embeddings, kernels, interpretability, contrastive-learning, infonce, simclr, clip, siglip, supcon, triplet-loss, self-supervised-learning, representation-learning]
+keywords:
+  - contrastive learning
+  - contrastive loss
+  - InfoNCE
+  - NT-Xent
+  - SimCLR
+  - CLIP
+  - SigLIP
+  - SupCon
+  - triplet loss
+  - pair contrastive loss
+  - Hadsell loss
+  - FaceNet
+  - alignment and uniformity
+  - Wang and Isola
+  - embedding visualisation
+  - two-moons dataset
+  - representation learning
+  - self-supervised learning
+  - metric learning
+  - siamese network
+  - negative sampling
+---
+import LossExplorer from '../../components/viz/LossExplorer.astro';
+import ContrastiveRace from '../../components/viz/ContrastiveRace.astro';
+import CiteAs from '../../components/CiteAs.astro';
+
+*Twenty years of contrastive learning, eight losses, eight datasets, and the geometric bug seven of them share.*
+
+---
+
+Contrastive learning is the standard recipe for turning raw data into a usable embedding space, and the recipe has been rewritten roughly every three years. Pair contrastive was the original; triplet was a response to pair contrastive's margin problem; InfoNCE was a response to triplet's selection problem; CLIP was InfoNCE scaled to multimodal data; SupCon was a response to InfoNCE's one-positive limitation; alignment-and-uniformity was the theoretical decomposition that made all of them legible at once; SigLIP is the most recent member, and the first one to seriously question whether the negatives target was right in the first place. Every version is a fix for the previous one's failure mode.
+
+What the lineage missed, all six members of it, is a question of geometry, not optimization. They all push different-class pairs *as far apart as possible*. On the unit sphere, as-far-as-possible means cosine $-1$ — diametrically opposite. That is overshooting. The maximally discriminative configuration on the sphere is the regular simplex, where negatives sit at cosine $-1/(k-1)$, not $-1$; for many classes the right target is approximately orthogonality, not opposition. I made the long case for this in [*Opposite Is Not Different*](/blog/opposite-is-not-different/), and the demonstration here is the simplest possible: in 2D, with the points sitting in the embedding space themselves, you can watch every loss in the lineage waste energy pushing past orthogonality.
+
+The fastest way to feel any of this is to skip the encoder entirely. Take 60 points in 2D, label them by class, and treat the positions themselves as the embeddings. Run gradient descent on the loss of your choice. Six losses, six geometries, six failure modes — all visible in under a minute each.
+
+This post walks the lineage in order. Each loss gets an interactive explorer locked to that loss; the default preset starts from **random positions and random labels** so the loss has to impose all the geometry itself, and the rest of the presets surface the loss's named pathologies on demand. At the end, all six race on the same dataset, from the same initial points, at the same step counter.
+
+## The setup
+
+The left panel in every explorer is the embedding space; the right is the loss curve and a running nearest-centroid classification accuracy. Losses that use cosine similarity project to the unit circle every step — the dashed reference circle appears for those. Losses that use Euclidean distance leave the points free.
+
+Eight datasets are available in the dropdown:
+
+- **random** (default) — uniform positions, random labels, no spatial signal. The loss must impose everything.
+- **random (4 classes)** — same, four-way.
+- **two-moons** — Hadsell's original test case. Two interlocking half-circles.
+- **overlapping blobs** — heavy class overlap.
+- **concentric rings** — same angular distribution, different radii. Diagnoses cosine-based losses.
+- **four classes / eight classes** — multi-class stress.
+- **two spirals**, **imbalanced moons**, **noisy moons** — adversarial settings.
+
+The default preset uses random data for every explorer because pre-organised datasets give the loss too much of a head start. What you want to see is the *law* — the configuration each loss converges to — and a structured initial state lets the loss get away with doing very little.
+
+## 1. The original: Hadsell, Chopra, and LeCun, 2006
+
+The modern contrastive era opens with [Hadsell, Chopra, and LeCun's *Dimensionality Reduction by Learning an Invariant Mapping*](https://ieeexplore.ieee.org/document/1640964) — a siamese network for face verification with what is now the canonical pair loss. For every pair of points you know whether they share a label. Pull positives together with a quadratic penalty; push negatives apart until they reach a margin $m$, and then stop:
+
+$$
+\mathcal{L}_{\text{pair}}(i, j) \;=\;
+\begin{cases}
+\|z_i - z_j\|^2 & y_i = y_j \\
+\bigl[\,m - \|z_i - z_j\|\,\bigr]_+^2 & y_i \neq y_j
+\end{cases}
+$$
+
+The margin does all the work. Without it the repulsion has no scale and the embedding blows up. With it the loss is satisfied as soon as negatives are *far enough* — and then the gradient vanishes. Pair contrastive knows when to stop, which is both its virtue and its problem.
+
+<LossExplorer loss="hadsell" preset="default" caption="Pair contrastive (Hadsell, Chopra, LeCun, 2006). Default preset starts from random data and watches the loss impose its geometry from scratch. Other presets surface the failure modes: too-small margin, too-large margin, imbalanced classes." />
+
+The named failure modes:
+
+- **Margin too small.** No reward for separating classes far. Loss drops to zero almost immediately; accuracy stays near chance. The loss curve looks healthy and the embedding is useless. The literature's name for this — *trivial solution* — already appears in Hadsell's paper.
+- **Margin too large.** Repulsion never saturates. Negatives keep getting pushed further forever; the embedding norm grows without bound; the loss curve never stabilises. In a real network this is where you get gradient explosions.
+- **Class imbalance.** Every pair contributes equally to the gradient. With an 80/20 split the majority class dominates and the minority gets dragged. Standard fix is pair re-weighting; vanilla pair contrastive does not.
+
+By 2014 the problem with pair contrastive was visible in production face-recognition systems: $m$ is a global hyperparameter that wants to be different for different parts of the data manifold. The fix would be to make the comparison *relative* — to ask not *is this pair close enough?* but *is the positive closer than the negative, by how much?* That is the next loss.
+
+## 2. The relativisation: FaceNet, 2015
+
+Schroff, Kalenichenko, and Philbin's [*FaceNet*](https://arxiv.org/abs/1503.03832) reformulated the problem in relative terms. Instead of asking two separate questions about positives and negatives, ask one combined question: is the negative farther than the positive, by at least margin $m$?
+
+$$
+\mathcal{L}_{\text{trip}}(a, p, n) \;=\;
+\bigl[\,\|z_a - z_p\|^2 - \|z_a - z_n\|^2 + m\,\bigr]_+
+$$
+
+Only triplets that *violate* the inequality contribute gradient. The hope was that this makes training focus naturally on the hardest examples, automatically. The reality, which the FaceNet paper itself discovered and the next decade of work spent fighting, is that *most random triplets are easy* — and a triplet that is easy contributes no gradient at all. In a batch of $B$ examples there are $O(B^3)$ candidate triplets and almost all of them are silent.
+
+<LossExplorer loss="triplet" preset="default" caption="Triplet loss (Schroff, Kalenichenko, Philbin, 2015). The 'easy triplets' preset shows the silent-death failure mode that motivated a decade of hard-negative-mining literature." />
+
+The named failure modes:
+
+- **Easy triplets.** At initialisation, random triplets are usually satisfied trivially. The loss is near zero from step one and no learning happens. FaceNet's own response was *semi-hard mining*: pick the negative that violates the triplet by the smallest positive amount. By 2017 there were [online miners](https://arxiv.org/abs/1706.07567), [batch-hard miners](https://arxiv.org/abs/1703.07737), miner schedules, and an industry of triplet-mining infrastructure. The point of all of it was to compensate for the fact that the triplet loss, left alone, has no gradient on most of its input.
+- **Aggressive margin.** Set the margin bigger than the typical inter-class distance and no triplet is ever satisfied. The embedding wanders stochastically.
+- **Class imbalance.** Random anchor sampling means most anchors come from the majority. Balanced batch sampling required.
+
+Pair contrastive and triplet together define what the literature later named the **margin family** — losses whose gradient vanishes once a margin condition is satisfied. The margin family's appeal is that it knows when to stop. Its problem is that it stops too soon, and selecting which examples it should think about is its own engineering project. By 2018 the field was ready to give up on margins entirely.
+
+## 3. The softmax turn: van den Oord and SimCLR, 2018–2020
+
+[Van den Oord, Li, and Vinyals](https://arxiv.org/abs/1807.03748), working on contrastive predictive coding, replaced the margin with a softmax. For an anchor $a$ with one positive $p$ and a batch of $N$ negatives:
+
+$$
+\mathcal{L}_{\text{InfoNCE}}(a) \;=\;
+-\log \frac{\exp(\mathrm{sim}(z_a, z_p) / \tau)}{\sum_{k \neq a} \exp(\mathrm{sim}(z_a, z_k) / \tau)}
+$$
+
+Three structural changes from triplet. **All negatives at once**: every other point participates as a negative, weighted by its similarity to the anchor; hard negatives get most of the gradient automatically, eliminating the explicit miner. **No hard margin**: the softmax has support everywhere, so the gradient never vanishes — there is always an incentive to spread the negatives a bit wider. **Embeddings on a sphere**: cosine similarity ignores the norm.
+
+The 2020 wave — [SimCLR](https://arxiv.org/abs/2002.05709), [MoCo](https://arxiv.org/abs/1911.05722), [CLIP](https://arxiv.org/abs/2103.00020) — all run on variants of this loss. The name InfoNCE comes from the loss being a tight variational lower bound on mutual information $I(X; Y)$; the name NT-Xent (normalised-temperature cross-entropy) comes from the SimCLR paper. They are the same loss.
+
+<LossExplorer loss="infonce" preset="default" caption="InfoNCE / NT-Xent (van den Oord et al., 2018; Chen et al., 2020). The temperature τ is the dominant hyperparameter — the failure-mode presets show its two extremes." />
+
+The named failure modes are almost all about the temperature $\tau$:
+
+- **τ too low.** The softmax becomes peaky. Gradients are dominated by the single hardest negative each step, and any noisy step destabilises the embedding. The loss curve becomes saw-toothed. Wang & Isola (next section) prove this corresponds to over-emphasising uniformity at the expense of alignment.
+- **τ too high.** The softmax flattens; all negatives contribute roughly equally; the gradient is weak. Convergence is glacial.
+- **Concentric rings.** Cosine similarity throws away the norm, so two concentric rings — different *radii*, same *angles* — become identical after projection. Accuracy at chance. This is not a defect of InfoNCE; it is a defect of cosine, and any loss that lives on the sphere inherits it.
+
+I argued at length in [*Attention is Explainable Because it is a Kernel*](/blog/attention-is-a-kernel/) that the softmax over similarities in attention is mathematically a Nadaraya–Watson smoother — the kernel operator. InfoNCE is the same operator, the same softmax, pointed at a different objective: optimize positions so the kernel-weighted distribution of labels around each anchor matches its own label.
+
+By 2019 the softmax family had a different problem. It was designed for self-supervised learning where each anchor has exactly one positive: the augmented view of the same image. When labels exist, every other example with the same label is also a positive — and InfoNCE was throwing away that signal one sample at a time. Before the labelled fix appeared, the loss took a detour through multimodality.
+
+## 4. Multimodal scaling: CLIP, 2021
+
+[Radford et al.'s *Learning Transferable Visual Models From Natural Language Supervision*](https://arxiv.org/abs/2103.00020) — the CLIP paper — was the loudest deployment of InfoNCE the field has seen. CLIP trains an image encoder and a text encoder jointly on $400$ million image-caption pairs, with a single objective: each image's embedding should be closest, in cosine distance, to its caption's embedding, out of a batch of $N$ candidates. The loss is symmetrised InfoNCE: image-as-anchor and text-as-anchor, averaged.
+
+$$
+\mathcal{L}_{\text{CLIP}} \;=\; \tfrac{1}{2}\bigl(\mathcal{L}_{\text{img}\rightarrow\text{txt}} + \mathcal{L}_{\text{txt}\rightarrow\text{img}}\bigr)
+$$
+
+Each side is an InfoNCE term. The symmetrisation is what makes the trained embedding *bidirectional*: a query in either modality retrieves nearest neighbours in the other.
+
+<LossExplorer loss="clip" preset="default" caption="CLIP (Radford et al., 2021). In a single-modality 2D demo CLIP is symmetrised InfoNCE — the gradient flows both directions of each anchor↔positive pair. The geometry it converges to is the same as InfoNCE; the gradient signal is doubled per step." />
+
+CLIP's failure modes are InfoNCE's failure modes, amplified by scale. The temperature sensitivity is worse because CLIP trains with frozen $\tau$ for stability; the spherical geometry is worse because the embedding dimension ($512$ in the public release) was chosen for matrix-multiplication throughput, not for the simplex bound that $\mathrm{ImageNet}$-scale class counts would actually need; and the cost — the literal compute cost, measured in GPU-years — is staggering, much of it spent on the gradient bookkeeping required to keep a $32,768 \times 32,768$ similarity matrix on-device.
+
+The geometric bug I argued in [*Opposite Is Not Different*](/blog/opposite-is-not-different/) is at its most consequential here. CLIP's loss has its global minimum, for every negative pair, at cosine $-1$. The space the model is being optimised in cannot accommodate $\binom{N}{2}$ pairs of antiparallel vectors when $N \gg \dim$; the model fights the geometry and loses. The cost is paid in batch size.
+
+## 5. Reintroducing supervision: SupCon, 2020
+
+[Khosla et al.'s *Supervised Contrastive Learning*](https://arxiv.org/abs/2004.11362) generalised InfoNCE to multiple positives — every other example with the same class label — by averaging the InfoNCE term over the positive set $P(a)$:
+
+$$
+\mathcal{L}_{\text{SupCon}}(a) \;=\;
+\frac{-1}{|P(a)|}\sum_{p \in P(a)}
+\log \frac{\exp(\mathrm{sim}(z_a, z_p) / \tau)}{\sum_{k \neq a} \exp(\mathrm{sim}(z_a, z_k) / \tau)}
+$$
+
+The effect is dramatic. Where InfoNCE pulls each anchor toward *a* positive each step, SupCon pulls it toward the *centroid* of all positives. Classes collapse to tight clusters on the sphere, much faster than InfoNCE, and the paper's headline result was beating plain cross-entropy on ImageNet classification accuracy with a two-stage pre-train-then-fine-tune recipe.
+
+<LossExplorer loss="supcon" preset="default" caption="Supervised Contrastive (Khosla et al., 2020). Default preset uses four classes from random data — the four-class case is where SupCon's geometry is sharpest. The 'representation collapse' preset surfaces the cost of that sharpness." />
+
+The named failure modes of SupCon are not about under-fitting. They are about *being too good a classifier*:
+
+- **Representation collapse.** With low $\tau$ and many positives, each class collapses to a single point on the circle. Linearly separable to perfection; but anything you cared about within a class — pose, style, lighting, the things downstream non-classification tasks need — is gone. SupCon is approximately optimal for downstream classification and approximately worst for downstream tasks that need within-class variation. The follow-up literature (Graf et al., 2021; Chen et al., 2022) calls this *neural collapse* and treats it as an interesting equilibrium phenomenon; whether you like it depends on what you want the embedding for.
+- **Imbalanced classes.** $|P(a)|$ ranges across classes; the per-anchor average is on a different scale for each class; the softmax denominator is dominated by the majority. Re-weighting or sub-sampling required.
+- **Label noise.** SupCon trusts its labels completely. A flipped label becomes a positive pulled toward the wrong centroid, dragging the cluster boundary every step. Robust-SupCon variants exist; vanilla does not handle this.
+
+By 2020 InfoNCE and SupCon between them dominated practical embedding work, and the field had a new conceptual problem. The losses worked, but it was unclear *why*. The softmax form bundles several things together — what is the right way to think about what these losses are doing in the limit?
+
+## 6. The theoretical decomposition: Wang and Isola, 2020
+
+[Wang and Isola's *Understanding Contrastive Representation Learning through Alignment and Uniformity on the Hypersphere*](https://arxiv.org/abs/2005.10242) proved that InfoNCE, in the limit of infinite negatives, is doing two separable things:
+
+$$
+\mathcal{L}_{\text{align}} \;=\; \mathbb{E}_{(x,y) \sim p_+}\,\bigl\|z_x - z_y\bigr\|_2^2
+$$
+
+$$
+\mathcal{L}_{\text{uniform}} \;=\; \log \mathbb{E}_{x, y \sim p_\text{data}} \exp\!\bigl(-t\,\|z_x - z_y\|_2^2\bigr)
+$$
+
+with total loss $\mathcal{L}_{\text{align}} + \lambda \mathcal{L}_{\text{uniform}}$. The uniformity term is the log-MMD of a Gaussian kernel — minimising it is the same as maximising the entropy of the embedding distribution over the sphere.
+
+The decomposition is more than aesthetic. It says *the two jobs are independent*. Writing them as separate terms means you can balance them by tuning $\lambda$, diagnose which one is misbehaving from the loss curve, and — in principle — replace either one with a different functional and retain interpretability.
+
+<LossExplorer loss="alignunif" preset="default" caption="Alignment + Uniformity (Wang & Isola, 2020). The λ = 0 preset shows what happens with no uniformity term: representation collapse, all points to one location. The high-λ preset shows the opposite: no alignment, points spread evenly with no class structure." />
+
+The failure modes of Alignment + Uniformity are particularly clean because the loss has only one balancing knob:
+
+- **λ = 0 (alignment only).** The loss is minimised by collapsing all points to a single location. Positives are perfectly aligned, but so is everything else.
+- **λ very high (uniformity only).** Points spread evenly across the sphere with no regard for class structure. Accuracy at chance.
+
+The cleanness is the contribution. Wang & Isola don't claim a new SOTA; they claim that this decomposition is what InfoNCE was doing all along, and once it is written explicitly you can see why InfoNCE works (the two objectives are intrinsically separable on the sphere) and predict when it will fail (whenever one of them is dominating).
+
+By the end of 2020 the contrastive lineage looked finished. The full pipeline — pair → triplet → InfoNCE → CLIP → SupCon → align-and-uniform — covered every modality of comparison the literature had needed. The remaining work was supposed to be parameter tuning and architectural search.
+
+What the lineage missed was a question none of its members had asked: *should the negatives target really be cosine $-1$?* Two years later, the answer arrived from inside Google.
+
+## 7. Questioning the target: SigLIP, 2023
+
+[Zhai et al.'s *Sigmoid Loss for Language Image Pre-Training*](https://arxiv.org/abs/2303.15343) — SigLIP — replaces CLIP's softmax with a pairwise sigmoid:
+
+$$
+\mathcal{L}_{\text{SigLIP}} \;=\; \sum_{i, j} \log\!\Bigl(1 + \exp\!\bigl(-y_{ij}\,(t \cdot \mathrm{sim}_{ij} + b)\bigr)\Bigr)
+$$
+
+with $y_{ij} = +1$ for matched pairs (image $i$ with caption $i$) and $-1$ otherwise, $t > 0$ a learned temperature, and $b$ a learned bias. The structural change is twofold. **Pairwise, not softmax**: each pair $(i, j)$ contributes independently — there is no normalisation over the batch. **Learnable bias**: the bias $b$ controls *where* negatives equilibrate. For a mismatched pair, the loss saturates (gradient vanishes) once $t \cdot \mathrm{sim}_{ij} + b \ll 0$, i.e., once $\mathrm{sim}_{ij} < -b/t$. The bias is the loss's stop sign on the cosine axis.
+
+The implications, for the geometric question the lineage had been ignoring:
+
+1. SigLIP's negatives target is **configurable**, not pinned to $-1$. The optimiser stops pushing once a negative is far enough — and the threshold is whatever the bias says it is.
+2. Because $t$ and $b$ are learnable, the network can *discover* the right negatives target during training. In published runs, the converged bias corresponds to negatives equilibrating somewhere between $-0.3$ and $0$ in cosine — near orthogonality, not at opposition.
+3. The pairwise structure removes the $N \times N$ softmax denominator. Small batches work; the engineering bottleneck that defined CLIP-era training is gone.
+
+<LossExplorer loss="siglip" preset="default" caption="SigLIP (Zhai et al., 2023). The slider is the equilibrium cosine for negatives — the value of the bias, divided by the temperature. Default targets orthogonality (cos ≈ 0); the 'target opposition' preset recovers CLIP-style behaviour. The 'shallow target' preset shows the configurability that no other loss has." />
+
+The named regimes:
+
+- **Target orthogonality** (cos = 0). Negatives are pushed apart only until they reach orthogonality, then the gradient vanishes. The classes settle on perpendicular axes; there is no overshoot, no wasted spreading. This is the configuration the simplex bound was always pointing at.
+- **Target opposition** (cos = $-1$). Setting the bias to recover CLIP-style behaviour shows the geometric bug come back. Negatives are pushed past orthogonality. In 2D the geometry happens to coincide with orthogonality (only two orthogonal axes exist, and they are diametrically opposite once normalised), but in higher dimensions this is where the wasted-spreading pathology lives.
+- **Shallow target** (cos = $-0.5$). The four-class case with a deliberately shallow target. Inter-class cosines equilibrate at $-0.5$, not at the $-1/3$ that the simplex would prefer, and not at the $-1$ that CLIP would force. The loss is doing what you told it to do.
+
+SigLIP is the first member of the lineage that *names* the target on the cosine axis as a separate object. Everything before it inherited the cosine-$-1$ default from Hadsell's margin without re-examining it. SigLIP's better small-batch accuracy is not a clever-engineering result; it is what the geometry was always asking for.
+
+The remaining question is whether SigLIP went far enough. The learned bias *can* land at orthogonality; it is not *required* to. The cleanest possible target — pull positives to cos $1$, push negatives to cos $0$, stop — is one more step down the road.
+
+## 8. The geometric bug fixed: cosine-to-zero
+
+Six of the seven losses above push different-class pairs *as far apart as possible*. On the unit sphere, as-far-apart-as-possible means cosine similarity $-1$, i.e. diametrically opposite. Pair contrastive's repulsion stops at margin $m$ but its gradient *direction* is the same; InfoNCE's softmax has its minimum at $\cos = -1$; CLIP, SupCon, and Align+Unif all inherit that target from InfoNCE. SigLIP is the first to make the target configurable — and the seventh loss, finally, is the one that puts it at orthogonality on purpose.
+
+This is overshooting. The maximally discriminative configuration for $k$ classes on the sphere is the regular $(k-1)$-simplex, where every inter-class cosine equals $-\tfrac{1}{k-1}$ — for two classes, $-1$; for three, $-\tfrac{1}{2}$; for ten, $-\tfrac{1}{9}$; for ImageNet's thousand, almost exactly zero. Pushing past the simplex bound wastes geometric capacity you could have spent on packing more classes in.
+
+The cosine scale has *three* landmarks, not two: alignment at $+1$, orthogonality at $0$, opposition at $-1$. Maximum *difference* between two unit vectors is not opposition; opposition is sign-flipped redundancy. Maximum difference is orthogonality. I made this argument in detail in [*Opposite Is Not Different*](/blog/opposite-is-not-different/); the simplest possible objective consistent with it is to pull positives to cosine $1$ and push negatives to cosine $0$, not $-1$:
+
+$$
+\mathcal{L}_{\text{cos→0}}(i, j) \;=\;
+\begin{cases}
+1 - \cos(z_i, z_j) & y_i = y_j \\
+\cos(z_i, z_j)^2 & y_i \neq y_j
+\end{cases}
+$$
+
+<LossExplorer loss="orthog" preset="default" caption="Cosine→0 (the orthogonality objective). Default preset uses four classes from random data: watch them find the four orthogonal axes (±x, ±y) and stop. The 'eight classes' preset shows the geometric ceiling — eight classes cannot all be mutually orthogonal in 2D." />
+
+What this loss does on random data is unusually clean: for two classes in 2D it lands them on perpendicular axes; for four, on the four orthogonal directions $\pm x, \pm y$; every inter-class cosine collapses to zero and the optimisation halts because the objective is genuinely satisfied. No wasted spreading. No overshoot.
+
+The failure modes are revealing in a different way than the rest of the family:
+
+- **Too many classes for the dimension.** Only $n$ mutually-orthogonal directions exist in $\mathbb{R}^n$. Eight classes in 2D *cannot* land on orthogonal axes; the loss compromises to a near-uniform angular spacing of $\pi / 4$. This is a geometric ceiling, not an optimisation failure, and it is the reason cosine-to-zero is also a diagnostic — when the failure shows up, you know the embedding dimension is insufficient for the class count.
+- **Concentric rings.** Same problem as InfoNCE. Cosine throws away the norm.
+
+Cosine-to-zero is the only one of the eight losses that *targets* the right cosine by construction. SigLIP can land there with the right bias, but it has to learn its way there. Every other loss spends gradient pushing negatives past orthogonality toward opposition.
+
+## The race
+
+You have seen each loss work alone. Now watch them race. Same dataset, same initial points, same step counter — only the loss differs. Eight panels in two rows: the historical lineage on top (Hadsell → FaceNet → InfoNCE → CLIP), and the modern wave on the bottom (SupCon → SigLIP → Align+Uniform → Cosine→0).
+
+<ContrastiveRace caption="All eight losses, same initial points, same step counter. The default dataset is random, so every panel starts from chaos. Hover any point to highlight it in every panel. Try changing the dataset to see how each loss handles structured input." />
+
+A handful of patterns become visible only when the panels are running side by side:
+
+**Pair and triplet stop early.** Once the margin is satisfied the gradient vanishes and the points freeze. This is the margin family's signature behaviour: a clean, early termination, with whatever geometric capacity remains unused.
+
+**Softmax-based losses never stop.** InfoNCE, CLIP, SupCon, and Alignment + Uniformity all have non-vanishing gradients. They keep optimising past the point of perfect classification — fine-tuning the angular spread of the negatives long after nearest-centroid accuracy hits 100%. This is why $\tau$ matters so much in practice; it is the only thing throttling the spreading. CLIP and InfoNCE look near-identical in 2D — they are the same loss with a symmetrisation factor.
+
+**SupCon is the harshest collapser.** Many positives means each point is pulled toward its class centroid every step. Classes become near-Dirac on the circle. Great for classification, terrible if you care about within-class variation.
+
+**SigLIP and cosine-to-zero stop at the right place.** SigLIP's pairwise sigmoid saturates once each negative is past the bias threshold; cosine-to-zero's quadratic penalty on negative cosines is exactly minimised at orthogonality. Of the eight, these are the only two whose loss-curve actually flattens at the geometrically correct configuration.
+
+## What this leaves out
+
+The post is restricted to the family of contrastive losses that act on pairwise distances or similarities. Two adjacent ideas worth mentioning, which don't translate to 2D:
+
+- [**Barlow Twins**](https://arxiv.org/abs/2103.03230) (Zbontar et al., 2021) and [**VICReg**](https://arxiv.org/abs/2105.04906) (Bardes et al., 2022) bypass the negative-sample problem by regularising the batch's cross-correlation matrix toward identity. They don't need negatives, but they need enough embedding dimensions for the diagonal and off-diagonal terms to make sense.
+- [**DINO**](https://arxiv.org/abs/2104.14294), [**MoCo**](https://arxiv.org/abs/1911.05722), [**BYOL**](https://arxiv.org/abs/2006.07733) use a momentum encoder and a slow-moving teacher to generate targets, removing the need for explicit negatives entirely.
+
+The eight losses racing here all act on the same primitive (pairwise similarities) and disagree about a single geometric question: *how far should different-class pairs be?* Once you watch the disagreement play out at 60 random points in 2D, with each loss's named pathologies exposed one preset at a time, the trade-offs the literature has been arguing about for nearly two decades stop being abstract.
+
+The bug seven of them share — overshooting from orthogonality to opposition — is not a property of any individual loss. It is a property of the lineage. Each loss inherited the cosine-$-1$ target from its predecessor without re-examining whether it was the right target. SigLIP was the first to make the target a parameter; cosine-to-zero is the next step, the one that puts the parameter at the value the simplex bound was always asking for. The right target was on the cosine scale the whole time, one stop short of where everyone was pushing.
+
+<CiteAs slug="untangling-the-moons" title="Untangling the Moons: A Visual History of Contrastive Learning" pubDate="2026-05-26" />

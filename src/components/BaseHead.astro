@@ -7,18 +7,35 @@ import '@fontsource/lora/400-italic.css';
 import '@fontsource/lora/600.css';
 import '@fontsource/lora/700.css';
 import '../styles/global.css';
-import { SITE_TITLE, SITE_DESCRIPTION, SITE_AUTHOR } from '../consts';
+import {
+  SITE_TITLE,
+  SITE_DESCRIPTION,
+  SITE_AUTHOR,
+  SITE_AUTHOR_URL,
+  SITE_AUTHOR_JOB_TITLE,
+  SITE_SAMEAS,
+  SITE_OG_IMAGE,
+} from '../consts';
+
+interface BlogPostRef { url: string; title: string; description?: string; pubDate: Date }
 
 interface Props {
   title: string;
   description?: string;
   image?: string;
-  type?: 'website' | 'article';
+  type?: 'website' | 'article' | 'profile';
   pubDate?: Date;
   updatedDate?: Date;
   tags?: string[];
+  keywords?: string[];
+  wordCount?: number;
   author?: string;
   noindex?: boolean;
+  blogPosts?: BlogPostRef[]; // home page: emit Blog schema with blogPost array
+  profile?: {
+    bio?: string;
+    knowsAbout?: string[];
+  };
 }
 
 const {
@@ -29,38 +46,200 @@ const {
   pubDate,
   updatedDate,
   tags = [],
+  keywords,
+  wordCount,
   author = SITE_AUTHOR,
   noindex = false,
+  blogPosts,
+  profile,
 } = Astro.props;
 
-const canonical = new URL(Astro.url.pathname, Astro.site);
-const fullTitle = title === SITE_TITLE ? title : `${title} — ${SITE_TITLE}`;
-const ogImage = image ? new URL(image, Astro.site).toString() : undefined;
+// Map our 'profile' type to a valid OG type ('profile') and a JSON-LD switch.
+const ogType = type === 'profile' ? 'profile' : type;
+const isArticle = type === 'article';
 
-const jsonLd =
-  type === 'article'
+// ─── URL helpers ───────────────────────────────────────────────────────
+const canonical = new URL(Astro.url.pathname, Astro.site);
+// Normalise BASE_URL: no trailing slash, leading slash. astro.config has
+// base: '/blog' so this is '/blog' on prod and '' in unconfigured local runs.
+const BASE = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '').replace(/^\/?/, '/');
+const SITE = String(Astro.site ?? 'https://tahabouhsine.com').replace(/\/+$/, '');
+const baseUrl = `${SITE}${BASE}/`; // 'https://tahabouhsine.com/blog/'
+
+// ─── Title format ───────────────────────────────────────────────────────
+// For posts, use just the post title in <title>/og:title so SERP and social
+// cards get all ~60 chars for the headline. The site name still appears via
+// og:site_name and the JSON-LD publisher block.
+const fullTitle = type === 'article' || title === SITE_TITLE
+  ? title
+  : `${title} — ${SITE_TITLE}`;
+
+// ─── Reading time → ISO 8601 duration ───────────────────────────────────
+// Used in BlogPosting.timeRequired. ~200 wpm reading-time default.
+const timeRequired = wordCount && wordCount > 0
+  ? `PT${Math.max(1, Math.ceil(wordCount / 200))}M`
+  : undefined;
+
+// ─── OG image ──────────────────────────────────────────────────────────
+// For articles without an explicit hero, point at the auto-generated PNG
+// at /blog/og/<slug>.png (built by src/pages/og/[...slug].png.ts). The
+// slug is derived from the canonical pathname.
+const slug = Astro.url.pathname.replace(BASE, '').replace(/^\/+|\/+$/g, '');
+const generatedOgPath =
+  isArticle && slug ? `${BASE}/og/${slug}.png` : null;
+const ogImageRaw = image ?? generatedOgPath ?? `${BASE}/${SITE_OG_IMAGE}`;
+const ogImage = new URL(ogImageRaw, Astro.site).toString();
+const ogImageAlt = image ? title : `${title} — ${SITE_TITLE}`;
+const ogImageType = ogImageRaw.endsWith('.png') ? 'image/png' : (ogImageRaw.endsWith('.svg') ? 'image/svg+xml' : undefined);
+
+// ─── Keywords ──────────────────────────────────────────────────────────
+const seoKeywords = Array.from(new Set([...(keywords ?? []), ...tags]));
+
+// ─── JSON-LD: per-page schema ──────────────────────────────────────────
+const authorPerson = {
+  '@type': 'Person',
+  '@id': `${baseUrl}#author`,
+  name: author,
+  url: SITE_AUTHOR_URL,
+  jobTitle: SITE_AUTHOR_JOB_TITLE,
+  sameAs: SITE_SAMEAS,
+};
+
+const publisherPerson = {
+  '@type': 'Person',
+  '@id': `${baseUrl}#publisher`,
+  name: author,
+  url: SITE_AUTHOR_URL,
+  sameAs: SITE_SAMEAS,
+};
+
+// Map common tag slugs to readable section names; fall back to title-case.
+const TAG_TO_SECTION: Record<string, string> = {
+  ml: 'Machine Learning',
+  ai: 'Artificial Intelligence',
+  math: 'Mathematics',
+  morocco: 'Morocco',
+  poem: 'Poetry',
+  contrastive: 'Contrastive Learning',
+};
+const titleCase = (s: string) =>
+  s.split('-').map((w) => (w ? w[0].toUpperCase() + w.slice(1) : '')).join(' ');
+const articleSection = tags[0]
+  ? TAG_TO_SECTION[tags[0]] ?? titleCase(tags[0])
+  : undefined;
+
+const blogPosting = isArticle
+  ? {
+      '@context': 'https://schema.org',
+      '@type': 'BlogPosting',
+      '@id': `${canonical}#article`,
+      headline: title,
+      name: title,
+      description,
+      image: [ogImage],
+      datePublished: pubDate?.toISOString(),
+      dateModified: (updatedDate ?? pubDate)?.toISOString(),
+      author: authorPerson,
+      publisher: publisherPerson,
+      mainEntityOfPage: { '@type': 'WebPage', '@id': canonical.toString() },
+      keywords: seoKeywords.length ? seoKeywords.join(', ') : undefined,
+      url: canonical.toString(),
+      inLanguage: 'en-US',
+      wordCount: wordCount && wordCount > 0 ? wordCount : undefined,
+      timeRequired,
+      articleSection,
+      isPartOf: { '@type': 'Blog', '@id': baseUrl, name: SITE_TITLE, url: baseUrl },
+    }
+  : null;
+
+// Breadcrumb: Blog → Post (articles) or Blog → About (profile page).
+const breadcrumb =
+  isArticle || type === 'profile'
     ? {
         '@context': 'https://schema.org',
-        '@type': 'BlogPosting',
-        headline: title,
-        description,
-        image: ogImage ? [ogImage] : undefined,
-        datePublished: pubDate?.toISOString(),
-        dateModified: (updatedDate ?? pubDate)?.toISOString(),
-        author: { '@type': 'Person', name: author, url: Astro.site?.toString() },
-        publisher: { '@type': 'Person', name: author },
-        mainEntityOfPage: { '@type': 'WebPage', '@id': canonical.toString() },
-        keywords: tags.length ? tags.join(', ') : undefined,
-        url: canonical.toString(),
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Blog', item: baseUrl },
+          { '@type': 'ListItem', position: 2, name: title, item: canonical.toString() },
+        ],
       }
-    : {
+    : null;
+
+const website =
+  type === 'website'
+    ? {
         '@context': 'https://schema.org',
         '@type': 'WebSite',
+        '@id': `${baseUrl}#website`,
         name: SITE_TITLE,
+        alternateName: 'Records of the Immortal Data Scientist',
         description: SITE_DESCRIPTION,
-        url: Astro.site?.toString(),
-        author: { '@type': 'Person', name: author },
-      };
+        url: baseUrl,
+        publisher: publisherPerson,
+        inLanguage: 'en-US',
+        potentialAction: {
+          '@type': 'SearchAction',
+          target: {
+            '@type': 'EntryPoint',
+            urlTemplate: `${baseUrl}search/?q={search_term_string}`,
+          },
+          'query-input': 'required name=search_term_string',
+        },
+      }
+    : null;
+
+// Home page: in addition to WebSite, emit a Blog node listing recent posts.
+// This is the rich-result eligibility signal Google uses for "Blog" cards.
+const blogIndex =
+  type === 'website' && blogPosts && blogPosts.length > 0
+    ? {
+        '@context': 'https://schema.org',
+        '@type': 'Blog',
+        '@id': `${baseUrl}#blog`,
+        name: SITE_TITLE,
+        url: baseUrl,
+        description: SITE_DESCRIPTION,
+        author: authorPerson,
+        publisher: publisherPerson,
+        inLanguage: 'en-US',
+        blogPost: blogPosts.map((p) => ({
+          '@type': 'BlogPosting',
+          headline: p.title,
+          description: p.description,
+          datePublished: p.pubDate.toISOString(),
+          url: p.url,
+          author: { '@id': `${baseUrl}#author` },
+        })),
+      }
+    : null;
+
+// Profile page (e.g. /about/): ProfilePage wrapper + full Person node with
+// jobTitle, knowsAbout, sameAs. Unlocks the author "About" carousel and
+// improves E-E-A-T signals.
+const profilePage =
+  type === 'profile'
+    ? {
+        '@context': 'https://schema.org',
+        '@type': 'ProfilePage',
+        '@id': `${canonical}#profile-page`,
+        mainEntity: {
+          '@type': 'Person',
+          '@id': `${baseUrl}#author`,
+          name: author,
+          url: SITE_AUTHOR_URL,
+          jobTitle: SITE_AUTHOR_JOB_TITLE,
+          description: profile?.bio,
+          knowsAbout: profile?.knowsAbout,
+          sameAs: SITE_SAMEAS,
+          mainEntityOfPage: { '@type': 'WebPage', '@id': canonical.toString() },
+        },
+        inLanguage: 'en-US',
+        isPartOf: { '@type': 'WebSite', '@id': `${baseUrl}#website` },
+      }
+    : null;
+
+// Compose the JSON-LD payloads we'll emit. Each becomes its own <script>.
+const jsonLdNodes = [blogPosting, breadcrumb, website, blogIndex, profilePage].filter(Boolean);
 ---
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -70,6 +249,7 @@ const jsonLd =
 <meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)" />
 <title>{fullTitle}</title>
 <meta name="description" content={description} />
+{seoKeywords.length > 0 && <meta name="keywords" content={seoKeywords.join(', ')} />}
 <meta name="author" content={author} />
 {noindex && <meta name="robots" content="noindex, nofollow" />}
 <link rel="canonical" href={canonical} />
@@ -77,18 +257,29 @@ const jsonLd =
 <link rel="alternate" type="application/rss+xml" title={SITE_TITLE} href={`${import.meta.env.BASE_URL}/rss.xml`} />
 <link rel="sitemap" href={`${import.meta.env.BASE_URL}/sitemap-index.xml`} />
 
-<meta property="og:type" content={type} />
+{/* rel=me — IndieWeb / Mastodon verification + Google author discovery */}
+{SITE_SAMEAS.map((href) => <link rel="me" href={href} />)}
+<link rel="author" href={SITE_AUTHOR_URL} />
+
+{/* Open Graph */}
+<meta property="og:type" content={ogType} />
 <meta property="og:site_name" content={SITE_TITLE} />
 <meta property="og:title" content={fullTitle} />
 <meta property="og:description" content={description} />
 <meta property="og:url" content={canonical} />
 <meta property="og:locale" content="en_US" />
-{ogImage && <meta property="og:image" content={ogImage} />}
+<meta property="og:image" content={ogImage} />
+<meta property="og:image:alt" content={ogImageAlt} />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+{ogImageType && <meta property="og:image:type" content={ogImageType} />}
 
-<meta name="twitter:card" content={ogImage ? 'summary_large_image' : 'summary'} />
+{/* Twitter Card — always large image since we have a default fallback */}
+<meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content={fullTitle} />
 <meta name="twitter:description" content={description} />
-{ogImage && <meta name="twitter:image" content={ogImage} />}
+<meta name="twitter:image" content={ogImage} />
+<meta name="twitter:image:alt" content={ogImageAlt} />
 
 {type === 'article' && pubDate && (
   <meta property="article:published_time" content={pubDate.toISOString()} />
@@ -97,9 +288,12 @@ const jsonLd =
   <meta property="article:modified_time" content={updatedDate.toISOString()} />
 )}
 {type === 'article' && <meta property="article:author" content={author} />}
+{type === 'article' && articleSection && <meta property="article:section" content={articleSection} />}
 {type === 'article' && tags.map((tag) => <meta property="article:tag" content={tag} />)}
 
-<script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+{jsonLdNodes.map((node) => (
+  <script type="application/ld+json" set:html={JSON.stringify(node)} />
+))}
 
 {/* Theme bootstrap — runs before paint to avoid FOUC */}
 <script is:inline>
