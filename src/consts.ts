@@ -28,6 +28,12 @@ export const SITE_OG_IMAGE = 'og-default.svg';
 // post path automatically.
 export const GA4_MEASUREMENT_ID = 'G-373438VHJB';
 
+// Google Search Console site-verification token. From Search Console →
+// add property → URL prefix → "HTML tag" method: paste only the content="..."
+// value here (not the whole tag). Leave empty if verifying another way
+// (e.g. via the Google Analytics method, which works now that GA4 is live).
+export const GOOGLE_SITE_VERIFICATION = '';
+
 // giscus — comments via GitHub Discussions on mlnomadpy/blog.
 // IDs fetched via the GitHub GraphQL API; "Announcements" category chosen
 // because only maintainers + the giscus app can create top-level threads.
