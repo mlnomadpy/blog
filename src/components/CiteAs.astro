@@ -65,13 +65,13 @@ const buildPaperBib = (p: PaperRef): { key: string; entry: string } => {
 const paperBib = paper ? buildPaperBib(paper) : null;
 const paperUrl = paper ? (paper.url ?? (paper.arxiv ? `https://arxiv.org/abs/${paper.arxiv}` : undefined)) : undefined;
 
-const dateFmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+const dateFmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
 ---
 <section class="cite-as" aria-labelledby={`cite-${slug}`}>
   <h2 id={`cite-${slug}`}>Cite as</h2>
 
   <p class="cite-line">
-    Bouhsine, T. (<time datetime={pubDate.toISOString()}>{year}, {dateFmt.format(pubDate).replace(/^.*?, /, '')}</time>).
+    Bouhsine, T. (<time datetime={pubDate.toISOString()}>{year}, {dateFmt.format(pubDate).replace(/,?\s*\d{4}$/, '')}</time>).
     <em>{title}</em>. {SITE_TITLE}.
     <a href={blogUrl}>{blogUrl}</a>
   </p>

@@ -319,12 +319,16 @@ def loss_orthog(z, labels, key, _unused, *, m):
 
 <figure class="jax-fig">
   <img src="/blog/jax-contrastive/orthog.gif" alt="Cosine-to-zero loss organizing two classes of random points onto perpendicular axes" loading="lazy" width="480" height="480" />
-  <figcaption>Cosine→0 on two classes. Same-class collapses to a point, different-class settles at a right angle — perpendicular axes, no overshoot to opposition. Exactly the simplex-optimal configuration for two classes.</figcaption>
+  <figcaption>Cosine→0 on two classes. Same-class collapses to a point, different-class settles at a right angle — orthogonality, the dimension-independent stop this loss always targets. (The strict max-margin arrangement for two classes is actually antipodal; cos→0 stops at orthogonality on purpose, since that is the target that generalizes to many classes.)</figcaption>
 </figure>
 
 Three lines of math, and the cleanest geometry of the six: two classes land on
 perpendicular directions and stop, because the loss is genuinely minimized there
-rather than fighting the spherical geometry forever.
+rather than fighting the spherical geometry forever. The target is a
+dimension-independent *approximation* to the simplex optimum $-1/(k-1)$ — nearly
+exact when classes are many, deliberately conservative when they are few. The
+[companion post](/blog/untangling-the-moons/) works through why that is the right
+trade, and why it only holds when the class count doesn't exceed the dimension.
 
 One honest caveat the code made me confront. From a *perfectly* balanced random
 start, this loss can stall at a symmetric configuration — each class smeared
