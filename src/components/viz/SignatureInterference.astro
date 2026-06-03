@@ -22,7 +22,7 @@ function randUnit() { const a = 2 * Math.PI * Math.random(); return [Math.cos(a)
 
 defineViz('siginterf', {
   title: "Welch's problem — signatures sharing a channel",
-  height: 360, stepsPerFrame: 2, maxStep: 260, loop: true,
+  height: 360, stepsPerFrame: 0.6, maxStep: 220,
   controls: [
     { type: 'play' }, { type: 'button', name: 'reroll', label: 're-roll', reset: true }, { type: 'speed' },
     { type: 'newrow' },
@@ -31,7 +31,7 @@ defineViz('siginterf', {
   ],
   setup(api) { const N = api.get('N'); const S = []; for (let i = 0; i < N; i++) S.push(randUnit()); api.state.S = S; },
   step(api) {
-    const S = api.state.S, N = S.length, lr = 0.12 / N, G = S.map(() => [0, 0]);
+    const S = api.state.S, N = S.length, lr = 0.05 / N, G = S.map(() => [0, 0]);
     for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) { if (i === j) continue; const c = S[i][0] * S[j][0] + S[i][1] * S[j][1], w = 2 * c; G[i][0] += w * S[j][0]; G[i][1] += w * S[j][1]; }
     for (let i = 0; i < N; i++) { const gu = G[i][0] * S[i][0] + G[i][1] * S[i][1]; let x = S[i][0] - lr * (G[i][0] - gu * S[i][0]), y = S[i][1] - lr * (G[i][1] - gu * S[i][1]); const n = Math.hypot(x, y) + 1e-12; S[i] = [x / n, y / n]; }
   },

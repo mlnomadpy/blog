@@ -27,7 +27,7 @@ const welch = (C) => C > 3 ? Math.sqrt((C - 3) / (3 * (C - 1))) : 0;
 
 defineViz('spherepack', {
   title: 'The optimal packing, on the sphere',
-  height: 420, stepsPerFrame: 1, maxStep: 220, loop: true,
+  height: 420, stepsPerFrame: 0.5,
   controls: [
     { type: 'play' }, { type: 'button', name: 'reroll', label: 're-roll', reset: true }, { type: 'speed' },
     { type: 'newrow' },
@@ -39,7 +39,7 @@ defineViz('spherepack', {
     api.state.P = P; api.state.spin = 0;
   },
   step(api) {
-    const P = api.state.P, C = P.length, lr = 0.25 / C;
+    const P = api.state.P, C = P.length, lr = 0.025 / C;
     const G = P.map(() => [0, 0, 0]);
     for (let i = 0; i < C; i++) for (let j = 0; j < C; j++) {
       if (i === j) continue;

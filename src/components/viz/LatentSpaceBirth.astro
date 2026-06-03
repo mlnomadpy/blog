@@ -26,7 +26,7 @@ const randn = () => { const u = Math.random() || 1e-9, v = Math.random(); return
 
 defineViz('latentbirth', {
   title: 'Watch a good latent space form',
-  height: 460, stepsPerFrame: 0.3, maxStep: 900, loop: true,
+  height: 460, stepsPerFrame: 0.3, maxStep: 820,
   controls: [
     { type: 'play' }, { type: 'step' }, { type: 'button', name: 'reroll', label: 're-roll', reset: true },
     { type: 'speed', presets: [0.25, 0.5, 1, 2] },
@@ -54,7 +54,7 @@ defineViz('latentbirth', {
     const enc = () => ng.normRows(rawEnc());
     api.state = {
       C, N, labels, rawEnc, enc,
-      adam: new ng.Adam([W1, b1, W2, b2], 0.01),
+      adam: new ng.Adam([W1, b1, W2, b2], 0.007),
       lossFn: (rep) => {
         const z = enc(), S = ng.matmul(z, ng.transpose(z)), y = ng.yatk(S, 0.5, 0.5);
         const intra = ng.div(ng.sumAll(ng.mul(ng.recip(ng.addk(y, 1)), Mp)), ng.scalar(nP));

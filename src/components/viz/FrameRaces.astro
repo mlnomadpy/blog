@@ -22,7 +22,7 @@ function fp(P) { let s = 0; for (let i = 0; i < P.length; i++) for (let j = 0; j
 
 defineViz('frameraces', {
   title: 'Every random start reaches the same minimum',
-  height: 320, stepsPerFrame: 1, maxStep: 110, loop: true,
+  height: 320, stepsPerFrame: 0.5, maxStep: 240,
   controls: [
     { type: 'play' }, { type: 'button', name: 'reroll', label: 're-roll', reset: true }, { type: 'speed' },
     { type: 'newrow' },
@@ -35,7 +35,7 @@ defineViz('frameraces', {
     api.state.sys = sys; api.state.C = C;
   },
   step(api) {
-    const C = api.state.C, lr = 0.22 / C;
+    const C = api.state.C, lr = 0.06 / C;
     for (const sysk of api.state.sys) {
       const P = sysk.P, G = P.map(() => [0, 0, 0]);
       for (let i = 0; i < C; i++) for (let j = 0; j < C; j++) { if (i === j) continue; const c = P[i][0] * P[j][0] + P[i][1] * P[j][1] + P[i][2] * P[j][2], w = 2 * c; G[i][0] += w * P[j][0]; G[i][1] += w * P[j][1]; G[i][2] += w * P[j][2]; }
