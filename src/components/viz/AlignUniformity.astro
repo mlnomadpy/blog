@@ -22,7 +22,7 @@ const randn = () => { const u = Math.random() || 1e-9, v = Math.random(); return
 
 defineViz('alignunif', {
   title: 'A contrastive loss is two forces',
-  height: 380, stepsPerFrame: 2,
+  height: 380, stepsPerFrame: 2, maxStep: 900, loop: true,
   controls: [
     { type: 'play' }, { type: 'button', name: 'reroll', label: 're-roll', reset: true }, { type: 'speed' },
     { type: 'newrow' },

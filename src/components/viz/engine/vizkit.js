@@ -157,7 +157,11 @@ function mountOne(root, specOrFactory) {
   const stop = () => { playing = false; if (playBtn) playBtn.textContent = '▶ Play'; cancelAnimationFrame(raf); };
   const loop = () => { if (!playing) return; acc += (spec.stepsPerFrame || 1) * speedMul;
     while (acc >= 1) { spec.step(api); iter++; acc -= 1; if (spec.maxStep && iter >= spec.maxStep) { acc = 0; break; } }
-    render(); if (spec.maxStep && iter >= spec.maxStep) { stop(); return; } raf = requestAnimationFrame(loop); };
+    render();
+    // At maxStep: a `loop` viz re-rolls (fresh init) and keeps animating the
+    // descent — so it never idles on a converged frame. Others stop.
+    if (spec.maxStep && iter >= spec.maxStep) { if (spec.loop) { doSetup(); } else { stop(); return; } }
+    raf = requestAnimationFrame(loop); };
   const play = () => { if (!hasLoop) return; if (spec.maxStep && iter >= spec.maxStep) doReset(); playing = true; if (playBtn) playBtn.textContent = '❚❚ Pause'; raf = requestAnimationFrame(loop); };
   const doReset = () => { stop(); doSetup(); render(); };
 

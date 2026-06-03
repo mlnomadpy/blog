@@ -26,7 +26,7 @@ const randn = () => { const u = Math.random() || 1e-9, v = Math.random(); return
 
 defineViz('latentbirth', {
   title: 'Watch a good latent space form',
-  height: 460, stepsPerFrame: 0.3, maxStep: 2600,
+  height: 460, stepsPerFrame: 0.3, maxStep: 900, loop: true,
   controls: [
     { type: 'play' }, { type: 'step' }, { type: 'button', name: 'reroll', label: 're-roll', reset: true },
     { type: 'speed', presets: [0.25, 0.5, 1, 2] },

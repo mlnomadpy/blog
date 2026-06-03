@@ -22,7 +22,7 @@ function randUnit() { const a = 2 * Math.PI * Math.random(); return [Math.cos(a)
 
 defineViz('siginterf', {
   title: "Welch's problem — signatures sharing a channel",
-  height: 360, stepsPerFrame: 2,
+  height: 360, stepsPerFrame: 2, maxStep: 260, loop: true,
   controls: [
     { type: 'play' }, { type: 'button', name: 'reroll', label: 're-roll', reset: true }, { type: 'speed' },
     { type: 'newrow' },

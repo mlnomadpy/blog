@@ -27,7 +27,7 @@ const welch = (C) => C > 3 ? Math.sqrt((C - 3) / (3 * (C - 1))) : 0;
 
 defineViz('spherepack', {
   title: 'The optimal packing, on the sphere',
-  height: 420, stepsPerFrame: 1,
+  height: 420, stepsPerFrame: 1, maxStep: 220, loop: true,
   controls: [
     { type: 'play' }, { type: 'button', name: 'reroll', label: 're-roll', reset: true }, { type: 'speed' },
     { type: 'newrow' },
