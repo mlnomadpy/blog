@@ -45,9 +45,8 @@
       document.documentElement.setAttribute('data-theme', stored);
     }
   })();
-</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.BSoRjUxf.css">
-<style>.related[data-astro-cid-dpgbfi7r]{margin:3.5rem 0 2rem;padding-top:1.75rem;border-top:1px solid var(--border)}.related[data-astro-cid-dpgbfi7r] h2[data-astro-cid-dpgbfi7r]{font-family:var(--mono);font-size:.78rem;letter-spacing:.16em;text-transform:uppercase;color:var(--fg-faint);font-weight:500;margin:0 0 1rem}.related[data-astro-cid-dpgbfi7r] ul[data-astro-cid-dpgbfi7r]{list-style:none;padding:0;margin:0;display:grid;gap:0}.related[data-astro-cid-dpgbfi7r] li[data-astro-cid-dpgbfi7r]{border-bottom:1px dashed var(--border)}.related[data-astro-cid-dpgbfi7r] li[data-astro-cid-dpgbfi7r]:last-child{border-bottom:0}.related[data-astro-cid-dpgbfi7r] a[data-astro-cid-dpgbfi7r]{display:block;padding:.85rem 0;text-decoration:none;color:inherit;transition:color var(--transition-fast)}.related-title[data-astro-cid-dpgbfi7r]{display:block;font-family:var(--serif);font-weight:600;font-size:1.05rem;line-height:1.4;color:var(--fg);margin-bottom:.25rem}.related-desc[data-astro-cid-dpgbfi7r]{display:block;font-size:.88rem;color:var(--fg-muted);line-height:1.5;margin-bottom:.35rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.related-meta[data-astro-cid-dpgbfi7r]{display:block;font-family:var(--mono);font-size:.74rem;color:var(--fg-faint);letter-spacing:.04em}.related[data-astro-cid-dpgbfi7r] a[data-astro-cid-dpgbfi7r]:hover .related-title[data-astro-cid-dpgbfi7r]{color:var(--accent)}
-</style></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>
+</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.DstInXr_.css">
+<link rel="stylesheet" href="/blog/_astro/_slug_.1UYF8z3a.css"></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>
   (() => {
     const apply = (theme) => {
       document.documentElement.setAttribute('data-theme', theme);
@@ -87,23 +86,33 @@
     const init = () => {
       const bar = document.querySelector('[data-reading-progress]');
       if (!bar) return;
-      const onScroll = () => {
+      const update = () => {
         const h = document.documentElement;
         const scrolled = h.scrollTop;
         const max = h.scrollHeight - h.clientHeight;
         const pct = max > 0 ? Math.min(100, (scrolled / max) * 100) : 0;
         bar.style.width = pct + '%';
       };
-      onScroll();
+      // Coalesce scroll events into one paint per frame so fast/touch
+      // scrolling stays smooth.
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => { update(); ticking = false; });
+      };
+      update();
       window.removeEventListener('scroll', window.__rp_onScroll || (() => {}));
+      window.removeEventListener('resize', window.__rp_onScroll || (() => {}));
       window.__rp_onScroll = onScroll;
       window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
     };
     init();
     document.addEventListener('astro:page-load', init);
     document.addEventListener('astro:after-swap', init);
   })();
-</script> <article data-pagefind-body data-pagefind-meta="date:2021-09-20"> <header class="post-header"> <h1 data-pagefind-meta="title">Poem 0.1</h1> <p class="meta"> <time datetime="2021-09-20T00:00:00.000Z">September 20, 2021</time>   · 1 min read </p> <p style="margin-top:0.65rem" data-pagefind-meta="tags:poem"> <a class="tag" href="/blog/tag/poem/">#poem</a> </p> </header>  <div style="text-align:center; font-style:italic"><p>A Data scientist by day, Skywolf by night</p><p>My code is spaghetti, but no bugs at sight</p><p>My data is scrambled, but my models are lite</p><p>Live slow, die whenever it is right</p></div>  </article>  <nav class="post-nav" aria-label="Adjacent posts"><span></span><a href="/blog/ai-illiteracy-pt1/" class="next" rel="next"><div class="label">Next →</div><div class="title">Morocco and AI Illiteracy — Part I: The Cost of Staying Behind</div></a></nav> <section aria-label="Comments" id="giscus-mount" style="margin-top:3rem" data-giscus="{&#34;repo&#34;:&#34;mlnomadpy/blog&#34;,&#34;repoId&#34;:&#34;MDEwOlJlcG9zaXRvcnk0MDQ4MzY2NDU=&#34;,&#34;category&#34;:&#34;Announcements&#34;,&#34;categoryId&#34;:&#34;DIC_kwDOGCFRJc4C9EiR&#34;,&#34;mapping&#34;:&#34;pathname&#34;,&#34;reactionsEnabled&#34;:&#34;1&#34;,&#34;emitMetadata&#34;:&#34;0&#34;,&#34;inputPosition&#34;:&#34;top&#34;,&#34;theme&#34;:&#34;preferred_color_scheme&#34;,&#34;lang&#34;:&#34;en&#34;}"></section><script>
+</script> <article data-pagefind-body data-pagefind-meta="date:2021-09-20"> <header class="post-header">  <h1 data-pagefind-meta="title">Poem 0.1</h1> <p class="meta"> <time datetime="2021-09-20T00:00:00.000Z">September 20, 2021</time>   · 1 min read </p> <p style="margin-top:0.65rem" data-pagefind-meta="tags:poem"> <a class="tag" href="/blog/tag/poem/">#poem</a> </p> </header>   <div style="text-align:center; font-style:italic"><p>A Data scientist by day, Skywolf by night</p><p>My code is spaghetti, but no bugs at sight</p><p>My data is scrambled, but my models are lite</p><p>Live slow, die whenever it is right</p></div>   </article>  <nav class="post-nav" aria-label="Adjacent posts"><span></span><a href="/blog/ai-illiteracy-pt1/" class="next" rel="next"><div class="label">Next →</div><div class="title">Morocco and AI Illiteracy — Part I: The Cost of Staying Behind</div></a></nav> <section aria-label="Comments" id="giscus-mount" style="margin-top:3rem" data-giscus="{&#34;repo&#34;:&#34;mlnomadpy/blog&#34;,&#34;repoId&#34;:&#34;MDEwOlJlcG9zaXRvcnk0MDQ4MzY2NDU=&#34;,&#34;category&#34;:&#34;Announcements&#34;,&#34;categoryId&#34;:&#34;DIC_kwDOGCFRJc4C9EiR&#34;,&#34;mapping&#34;:&#34;pathname&#34;,&#34;reactionsEnabled&#34;:&#34;1&#34;,&#34;emitMetadata&#34;:&#34;0&#34;,&#34;inputPosition&#34;:&#34;top&#34;,&#34;theme&#34;:&#34;preferred_color_scheme&#34;,&#34;lang&#34;:&#34;en&#34;}"></section><script>
     (() => {
       const load = () => {
         const mount = document.getElementById('giscus-mount');
@@ -170,7 +179,9 @@
     document.addEventListener('astro:page-load', enhance);
     document.addEventListener('astro:after-swap', enhance);
   })();
-</script>  </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> </span> </footer> <div id="consent-banner" class="consent-banner" role="dialog" aria-live="polite" aria-label="Analytics consent" hidden><p class="consent-text">
+</script>  </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span class="site-footer__links"> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> <a class="site-footer__support" href="https://buymeacoffee.com/mlnomadpy" target="_blank" rel="noopener noreferrer" aria-label="Support this blog on Buy Me a Coffee">
+buy me a coffee
+</a> </span> </footer> <div id="consent-banner" class="consent-banner" role="dialog" aria-live="polite" aria-label="Analytics consent" hidden><p class="consent-text">
 I use Google Analytics to see which posts get read. It sets cookies only
       if you accept. No ads, no selling data.
 </p><div class="consent-actions"><button type="button" id="consent-decline" class="consent-btn consent-decline">Decline</button><button type="button" id="consent-accept" class="consent-btn consent-accept">Accept</button></div></div>
