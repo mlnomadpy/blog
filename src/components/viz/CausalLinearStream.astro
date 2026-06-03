@@ -1,0 +1,162 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 320 } = Astro.props;
+---
+<figure class="viz causallinearstream" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { arrow, text } from './engine/draw.js';
+
+defineViz('causallinearstream', {
+  height: 320,
+  maxStep: 180,
+  controls: [
+    { type: 'play' },
+    { type: 'step', label: 'Step' },
+    { type: 'reset' },
+    { type: 'speed', presets: [0.5, 1, 2, 4] },
+    { type: 'newrow' },
+    { type: 'range', name: 'N', label: 'context N', min: 16, max: 96, step: 8, value: 48, int: true, reset: true },
+    { type: 'range', name: 'm', label: 'state m', min: 8, max: 32, step: 4, value: 16, int: true, reset: true },
+    { type: 'readout', name: 'ro' },
+  ],
+  setup(api) {
+    api.state.t = 0;
+  },
+  step(api) {
+    api.state.t++;
+  },
+  draw(api) {
+    const { ctx, colors, size, state } = api;
+    const W = size.W, H = size.H;
+    if (!W) return;
+    const N = api.get('N'), m = api.get('m');
+    const i = Math.min(N - 1, Math.floor((state.t % 180) / 179 * N));
+    const mid = W / 2;
+
+    ctx.strokeStyle = colors.border;
+    ctx.setLineDash([4, 5]);
+    ctx.beginPath();
+    ctx.moveTo(mid, 14);
+    ctx.lineTo(mid, H - 14);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    text(ctx, 'causal softmax: growing KV cache', mid / 2, 14, colors, { align: 'center', size: 13, weight: '700', color: colors.blue });
+    text(ctx, 'causal linear attention: fixed recurrent state', mid + mid / 2, 14, colors, { align: 'center', size: 13, weight: '700', color: colors.accent });
+
+    drawSoftmax(api, { x: 16, y: 46, w: mid - 32, h: H - 64 }, N, i);
+    drawLinear(api, { x: mid + 16, y: 46, w: mid - 32, h: H - 64 }, N, m, i);
+
+    api.readout('ro', `token ${i + 1}/${N} · cache reads ${i + 1} keys · linear state stays ${m} x d`);
+  },
+});
+
+function drawSoftmax(api, box, N, i) {
+  const { ctx, colors } = api;
+  const y = box.y + 44;
+  const usable = box.w - 22;
+  const step = usable / Math.max(1, N - 1);
+  text(ctx, 'new token scans every earlier key/value', box.x + box.w / 2, box.y, colors, { align: 'center', size: 11.5, color: colors.muted });
+
+  ctx.strokeStyle = colors.border;
+  ctx.lineWidth = 5;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(box.x + 11, y);
+  ctx.lineTo(box.x + box.w - 11, y);
+  ctx.stroke();
+
+  for (let k = 0; k < N; k++) {
+    const x = box.x + 11 + k * step;
+    const active = k <= i;
+    ctx.fillStyle = active ? colors.blue : colors.border;
+    ctx.beginPath();
+    ctx.arc(x, y, k === i ? 5 : 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const qx = box.x + 11 + i * step;
+  for (let k = 0; k <= i; k += Math.max(1, Math.ceil((i + 1) / 12))) {
+    const x = box.x + 11 + k * step;
+    arrow(ctx, qx, y + 28, x, y + 6, colors.blue, 0.9);
+  }
+  text(ctx, 'query', qx, y + 34, colors, { align: 'center', mono: true, size: 10, color: colors.blue });
+
+  const bx = box.x + 22, by = box.y + box.h - 110, bw = box.w - 44, bh = 78;
+  bar(ctx, bx, by, bw, bh, (i + 1) / N, colors.blue, colors, 'KV cache size', `${i + 1} token states`);
+  text(ctx, 'work per new token grows with history', box.x + box.w / 2, by + bh + 16, colors, { align: 'center', size: 11, color: colors.muted });
+}
+
+function drawLinear(api, box, N, m, i) {
+  const { ctx, colors } = api;
+  text(ctx, 'update S_i and z_i once, then read them', box.x + box.w / 2, box.y, colors, { align: 'center', size: 11.5, color: colors.muted });
+
+  const cx = box.x + box.w * 0.5;
+  const sy = box.y + 44;
+  const sw = Math.min(132, box.w * 0.55);
+  const sh = 96;
+  const sx = cx - sw / 2;
+  stateGrid(ctx, sx, sy, sw, sh, m, i / Math.max(1, N - 1), colors);
+  text(ctx, 'S_i, z_i', cx, sy - 18, colors, { align: 'center', mono: true, size: 12, weight: '700', color: colors.accent });
+
+  const inx = box.x + 28, iny = sy + sh / 2;
+  const outx = box.x + box.w - 28, outy = iny;
+  arrow(ctx, inx, iny, sx - 10, iny, colors.green, 1.8);
+  arrow(ctx, sx + sw + 10, iny, outx, outy, colors.accent, 1.8);
+  text(ctx, 'φ(k_i), v_i', inx, iny + 16, colors, { align: 'center', mono: true, size: 10, color: colors.green });
+  text(ctx, 'y_i', outx, outy + 16, colors, { align: 'center', mono: true, size: 10, color: colors.accent });
+
+  const bx = box.x + 22, by = box.y + box.h - 110, bw = box.w - 44, bh = 78;
+  bar(ctx, bx, by, bw, bh, 1, colors.accent, colors, 'state size', `${m} feature rows, constant in N`);
+  text(ctx, 'memory stays flat as context grows', box.x + box.w / 2, by + bh + 16, colors, { align: 'center', size: 11, color: colors.muted });
+}
+
+function stateGrid(ctx, x, y, w, h, rows, phase, colors) {
+  ctx.fillStyle = colors.cellBg;
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = colors.border;
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  const cols = 7;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const t = 0.25 + 0.75 * Math.abs(Math.sin(phase * 5 + r * 0.7 + c * 1.3));
+      const cw = (w - 8) / cols, ch = (h - 8) / rows;
+      ctx.fillStyle = mix(colors.cellBg, colors.accent, t);
+      ctx.fillRect(x + 4 + c * cw, y + 4 + r * ch, cw - 1, Math.max(1, ch - 1));
+    }
+  }
+}
+
+function bar(ctx, x, y, w, h, frac, color, colors, label, value) {
+  ctx.fillStyle = colors.cellBg;
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = colors.border;
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  ctx.fillStyle = color;
+  ctx.fillRect(x + 8, y + h - 12 - (h - 28) * frac, w - 16, (h - 28) * frac);
+  text(ctx, label, x + w / 2, y + 8, colors, { align: 'center', size: 11, color });
+  text(ctx, value, x + w / 2, y + h - 18, colors, { align: 'center', mono: true, size: 10, color: colors.fg });
+}
+
+function mix(a, b, t) {
+  const pa = parse(a), pb = parse(b);
+  return `rgb(${Math.round(pa[0] + (pb[0] - pa[0]) * t)},${Math.round(pa[1] + (pb[1] - pa[1]) * t)},${Math.round(pa[2] + (pb[2] - pa[2]) * t)})`;
+}
+
+function parse(v) {
+  if (v[0] === '#') {
+    let s = v.slice(1);
+    if (s.length === 3) s = s.split('').map((c) => c + c).join('');
+    return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
+  }
+  const m = v.match(/\d+(\.\d+)?/g);
+  return m ? [+m[0], +m[1], +m[2]] : [0, 0, 0];
+}
+</script>

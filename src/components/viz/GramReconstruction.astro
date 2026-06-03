@@ -1,0 +1,89 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 300 } = Astro.props;
+---
+<figure class="viz gramreconstruction" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { parseColor, text } from './engine/draw.js';
+import { np, withJax, drawJaxLoading } from './engine/jax.js';
+
+// The n×n Gram matrix is the O(n²) object. Random features make it low-rank.
+// Left: the exact RBF Gram K_ij = exp(-‖xᵢ-xⱼ‖²/2σ²) on n points laid along a
+// line (a smooth band). Right: the rank-m approximation K̂ = ΦΦᵀ built from
+// random Fourier features φ(x) = √(2/m)[cos(wₜx+bₜ)], accumulated one feature at
+// a time. Watch K̂ sharpen into K and the Frobenius error fall like 1/√m. The
+// per-feature cosine vector is computed on jax-js; the rank-1 update is in JS.
+const N = 30;
+
+const lcg = (s) => () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+const randn = (rng) => { let u = 0, v = 0; while (u === 0) u = rng(); while (v === 0) v = rng(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+
+// local heatmap for values in [0,1] (the draw.js helper is tuned for ~1/N entries)
+const drawGram = (ctx, box, A, colors, gamma = 0.85) => {
+  const side = Math.min(box.w, box.h); const ox = box.x + (box.w - side) / 2, oy = box.y + (box.h - side) / 2;
+  const base = parseColor(colors.cellBg), hi = parseColor(colors.accent); const cell = side / N;
+  ctx.fillStyle = colors.cellBg; ctx.fillRect(ox, oy, side, side);
+  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+    const t = Math.max(0, Math.min(1, Math.pow(Math.max(0, A[i * N + j]), gamma)));
+    ctx.fillStyle = `rgb(${Math.round(base[0] + (hi[0] - base[0]) * t)},${Math.round(base[1] + (hi[1] - base[1]) * t)},${Math.round(base[2] + (hi[2] - base[2]) * t)})`;
+    ctx.fillRect(ox + j * cell, oy + i * cell, cell + 0.6, cell + 0.6);
+  }
+  ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.strokeRect(ox + 0.5, oy + 0.5, side - 1, side - 1);
+  return { ox, oy, side };
+};
+
+defineViz('gramreconstruction', {
+  height: 300, stepsPerFrame: 1.2, maxStep: 240, autoplay: true,
+  controls: [
+    { type: 'play' }, { type: 'step' }, { type: 'reset' }, { type: 'speed' },
+    { type: 'range', name: 'sigma', label: 'bandwidth σ', min: 0.5, max: 2, step: 0.1, value: 1, reset: true, fmt: (v) => v.toFixed(1) },
+    { type: 'readout', name: 'ro' },
+  ],
+  setup(api) {
+    // n points along a line → exact K is a smooth diagonal band
+    const X = new Float64Array(N); for (let i = 0; i < N; i++) X[i] = (i / (N - 1) - 0.5) * 6;
+    api.state.X = X; api.state.acc = new Float64Array(N * N); api.state.m = 0; api.state.rng = lcg(404);
+    withJax(api, (a) => {
+      const sigma = a.get('sigma');
+      const Xa = np.array(a.state.X);
+      const di = np.subtract(np.reshape(Xa.ref, [N, 1]), np.reshape(Xa, [1, N]));   // (N,N) gaps
+      const K = np.exp(di.ref.mul(di).mul(-1 / (2 * sigma * sigma))).js();
+      const flat = new Float64Array(N * N); for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) flat[i * N + j] = K[i][j];
+      a.state.K = flat;
+    });
+  },
+  step(api) {
+    if (!api.state.jaxReady) return;
+    const sigma = api.get('sigma'); const w = randn(api.state.rng) / sigma; const b = api.state.rng() * 2 * Math.PI;
+    // feature vector f = √2·cos(w·x + b) over the n points, on jax-js
+    const f = np.cos(np.array(api.state.X).mul(w).add(b)).mul(Math.SQRT2).js();
+    const acc = api.state.acc; for (let i = 0; i < N; i++) { const fi = f[i]; for (let j = 0; j < N; j++) acc[i * N + j] += fi * f[j]; }
+    api.state.m += 1;
+  },
+  draw(api) {
+    const { ctx, colors, size, state } = api; const W = size.W, H = size.H; if (W === 0) return;
+    if (!state.jaxReady || !state.K) return drawJaxLoading(api);
+    const { fg, accent, muted } = colors; const { K, acc, m } = state;
+    // K̂ = acc / m  ; relative Frobenius error
+    const Khat = new Float64Array(N * N); let en = 0, ed = 0;
+    for (let k = 0; k < N * N; k++) { const v = m > 0 ? acc[k] / m : 0; Khat[k] = v; en += (v - K[k]) ** 2; ed += K[k] ** 2; }
+    const relErr = Math.sqrt(en / ed);
+
+    const lblH = 18, gap = 22, top = lblH;
+    const side = Math.min((W - gap) / 2, H - top - 6);
+    const totW = side * 2 + gap, x0 = (W - totW) / 2;
+    text(ctx, 'exact RBF Gram K', x0 + side / 2, 1, colors, { align: 'center', size: 11.5, weight: '600', color: fg });
+    text(ctx, `rank-m  K̂ = ΦΦᵀ  (m=${m})`, x0 + side + gap + side / 2, 1, colors, { align: 'center', size: 11.5, weight: '600', color: accent });
+    drawGram(ctx, { x: x0, y: top, w: side, h: side }, K, colors);
+    drawGram(ctx, { x: x0 + side + gap, y: top, w: side, h: side }, Khat, colors);
+    api.readout('ro', `m ${m} features · ‖K̂−K‖/‖K‖ ${(relErr * 100).toFixed(relErr < 0.1 ? 1 : 0)}% · jax-js`);
+  },
+});
+</script>

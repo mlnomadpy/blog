@@ -1,7 +1,8 @@
 import { getCollection } from 'astro:content';
+import { postFilter } from '../utils/posts';
 
 export async function GET() {
-  const posts = await getCollection('blog', ({ data }) => !data.draft);
+  const posts = await getCollection('blog', postFilter);
   // Strip MDX/JSX imports + component invocations so they don't pollute search.
   const stripMdx = (s: string) =>
     s

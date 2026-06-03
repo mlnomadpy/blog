@@ -1,0 +1,45 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 340 } = Astro.props;
+---
+<figure class="viz linearreservoir" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { drawReservoirPanel, fmt, MAX_N, MAX_M } from './engine/storm.js';
+
+defineViz('linearreservoir', {
+  height: 340,
+  minHeight: 280,
+  maxHeight: 440,
+  maxStep: 720,
+  controls: [
+    { type: 'play' },
+    { type: 'step', label: 'Tick' },
+    { type: 'reset' },
+    { type: 'speed', presets: [0.5, 1, 2, 4] },
+    { type: 'newrow' },
+    { type: 'range', name: 'N', label: 'tokens N', min: 16, max: MAX_N, step: 8, value: 64, int: true, reset: false },
+    { type: 'range', name: 'm', label: 'features m', min: 4, max: MAX_M, step: 2, value: 12, int: true, reset: false },
+    { type: 'readout', name: 'ro' },
+  ],
+  setup() {},
+  step() {},
+  draw(api) {
+    const { ctx, colors, size } = api;
+    const W = size.W, H = size.H;
+    if (!W || !H) return;
+    const N = api.get('N');
+    const m = api.get('m');
+    const phase = (api.iter % 360) / 360;
+    const box = { x: 12, y: 8, w: W - 24, h: H - 16 };
+    drawReservoirPanel(ctx, box, colors, api.iter, N, m, phase);
+    api.readout('ro', `N=${N} · ${fmt(N * m)} feature touches (N×m, m=${m})`);
+  },
+});
+</script>

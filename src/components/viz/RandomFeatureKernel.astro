@@ -1,0 +1,136 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 320 } = Astro.props;
+---
+<figure class="viz randomfeaturekernel" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { np, withJax, drawJaxLoading } from './engine/jax.js';
+
+// The softmax kernel K(q,k) = exp(q·k) is exactly an inner product of feature
+// maps φ. Performer approximates φ with m random features. This shows the
+// approximation live: fix ‖q‖=‖k‖=r, sweep the angle θ between them so
+// q·k = r²cosθ, and plot the true kernel against K independent random-feature
+// estimates. positive (FAVOR+) features: φ(x) = exp(-‖x‖²/2)·exp(Wx)/√m, always
+// ≥ 0. trigonometric (FAVOR): φ(x) = exp(‖x‖²/2)·[sin Wx, cos Wx]/√m, unbiased
+// but high-variance and frequently negative in the tail. Both kernel estimates
+// are computed on jax-js: a fresh (m,G) exponent matrix per draw, read once.
+const G = 140, K_DRAWS = 7;
+const PADL = 42, PADR = 14, PADT = 16, PADB = 30;
+
+// seeded LCG + Box–Muller, matching the house convention for reproducible randoms
+const lcg = (s) => () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+const randn = (rng) => { let u = 0, v = 0; while (u === 0) u = rng(); while (v === 0) v = rng(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+
+// One random-feature estimate of exp(q·k) over the whole angle grid, on jax-js.
+// q,k live in a 2-plane (q·k spans at most 2 dims) so only W[:,0:2] matters and
+// the estimate is exact in distribution for any ambient d. cos/sin are length-G.
+const estimateCurve = (W0, W1, cos, sin, r, mode) => {
+  const m = W0.length;
+  const col0 = np.reshape(np.array(W0), [m, 1]);          // (m,1)
+  const col1 = np.reshape(np.array(W1), [m, 1]);
+  const rowS = np.reshape(np.array(sin), [1, G]);         // (1,G)
+  if (mode === 'positive') {
+    // exponent = r·( W0·(1+cosθ) + W1·sinθ ),  est = e^{-r²}·mean_i exp(exponent)
+    const rowA = np.reshape(np.array(cos.map((c) => 1 + c)), [1, G]);
+    const expo = np.add(col0.mul(rowA), col1.mul(rowS)).mul(r);  // (m,G)
+    const est = np.sum(np.exp(expo), 0).mul(Math.exp(-r * r) / m);
+    return est.js();
+  }
+  // trigonometric: arg = r·( W0·(1-cosθ) - W1·sinθ ),  est = e^{r²}·mean_i cos(arg)
+  const rowA = np.reshape(np.array(cos.map((c) => 1 - c)), [1, G]);
+  const arg = np.subtract(col0.mul(rowA), col1.mul(rowS)).mul(r);
+  const est = np.sum(np.cos(arg), 0).mul(Math.exp(r * r) / m);
+  return est.js();
+};
+
+defineViz('randomfeaturekernel', {
+  height: 320,
+  controls: [
+    { type: 'range', name: 'm', label: 'random features m', min: 2, max: 256, step: 2, value: 32, int: true, reset: false, fmt: (v) => '' + v },
+    { type: 'range', name: 'r', label: 'scale r = ‖q‖=‖k‖', min: 0.4, max: 1.7, step: 0.05, value: 1.15, reset: false, fmt: (v) => v.toFixed(2) },
+    { type: 'newrow' },
+    { type: 'select', name: 'mode', label: 'features', value: 'positive', reset: false, options: [
+      { value: 'positive', label: 'positive (FAVOR+)' },
+      { value: 'trig', label: 'trigonometric (FAVOR)' },
+    ] },
+    { type: 'button', name: 'resample', label: 'resample randoms' },
+    { type: 'readout', name: 'ro' },
+  ],
+  setup(api) {
+    const cos = new Float64Array(G), sin = new Float64Array(G);
+    for (let i = 0; i < G; i++) { const t = (i / (G - 1)) * Math.PI; cos[i] = Math.cos(t); sin[i] = Math.sin(t); }
+    api.state.cos = cos; api.state.sin = sin; api.state.seed = 7;
+    withJax(api);
+  },
+  onAction(name, api) { if (name === 'resample') { api.state.seed = (api.state.seed * 1103515245 + 12345) & 0x7fffffff; api.render(); } },
+  draw(api) {
+    const { ctx, colors, size, state } = api; const W = size.W, H = size.H; if (W === 0) return;
+    if (!state.jaxReady) return drawJaxLoading(api);
+    const { accent, blue, fg, muted, faint, border } = colors; const { cos, sin } = state;
+    const m = api.get('m'), r = api.get('r'), mode = api.get('mode');
+
+    // true kernel over the grid
+    const trueK = new Float64Array(G); for (let i = 0; i < G; i++) trueK[i] = Math.exp(r * r * cos[i]);
+    const peak = Math.exp(r * r);
+    const yMax = peak * 1.18, yMin = -peak * 0.42, yRange = yMax - yMin;
+    const plotW = W - PADL - PADR, plotH = H - PADT - PADB;
+    const sx = (i) => PADL + (i / (G - 1)) * plotW;
+    const sy = (y) => PADT + (yMax - y) / yRange * plotH;
+
+    // axes: zero line + a few gridlines
+    ctx.strokeStyle = border; ctx.lineWidth = 1; ctx.beginPath();
+    for (let g = 0; g <= 4; g++) { const py = PADT + (g / 4) * plotH; ctx.moveTo(PADL, py); ctx.lineTo(W - PADR, py); } ctx.stroke();
+    const y0 = sy(0); ctx.strokeStyle = faint; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(PADL, y0); ctx.lineTo(W - PADR, y0); ctx.stroke();
+    ctx.fillStyle = faint; ctx.font = '10px ui-monospace, monospace'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (const v of [yMin, 0, peak, yMax]) ctx.fillText(v.toFixed(1), PADL - 5, sy(v));
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText('θ=0 (aligned)', sx(0) + 26, H - PADB + 7);
+    ctx.fillText('θ=π (opposed)', sx(G - 1) - 30, H - PADB + 7);
+
+    // K independent random-feature estimates (variance band)
+    let neg = false, sse = 0, cnt = 0;
+    const mean = new Float64Array(G);
+    for (let kd = 0; kd < K_DRAWS; kd++) {
+      const rng = lcg((state.seed ^ (kd * 2654435761)) >>> 0 || 1 + kd);
+      const W0 = new Float64Array(m), W1 = new Float64Array(m);
+      for (let i = 0; i < m; i++) { W0[i] = randn(rng); W1[i] = randn(rng); }
+      const est = estimateCurve(W0, W1, cos, sin, r, mode);
+      ctx.strokeStyle = accent + '40'; ctx.lineWidth = 1; ctx.beginPath();
+      for (let i = 0; i < G; i++) {
+        const py = Math.max(PADT - 6, Math.min(H - PADB + 6, sy(est[i])));
+        i === 0 ? ctx.moveTo(sx(i), py) : ctx.lineTo(sx(i), py);
+        mean[i] += est[i] / K_DRAWS;
+        if (est[i] < -1e-6) neg = true;
+        sse += (est[i] - trueK[i]) ** 2; cnt++;
+      }
+      ctx.stroke();
+    }
+
+    // mean of the estimates (bold accent)
+    ctx.strokeStyle = accent; ctx.lineWidth = 2; ctx.beginPath();
+    for (let i = 0; i < G; i++) { const py = Math.max(PADT - 6, Math.min(H - PADB + 6, sy(mean[i]))); i === 0 ? ctx.moveTo(sx(i), py) : ctx.lineTo(sx(i), py); } ctx.stroke();
+
+    // true kernel (bold blue) on top
+    ctx.strokeStyle = blue; ctx.lineWidth = 2.2; ctx.beginPath();
+    for (let i = 0; i < G; i++) { const py = sy(trueK[i]); i === 0 ? ctx.moveTo(sx(i), py) : ctx.lineTo(sx(i), py); } ctx.stroke();
+
+    // legend
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.font = '11px ui-sans-serif, system-ui';
+    const lx = PADL + 8, ly = PADT + 12;
+    ctx.strokeStyle = blue; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx + 18, ly); ctx.stroke();
+    ctx.fillStyle = fg; ctx.fillText('exp(q·k)', lx + 24, ly);
+    ctx.strokeStyle = accent; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(lx, ly + 16); ctx.lineTo(lx + 18, ly + 16); ctx.stroke();
+    ctx.fillStyle = muted; ctx.fillText(`${K_DRAWS} estimates + mean`, lx + 24, ly + 16);
+
+    const rmse = Math.sqrt(sse / cnt);
+    api.readout('ro', `m ${m} · RMSE ${rmse.toFixed(rmse < 1 ? 3 : 2)}${neg ? ' · ⚠ went negative' : ' · stays ≥ 0'} · jax-js`);
+  },
+});
+</script>

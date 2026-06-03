@@ -1,0 +1,127 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 300 } = Astro.props;
+---
+<figure class="viz linearattentionapprox" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { heatmap, text } from './engine/draw.js';
+import { np, nn, withJax, drawJaxLoading } from './engine/jax.js';
+
+// Does the random-feature trick really reconstruct attention? Left: the exact
+// N×N softmax matrix A = softmax(QKᵀ/√d). Right: the matrix you get from
+// random features, Â = D⁻¹ φ(Q)φ(K)ᵀ — never formed in a real Performer (that
+// would cost N²), but drawn here so you can see it converge to A as m grows.
+// The bar reports the relative error of the actual output Ŷ = D⁻¹φ(Q)(φ(K)ᵀV)
+// against Y = AV. positive features stay valid; trig features wobble and the
+// denominator D can collapse. Everything is computed live on jax-js.
+const N = 28, D = 8;
+const PADT = 16;
+
+const lcg = (s) => () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+const randn = (rng) => { let u = 0, v = 0; while (u === 0) u = rng(); while (v === 0) v = rng(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+const gauss = (rng, n) => { const a = new Float64Array(n); for (let i = 0; i < n; i++) a[i] = randn(rng); return a; };
+
+const flatten = (nested, rows, cols) => { const f = new Float64Array(rows * cols); for (let i = 0; i < rows; i++) for (let j = 0; j < cols; j++) f[i * cols + j] = nested[i][j]; return f; };
+
+defineViz('linearattentionapprox', {
+  height: 300,
+  controls: [
+    { type: 'range', name: 'm', label: 'random features m', min: 2, max: 256, step: 2, value: 24, int: true, reset: false, fmt: (v) => '' + v },
+    { type: 'newrow' },
+    { type: 'select', name: 'mode', label: 'features', value: 'positive', reset: false, options: [
+      { value: 'positive', label: 'positive (FAVOR+)' },
+      { value: 'trig', label: 'trigonometric (FAVOR)' },
+    ] },
+    { type: 'button', name: 'resample', label: 'resample randoms' },
+    { type: 'readout', name: 'ro' },
+  ],
+  setup(api) {
+    // structured sequence: tokens sit on a latent circle, q=k up to noise, so the
+    // exact attention matrix is a recognizable diagonal band (each token attends to
+    // its neighbours, wrapping at the corners) rather than uniform noise — and the
+    // low effective dimension lets the random-feature estimate actually converge.
+    const rng = lcg(91), R = 1.5, noise = 0.2;
+    const Q = new Float64Array(N * D), Km = new Float64Array(N * D), V = new Float64Array(N * D);
+    for (let i = 0; i < N; i++) { const th = 2 * Math.PI * i / N + randn(rng) * 0.15;
+      for (let c = 0; c < D; c++) { const base = c === 0 ? R * Math.cos(th) : c === 1 ? R * Math.sin(th) : 0;
+        Q[i * D + c] = base + randn(rng) * noise; Km[i * D + c] = base + randn(rng) * noise; V[i * D + c] = randn(rng); } }
+    api.state.Q = Q; api.state.K = Km; api.state.V = V;
+    api.state.seed = 5;
+    // exact attention A and output Y, computed once on jax
+    withJax(api, (a) => {
+      const sc = Math.pow(D, -0.25);
+      const Q = np.reshape(np.array(a.state.Q), [N, D]).mul(sc);
+      const Km = np.reshape(np.array(a.state.K), [N, D]).mul(sc);
+      const s = np.matmul(Q, np.swapaxes(Km, 0, 1));            // (N,N) = q·k/√d
+      const A = nn.softmax(s, -1);
+      a.state.A = flatten(A.ref.js(), N, N);
+      a.state.Y = np.matmul(A, np.reshape(np.array(a.state.V), [N, D])).js();  // (N,D) exact output
+    });
+  },
+  onAction(name, api) { if (name === 'resample') { api.state.seed = (api.state.seed * 1103515245 + 12345) & 0x7fffffff; api.render(); } },
+  draw(api) {
+    const { ctx, colors, size, state } = api; const W = size.W, H = size.H; if (W === 0) return;
+    if (!state.jaxReady || !state.A) return drawJaxLoading(api);
+    const { fg, muted, faint, accent } = colors;
+    const m = api.get('m'), mode = api.get('mode');
+    const sc = Math.pow(D, -0.25);
+
+    // build random features φ(Q), φ(K) and the implied Â + output Ŷ, on jax
+    const rng = lcg(state.seed >>> 0 || 1);
+    const Wf = gauss(rng, m * D);
+    const Qarr = state.Q, Karr = state.K;
+    // scaled q,k and their squared norms (for the e^{±‖·‖²/2} prefactors)
+    const Q = np.reshape(np.array(Qarr), [N, D]).mul(sc);
+    const Kk = np.reshape(np.array(Karr), [N, D]).mul(sc);
+    const Wt = np.swapaxes(np.reshape(np.array(Wf), [m, D]), 0, 1);     // (D,m)
+    const QW = np.matmul(Q.ref, Wt.ref);                                 // (N,m)
+    const KW = np.matmul(Kk.ref, Wt);                                    // (N,m)
+    const qn = np.sum(Q.ref.mul(Q), 1).js();                             // ‖q‖²
+    const kn = np.sum(Kk.ref.mul(Kk), 1).js();                           // ‖k‖²
+    let PhiQ, PhiK;
+    if (mode === 'positive') {
+      const hq = np.reshape(np.array(qn.map((v) => Math.exp(-v / 2))), [N, 1]);
+      const hk = np.reshape(np.array(kn.map((v) => Math.exp(-v / 2))), [N, 1]);
+      PhiQ = np.exp(QW).mul(hq);                                         // (N,m)
+      PhiK = np.exp(KW).mul(hk);
+    } else {
+      const QWj = QW.js(), KWj = KW.js();                                // (N,m)
+      const buildTrig = (XW, norm) => { const F = new Float64Array(N * 2 * m);
+        for (let i = 0; i < N; i++) { const h = Math.exp(norm[i] / 2);
+          for (let j = 0; j < m; j++) { F[i * 2 * m + j] = h * Math.sin(XW[i][j]); F[i * 2 * m + m + j] = h * Math.cos(XW[i][j]); } }
+        return np.reshape(np.array(F), [N, 2 * m]); };
+      PhiQ = buildTrig(QWj, qn); PhiK = buildTrig(KWj, kn);
+    }
+    // Â unnormalized = φ(Q)φ(K)ᵀ ; D = row sums ; Ŷ = Âun V / D
+    const Aun = np.matmul(PhiQ.ref, np.swapaxes(PhiK.ref, 0, 1));        // (N,N)
+    const den = np.sum(Aun.ref, 1).js();                                 // (N,)
+    const AunJ = Aun.js();
+    const Yh = np.matmul(np.matmul(PhiQ, np.swapaxes(PhiK, 0, 1)), np.reshape(np.array(state.V), [N, D])).js();
+
+    // normalized Â for display + relative output error
+    const Ahat = new Float64Array(N * N); let collapse = false;
+    for (let i = 0; i < N; i++) { const dd = den[i]; if (Math.abs(dd) < 1e-9) collapse = true;
+      for (let j = 0; j < N; j++) Ahat[i * N + j] = dd !== 0 ? AunJ[i][j] / dd : 0; }
+    let enum_ = 0, eden = 0;
+    for (let i = 0; i < N; i++) for (let k = 0; k < D; k++) { const yh = den[i] !== 0 ? Yh[i][k] / den[i] : 0; const y = state.Y[i][k]; enum_ += (yh - y) ** 2; eden += y * y; }
+    const relErr = Math.sqrt(enum_ / eden);
+
+    // two heatmaps side by side
+    const gap = 22, lblH = 16, side = Math.min((W - gap) / 2, H - PADT - lblH - 6);
+    const totW = side * 2 + gap; const x0 = (W - totW) / 2, y0 = PADT + lblH;
+    text(ctx, 'softmax  (exact, O(N²))', x0 + side / 2, PADT - 2, colors, { align: 'center', size: 11.5, weight: '600', color: fg });
+    text(ctx, `random features  (m=${mode === 'trig' ? 2 * m : m})`, x0 + side + gap + side / 2, PADT - 2, colors, { align: 'center', size: 11.5, weight: '600', color: accent });
+    heatmap(ctx, { x: x0, y: y0, w: side, h: side }, state.A, N, colors);
+    heatmap(ctx, { x: x0 + side + gap, y: y0, w: side, h: side }, Ahat, N, colors);
+
+    api.readout('ro', `output error ${(relErr * 100).toFixed(relErr < 0.1 ? 1 : 0)}%${collapse ? ' · ⚠ denominator collapsed' : ''} · jax-js`);
+  },
+});
+</script>

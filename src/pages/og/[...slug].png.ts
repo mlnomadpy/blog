@@ -6,6 +6,7 @@ import { html } from 'satori-html';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { SITE_TITLE, SITE_AUTHOR } from '../../consts';
+import { postFilter } from '../../utils/posts';
 
 // ─── font loading ───────────────────────────────────────────────────
 // Satori supports WOFF via opentype.js, so we load Lora directly from
@@ -41,7 +42,7 @@ const sanitizeForOg = (s: string): string =>
 
 // ─── path generation ────────────────────────────────────────────────
 export const getStaticPaths: GetStaticPaths = async () => {
-  const posts = await getCollection('blog');
+  const posts = await getCollection('blog', postFilter);
   return posts.map((post) => ({
     params: { slug: post.id.replace(/\.(md|mdx)$/, '') },
     props: { post },

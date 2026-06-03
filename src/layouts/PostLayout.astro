@@ -5,12 +5,19 @@ import CodeCopy from '../components/CodeCopy.astro';
 import ReadingProgress from '../components/ReadingProgress.astro';
 import PostNav from '../components/PostNav.astro';
 import RelatedPosts from '../components/RelatedPosts.astro';
+import CompanionCallout from '../components/CompanionCallout.astro';
+import References from '../components/References.astro';
 
 interface NavItem { slug: string; title: string }
 interface RelatedPost { slug: string; title: string; description?: string; pubDate: Date }
+interface Pair { role: 'explainer' | 'companion'; slug: string; title: string }
+interface Reference { key?: string; authors: string; year: number | string; title: string; venue?: string; url?: string; arxiv?: string; doi?: string }
 interface Props {
   title: string;
   description?: string;
+  draft?: boolean;
+  pair?: Pair;
+  references?: Reference[];
   pubDate: Date;
   updatedDate?: Date;
   tags?: string[];
@@ -25,6 +32,9 @@ interface Props {
 const {
   title,
   description,
+  draft,
+  pair,
+  references = [],
   pubDate,
   updatedDate,
   tags = [],
@@ -56,6 +66,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     data-pagefind-meta={`date:${pubDate.toISOString().slice(0, 10)}`}
   >
     <header class="post-header">
+      {draft && <p class="draft-banner">Draft — visible locally, excluded from the published site</p>}
       <h1 data-pagefind-meta="title">{title}</h1>
       <p class="meta">
         <time datetime={pubDate.toISOString()}>{dateFmt.format(pubDate)}</time>
@@ -70,7 +81,9 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
         </p>
       )}
     </header>
+    {pair && <CompanionCallout pair={pair} />}
     <slot />
+    <References items={references} />
   </article>
   <RelatedPosts posts={related} />
   <PostNav prev={prev} next={next} />

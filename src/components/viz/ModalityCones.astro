@@ -1,0 +1,213 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 460 } = Astro.props;
+const id = `cn-${Math.random().toString(36).slice(2, 9)}`;
+---
+<figure class="viz" tabindex="0">
+  <div class="viz-cell">
+    <h4>Anatomy of the gap: two cones</h4>
+    <div class="cn-controls">
+      <button id={`${id}-play`} class="cn-play" type="button">▶ train</button>
+      <button id={`${id}-reset`} class="cn-btn" type="button">restart</button>
+      <label class="cn-toggle"><input type="checkbox" id={`${id}-rays`} checked /> rays</label>
+      <label>speed <input type="range" id={`${id}-spd`} min="1" max="12" step="1" value="6" /></label>
+      <span class="cn-readout" id={`${id}-readout`}></span>
+    </div>
+    <canvas id={`${id}-c`} height={height} aria-label="The trained embeddings as two cones from the origin: each modality occupies a narrow angular wedge, and the modality gap is the angle between the two cone axes"></canvas>
+    {caption && <figcaption>{caption}</figcaption>}
+  </div>
+</figure>
+
+<script is:inline define:vars={{ id }}>
+(() => {
+  // The SAME deep-tower SigLIP simulation as the hero, but drawn as cones: each
+  // modality's unit embeddings fan out from the origin into a narrow angular
+  // wedge, and the modality gap is the angle between the two wedge axes.
+  const D = 16, H = 32, DE = 2, N = 1000, BATCH = 64, NDISP = 320, MAXSTEP = 1400;
+  const readColors = () => { const s = getComputedStyle(document.documentElement);
+    const v = (n, f) => (s.getPropertyValue(n).trim() || f);
+    return { accent: v('--accent', '#b3661b'), blue: '#4a7fb3', muted: v('--fg-muted', '#5a5f66'),
+             border: v('--border', '#e4e1d6'), fg: v('--fg', '#1a1a1a'), cellBg: v('--bg-elev', '#fff') }; };
+  let colors = readColors();
+  const hexA = (hex, a) => { const p = [1,3,5].map(i => parseInt(hex.slice(i, i+2), 16)); return `rgba(${p[0]},${p[1]},${p[2]},${a})`; };
+
+  const setup = () => {
+    const c = document.getElementById(id + '-c'); if (!c || c.dataset.ready) return; c.dataset.ready = '1';
+    const ctx = c.getContext('2d');
+    const playBtn = document.getElementById(id + '-play'), resetBtn = document.getElementById(id + '-reset');
+    const raysChk = document.getElementById(id + '-rays'), readout = document.getElementById(id + '-readout');
+
+    const mat = (r, cc) => Array.from({ length: r }, () => new Float64Array(cc));
+    const rng = (() => { let s = 19 >>> 0; return () => { s |= 0; s = (s + 0x6D2B79F5) | 0;
+      let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; })();
+    const randn = () => { let u = 0, v = 0; while (!u) u = rng(); while (!v) v = rng();
+      return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v); };
+
+    const cls = new Int8Array(N);
+    const lift = () => { const W = []; for (let d = 0; d < D; d++) W.push([randn(), randn()]);
+      for (let m = 0; m < 2; m++) { let n = 0; for (let d = 0; d < D; d++) n += W[d][m]*W[d][m]; n = Math.sqrt(n)+1e-9;
+        for (let d = 0; d < D; d++) W[d][m] /= n; } const b = []; for (let d = 0; d < D; d++) b.push(randn()*0.1); return { W, b }; };
+    const LA = lift(), LB = lift();
+    const build = (L, useTA) => { const X = []; for (let i = 0; i < N; i++) {
+        if (useTA) cls[i] = rng() < 0.5 ? 0 : 1;
+        const k = cls[i], s = (k === 1 ? 1 : -1) + randn()*0.12, t = rng()*2 - 1;
+        const row = new Float64Array(D); for (let d = 0; d < D; d++) row[d] = s*L.W[d][0] + t*L.W[d][1] + L.b[d] + randn()*0.08;
+        X.push(row); } return X; };
+    const Xa = build(LA, true), Xb = build(LB, false);
+    const whiten = (X) => { const mu = new Float64Array(D), sd = new Float64Array(D);
+      for (let i = 0; i < N; i++) for (let d = 0; d < D; d++) mu[d] += X[i][d]/N;
+      for (let i = 0; i < N; i++) for (let d = 0; d < D; d++) sd[d] += (X[i][d]-mu[d])**2/N;
+      for (let d = 0; d < D; d++) sd[d] = Math.sqrt(sd[d]) + 1e-6;
+      for (let i = 0; i < N; i++) for (let d = 0; d < D; d++) X[i][d] = (X[i][d]-mu[d])/sd[d]; };
+    whiten(Xa); whiten(Xb);
+    const dispIdx = Array.from({ length: NDISP }, (_, i) => i);
+
+    const initTower = () => ({ W1: mat(D, H), b1: new Float64Array(H), W2: mat(H, DE), b2: new Float64Array(DE),
+                               sW1: { m: mat(D, H), v: mat(D, H) }, sb1: { m: new Float64Array(H), v: new Float64Array(H) },
+                               sW2: { m: mat(H, DE), v: mat(H, DE) }, sb2: { m: new Float64Array(DE), v: new Float64Array(DE) } });
+    let TA, TB, logit, bias, sL, sB, step;
+    const reset = () => { const W1 = mat(D, H), W2 = mat(H, DE);
+      for (let d = 0; d < D; d++) for (let j = 0; j < H; j++) W1[d][j] = randn()*Math.sqrt(2/D);
+      for (let j = 0; j < H; j++) for (let e = 0; e < DE; e++) W2[j][e] = randn()*Math.sqrt(2/H);
+      TA = initTower(); TB = initTower();
+      for (let d = 0; d < D; d++) for (let j = 0; j < H; j++) { TA.W1[d][j] = W1[d][j]; TB.W1[d][j] = W1[d][j]; }
+      for (let j = 0; j < H; j++) for (let e = 0; e < DE; e++) { TA.W2[j][e] = W2[j][e]; TB.W2[j][e] = W2[j][e]; }
+      logit = Math.log(2); bias = -1.0; sL = { m: 0, v: 0 }; sB = { m: 0, v: 0 }; step = 0; };
+
+    const fwd = (T, X, idx) => { const n = idx.length, h = mat(n, H), z = mat(n, DE), nrm = new Float64Array(n), rm = mat(n, H);
+      for (let q = 0; q < n; q++) { const i = idx[q];
+        for (let j = 0; j < H; j++) { let s = T.b1[j]; for (let d = 0; d < D; d++) s += X[i][d]*T.W1[d][j]; rm[q][j] = s > 0 ? 1 : 0; h[q][j] = s > 0 ? s : 0; }
+        const zp = new Float64Array(DE); for (let e = 0; e < DE; e++) { let s = T.b2[e]; for (let j = 0; j < H; j++) s += h[q][j]*T.W2[j][e]; zp[e] = s; }
+        let nn = 0; for (let e = 0; e < DE; e++) nn += zp[e]*zp[e]; nn = Math.sqrt(nn)+1e-9; nrm[q] = nn;
+        for (let e = 0; e < DE; e++) z[q][e] = zp[e]/nn; } return { h, z, nrm, rm }; };
+    const zeroG = () => ({ W1: mat(D, H), b1: new Float64Array(H), W2: mat(H, DE), b2: new Float64Array(DE) });
+    const bwd = (T, X, idx, F, dZ, G) => { const n = idx.length;
+      for (let q = 0; q < n; q++) { const i = idx[q], nn = F.nrm[q]; let zdg = 0; for (let e = 0; e < DE; e++) zdg += F.z[q][e]*dZ[q][e];
+        const dzp = new Float64Array(DE); for (let e = 0; e < DE; e++) dzp[e] = (dZ[q][e] - F.z[q][e]*zdg)/nn;
+        const dh = new Float64Array(H);
+        for (let e = 0; e < DE; e++) { G.b2[e] += dzp[e]; for (let j = 0; j < H; j++) { G.W2[j][e] += F.h[q][j]*dzp[e]; dh[j] += T.W2[j][e]*dzp[e]; } }
+        for (let j = 0; j < H; j++) { if (!F.rm[q][j]) continue; const g = dh[j]; G.b1[j] += g; for (let d = 0; d < D; d++) G.W1[d][j] += X[i][d]*g; } } };
+    const sig = (x) => 1/(1 + Math.exp(-x));
+    const B1 = 0.9, B2 = 0.999, EPS = 1e-8;
+    const adamMat = (W, G, S, r, cc, lr, bc1, bc2) => { for (let a = 0; a < r; a++) for (let b = 0; b < cc; b++) {
+        S.m[a][b] = B1*S.m[a][b] + (1-B1)*G[a][b]; S.v[a][b] = B2*S.v[a][b] + (1-B2)*G[a][b]**2; W[a][b] -= lr*(S.m[a][b]/bc1)/(Math.sqrt(S.v[a][b]/bc2)+EPS); } };
+    const adamVec = (W, G, S, n, lr, bc1, bc2) => { for (let b = 0; b < n; b++) {
+        S.m[b] = B1*S.m[b] + (1-B1)*G[b]; S.v[b] = B2*S.v[b] + (1-B2)*G[b]**2; W[b] -= lr*(S.m[b]/bc1)/(Math.sqrt(S.v[b]/bc2)+EPS); } };
+    const trainStep = (lr) => {
+      const idx = new Array(BATCH); for (let b = 0; b < BATCH; b++) idx[b] = (rng()*N) | 0;
+      const A = fwd(TA, Xa, idx), Bf = fwd(TB, Xb, idx), t = Math.exp(logit), n = BATCH, inv = 1/(n*n);
+      const dZa = mat(n, DE), dZb = mat(n, DE); let dlogit = 0, dbias = 0;
+      for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { let dp = 0; for (let e = 0; e < DE; e++) dp += A.z[i][e]*Bf.z[j][e];
+        const S = t*dp + bias, Y = i === j ? 1 : -1; const g = -Y*sig(-Y*S)*inv; dlogit += g*t*dp; dbias += g; const gt = g*t;
+        for (let e = 0; e < DE; e++) { dZa[i][e] += gt*Bf.z[j][e]; dZb[j][e] += gt*A.z[i][e]; } }
+      const GA = zeroG(), GB = zeroG(); bwd(TA, Xa, idx, A, dZa, GA); bwd(TB, Xb, idx, Bf, dZb, GB);
+      step++; const bc1 = 1 - Math.pow(B1, step), bc2 = 1 - Math.pow(B2, step);
+      adamMat(TA.W1, GA.W1, TA.sW1, D, H, lr, bc1, bc2); adamVec(TA.b1, GA.b1, TA.sb1, H, lr, bc1, bc2);
+      adamMat(TA.W2, GA.W2, TA.sW2, H, DE, lr, bc1, bc2); adamVec(TA.b2, GA.b2, TA.sb2, DE, lr, bc1, bc2);
+      adamMat(TB.W1, GB.W1, TB.sW1, D, H, lr, bc1, bc2); adamVec(TB.b1, GB.b1, TB.sb1, H, lr, bc1, bc2);
+      adamMat(TB.W2, GB.W2, TB.sW2, H, DE, lr, bc1, bc2); adamVec(TB.b2, GB.b2, TB.sb2, DE, lr, bc1, bc2);
+      sL.m = B1*sL.m + (1-B1)*dlogit; sL.v = B2*sL.v + (1-B2)*dlogit**2; logit -= lr*(sL.m/bc1)/(Math.sqrt(sL.v/bc2)+EPS);
+      sB.m = B1*sB.m + (1-B1)*dbias; sB.v = B2*sB.v + (1-B2)*dbias**2; bias -= lr*(sB.m/bc1)/(Math.sqrt(sB.v/bc2)+EPS); };
+
+    const st = { dpr: 1, w: 0, h: 0, za: null, zb: null, playing: false, raf: 0 };
+    const refresh = () => { st.za = fwd(TA, Xa, dispIdx).z; st.zb = fwd(TB, Xb, dispIdx).z; };
+
+    // cone geometry of a set of unit vectors, in CANVAS coords (vy flipped)
+    const coneOf = (Z) => { let mx = 0, my = 0;
+      for (let q = 0; q < NDISP; q++) { mx += Z[q][0]/NDISP; my += (-Z[q][1])/NDISP; }
+      const Rbar = Math.hypot(mx, my), axis = Math.atan2(my, mx);
+      const sigma = Math.sqrt(-2*Math.log(Math.max(Rbar, 1e-3)));   // circular std
+      const hw = Math.min(sigma*1.3, 1.35);                          // wedge half-width (rad)
+      return { axis, hw, Rbar }; };
+    const angDiff = (a, b) => { let d = Math.abs(a - b) % (2*Math.PI); if (d > Math.PI) d = 2*Math.PI - d; return d; };
+
+    const draw = () => { const W = st.w, Hh = st.h; if (W === 0 || !st.za) return;
+      ctx.setTransform(st.dpr, 0, 0, st.dpr, 0, 0); ctx.clearRect(0, 0, W, Hh);
+      const pad = 16, side = Math.min(W - 2*pad, Hh - 2*pad), ox = (W-side)/2, oy = (Hh-side)/2;
+      ctx.fillStyle = colors.cellBg; ctx.fillRect(ox, oy, side, side);
+      ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.strokeRect(ox+0.5, oy+0.5, side-1, side-1);
+      const cx = ox + side/2, cy = oy + side/2, R = side*0.42, r = 2.6;
+      ctx.beginPath(); ctx.arc(cx, cy, R, 0, 2*Math.PI); ctx.strokeStyle = colors.border; ctx.stroke();
+      const conA = coneOf(st.za), conB = coneOf(st.zb);
+
+      const drawCone = (con, col) => {
+        ctx.fillStyle = hexA(col, 0.13);                       // shaded wedge = the cone
+        ctx.beginPath(); ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, R, con.axis - con.hw, con.axis + con.hw); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = col; ctx.lineWidth = 2;              // axis arrow
+        const ex = cx + Math.cos(con.axis)*R*0.96, ey = cy + Math.sin(con.axis)*R*0.96;
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(ex, ey); ctx.stroke();
+        const ah = 7; ctx.beginPath(); ctx.moveTo(ex, ey);
+        ctx.lineTo(ex - ah*Math.cos(con.axis - 0.4), ey - ah*Math.sin(con.axis - 0.4));
+        ctx.moveTo(ex, ey); ctx.lineTo(ex - ah*Math.cos(con.axis + 0.4), ey - ah*Math.sin(con.axis + 0.4)); ctx.stroke(); };
+      drawCone(conA, colors.blue); drawCone(conB, colors.accent);
+
+      const drawPts = (Z, col) => { ctx.strokeStyle = col; ctx.fillStyle = col;
+        for (let q = 0; q < NDISP; q++) { const x = cx + Z[q][0]*R, y = cy - Z[q][1]*R;
+          if (raysChk.checked) { ctx.globalAlpha = 0.12; ctx.lineWidth = 0.6; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(x, y); ctx.stroke(); ctx.globalAlpha = 1; }
+          if (cls[dispIdx[q]] === 0) { ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, r, 0, 2*Math.PI); ctx.fill(); }
+          else { ctx.lineWidth = 1.3; ctx.beginPath(); ctx.moveTo(x-r, y-r); ctx.lineTo(x+r, y+r); ctx.moveTo(x+r, y-r); ctx.lineTo(x-r, y+r); ctx.stroke(); } } };
+      drawPts(st.za, colors.blue); drawPts(st.zb, colors.accent);
+
+      // gap = angle between the two cone axes, drawn as an arc near the origin
+      const gapAng = angDiff(conA.axis, conB.axis);
+      let a0 = conA.axis, a1 = conB.axis; // draw minor arc
+      if (((a1 - a0 + 2*Math.PI) % (2*Math.PI)) > Math.PI) { const tmp = a0; a0 = a1; a1 = tmp; }
+      ctx.strokeStyle = colors.fg; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, R*0.3, a0, a1); ctx.stroke();
+      const mid = a0 + (((a1 - a0 + 2*Math.PI) % (2*Math.PI))/2);
+      ctx.fillStyle = colors.fg; ctx.font = '600 12px ui-sans-serif, system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(`gap ${(gapAng*180/Math.PI).toFixed(0)}°`, cx + Math.cos(mid)*R*0.46, cy + Math.sin(mid)*R*0.46);
+
+      // legend + readout
+      ctx.font = '11px ui-sans-serif, system-ui'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+      const ly = oy + side - 40;
+      ctx.fillStyle = colors.blue; ctx.beginPath(); ctx.arc(ox+14, ly, 4, 0, 6.3); ctx.fill();
+      ctx.fillStyle = colors.muted; ctx.fillText('modality A cone', ox+24, ly);
+      ctx.fillStyle = colors.accent; ctx.beginPath(); ctx.arc(ox+14, ly+14, 4, 0, 6.3); ctx.fill();
+      ctx.fillStyle = colors.muted; ctx.fillText('modality B cone', ox+24, ly+14);
+      ctx.fillStyle = colors.muted; ctx.beginPath(); ctx.arc(ox+14, ly+28, 3, 0, 6.3); ctx.fill();
+      ctx.fillText('class 0 ○   class 1 ✕', ox+24, ly+28);
+      readout.textContent = `step ${step}  ·  gap ${(gapAng*180/Math.PI).toFixed(0)}°  ·  cone width A ${(conA.hw*180/Math.PI).toFixed(0)}°  B ${(conB.hw*180/Math.PI).toFixed(0)}°`;
+    };
+
+    const tick = () => { if (!st.playing) return; for (let s = 0, K = +document.getElementById(id + '-spd').value; s < K; s++) trainStep(0.01); refresh(); draw();
+      if (step >= MAXSTEP) stop(); else st.raf = requestAnimationFrame(tick); };
+    const stop = () => { st.playing = false; playBtn.textContent = '▶ train'; cancelAnimationFrame(st.raf); };
+    const play = () => { if (step >= MAXSTEP) doReset(); st.playing = true; playBtn.textContent = '❚❚ pause'; st.raf = requestAnimationFrame(tick); };
+    const doReset = () => { stop(); reset(); refresh(); draw(); };
+
+    playBtn.addEventListener('click', () => (st.playing ? stop() : play()));
+    resetBtn.addEventListener('click', doReset);
+    raysChk.addEventListener('change', draw);
+    const fit = () => { const rect = c.getBoundingClientRect(); const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+      st.dpr = dpr; st.w = rect.width; st.h = rect.height; c.width = Math.round(rect.width*dpr); c.height = Math.round(rect.height*dpr); };
+
+    reset(); refresh();
+    const themeObs = new MutationObserver(() => { colors = readColors(); draw(); });
+    themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    const ro = new ResizeObserver(() => { fit(); draw(); }); ro.observe(c);
+    let kicked = false;
+    const io = new IntersectionObserver((e) => { if (e[0].isIntersecting) { fit(); draw(); if (!kicked) { kicked = true; play(); } } else stop(); }, { rootMargin: '0px' });
+    io.observe(c);
+  };
+  setup();
+  document.addEventListener('astro:page-load', setup);
+  document.addEventListener('astro:after-swap', setup);
+})();
+</script>
+
+<style>
+.cn-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 6px 0 10px; }
+.cn-play { background: var(--accent); color: #fff; border: none; border-radius: 5px; padding: 4px 12px; font-size: 12px; cursor: pointer; font-family: inherit; min-width: 78px; }
+.cn-btn { background: var(--bg-elev, #fff); color: var(--fg-muted); border: 1px solid var(--border); border-radius: 5px; padding: 4px 10px; font-size: 12px; cursor: pointer; font-family: inherit; }
+.cn-toggle { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-muted); font-size: 12px; }
+.cn-toggle input { accent-color: var(--accent); }
+.cn-controls label { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-muted); font-size: 12px; }
+.cn-controls input[type="range"] { accent-color: var(--accent); width: 84px; }
+.cn-readout { margin-left: auto; font-family: ui-monospace, monospace; font-size: 11px; color: var(--fg-muted); white-space: nowrap; }
+.viz-cell canvas { width: 100%; display: block; }
+</style>

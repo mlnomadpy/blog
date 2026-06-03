@@ -1,0 +1,171 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 460 } = Astro.props;
+const id = `clab-${Math.random().toString(36).slice(2, 9)}`;
+---
+<figure class="viz clab" data-id={id} tabindex="0">
+  <div class="viz-cell">
+    <h4>Four losses racing on the engine — live</h4>
+    <div class="clab-controls">
+      <div class="clab-row">
+        <button data-act="play" class="clab-play">▶ Play</button>
+        <button data-act="step" class="clab-btn">Step</button>
+        <button data-act="reset" class="clab-btn">Reset</button>
+        <span class="clab-spd">speed
+          <button data-spd="0.5" class="clab-s">0.5×</button>
+          <button data-spd="1" class="clab-s active">1×</button>
+          <button data-spd="2" class="clab-s">2×</button>
+          <button data-spd="4" class="clab-s">4×</button>
+        </span>
+      </div>
+      <div class="clab-row">
+        <label>data <select data-ctl="data"></select></label>
+        <label>n <select data-ctl="n"><option>32</option><option selected>48</option><option>64</option></select></label>
+        <label>seed <input data-ctl="seed" type="number" value="7" min="0" max="999" style="width:54px" /></label>
+        <span class="clab-iter" data-ctl="iter">iter 0</span>
+      </div>
+    </div>
+    <canvas data-ctl="canvas" height={height} aria-label="Four contrastive losses (align-only, SupCon, SigLIP, SimO2/AFCL) trained live on the same dataset via in-browser autodiff"></canvas>
+    {caption && <figcaption>{caption}</figcaption>}
+  </div>
+</figure>
+
+<script>
+import * as ng from './engine/nanograd.js';
+import { makeData, DATASETS } from './engine/datasets.js';
+
+const PAL = ['#b3661b', '#4a7fb3', '#3a8f5e', '#9a4f9c'];
+const LOSSES = [
+  { key: 'align', name: 'alignment only', sub: 'no repulsion → crowds' },
+  { key: 'supcon', name: 'SupCon', sub: '2020 · softmax + negatives' },
+  { key: 'siglip', name: 'SigLIP', sub: '2023 · pairwise sigmoid' },
+  { key: 'afcl', name: 'SimO₂ / AFCL', sub: 'ⵟ-kernel · no patches' },
+];
+const D = 12, Hd = 16, DE = 2;
+
+function initLab(root) {
+  if (root.dataset.ready) return; root.dataset.ready = '1';
+  const q = (s) => root.querySelector(s);
+  const canvas = q('[data-ctl="canvas"]'), ctx = canvas.getContext('2d');
+  const dataSel = q('[data-ctl="data"]'), nSel = q('[data-ctl="n"]'), seedInp = q('[data-ctl="seed"]'), iterEl = q('[data-ctl="iter"]');
+  DATASETS.forEach((d, i) => { const o = document.createElement('option'); o.value = d.value; o.textContent = d.label; if (i === 0) o.selected = true; dataSel.appendChild(o); });
+
+  const readColors = () => { const s = getComputedStyle(document.documentElement); const v = (n, f) => (s.getPropertyValue(n).trim() || f);
+    return { muted: v('--fg-muted', '#5a5f66'), border: v('--border', '#e4e1d6'), fg: v('--fg', '#1a1a1a'), cellBg: v('--bg-elev', '#fff') }; };
+  let colors = readColors();
+
+  let data, masks, models, iter = 0, playing = false, raf = 0, speed = 1, acc = 0;
+
+  const buildLoss = (key, X, M) => {
+    const randn = () => { let u = Math.random(), v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+    const W1 = ng.param(D, Hd, () => randn() * Math.sqrt(2 / D)), b1 = ng.param(1, Hd, () => 0);
+    const W2 = ng.param(Hd, DE, () => randn() * Math.sqrt(2 / Hd)), b2 = ng.param(1, DE, () => 0);
+    const params = [W1, b1, W2, b2];
+    const enc = () => ng.normRows(ng.add(ng.matmul(ng.relu(ng.add(ng.matmul(X, W1), b1)), W2), b2));
+    const lossFn = () => {
+      const z = enc(); const S = ng.matmul(z, ng.transpose(z));
+      if (key === 'align') return ng.mulk(ng.div(ng.sumAll(ng.mul(S, M.same)), ng.scalar(M.nS)), -1);
+      if (key === 'siglip') { const logits = ng.addk(ng.mulk(S, 4), -1);
+        return ng.div(ng.sumAll(ng.mul(ng.softplus(ng.mulk(ng.mul(logits, M.Y), -1)), M.off)), ng.scalar(M.nOff)); }
+      if (key === 'supcon') { const logits = ng.mulk(S, 1 / 0.2); const denom = ng.sumRows(ng.mul(ng.exp(logits), M.off));
+        const lp = ng.sub(logits, ng.log(denom)); return ng.mulk(ng.div(ng.sumAll(ng.mul(lp, M.same)), ng.scalar(M.nS)), -1); }
+      const y = ng.yatk(S, 0.3, 1.0);   // AFCL
+      const intra = ng.div(ng.sumAll(ng.mul(ng.recip(ng.addk(y, 1)), M.same)), ng.scalar(M.nS));
+      const inter = ng.div(ng.sumAll(ng.mul(ng.addk(y, 1), M.diff)), ng.scalar(M.nD));
+      return ng.add(intra, inter);
+    };
+    return { params, adam: new ng.Adam(params, 0.02), enc, lossFn, lastLoss: 0 };
+  };
+
+  const rebuild = () => {
+    const N = +nSel.value, seed = +seedInp.value || 1;
+    data = makeData(dataSel.value, N, seed, D);
+    const Xt = ng.tensor(N, D, data.X);
+    const same = new Float64Array(N * N), diff = new Float64Array(N * N), off = new Float64Array(N * N), Y = new Float64Array(N * N);
+    let nS = 0, nD = 0, nOff = 0;
+    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) { if (i === j) continue; const s = data.lab[i] === data.lab[j];
+      off[i * N + j] = 1; nOff++; if (s) { same[i * N + j] = 1; nS++; Y[i * N + j] = 1; } else { diff[i * N + j] = 1; nD++; Y[i * N + j] = -1; } }
+    masks = { same: ng.tensor(N, N, same), diff: ng.tensor(N, N, diff), off: ng.tensor(N, N, off), Y: ng.tensor(N, N, Y), nS, nD, nOff };
+    models = LOSSES.map(l => buildLoss(l.key, Xt, masks));
+    iter = 0;
+  };
+
+  const trainOnce = () => { for (const m of models) { const L = m.lossFn(); ng.backward(L); m.adam.step(); m.lastLoss = L.d[0]; } iter++; };
+
+  // nearest-class-centroid accuracy on the current embedding
+  const nccAcc = (z, N, C) => {
+    const cen = Array.from({ length: C }, () => [0, 0]), cnt = new Array(C).fill(0);
+    for (let i = 0; i < N; i++) { const c = data.lab[i]; cen[c][0] += z.d[i * DE]; cen[c][1] += z.d[i * DE + 1]; cnt[c]++; }
+    for (let c = 0; c < C; c++) { const n = Math.hypot(cen[c][0], cen[c][1]) + 1e-9; cen[c][0] /= n; cen[c][1] /= n; }
+    let ok = 0; for (let i = 0; i < N; i++) { let best = -2, arg = 0;
+      for (let c = 0; c < C; c++) { const d = z.d[i * DE] * cen[c][0] + z.d[i * DE + 1] * cen[c][1]; if (cnt[c] && d > best) { best = d; arg = c; } }
+      if (arg === data.lab[i]) ok++; }
+    return ok / N;
+  };
+
+  const draw = () => {
+    const W = canvas.clientWidth, H = canvas.clientHeight; const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+    if (canvas.width !== Math.round(W * dpr)) { canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+    const cols = 2, rows = 2, pad = 8, pw = W / cols, ph = H / rows;
+    models.forEach((m, idx) => {
+      const gx = (idx % cols) * pw, gy = ((idx / cols) | 0) * ph;
+      const side = Math.min(pw - 2 * pad, ph - 2 * pad - 28), ox = gx + (pw - side) / 2, oy = gy + 28 + (ph - 28 - side) / 2;
+      ctx.fillStyle = colors.cellBg; ctx.fillRect(ox, oy, side, side); ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.strokeRect(ox + 0.5, oy + 0.5, side - 1, side - 1);
+      const cx = ox + side / 2, cy = oy + side / 2, R = side * 0.42;
+      ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.283); ctx.strokeStyle = colors.border; ctx.stroke();
+      const z = m.enc(); const N = data.N;
+      for (let i = 0; i < N; i++) { ctx.fillStyle = PAL[data.lab[i] % PAL.length];
+        ctx.beginPath(); ctx.arc(cx + z.d[i * DE] * R, cy - z.d[i * DE + 1] * R, 2.4, 0, 6.283); ctx.fill(); }
+      ctx.fillStyle = colors.fg; ctx.font = '600 12px ui-sans-serif, system-ui'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.fillText(LOSSES[idx].name, gx + pad, gy + 1);
+      ctx.fillStyle = colors.muted; ctx.font = '9.5px ui-monospace, monospace';
+      ctx.fillText(LOSSES[idx].sub, gx + pad, gy + 16);
+      const acc = nccAcc(z, N, data.C);
+      ctx.textAlign = 'right'; ctx.fillStyle = colors.fg;
+      ctx.fillText(`acc ${(acc * 100).toFixed(0)}%`, gx + pw - pad, gy + 1);
+      ctx.fillStyle = colors.muted; ctx.fillText(`loss ${m.lastLoss.toFixed(3)}`, gx + pw - pad, gy + 16);
+    });
+    iterEl.textContent = 'iter ' + iter;
+  };
+
+  const tick = () => { if (!playing) return; acc += speed; while (acc >= 1) { trainOnce(); acc -= 1; } draw(); raf = requestAnimationFrame(tick); };
+  const stop = () => { playing = false; q('[data-act="play"]').textContent = '▶ Play'; cancelAnimationFrame(raf); };
+  const play = () => { playing = true; q('[data-act="play"]').textContent = '❚❚ Pause'; raf = requestAnimationFrame(tick); };
+
+  q('[data-act="play"]').addEventListener('click', () => playing ? stop() : play());
+  q('[data-act="step"]').addEventListener('click', () => { stop(); trainOnce(); draw(); });
+  q('[data-act="reset"]').addEventListener('click', () => { stop(); rebuild(); draw(); });
+  root.querySelectorAll('[data-spd]').forEach(b => b.addEventListener('click', () => { speed = +b.dataset.spd;
+    root.querySelectorAll('[data-spd]').forEach(x => x.classList.remove('active')); b.classList.add('active'); }));
+  [dataSel, nSel, seedInp].forEach(el => el.addEventListener('change', () => { stop(); rebuild(); draw(); }));
+
+  new MutationObserver(() => { colors = readColors(); draw(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  new ResizeObserver(() => draw()).observe(canvas);
+  let kicked = false;
+  new IntersectionObserver((e) => { if (e[0].isIntersecting) { draw(); if (!kicked) { kicked = true; play(); } } else stop(); }, { rootMargin: '0px' }).observe(canvas);
+  rebuild(); draw();
+}
+
+const boot = () => document.querySelectorAll('.clab').forEach(initLab);
+boot();
+document.addEventListener('astro:page-load', boot);
+document.addEventListener('astro:after-swap', boot);
+</script>
+
+<style>
+.clab-controls { display: flex; flex-direction: column; gap: 6px; padding: 6px 0 10px; }
+.clab-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.clab-play { background: var(--accent); color: #fff; border: none; border-radius: 5px; padding: 4px 12px; font-size: 12px; cursor: pointer; font-family: inherit; min-width: 70px; }
+.clab-btn { background: var(--bg-elev, #fff); color: var(--fg-muted); border: 1px solid var(--border); border-radius: 5px; padding: 4px 10px; font-size: 12px; cursor: pointer; font-family: inherit; }
+.clab-spd { display: inline-flex; align-items: center; gap: 4px; color: var(--fg-muted); font-size: 12px; }
+.clab-s { background: var(--bg-elev, #fff); color: var(--fg-muted); border: 1px solid var(--border); border-radius: 4px; padding: 2px 7px; font-size: 11px; cursor: pointer; font-family: ui-monospace, monospace; }
+.clab-s.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.clab-controls label { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-muted); font-size: 12px; }
+.clab-controls select, .clab-controls input { background: var(--bg-elev, #fff); color: var(--fg); border: 1px solid var(--border); border-radius: 4px; padding: 2px 4px; font-size: 12px; font-family: inherit; }
+.clab-iter { margin-left: auto; font-family: ui-monospace, monospace; font-size: 11px; color: var(--fg-muted); }
+.clab canvas { width: 100%; display: block; }
+</style>

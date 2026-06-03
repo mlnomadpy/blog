@@ -7,17 +7,27 @@
     const init = () => {
       const bar = document.querySelector('[data-reading-progress]');
       if (!bar) return;
-      const onScroll = () => {
+      const update = () => {
         const h = document.documentElement;
         const scrolled = h.scrollTop;
         const max = h.scrollHeight - h.clientHeight;
         const pct = max > 0 ? Math.min(100, (scrolled / max) * 100) : 0;
         bar.style.width = pct + '%';
       };
-      onScroll();
+      // Coalesce scroll events into one paint per frame so fast/touch
+      // scrolling stays smooth.
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => { update(); ticking = false; });
+      };
+      update();
       window.removeEventListener('scroll', window.__rp_onScroll || (() => {}));
+      window.removeEventListener('resize', window.__rp_onScroll || (() => {}));
       window.__rp_onScroll = onScroll;
       window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
     };
     init();
     document.addEventListener('astro:page-load', init);

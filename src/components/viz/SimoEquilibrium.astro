@@ -1,0 +1,49 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 380 } = Astro.props;
+---
+<figure class="viz simoeq" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { PALETTE, panel, unitCircle, arrow } from './engine/draw.js';
+
+// C class centroids minimising the biased frame potential Σ(⟨eᵢ,eⱼ⟩+b)². The
+// single scalar b steers the equilibrium across the bifurcation bᴄ = 1/[2(C−1)]:
+// orthogonal frame below, regular simplex above 1/(C−1).
+defineViz('simoeq', {
+  title: 'Steer the equilibrium with one scalar',
+  height: 380, maxStep: 700, stepsPerFrame: 4,
+  controls: [
+    { type: 'play' }, { type: 'step' }, { type: 'button', name: 'reroll', label: 're-roll', reset: true }, { type: 'speed' },
+    { type: 'newrow' },
+    { type: 'range', name: 'C', label: 'classes C', min: 2, max: 6, step: 1, value: 4, int: true, reset: true, fmt: v => v },
+    { type: 'range', name: 'b', label: 'bias b', min: 0, max: 1, step: 0.02, value: 0.5, fmt: v => v.toFixed(2) },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) {
+    const C = api.get('C'); const U = [];
+    for (let i = 0; i < C; i++) { const a = 2 * Math.PI * Math.random(); U.push([Math.cos(a), Math.sin(a)]); }
+    api.state.U = U;
+  },
+  step(api) {
+    const U = api.state.U, C = U.length, b = api.get('b'), g = U.map(() => [0, 0]);
+    for (let i = 0; i < C; i++) for (let j = 0; j < C; j++) { if (i === j) continue; const c = U[i][0] * U[j][0] + U[i][1] * U[j][1], w = 2 * (c + b); g[i][0] += w * U[j][0]; g[i][1] += w * U[j][1]; }
+    for (let i = 0; i < C; i++) { const d = g[i][0] * U[i][0] + g[i][1] * U[i][1]; let nx = U[i][0] - 0.06 * (g[i][0] - d * U[i][0]), ny = U[i][1] - 0.06 * (g[i][1] - d * U[i][1]); const n = Math.hypot(nx, ny) + 1e-9; U[i] = [nx / n, ny / n]; }
+  },
+  draw(api) {
+    const { ctx, colors, size, state } = api; const U = state.U, C = U.length;
+    const m = panel(ctx, { x: 0, y: 0, w: size.W, h: size.H }, colors); unitCircle(ctx, m, colors);
+    U.forEach((u, i) => { const [ex, ey] = m.map(u); arrow(ctx, m.cx, m.cy, ex, ey, PALETTE[i % PALETTE.length], 2.4); });
+    const b = api.get('b'), bc = 1 / (2 * (C - 1)), simp = 1 / (C - 1);
+    let mn = 180; for (let i = 0; i < C; i++) for (let j = i + 1; j < C; j++) { const c = U[i][0] * U[j][0] + U[i][1] * U[j][1]; mn = Math.min(mn, Math.acos(Math.max(-1, Math.min(1, c))) * 180 / Math.PI); }
+    const regime = b >= simp ? 'simplex (max-margin)' : b > bc ? 'interior equiangular' : 'orthogonal frame';
+    api.readout('rd', `bᴄ ${bc.toFixed(2)} · ${regime} · min angle ${mn.toFixed(0)}°`);
+  },
+});
+</script>

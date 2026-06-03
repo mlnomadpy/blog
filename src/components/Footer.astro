@@ -1,10 +1,19 @@
 ---
-import { SITE_AUTHOR } from '../consts';
+import { BUY_ME_A_COFFEE_URL, SITE_AUTHOR } from '../consts';
 const year = new Date().getFullYear();
 ---
 <footer class="site-footer">
   <span>© {year} {SITE_AUTHOR}</span>
-  <span>
+  <span class="site-footer__links">
     <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a>
+    <a
+      class="site-footer__support"
+      href={BUY_ME_A_COFFEE_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="Support this blog on Buy Me a Coffee"
+    >
+      buy me a coffee
+    </a>
   </span>
 </footer>

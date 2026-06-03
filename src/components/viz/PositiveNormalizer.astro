@@ -1,0 +1,162 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 320 } = Astro.props;
+---
+<figure class="viz positivenormalizer" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { text } from './engine/draw.js';
+
+const M = 28;
+
+defineViz('positivenormalizer', {
+  height: 320,
+  controls: [
+    { type: 'range', name: 'm', label: 'features m', min: 4, max: 128, step: 4, value: 24, int: true, reset: false },
+    { type: 'range', name: 'r', label: 'norm r', min: 1, max: 4, step: 0.25, value: 2.5, reset: false, fmt: (v) => v.toFixed(2) },
+    { type: 'select', name: 'mode', label: 'features', value: 'positive', reset: false, options: [
+      { value: 'positive', label: 'positive' },
+      { value: 'trig', label: 'trigonometric' },
+    ] },
+    { type: 'button', name: 'resample', label: 'resample' },
+    { type: 'readout', name: 'ro' },
+  ],
+  setup(api) {
+    api.state.seed = 23;
+  },
+  onAction(name, api) {
+    if (name === 'resample') {
+      api.state.seed = (api.state.seed * 1664525 + 1013904223) >>> 0;
+      api.render();
+    }
+  },
+  draw(api) {
+    const { ctx, colors, size, state } = api;
+    const W = size.W, H = size.H;
+    if (!W) return;
+    const m = api.get('m'), r = api.get('r'), mode = api.get('mode');
+    const vals = estimateRow(m, r, mode, state.seed);
+    const max = Math.max(...vals.exact, ...vals.est.map(Math.abs));
+    const sumExact = vals.exact.reduce((a, b) => a + b, 0);
+    const sumEst = vals.est.reduce((a, b) => a + b, 0);
+    const negatives = vals.est.filter((v) => v < 0).length;
+
+    const plot = { x: 36, y: 42, w: W - 72, h: H - 118 };
+    ctx.fillStyle = colors.cellBg;
+    ctx.fillRect(plot.x, plot.y, plot.w, plot.h);
+    ctx.strokeStyle = colors.border;
+    ctx.strokeRect(plot.x + 0.5, plot.y + 0.5, plot.w - 1, plot.h - 1);
+    const zeroY = plot.y + plot.h * 0.72;
+    ctx.strokeStyle = colors.border;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(plot.x, zeroY);
+    ctx.lineTo(plot.x + plot.w, zeroY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    text(ctx, '0', plot.x - 8, zeroY, colors, { align: 'right', baseline: 'middle', mono: true, size: 10, color: colors.faint });
+
+    const bw = plot.w / M;
+    for (let i = 0; i < M; i++) {
+      const x = plot.x + i * bw + 2;
+      const ew = Math.max(2, bw - 4);
+      const hExact = vals.exact[i] / max * plot.h * 0.55;
+      ctx.fillStyle = alpha(colors.blue, 0.38);
+      ctx.fillRect(x, zeroY - hExact, ew, hExact);
+      const est = vals.est[i];
+      const hEst = Math.abs(est) / max * plot.h * 0.55;
+      ctx.fillStyle = est >= 0 ? colors.accent : '#c2553a';
+      ctx.fillRect(x + ew * 0.23, est >= 0 ? zeroY - hEst : zeroY, ew * 0.54, hEst);
+    }
+
+    text(ctx, 'kernel row: exact softmax weights vs random-feature estimate', W / 2, 16, colors, { align: 'center', size: 12, weight: '700' });
+    text(ctx, 'blue = exact positive kernel', plot.x + 8, plot.y + 8, colors, { size: 11, color: colors.blue });
+    text(ctx, mode === 'positive' ? 'orange = positive estimate' : 'orange/red = trig estimate, red is negative', plot.x + plot.w - 8, plot.y + 8, colors, { align: 'right', size: 11, color: mode === 'positive' ? colors.accent : '#c2553a' });
+
+    const gauge = { x: 36, y: H - 58, w: W - 72, h: 26 };
+    drawGauge(ctx, gauge, sumExact, sumEst, negatives, colors);
+    const status = sumEst <= 0 ? 'denominator invalid' : sumEst < sumExact * 0.2 ? 'denominator near zero' : negatives ? `${negatives} negative entries` : 'all weights positive';
+    api.readout('ro', `${status} · estimated row sum ${(sumEst / sumExact).toFixed(2)}× exact`);
+  },
+});
+
+function estimateRow(m, r, mode, seed) {
+  const rng = lcg(seed || 1);
+  const ws = Array.from({ length: m }, () => [randn(rng), randn(rng)]);
+  const q = [r, 0];
+  const exact = [], est = [];
+  for (let i = 0; i < M; i++) {
+    const th = -Math.PI + (2 * Math.PI * i) / (M - 1);
+    const k = [r * Math.cos(th), r * Math.sin(th)];
+    exact.push(Math.exp(q[0] * k[0] + q[1] * k[1]));
+    if (mode === 'positive') {
+      let s = 0;
+      for (const w of ws) {
+        s += Math.exp(w[0] * q[0] + w[1] * q[1] - r * r / 2) * Math.exp(w[0] * k[0] + w[1] * k[1] - r * r / 2);
+      }
+      est.push(s / m);
+    } else {
+      let s = 0;
+      const dx = q[0] - k[0], dy = q[1] - k[1];
+      for (const w of ws) s += Math.cos(w[0] * dx + w[1] * dy);
+      est.push(Math.exp(r * r) * s / m);
+    }
+  }
+  return { exact, est };
+}
+
+function drawGauge(ctx, box, exact, est, negatives, colors) {
+  ctx.fillStyle = colors.cellBg;
+  ctx.fillRect(box.x, box.y, box.w, box.h);
+  ctx.strokeStyle = colors.border;
+  ctx.strokeRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1);
+  const ratio = est / exact;
+  const cx = box.x + box.w / 2;
+  ctx.strokeStyle = colors.border;
+  ctx.beginPath();
+  ctx.moveTo(cx, box.y);
+  ctx.lineTo(cx, box.y + box.h);
+  ctx.stroke();
+  const w = Math.max(-1, Math.min(2, ratio)) / 2 * box.w;
+  ctx.fillStyle = ratio <= 0 || negatives ? '#c2553a' : colors.accent;
+  if (w >= 0) ctx.fillRect(cx, box.y + 5, w, box.h - 10);
+  else ctx.fillRect(cx + w, box.y + 5, -w, box.h - 10);
+  text(ctx, 'normalizer  Σ_j κ(q,k_j)', box.x + 8, box.y + 7, colors, { size: 11, color: colors.muted });
+  text(ctx, 'exact', cx, box.y + box.h + 4, colors, { align: 'center', size: 10, color: colors.faint });
+}
+
+function lcg(s) {
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+
+function randn(rng) {
+  let u = 0, v = 0;
+  while (u === 0) u = rng();
+  while (v === 0) v = rng();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+function alpha(hex, a) {
+  const p = parse(hex);
+  return `rgba(${p[0]},${p[1]},${p[2]},${a})`;
+}
+
+function parse(v) {
+  if (v[0] === '#') {
+    let s = v.slice(1);
+    if (s.length === 3) s = s.split('').map((c) => c + c).join('');
+    return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
+  }
+  const m = v.match(/\d+(\.\d+)?/g);
+  return m ? [+m[0], +m[1], +m[2]] : [0, 0, 0];
+}
+</script>

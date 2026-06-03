@@ -1,0 +1,201 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 220 } = Astro.props;
+---
+<figure class="viz attentioncost" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { text } from './engine/draw.js';
+
+// Cost picture for the introduction. The old version used a log-log plot, which
+// is mathematically tidy but visually hides the punchline: O(N) and O(N^2) both
+// become straight lines. This version uses a linear context axis and measures
+// compute relative to exact softmax at 4K tokens. Softmax visibly bends upward;
+// linear attention stays near the floor at long context.
+const PADL = 48, PADR = 18, PADT = 26, PADB = 42;
+const Nmax = 131072;
+const Nbase = 4096;
+const yCap = 64;
+
+defineViz('attentioncost', {
+  height: 220,
+  controls: [
+    { type: 'range', name: 'd', label: 'head dim d', min: 16, max: 128, step: 8, value: 64, int: true, reset: false, fmt: (v) => '' + v },
+    { type: 'range', name: 'm', label: 'features m', min: 32, max: 512, step: 16, value: 256, int: true, reset: false, fmt: (v) => '' + v },
+    { type: 'readout', name: 'ro' },
+  ],
+  setup(api) {
+    api.state.N = 32768;
+    if (!api.canvas.dataset.acDrag) {
+      api.canvas.dataset.acDrag = '1';
+      let dragging = false;
+      const onP = (e) => {
+        const r = api.canvas.getBoundingClientRect();
+        const plotW = api.size.W - PADL - PADR;
+        const t = Math.max(0, Math.min(1, ((e.clientX - r.left) - PADL) / plotW));
+        api.state.N = Math.max(512, Math.round(t * Nmax / 512) * 512);
+        api.render();
+      };
+      api.canvas.addEventListener('pointerdown', (e) => {
+        dragging = true;
+        api.canvas.setPointerCapture(e.pointerId);
+        onP(e);
+      });
+      api.canvas.addEventListener('pointermove', (e) => { if (dragging) onP(e); });
+      api.canvas.addEventListener('pointerup', (e) => {
+        dragging = false;
+        try { api.canvas.releasePointerCapture(e.pointerId); } catch {}
+      });
+    }
+  },
+  draw(api) {
+    const { ctx, colors, size, state } = api;
+    const W = size.W, H = size.H;
+    if (W === 0) return;
+    const d = api.get('d'), m = api.get('m');
+    const plotW = Math.max(220, W - PADL - PADR);
+    const plotH = H - PADT - PADB;
+    const N = state.N;
+
+    const exactCost = (n) => 4 * n * n * d;
+    const linearCost = (n) => 5 * n * m * d;
+    const baseCost = exactCost(Nbase);
+    const exactRel = (n) => exactCost(n) / baseCost;
+    const linearRel = (n) => linearCost(n) / baseCost;
+    const sx = (n) => PADL + (n / Nmax) * plotW;
+    const sy = (rel) => PADT + (1 - Math.min(yCap, rel) / yCap) * plotH;
+
+    drawFrame(ctx, colors, plotW, plotH);
+    drawCurves(ctx, colors, sx, sy, exactRel, linearRel);
+    drawMarker(ctx, colors, sx, sy, N, exactRel(N), linearRel(N), plotH);
+
+    const speed = exactCost(N) / linearCost(N);
+    const fmtN = formatN(N);
+    const ex = exactRel(N);
+    const lin = linearRel(N);
+    api.readout('ro', `drag · N ${fmtN} · exact ${formatRel(ex)} vs linear ${formatRel(lin)} of 4K softmax · ${speed.toFixed(speed < 10 ? 1 : 0)}x gap`);
+  },
+});
+
+function drawFrame(ctx, colors, plotW, plotH) {
+  ctx.fillStyle = colors.cellBg;
+  ctx.fillRect(PADL, PADT, plotW, plotH);
+  ctx.strokeStyle = colors.border;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(PADL + 0.5, PADT + 0.5, plotW - 1, plotH - 1);
+
+  ctx.font = '10px ui-monospace, monospace';
+  ctx.fillStyle = colors.faint;
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  for (const y of [1, 4, 16, 64]) {
+    const py = PADT + (1 - y / yCap) * plotH;
+    ctx.strokeStyle = colors.border;
+    ctx.beginPath();
+    ctx.moveTo(PADL, py);
+    ctx.lineTo(PADL + plotW, py);
+    ctx.stroke();
+    ctx.fillStyle = colors.faint;
+    ctx.fillText(`${y}x`, PADL - 6, py);
+  }
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  for (const n of [0, 32768, 65536, 98304, 131072]) {
+    const px = PADL + (n / Nmax) * plotW;
+    ctx.strokeStyle = colors.border;
+    ctx.beginPath();
+    ctx.moveTo(px, PADT);
+    ctx.lineTo(px, PADT + plotH);
+    ctx.stroke();
+    ctx.fillStyle = colors.faint;
+    ctx.fillText(formatN(n), px, PADT + plotH + 8);
+  }
+  text(ctx, 'context length N', PADL + plotW / 2, PADT + plotH + 27, colors, { align: 'center', size: 11, color: colors.muted });
+  ctx.save();
+  ctx.translate(13, PADT + plotH / 2);
+  ctx.rotate(-Math.PI / 2);
+  text(ctx, 'compute vs 4K exact softmax', 0, 0, colors, { align: 'center', size: 11, color: colors.muted });
+  ctx.restore();
+}
+
+function drawCurves(ctx, colors, sx, sy, exactRel, linearRel) {
+  const line = (fn, color, width, clip = false) => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    let started = false;
+    for (let i = 0; i <= 240; i++) {
+      const n = (i / 240) * Nmax;
+      const rel = fn(n);
+      if (clip && rel > yCap) {
+        const px = sx(n), py = sy(rel);
+        if (!started) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        break;
+      }
+      const px = sx(n), py = sy(rel);
+      if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  };
+  line(exactRel, colors.blue, 2.8, true);
+  line(linearRel, colors.accent, 2.8, false);
+
+  const clipN = Nbase * Math.sqrt(yCap);
+  const px = sx(clipN), py = sy(yCap);
+  ctx.fillStyle = colors.blue;
+  ctx.beginPath();
+  ctx.moveTo(px - 5, py + 2);
+  ctx.lineTo(px + 5, py + 2);
+  ctx.lineTo(px, py - 6);
+  ctx.closePath();
+  ctx.fill();
+  text(ctx, 'softmax goes off chart', px + 8, py + 4, colors, { size: 10.5, color: colors.blue });
+
+  text(ctx, 'O(N^2): bends upward fast', sx(50000), sy(exactRel(50000)) - 15, colors, { size: 11, color: colors.blue, weight: '700' });
+  text(ctx, 'O(N): steady slope', sx(76000), sy(linearRel(76000)) - 18, colors, { size: 11, color: colors.accent, weight: '700' });
+}
+
+function drawMarker(ctx, colors, sx, sy, N, ex, lin, plotH) {
+  const px = sx(N);
+  ctx.strokeStyle = colors.fg;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(px, PADT);
+  ctx.lineTo(px, PADT + plotH);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  point(ctx, px, sy(ex), colors.blue);
+  point(ctx, px, sy(lin), colors.accent);
+  text(ctx, formatN(N), px, PADT - 17, colors, { align: 'center', mono: true, size: 11, color: colors.fg });
+}
+
+function point(ctx, x, y, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(x, y, 4.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
+function formatN(n) {
+  if (n === 0) return '0';
+  if (n >= 1024) return `${Math.round(n / 1024)}K`;
+  return `${n}`;
+}
+
+function formatRel(v) {
+  if (v >= 1000) return `${Math.round(v)}x`;
+  if (v >= 10) return `${v.toFixed(0)}x`;
+  return `${v.toFixed(1)}x`;
+}
+</script>

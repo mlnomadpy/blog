@@ -1,0 +1,102 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 340 } = Astro.props;
+---
+<figure class="viz randomfourierbuild" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { np, withJax, drawJaxLoading } from './engine/jax.js';
+
+// A kernel is what you get by averaging random features. For the RBF kernel
+// k(δ) = exp(-δ²/2σ²), Bochner's theorem says it is the average of cosines whose
+// frequencies are drawn from the kernel's spectral density — here w ~ N(0, 1/σ²),
+// since E_w[cos(wδ)] = exp(-δ²/2σ²). Each step draws one frequency, adds the
+// cosine cos(wδ) (top strip) to the running average (main panel), and the jagged
+// estimate smooths into the bell. The per-step cosine is evaluated on jax-js.
+const M = 240, PADL = 40, PADR = 14;
+const STRIP_H = 56, GAP = 14, PADT = 14, PADB = 28;
+const DOM = 3;
+
+const lcg = (s) => () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+const randn = (rng) => { let u = 0, v = 0; while (u === 0) u = rng(); while (v === 0) v = rng(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+
+defineViz('randomfourierbuild', {
+  height: 340, stepsPerFrame: 1.4, maxStep: 400, autoplay: true,
+  controls: [
+    { type: 'play' }, { type: 'step' }, { type: 'reset' }, { type: 'speed' },
+    { type: 'range', name: 'sigma', label: 'bandwidth σ', min: 0.4, max: 1.3, step: 0.05, value: 0.8, reset: true, fmt: (v) => v.toFixed(2) },
+    { type: 'readout', name: 'ro' },
+  ],
+  setup(api) {
+    const grid = new Float64Array(M + 1); for (let i = 0; i <= M; i++) grid[i] = -DOM + (2 * DOM) * i / M;
+    api.state.grid = grid;
+    api.state.sum = new Float64Array(M + 1);
+    api.state.curCos = null; api.state.curW = 0; api.state.m = 0;
+    api.state.rng = lcg(1234567);
+    withJax(api);
+  },
+  step(api) {
+    if (!api.state.jaxReady) return;
+    const sigma = api.get('sigma'); const w = randn(api.state.rng) / sigma;
+    // cos(w·δ) over the whole grid, on jax-js
+    const c = np.cos(np.array(api.state.grid).mul(w)).js();
+    const sum = api.state.sum; for (let i = 0; i <= M; i++) sum[i] += c[i];
+    api.state.curCos = c; api.state.curW = w; api.state.m += 1;
+  },
+  draw(api) {
+    const { ctx, colors, size, state } = api; const W = size.W, H = size.H; if (W === 0) return;
+    if (!state.jaxReady) return drawJaxLoading(api);
+    const { accent, blue, fg, muted, faint, border } = colors;
+    const sigma = api.get('sigma'); const { grid, sum, curCos, m } = state;
+    const plotW = W - PADL - PADR;
+    const sx = (d) => PADL + (d + DOM) / (2 * DOM) * plotW;
+
+    // ── top strip: the single new cosine being folded in ──
+    const stripTop = PADT, stripMid = stripTop + STRIP_H / 2;
+    ctx.strokeStyle = border; ctx.lineWidth = 1; ctx.strokeRect(PADL + 0.5, stripTop + 0.5, plotW - 1, STRIP_H - 1);
+    ctx.strokeStyle = border; ctx.beginPath(); ctx.moveTo(PADL, stripMid); ctx.lineTo(W - PADR, stripMid); ctx.stroke();
+    if (curCos) { ctx.strokeStyle = accent + 'cc'; ctx.lineWidth = 1.3; ctx.beginPath();
+      for (let i = 0; i <= M; i++) { const py = stripMid - curCos[i] * (STRIP_H / 2 - 4); const px = sx(grid[i]); i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); } ctx.stroke(); }
+    ctx.fillStyle = faint; ctx.font = '10px ui-monospace, monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText(`new feature  cos(w·δ),  w = ${state.curW.toFixed(2)}`, PADL + 6, stripTop + 5);
+
+    // ── main panel: running average vs the true bell ──
+    const mainTop = stripTop + STRIP_H + GAP, mainBot = H - PADB, mainH = mainBot - mainTop;
+    const yMin = -0.35, yMax = 1.08, yRange = yMax - yMin;
+    const sy = (y) => mainTop + (yMax - y) / yRange * mainH;
+    ctx.strokeStyle = border; ctx.lineWidth = 1; ctx.beginPath();
+    for (const yv of [0, 0.5, 1]) { ctx.moveTo(PADL, sy(yv)); ctx.lineTo(W - PADR, sy(yv)); } ctx.stroke();
+    ctx.fillStyle = faint; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (const yv of [0, 0.5, 1]) ctx.fillText(yv.toFixed(1), PADL - 5, sy(yv));
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (const dv of [-3, -2, -1, 0, 1, 2, 3]) ctx.fillText(dv.toFixed(0), sx(dv), mainBot + 6);
+    ctx.fillText('gap  δ = x − y', PADL + plotW / 2, mainBot + 16);
+
+    // running estimate
+    let sse = 0;
+    if (m > 0) { ctx.strokeStyle = accent; ctx.lineWidth = 1.8; ctx.beginPath();
+      for (let i = 0; i <= M; i++) { const est = sum[i] / m; const py = Math.max(mainTop - 4, Math.min(mainBot + 4, sy(est))); const px = sx(grid[i]); i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+        const tr = Math.exp(-(grid[i] * grid[i]) / (2 * sigma * sigma)); sse += (est - tr) ** 2; } ctx.stroke(); }
+    // true RBF bell
+    ctx.strokeStyle = blue; ctx.lineWidth = 2.2; ctx.beginPath();
+    for (let i = 0; i <= M; i++) { const tr = Math.exp(-(grid[i] * grid[i]) / (2 * sigma * sigma)); const px = sx(grid[i]), py = sy(tr); i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); } ctx.stroke();
+
+    // legend
+    ctx.font = '11px ui-sans-serif, system-ui'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    const lx = W - PADR - 150, ly = mainTop + 12;
+    ctx.strokeStyle = blue; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx + 16, ly); ctx.stroke();
+    ctx.fillStyle = fg; ctx.fillText('exp(−δ²/2σ²)', lx + 22, ly);
+    ctx.strokeStyle = accent; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(lx, ly + 15); ctx.lineTo(lx + 16, ly + 15); ctx.stroke();
+    ctx.fillStyle = muted; ctx.fillText('mean of m cosines', lx + 22, ly + 15);
+
+    const rmse = m > 0 ? Math.sqrt(sse / (M + 1)) : 0;
+    api.readout('ro', `m ${m} features · RMSE ${rmse.toFixed(3)} · jax-js`);
+  },
+});
+</script>

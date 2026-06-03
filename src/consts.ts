@@ -7,6 +7,7 @@ export const SITE_DESCRIPTION =
 export const SITE_AUTHOR = 'Taha Bouhsine';
 export const SITE_AUTHOR_URL = 'https://github.com/mlnomadpy';
 export const SITE_AUTHOR_JOB_TITLE = 'Machine Learning Researcher';
+export const BUY_ME_A_COFFEE_URL = 'https://buymeacoffee.com/mlnomadpy';
 
 // sameAs URLs — used in JSON-LD Person/Publisher schema and as <link rel="me">
 // for IndieWeb / Mastodon verification and Google's author-discovery signal.

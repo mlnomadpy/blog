@@ -1,0 +1,186 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 300 } = Astro.props;
+const id = `simoexp-${Math.random().toString(36).slice(2, 9)}`;
+---
+<figure class="viz simoexp" data-id={id} tabindex="0">
+  <div class="viz-cell">
+    <h4>Explore SimO₂: steer the equilibrium, watch it train</h4>
+    <div class="sx-controls">
+      <div class="sx-row">
+        <label>preset <select data-ctl="preset"></select></label>
+        <label>data <select data-ctl="data"></select></label>
+        <label class="sx-slider">bias&nbsp;b
+          <input type="range" data-ctl="b" min="0" max="1" step="0.01" value="0.5" />
+          <span class="sx-val" data-ctl="bval">0.50</span>
+        </label>
+        <label class="sx-chk"><input type="checkbox" data-ctl="prenorm" /> pre-norm</label>
+      </div>
+      <div class="sx-row">
+        <button data-act="play" class="sx-play">▶ Play</button>
+        <button data-act="step" class="sx-btn">Step</button>
+        <button data-act="reset" class="sx-btn">Reset</button>
+        <span class="sx-spd">speed
+          <button data-spd="0.5" class="sx-s">0.5×</button>
+          <button data-spd="1" class="sx-s active">1×</button>
+          <button data-spd="2" class="sx-s">2×</button>
+          <button data-spd="4" class="sx-s">4×</button>
+        </span>
+        <span class="sx-iter" data-ctl="iter">iter 0 · acc 0%</span>
+      </div>
+    </div>
+    <div class="sx-grid">
+      <canvas data-ctl="scatter" height={height} aria-label="AFCL embedding, live"></canvas>
+      <canvas data-ctl="plots" height={height} aria-label="Loss and accuracy curves"></canvas>
+    </div>
+    <div class="sx-ann" data-ctl="ann"></div>
+    {caption && <figcaption>{caption}</figcaption>}
+  </div>
+</figure>
+
+<script>
+import * as ng from './engine/nanograd.js';
+import { makeData, DATASETS } from './engine/datasets.js';
+
+const D = 12, Hd = 16, DE = 2, EPS = 1.0;
+const PRESETS = [
+  { name: 'orthogonal frame (b → 0)', b: 0.02, data: 'c4', note: 'Below the bifurcation bᴄ, "different" is sent toward orthogonal — concepts get their own near-perpendicular axes, full rank, but only a 90° margin.' },
+  { name: 'max-margin simplex (b = 0.5)', b: 0.5, data: 'c4', note: 'Above the simplex threshold the classes spread to the regular simplex — the certified > 90° margin. This is the default, healthy regime.' },
+  { name: 'near-antipodal (b → 1)', b: 0.97, data: 'c2', note: 'Aiming "different" at opposite (cos −1). With two classes that is rank-collapsing — the embeddings live on a line, not a frame.' },
+  { name: 'two-moons', b: 0.5, data: 'moons', note: 'Curved, non-linearly-separable classes; the encoder warps them and AFCL still lands them on the simplex.' },
+  { name: 'concentric rings', b: 0.5, data: 'rings', note: 'A bare cosine cannot separate nested rings; the encoder must unfold them before the kernel can place them.' },
+  { name: 'two spirals', b: 0.5, data: 'spiral', note: 'The hard case — interleaved spirals. Watch how many steps the encoder needs before the simplex appears.' },
+];
+
+function initExp(root) {
+  if (root.dataset.ready) return; root.dataset.ready = '1';
+  const q = (s) => root.querySelector(s);
+  const cS = q('[data-ctl="scatter"]'), ctxS = cS.getContext('2d');
+  const cP = q('[data-ctl="plots"]'), ctxP = cP.getContext('2d');
+  const presetSel = q('[data-ctl="preset"]'), dataSel = q('[data-ctl="data"]'), bInp = q('[data-ctl="b"]'), bVal = q('[data-ctl="bval"]'), preNormChk = q('[data-ctl="prenorm"]');
+  const iterEl = q('[data-ctl="iter"]'), annEl = q('[data-ctl="ann"]');
+  PRESETS.forEach((p, i) => { const o = document.createElement('option'); o.value = i; o.textContent = p.name; if (i === 1) o.selected = true; presetSel.appendChild(o); });
+  DATASETS.forEach(d => { const o = document.createElement('option'); o.value = d.value; o.textContent = d.label; dataSel.appendChild(o); });
+  const PAL = ['#b3661b', '#4a7fb3', '#3a8f5e', '#9a4f9c'];
+  const readColors = () => { const s = getComputedStyle(document.documentElement); const v = (n, f) => (s.getPropertyValue(n).trim() || f);
+    return { accent: v('--accent', '#b3661b'), blue: '#4a7fb3', muted: v('--fg-muted', '#5a5f66'), border: v('--border', '#e4e1d6'), fg: v('--fg', '#1a1a1a'), cellBg: v('--bg-elev', '#fff') }; };
+  let colors = readColors();
+
+  let data, X, M, params, adam, enc, encRaw, iter, lossH, accH, playing = false, raf = 0, speed = 1, acc2 = 0;
+
+  const rebuild = () => {
+    data = makeData(dataSel.value, 56, 7, D); X = ng.tensor(data.N, D, data.X);
+    const N = data.N, same = new Float64Array(N * N), diff = new Float64Array(N * N); let nS = 0, nD = 0;
+    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) { if (i === j) continue; if (data.lab[i] === data.lab[j]) { same[i * N + j] = 1; nS++; } else { diff[i * N + j] = 1; nD++; } }
+    M = { same: ng.tensor(N, N, same), diff: ng.tensor(N, N, diff), nS, nD };
+    const rn = () => { let u = Math.random(), v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+    const W1 = ng.param(D, Hd, () => rn() * Math.sqrt(2 / D)), b1 = ng.param(1, Hd, () => 0), W2 = ng.param(Hd, DE, () => rn() * Math.sqrt(2 / Hd)), b2 = ng.param(1, DE, () => 0);
+    params = [W1, b1, W2, b2]; adam = new ng.Adam(params, 0.02);
+    encRaw = () => ng.add(ng.matmul(ng.relu(ng.add(ng.matmul(X, W1), b1)), W2), b2); // pre-norm output
+    enc = () => ng.normRows(encRaw());
+    iter = 0; lossH = []; accH = [];
+  };
+  const lossFn = () => { const b = +bInp.value; const z = enc(); const S = ng.matmul(z, ng.transpose(z)); const y = ng.yatk(S, b, EPS);
+    const intra = ng.div(ng.sumAll(ng.mul(ng.recip(ng.addk(y, 1)), M.same)), ng.scalar(M.nS));
+    const inter = ng.div(ng.sumAll(ng.mul(ng.addk(y, 1), M.diff)), ng.scalar(M.nD));
+    return ng.add(intra, inter); };
+  // Classify with the SAME ⵟ-kernel the loss trains on — not a linear/cosine probe.
+  // Class prototypes are the (normalised) mean embeddings; each point is assigned to
+  // the class of maximum kernel probability ⵟ(S)=(S+b)²/(ε+2−2S), S=⟨x,cₖ⟩ on the sphere.
+  const acc = () => { const z = enc(), N = data.N, C = data.C, b = +bInp.value; const cen = Array.from({ length: C }, () => [0, 0]), cnt = new Array(C).fill(0);
+    for (let i = 0; i < N; i++) { const c = data.lab[i]; cen[c][0] += z.d[i * DE]; cen[c][1] += z.d[i * DE + 1]; cnt[c]++; }
+    for (let c = 0; c < C; c++) { const n = Math.hypot(cen[c][0], cen[c][1]) + 1e-9; cen[c][0] /= n; cen[c][1] /= n; }
+    let ok = 0; for (let i = 0; i < N; i++) { let best = -Infinity, arg = 0; for (let c = 0; c < C; c++) if (cnt[c]) { const S = z.d[i * DE] * cen[c][0] + z.d[i * DE + 1] * cen[c][1]; const num = S + b, k = (num * num) / (EPS + 2 - 2 * S); if (k > best) { best = k; arg = c; } } if (arg === data.lab[i]) ok++; } return ok / N; };
+  const trainOnce = () => { const L = lossFn(); ng.backward(L); adam.step(); iter++; lossH.push(L.d[0]); accH.push(acc()); if (lossH.length > 240) { lossH.shift(); accH.shift(); } };
+
+  const annotate = () => { const b = +bInp.value, C = data.C, bc = 1 / (2 * (C - 1)), simp = 1 / (C - 1);
+    const regime = b >= simp ? 'simplex (max-margin)' : b > bc ? 'interior equiangular' : 'orthogonal frame';
+    const p = PRESETS[+presetSel.value]; annEl.innerHTML = `<b>b = ${b.toFixed(2)} → ${regime}</b> &nbsp;(bᴄ = ${bc.toFixed(2)}, simplex above ${simp.toFixed(2)}). ${p ? p.note : ''}`; };
+
+  const drawScatter = () => { const W = cS.clientWidth, H = cS.clientHeight, dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+    if (cS.width !== Math.round(W * dpr)) { cS.width = Math.round(W * dpr); cS.height = Math.round(H * dpr); }
+    ctxS.setTransform(dpr, 0, 0, dpr, 0, 0); ctxS.clearRect(0, 0, W, H);
+    const side = Math.min(W, H) - 6, ox = (W - side) / 2, oy = (H - side) / 2, cx = ox + side / 2, cy = oy + side / 2, R = side * 0.42;
+    ctxS.fillStyle = colors.cellBg; ctxS.fillRect(ox, oy, side, side); ctxS.strokeStyle = colors.border; ctxS.lineWidth = 1; ctxS.strokeRect(ox + 0.5, oy + 0.5, side - 1, side - 1);
+    ctxS.beginPath(); ctxS.arc(cx, cy, R, 0, 6.283); ctxS.stroke();
+    const zr = encRaw(); const showRaw = preNormChk.checked;
+    // direction is preserved by normalisation, so each on-sphere point is zr/‖zr‖
+    const nrm = new Float64Array(data.N);
+    for (let i = 0; i < data.N; i++) nrm[i] = Math.hypot(zr.d[i * DE], zr.d[i * DE + 1]) + 1e-9;
+    if (showRaw) {
+      // auto-scale the raw cloud to fit the panel; norm-1 still lands on the circle radially
+      let mr = 0; for (let i = 0; i < data.N; i++) mr = Math.max(mr, nrm[i]);
+      const sRaw = (R * 2.05) / (mr || 1);
+      for (let i = 0; i < data.N; i++) {
+        const col = PAL[data.lab[i] % PAL.length];
+        const rx = cx + zr.d[i * DE] * sRaw, ry = cy - zr.d[i * DE + 1] * sRaw; // pre-norm position
+        const px = cx + (zr.d[i * DE] / nrm[i]) * R, py = cy - (zr.d[i * DE + 1] / nrm[i]) * R; // on-sphere
+        ctxS.globalAlpha = 0.22; ctxS.strokeStyle = col; ctxS.lineWidth = 1; ctxS.beginPath(); ctxS.moveTo(rx, ry); ctxS.lineTo(px, py); ctxS.stroke();
+        ctxS.globalAlpha = 0.9; ctxS.strokeStyle = col; ctxS.lineWidth = 1.2; ctxS.beginPath(); ctxS.arc(rx, ry, 2.6, 0, 6.283); ctxS.stroke();
+      }
+      ctxS.globalAlpha = 1;
+    }
+    for (let i = 0; i < data.N; i++) { ctxS.fillStyle = PAL[data.lab[i] % PAL.length]; ctxS.beginPath(); ctxS.arc(cx + (zr.d[i * DE] / nrm[i]) * R, cy - (zr.d[i * DE + 1] / nrm[i]) * R, 2.8, 0, 6.283); ctxS.fill(); }
+    ctxS.fillStyle = colors.muted; ctxS.font = '10px ui-sans-serif, system-ui'; ctxS.textAlign = 'left'; ctxS.textBaseline = 'top'; ctxS.fillText(showRaw ? 'hollow = pre-norm · solid = on sphere' : 'embedding', ox + 4, oy + 4);
+  };
+  const drawPlots = () => { const W = cP.clientWidth, H = cP.clientHeight, dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+    if (cP.width !== Math.round(W * dpr)) { cP.width = Math.round(W * dpr); cP.height = Math.round(H * dpr); }
+    ctxP.setTransform(dpr, 0, 0, dpr, 0, 0); ctxP.clearRect(0, 0, W, H);
+    const pad = 28, pw = W - pad - 8, ph = H - 24;
+    ctxP.fillStyle = colors.cellBg; ctxP.fillRect(pad, 8, pw, ph - 8); ctxP.strokeStyle = colors.border; ctxP.lineWidth = 1; ctxP.strokeRect(pad + 0.5, 8.5, pw - 1, ph - 8 - 1);
+    const n = lossH.length; if (n > 1) { const lmax = Math.max(...lossH, 1e-6);
+      const line = (arr, scale, col) => { ctxP.strokeStyle = col; ctxP.lineWidth = 1.6; ctxP.beginPath();
+        for (let i = 0; i < n; i++) { const x = pad + (i / (n - 1)) * pw, y = 8 + (ph - 8) - scale(arr[i]) * (ph - 14); i === 0 ? ctxP.moveTo(x, y) : ctxP.lineTo(x, y); } ctxP.stroke(); };
+      line(lossH, v => Math.min(1, v / lmax), colors.accent);
+      line(accH, v => v, colors.blue); }
+    ctxP.fillStyle = colors.accent; ctxP.font = '10px ui-monospace, monospace'; ctxP.textAlign = 'left'; ctxP.textBaseline = 'top'; ctxP.fillText('loss', pad + 4, 10);
+    ctxP.fillStyle = colors.blue; ctxP.fillText('ⵟ-kernel accuracy', pad + 4, 22);
+    ctxP.fillStyle = colors.muted; ctxP.save(); ctxP.translate(10, H / 2); ctxP.rotate(-Math.PI / 2); ctxP.textAlign = 'center'; ctxP.fillText('over iterations →', 0, 0); ctxP.restore();
+  };
+  const draw = () => { drawScatter(); drawPlots(); iterEl.textContent = `iter ${iter} · ⵟ-acc ${(accH.length ? accH[accH.length - 1] * 100 : 0).toFixed(0)}%`; bVal.textContent = (+bInp.value).toFixed(2); };
+
+  const tick = () => { if (!playing) return; acc2 += speed; while (acc2 >= 1) { trainOnce(); acc2 -= 1; } draw(); if (iter >= 600) stop(); else raf = requestAnimationFrame(tick); };
+  const stop = () => { playing = false; q('[data-act="play"]').textContent = '▶ Play'; cancelAnimationFrame(raf); };
+  const play = () => { if (iter >= 600) { rebuild(); } playing = true; q('[data-act="play"]').textContent = '❚❚ Pause'; raf = requestAnimationFrame(tick); };
+
+  q('[data-act="play"]').addEventListener('click', () => playing ? stop() : play());
+  q('[data-act="step"]').addEventListener('click', () => { stop(); trainOnce(); draw(); });
+  q('[data-act="reset"]').addEventListener('click', () => { stop(); rebuild(); annotate(); draw(); });
+  root.querySelectorAll('[data-spd]').forEach(b => b.addEventListener('click', () => { speed = +b.dataset.spd; root.querySelectorAll('[data-spd]').forEach(x => x.classList.remove('active')); b.classList.add('active'); }));
+  bInp.addEventListener('input', () => { annotate(); bVal.textContent = (+bInp.value).toFixed(2); });
+  preNormChk.addEventListener('change', () => { if (!playing) draw(); });
+  dataSel.addEventListener('change', () => { stop(); rebuild(); annotate(); draw(); });
+  presetSel.addEventListener('change', () => { const p = PRESETS[+presetSel.value]; bInp.value = p.b; dataSel.value = p.data; stop(); rebuild(); annotate(); draw(); });
+
+  new MutationObserver(() => { colors = readColors(); draw(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  new ResizeObserver(() => draw()).observe(cS);
+  let kicked = false;
+  new IntersectionObserver((e) => { if (e[0].isIntersecting) { draw(); if (!kicked) { kicked = true; play(); } } else stop(); }, { rootMargin: '0px' }).observe(cS);
+  // init from default preset
+  const p0 = PRESETS[1]; bInp.value = p0.b; dataSel.value = p0.data; rebuild(); annotate(); draw();
+}
+const boot = () => document.querySelectorAll('.simoexp').forEach(initExp);
+boot(); document.addEventListener('astro:page-load', boot); document.addEventListener('astro:after-swap', boot);
+</script>
+
+<style>
+.sx-controls { display: flex; flex-direction: column; gap: 6px; padding: 6px 0 10px; }
+.sx-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.sx-play { background: var(--accent); color: #fff; border: none; border-radius: 5px; padding: 4px 12px; font-size: 12px; cursor: pointer; font-family: inherit; min-width: 70px; }
+.sx-btn { background: var(--bg-elev, #fff); color: var(--fg-muted); border: 1px solid var(--border); border-radius: 5px; padding: 4px 10px; font-size: 12px; cursor: pointer; font-family: inherit; }
+.sx-spd { display: inline-flex; align-items: center; gap: 4px; color: var(--fg-muted); font-size: 12px; }
+.sx-s { background: var(--bg-elev, #fff); color: var(--fg-muted); border: 1px solid var(--border); border-radius: 4px; padding: 2px 7px; font-size: 11px; cursor: pointer; font-family: ui-monospace, monospace; }
+.sx-s.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.sx-controls label { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-muted); font-size: 12px; }
+.sx-controls select, .sx-controls input[type="range"], .sx-controls input[type="checkbox"] { accent-color: var(--accent); }
+.sx-controls select { background: var(--bg-elev, #fff); color: var(--fg); border: 1px solid var(--border); border-radius: 4px; padding: 2px 4px; font-size: 12px; }
+.sx-val { font-family: ui-monospace, monospace; font-size: 11px; color: var(--fg-muted); min-width: 28px; }
+.sx-iter { margin-left: auto; font-family: ui-monospace, monospace; font-size: 11px; color: var(--fg-muted); }
+.sx-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.sx-grid canvas { width: 100%; display: block; }
+.sx-ann { margin-top: 8px; font-size: 12.5px; line-height: 1.5; color: var(--fg-muted); max-width: 64ch; }
+@media (max-width: 560px) { .sx-grid { grid-template-columns: 1fr; } }
+</style>

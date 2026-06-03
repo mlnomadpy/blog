@@ -1,0 +1,110 @@
+---
+// Bibliography rendered at the foot of a post from its `references` frontmatter.
+// Each entry gets a numbered marker and an id (`ref-<n>`, plus `ref-<key>` when a
+// key is given) so inline citations can link to it, e.g. <sup><a href="#ref-welch1974">[1]</a></sup>.
+interface Reference {
+  key?: string;
+  authors: string;
+  year: number | string;
+  title: string;
+  venue?: string;
+  url?: string;
+  arxiv?: string;
+  doi?: string;
+}
+interface Props { items?: Reference[] }
+const { items = [] } = Astro.props;
+
+const linkFor = (r: Reference): string | undefined =>
+  r.url ?? (r.arxiv ? `https://arxiv.org/abs/${r.arxiv}` : r.doi ? `https://doi.org/${r.doi}` : undefined);
+---
+{items.length > 0 && (
+  <section class="references" aria-labelledby="references-heading">
+    <h2 id="references-heading">References</h2>
+    <ol>
+      {items.map((r, i) => {
+        const href = linkFor(r);
+        const ids = [`ref-${i + 1}`, r.key ? `ref-${r.key}` : null].filter(Boolean) as string[];
+        return (
+          <li id={ids[0]} data-alt-id={ids[1]}>
+            {ids[1] && <span id={ids[1]} class="ref-anchor" aria-hidden="true" />}
+            <span class="ref-authors">{r.authors}</span>{' '}
+            <span class="ref-year">({r.year})</span>.{' '}
+            {href
+              ? <a class="ref-title" href={href} target="_blank" rel="noopener noreferrer">{r.title}</a>
+              : <span class="ref-title">{r.title}</span>}.
+            {r.venue && <> <span class="ref-venue">{r.venue}</span>.</>}
+            {r.arxiv && (
+              <> <a class="ref-ext" href={`https://arxiv.org/abs/${r.arxiv}`} target="_blank" rel="noopener noreferrer">arXiv:{r.arxiv}</a></>
+            )}
+            {!r.arxiv && r.doi && (
+              <> <a class="ref-ext" href={`https://doi.org/${r.doi}`} target="_blank" rel="noopener noreferrer">doi:{r.doi}</a></>
+            )}
+          </li>
+        );
+      })}
+    </ol>
+  </section>
+)}
+
+<style>
+  .references {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  .references h2 {
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--fg-faint);
+    font-weight: 500;
+    margin: 0 0 1.1rem;
+  }
+  .references ol {
+    list-style: none;
+    counter-reset: ref;
+    padding: 0;
+    margin: 0;
+  }
+  .references li {
+    counter-increment: ref;
+    position: relative;
+    padding-left: 2.5rem;
+    margin: 0 0 0.75rem;
+    font-family: var(--sans);
+    font-size: 0.9rem;
+    line-height: 1.55;
+    color: var(--fg-muted);
+  }
+  .references li::before {
+    content: '[' counter(ref) ']';
+    position: absolute;
+    left: 0;
+    top: 0.05rem;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--accent);
+  }
+  .ref-anchor {
+    position: absolute;
+    top: -5rem;          /* offset for the sticky header on jump */
+  }
+  .references .ref-authors { color: var(--fg); font-weight: 500; }
+  .references .ref-title { color: var(--fg); }
+  .references a.ref-title { text-decoration: none; }
+  .references a.ref-title:hover { color: var(--accent); text-decoration: underline; }
+  .references .ref-venue { font-style: italic; }
+  .references .ref-ext {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+  .references li:target {
+    background: var(--accent-soft);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 0 0 6px var(--accent-soft);
+  }
+</style>

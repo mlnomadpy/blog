@@ -1,0 +1,96 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 360 } = Astro.props;
+---
+<figure class="viz featurelift" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { np, withJax, drawJaxLoading } from './engine/jax.js';
+
+// A kernel is an inner product of features. With m random Fourier features
+// φ(t) = √(2/m)[cos(wᵢt+bᵢ)], the RBF kernel k(x,y)=exp(-(x-y)²/2σ²) is just the
+// dot product φ(x)·φ(y). Drag the point y: its feature vector (lower bars) shifts
+// against the fixed anchor φ(0) (upper bars). When y≈0 the two vectors line up
+// sign-for-sign and the dot product is large; pull y away and the signs scramble
+// and the dot product decays — exactly tracing the bell below. Features on jax-js.
+const PADL = 40, PADR = 14, DOM = 3;
+
+const lcg = (s) => () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+const randn = (rng) => { let u = 0, v = 0; while (u === 0) u = rng(); while (v === 0) v = rng(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+
+const sampleWB = (seed, m, sigma) => { const rng = lcg(seed >>> 0 || 1); const w = new Float64Array(m), b = new Float64Array(m);
+  for (let i = 0; i < m; i++) { w[i] = randn(rng) / sigma; b[i] = rng() * 2 * Math.PI; } return { w, b }; };
+
+defineViz('featurelift', {
+  height: 360,
+  controls: [
+    { type: 'range', name: 'm', label: 'features m', min: 4, max: 64, step: 2, value: 36, int: true, reset: false, fmt: (v) => '' + v },
+    { type: 'range', name: 'sigma', label: 'bandwidth σ', min: 0.5, max: 1.6, step: 0.05, value: 0.9, reset: false, fmt: (v) => v.toFixed(2) },
+    { type: 'button', name: 'resample', label: 'resample features' },
+    { type: 'readout', name: 'ro' },
+  ],
+  setup(api) {
+    api.state.y = 1.2; api.state.seed = 27;
+    if (!api.canvas.dataset.flDrag) {
+      api.canvas.dataset.flDrag = '1'; let dragging = false;
+      const onP = (e) => { const r = api.canvas.getBoundingClientRect(); const plotW = api.size.W - PADL - PADR;
+        const t = Math.max(0, Math.min(1, ((e.clientX - r.left) - PADL) / plotW)); api.state.y = -DOM + t * 2 * DOM; api.render(); };
+      api.canvas.addEventListener('pointerdown', (e) => { dragging = true; api.canvas.setPointerCapture(e.pointerId); onP(e); });
+      api.canvas.addEventListener('pointermove', (e) => { if (dragging) onP(e); });
+      api.canvas.addEventListener('pointerup', (e) => { dragging = false; try { api.canvas.releasePointerCapture(e.pointerId); } catch {} });
+    }
+    withJax(api);
+  },
+  onAction(name, api) { if (name === 'resample') { api.state.seed = (api.state.seed * 1103515245 + 12345) & 0x7fffffff; api.render(); } },
+  draw(api) {
+    const { ctx, colors, size, state } = api; const W = size.W, H = size.H; if (W === 0) return;
+    if (!state.jaxReady) return drawJaxLoading(api);
+    const { accent, blue, fg, muted, faint, border } = colors;
+    const m = api.get('m'), sigma = api.get('sigma'), y = state.y;
+    const { w, b } = sampleWB(state.seed, m, sigma);
+    // feature coordinates cos(w·t + b) for the anchor (t=0) and for t=y, on jax-js
+    const cosA = np.cos(np.array(b)).js();
+    const cosY = np.cos(np.array(w).mul(y).add(np.array(b))).js();
+    let dot = 0; for (let i = 0; i < m; i++) dot += cosA[i] * cosY[i];
+    const kEst = (2 / m) * dot;                       // φ(0)·φ(y)
+    const kTrue = Math.exp(-(y * y) / (2 * sigma * sigma));
+
+    const plotW = W - PADL - PADR, sx = (d) => PADL + (d + DOM) / (2 * DOM) * plotW;
+    const barW = plotW / m;
+    const drawRow = (vals, baseY, rowH, label) => {
+      ctx.strokeStyle = border; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(PADL, baseY); ctx.lineTo(W - PADR, baseY); ctx.stroke();
+      for (let i = 0; i < m; i++) { const v = vals[i]; const bh = v * (rowH / 2 - 2); const x = PADL + i * barW + 0.5;
+        ctx.fillStyle = v >= 0 ? accent : blue; ctx.globalAlpha = 0.85; ctx.fillRect(x, baseY - Math.max(0, bh), Math.max(1, barW - 1), Math.abs(bh)); }
+      ctx.globalAlpha = 1; ctx.fillStyle = muted; ctx.font = '11px ui-monospace, monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      ctx.fillText(label, PADL + 2, baseY - rowH / 2 - 3);
+    };
+    const rowH = 46;
+    drawRow(cosA, 24 + rowH / 2, rowH, 'φ(a),  a = 0');
+    drawRow(cosY, 24 + rowH + 18 + rowH / 2, rowH, `φ(y),  y = ${y.toFixed(2)}`);
+
+    // ── kernel curve below ──
+    const cTop = 24 + 2 * rowH + 18 + 26, cBot = H - 26, cH = cBot - cTop;
+    const yMin = -0.08, yMax = 1.06, yRange = yMax - yMin; const syc = (v) => cTop + (yMax - v) / yRange * cH;
+    ctx.strokeStyle = border; ctx.lineWidth = 1; ctx.beginPath(); for (const v of [0, 1]) { ctx.moveTo(PADL, syc(v)); ctx.lineTo(W - PADR, syc(v)); } ctx.stroke();
+    ctx.fillStyle = faint; ctx.font = '10px ui-monospace, monospace'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (const v of [0, 1]) ctx.fillText(v.toFixed(0), PADL - 5, syc(v));
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; for (const dv of [-3, -2, -1, 0, 1, 2, 3]) ctx.fillText(dv.toFixed(0), sx(dv), cBot + 5);
+    // true bell
+    ctx.strokeStyle = blue; ctx.lineWidth = 2; ctx.beginPath();
+    for (let i = 0; i <= 200; i++) { const d = -DOM + (2 * DOM) * i / 200; const v = Math.exp(-(d * d) / (2 * sigma * sigma)); const px = sx(d), py = syc(v); i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); } ctx.stroke();
+    // anchor at δ=0, draggable y marker, and the estimate point
+    ctx.strokeStyle = faint; ctx.setLineDash([2, 3]); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(sx(0), cTop); ctx.lineTo(sx(0), cBot); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = faint; ctx.beginPath(); ctx.arc(sx(0), syc(1), 3.5, 0, Math.PI * 2); ctx.fill();
+    const qx = sx(y); ctx.strokeStyle = accent; ctx.lineWidth = 1; ctx.setLineDash([3, 4]); ctx.beginPath(); ctx.moveTo(qx, cTop); ctx.lineTo(qx, cBot); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = accent; ctx.beginPath(); ctx.arc(qx, syc(kEst), 5, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = fg; ctx.lineWidth = 1.4; ctx.stroke();
+
+    api.readout('ro', `drag y · φ(0)·φ(y) ${kEst.toFixed(3)} vs exp ${kTrue.toFixed(3)} · jax-js`);
+  },
+});
+</script>

@@ -1,0 +1,100 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 520 } = Astro.props;
+---
+<figure class="viz bookkeepingfour" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { withJax, drawJaxLoading } from './engine/jax.js';
+import { text } from './engine/draw.js';
+import {
+  setupBodies, setupField, stepDirect, stepField,
+  drawDirectPanel, drawFieldPanel, directCost, meshVariableCost, fmt, MAX_N,
+} from './engine/nbody.js';
+import { drawStormPanel, drawReservoirPanel } from './engine/storm.js';
+
+defineViz('bookkeepingfour', {
+  height: 520,
+  heightMobile: 560,
+  minHeight: 440,
+  maxHeight: 640,
+  maxStep: 900,
+  controls: [
+    { type: 'play' },
+    { type: 'step', label: 'Tick' },
+    { type: 'reset' },
+    { type: 'speed', presets: [0.5, 1, 2, 4] },
+    { type: 'newrow' },
+    { type: 'range', name: 'N', label: 'bodies / tokens N', min: 16, max: MAX_N, step: 8, value: 48, int: true, reset: true },
+    { type: 'range', name: 'm', label: 'features m', min: 4, max: 24, step: 2, value: 12, int: true, reset: false },
+    { type: 'readout', name: 'ro' },
+  ],
+  setup(api) {
+    setupBodies(api);
+    setupField(api);
+    withJax(api);
+  },
+  step(api) {
+    if (!api.state.jaxReady) return;
+    const N = api.get('N');
+    stepDirect(api.state, N);
+    stepField(api.state, N);
+  },
+  draw(api) {
+    const { ctx, colors, size, state } = api;
+    const W = size.W, H = size.H;
+    if (!W || !H) return;
+    if (!state.jaxReady) return drawJaxLoading(api);
+
+    const N = api.get('N');
+    const m = api.get('m');
+    const phase = (api.iter % 360) / 360;
+
+    const pad = 10;
+    const headerH = 34;
+    const colGap = 14;
+    const rowGap = 8;
+    const colW = (W - 2 * pad - colGap) / 2;
+    const rowH = (H - headerH - pad - rowGap) / 2;
+    const leftX = pad;
+    const rightX = pad + colW + colGap;
+    const topY = headerH;
+    const botY = headerH + rowH + rowGap;
+    const leftCx = leftX + colW / 2;
+    const rightCx = rightX + colW / 2;
+    const midX = pad + colW + colGap / 2;
+    const midY = headerH + rowH + rowGap / 2;
+
+    // column headers: the whole point of the figure
+    text(ctx, 'all pairs — O(N²)', leftCx, 6, colors, { align: 'center', size: 12.5, weight: '700', color: colors.blue });
+    text(ctx, 'every body / token talks to every other', leftCx, 22, colors, { align: 'center', size: 10, color: colors.muted });
+    text(ctx, 'shared state — O(N)', rightCx, 6, colors, { align: 'center', size: 12.5, weight: '700', color: colors.accent });
+    text(ctx, 'write a field / feature state once, then read it', rightCx, 22, colors, { align: 'center', size: 10, color: colors.muted });
+
+    // dividers
+    ctx.strokeStyle = colors.border;
+    ctx.setLineDash([4, 5]);
+    ctx.beginPath();
+    ctx.moveTo(midX, headerH);
+    ctx.lineTo(midX, H - pad);
+    ctx.moveTo(leftX, midY);
+    ctx.lineTo(W - pad, midY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // top row: gravity. bottom row: attention. left col: pairwise. right col: shared state.
+    drawDirectPanel(ctx, { x: leftX, y: topY, w: colW, h: rowH }, colors, state, N);
+    drawFieldPanel(ctx, { x: rightX, y: topY, w: colW, h: rowH }, colors, state, N);
+    drawStormPanel(ctx, { x: leftX, y: botY, w: colW, h: rowH }, colors, api.iter, N);
+    drawReservoirPanel(ctx, { x: rightX, y: botY, w: colW, h: rowH }, colors, api.iter, N, m, phase);
+
+    api.readout('ro', `N=${N} · pairwise: ${fmt(directCost(N))} forces / ${fmt(N * N)} scores · shared: ${fmt(meshVariableCost(N))} grid touches / ${fmt(N * m)} feature touches`);
+  },
+});
+</script>

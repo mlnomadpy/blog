@@ -2,11 +2,18 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { getCollection } from 'astro:content';
 import { SITE_TITLE, SITE_DESCRIPTION, SITE_TAGLINE } from '../consts';
+import { postFilter, buildPairs } from '../utils/posts';
 
-const posts = (await getCollection('blog', ({ data }) => !data.draft))
+const posts = (await getCollection('blog', postFilter))
   .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
 
-const byYear = posts.reduce<Record<number, typeof posts>>((acc, p) => {
+// Pair explainers with their JAX companions. Companions are not listed on their
+// own row; they appear nested under their explainer (see the archive markup).
+const { companionOf, mainOf } = buildPairs(posts);
+const stripId = (s: string) => s.replace(/\.(md|mdx)$/, '');
+const topLevel = posts.filter((p) => !mainOf.has(stripId(p.id)));
+
+const byYear = topLevel.reduce<Record<number, typeof posts>>((acc, p) => {
   const y = p.data.pubDate.getFullYear();
   (acc[y] ??= []).push(p);
   return acc;
@@ -46,16 +53,32 @@ const blogPosts = posts.slice(0, 10).map((p) => ({
       <div class="archive-year">
         <h2>{year}</h2>
         <ul>
-          {byYear[year].map((post) => (
-            <li>
-              <a class="row" href={`${base}/${post.id}/`}>
-                <time class="row-date" datetime={post.data.pubDate.toISOString()}>
-                  {fmt.format(post.data.pubDate)}
-                </time>
-                <span class="row-title">{post.data.title}</span>
-              </a>
-            </li>
-          ))}
+          {byYear[year].map((post) => {
+            const companion = companionOf.get(stripId(post.id));
+            return (
+              <li class={companion ? 'has-companion' : undefined}>
+                <a class="row" href={`${base}/${post.id}/`}>
+                  <time class="row-date" datetime={post.data.pubDate.toISOString()}>
+                    {fmt.format(post.data.pubDate)}
+                  </time>
+                  <span class="row-title">
+                    {post.data.draft && <span class="draft-badge">draft</span>}
+                    {post.data.title}
+                  </span>
+                </a>
+                {companion && (
+                  <a class="companion-row" href={`${base}/${companion.id}/`} aria-label={`JAX companion: ${companion.data.title}`}>
+                    <span class="companion-rail" aria-hidden="true"></span>
+                    <span class="companion-tag">JAX companion</span>
+                    <span class="companion-title">
+                      {companion.data.draft && <span class="draft-badge">draft</span>}
+                      {companion.data.title}
+                    </span>
+                  </a>
+                )}
+              </li>
+            );
+          })}
         </ul>
       </div>
     ))}
@@ -87,6 +110,7 @@ const blogPosts = posts.slice(0, 10).map((p) => ({
   .archive-year ul { list-style: none; padding: 0; margin: 0; }
   .archive-year li { border-bottom: 1px dashed var(--border); }
   .archive-year li:last-child { border-bottom: 0; }
+  .archive-year li.has-companion { padding-bottom: 0.35rem; }
 
   .row {
     display: grid;
@@ -97,6 +121,50 @@ const blogPosts = posts.slice(0, 10).map((p) => ({
     text-decoration: none;
     color: inherit;
   }
+  .has-companion .row { padding-bottom: 0.3rem; }
+
+  /* nested JAX-companion link under its explainer */
+  .companion-row {
+    position: relative;
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-left: calc(72px + 1rem);
+    padding: 0.1rem 0 0.45rem;
+    text-decoration: none;
+    color: inherit;
+  }
+  .companion-rail {
+    position: absolute;
+    left: -14px;
+    top: -0.35em;
+    width: 10px;
+    height: 0.95em;
+    border-left: 1.5px solid var(--border);
+    border-bottom: 1.5px solid var(--border);
+    border-bottom-left-radius: 6px;
+  }
+  .companion-tag {
+    flex: none;
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 0.07rem 0.4rem;
+    white-space: nowrap;
+  }
+  .companion-title {
+    font-family: var(--serif);
+    font-size: 0.92rem;
+    line-height: 1.4;
+    color: var(--fg-muted);
+    transition: color var(--transition-fast);
+  }
+  .companion-row:hover .companion-title { color: var(--accent); }
+  .companion-row:hover .companion-tag { background: color-mix(in srgb, var(--accent) 12%, transparent); }
   .row-date {
     font-family: var(--mono);
     font-size: 0.78rem;
@@ -113,6 +181,19 @@ const blogPosts = posts.slice(0, 10).map((p) => ({
     transition: color var(--transition-fast);
   }
   .row:hover .row-title { color: var(--accent); }
+  .draft-badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 0.05rem 0.35rem;
+    margin-right: 0.5rem;
+    vertical-align: 0.12em;
+  }
 
   @media (max-width: 720px) {
     .row {

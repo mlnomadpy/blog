@@ -4,225 +4,68 @@ interface Props {
   height?: number;
 }
 const { caption, height = 280 } = Astro.props;
-const id = `rbf-${Math.random().toString(36).slice(2, 9)}`;
 ---
-<figure class="viz">
-  <div class="viz-controls">
-    <label>
-      kernel width <em style="font-style:normal;color:var(--fg)">σ</em>
-      <input type="range" min="-1.5" max="-0.3" step="0.05" value="-0.9" id={`${id}-s`} aria-label="RBF kernel width" />
-      <span class="readout" id={`${id}-readout`}>0.13</span>
-    </label>
-    <label>
-      <input type="checkbox" id={`${id}-show`} checked /> show basis sections
-    </label>
-  </div>
-  <canvas id={`${id}-c`} height={height} aria-label="RBF basis expansion approximating a target function"></canvas>
-  {caption && <figcaption>{caption}</figcaption>}
+<figure class="viz rbfexpansion" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
 </figure>
 
-<script is:inline define:vars={{ id }}>
-(() => {
-  const setup = () => {
-    const c = document.getElementById(id + '-c');
-    if (!c || c.dataset.ready) return;
-    c.dataset.ready = '1';
-    const slider = document.getElementById(id + '-s');
-    const showBasis = document.getElementById(id + '-show');
-    const readout = document.getElementById(id + '-readout');
-    const ctx = c.getContext('2d');
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { np, withJax, drawJaxLoading } from './engine/jax.js';
 
-    const n = 9;
-    const centers = new Float32Array(n);
-    const targets = new Float32Array(n);
-    for (let k = 0; k < n; k++) {
-      centers[k] = k / (n - 1);
-      targets[k] = Math.sin(centers[k] * Math.PI * 2.2) * 0.6 - centers[k] * 0.1 + 0.1;
-    }
-    const M = 240;
-    const xs = new Float32Array(M + 1);
-    for (let i = 0; i <= M; i++) xs[i] = i / M;
+// RBF basis expansion: fit f as Σ αⱼ K(·, kⱼ) over fixed anchors by solving the
+// real kernel ridge system (K + λI)α = y live — jax-js builds the Gram matrix and
+// solves it with np.linalg.solve (LU under the hood), n=9.
+const n = 9, M = 240, PADL = 30, PADR = 14, PADT = 16, PADB = 26;
+const target = (x) => Math.sin(x * Math.PI * 2.2) * 0.6 - x * 0.1 + 0.1;
 
-    // Caches keyed by sigma.
-    let cacheSigma = -1;
-    const alpha = new Float32Array(n);
-    const sumY = new Float32Array(M + 1);
-    const basisY = new Float32Array((M + 1) * n);
+// (K + λI)α = y via jax-js. Builds the Gram matrix as a vectorised outer-diff,
+// adds ridge on the diagonal, and solves. Fresh arrays, read once → no .ref leak.
+const fitAlpha = (centers, targets, inv2ss, lambda) => {
+  const C = np.array(Array.from(centers));
+  const di = np.subtract(np.reshape(C.ref, [n, 1]), np.reshape(C, [1, n]));  // (n,n) center gaps
+  const G = np.exp(di.ref.mul(di).mul(-inv2ss));                             // Gaussian Gram
+  const K = np.add(G, np.array(eye(n, lambda)));                            // + λI ridge
+  return np.linalg.solve(K, np.array(Array.from(targets))).js();
+};
+const eye = (m, v) => Array.from({ length: m }, (_, i) => Array.from({ length: m }, (_, j) => (i === j ? v : 0)));
 
-    // Cache theme colors.
-    let colors = readColors();
-    function readColors() {
-      const s = getComputedStyle(document.documentElement);
-      const v = (name) => s.getPropertyValue(name).trim();
-      return {
-        accent: v('--accent') || '#b3661b',
-        muted: v('--fg-muted') || '#5a5f66',
-        faint: v('--fg-faint') || '#8d8d8d',
-        border: v('--border') || '#e4e1d6',
-      };
-    }
-    const themeObs = new MutationObserver(() => { colors = readColors(); requestRedraw(); });
-    themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-
-    const state = { dpr: 1, w: 0, h: 0 };
-    const fit = () => {
-      const rect = c.getBoundingClientRect();
-      const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
-      state.dpr = dpr;
-      state.w = rect.width;
-      state.h = rect.height;
-      c.width = Math.round(rect.width * dpr);
-      c.height = Math.round(rect.height * dpr);
-    };
-
-    // Solve (K + λI) α = y in place. Tiny n=9, O(n^3) once per sigma change.
-    const solve = (K, y, out) => {
-      const N = y.length;
-      const A = new Float64Array(N * (N + 1));
-      for (let i = 0; i < N; i++) {
-        for (let j = 0; j < N; j++) A[i * (N + 1) + j] = K[i * N + j];
-        A[i * (N + 1) + N] = y[i];
-      }
-      for (let i = 0; i < N; i++) {
-        let piv = i;
-        for (let r = i + 1; r < N; r++) if (Math.abs(A[r * (N + 1) + i]) > Math.abs(A[piv * (N + 1) + i])) piv = r;
-        if (piv !== i) {
-          for (let k = 0; k <= N; k++) {
-            const tmp = A[i * (N + 1) + k]; A[i * (N + 1) + k] = A[piv * (N + 1) + k]; A[piv * (N + 1) + k] = tmp;
-          }
-        }
-        const d = A[i * (N + 1) + i];
-        if (Math.abs(d) < 1e-12) continue;
-        for (let r = 0; r < N; r++) {
-          if (r === i) continue;
-          const f = A[r * (N + 1) + i] / d;
-          if (f === 0) continue;
-          for (let k = i; k <= N; k++) A[r * (N + 1) + k] -= f * A[i * (N + 1) + k];
-        }
-      }
-      for (let i = 0; i < N; i++) out[i] = A[i * (N + 1) + N] / A[i * (N + 1) + i];
-    };
-
-    const recompute = (sigma) => {
-      if (sigma === cacheSigma) return;
-      cacheSigma = sigma;
-      const inv2ss = 1 / (2 * sigma * sigma);
-      const lambda = 1e-4;
-      const K = new Float64Array(n * n);
-      for (let i = 0; i < n; i++) {
-        for (let j = 0; j < n; j++) {
-          const d = centers[i] - centers[j];
-          K[i * n + j] = Math.exp(-(d * d) * inv2ss) + (i === j ? lambda : 0);
-        }
-      }
-      solve(K, targets, alpha);
-
-      // Pre-compute basis sections and sum at sample xs.
-      for (let i = 0; i <= M; i++) {
-        let s = 0;
-        for (let j = 0; j < n; j++) {
-          const d = xs[i] - centers[j];
-          const kij = Math.exp(-(d * d) * inv2ss);
-          const v = alpha[j] * kij;
-          basisY[i * n + j] = v;
-          s += v;
-        }
-        sumY[i] = s;
-      }
-    };
-
-    const draw = () => {
-      const W = state.w, H = state.h;
-      if (W === 0 || H === 0) return;
-      ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
-      ctx.clearRect(0, 0, W, H);
-
-      const { accent, muted, faint, border } = colors;
-      const padL = 30, padR = 14, padT = 16, padB = 26;
-      const plotW = W - padL - padR;
-      const plotH = H - padT - padB;
-      const yMin = -1.0, yMax = 1.0;
-      const yRange = yMax - yMin;
-      const sx = (x) => padL + x * plotW;
-      const sy = (y) => padT + (yMax - y) / yRange * plotH;
-
-      ctx.strokeStyle = border;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(padL, sy(yMin)); ctx.lineTo(W - padR, sy(yMin));
-      ctx.moveTo(padL, sy(0)); ctx.lineTo(W - padR, sy(0));
-      ctx.moveTo(padL, sy(yMax)); ctx.lineTo(W - padR, sy(yMax));
-      ctx.stroke();
-
-      const sigma = Math.pow(10, parseFloat(slider.value));
-      readout.textContent = sigma.toFixed(2);
-      recompute(sigma);
-
-      // Target function (dashed)
-      ctx.strokeStyle = faint;
-      ctx.setLineDash([4, 4]);
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      for (let i = 0; i <= M; i++) {
-        const t = Math.sin(xs[i] * Math.PI * 2.2) * 0.6 - xs[i] * 0.1 + 0.1;
-        const px = sx(xs[i]), py = sy(t);
-        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-      }
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      if (showBasis.checked) {
-        ctx.strokeStyle = accent + '55';
-        ctx.lineWidth = 1;
-        for (let j = 0; j < n; j++) {
-          ctx.beginPath();
-          for (let i = 0; i <= M; i++) {
-            const px = sx(xs[i]), py = sy(basisY[i * n + j]);
-            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-          }
-          ctx.stroke();
-        }
-      }
-
-      ctx.strokeStyle = accent;
-      ctx.lineWidth = 1.8;
-      ctx.beginPath();
-      for (let i = 0; i <= M; i++) {
-        const px = sx(xs[i]), py = sy(sumY[i]);
-        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-      }
-      ctx.stroke();
-
-      ctx.fillStyle = muted;
-      for (let k = 0; k < n; k++) {
-        ctx.beginPath(); ctx.arc(sx(centers[k]), sy(targets[k]), 3, 0, Math.PI * 2); ctx.fill();
-      }
-    };
-
-    let rafScheduled = false;
-    let visible = false;
-    const requestRedraw = () => {
-      if (rafScheduled || !visible) return;
-      rafScheduled = true;
-      requestAnimationFrame(() => { rafScheduled = false; draw(); });
-    };
-
-    slider.addEventListener('input', requestRedraw);
-    showBasis.addEventListener('change', requestRedraw);
-
-    const ro = new ResizeObserver(() => { fit(); requestRedraw(); });
-    ro.observe(c);
-
-    const io = new IntersectionObserver((entries) => {
-      const was = visible;
-      visible = entries[0].isIntersecting;
-      if (visible && !was) { fit(); draw(); }
-    }, { rootMargin: '120px' });
-    io.observe(c);
-  };
-
-  setup();
-  document.addEventListener('astro:page-load', setup);
-  document.addEventListener('astro:after-swap', setup);
-})();
+defineViz('rbfexpansion', {
+  height: 280,
+  controls: [
+    { type: 'range', name: 'sigma', label: 'kernel width σ', min: -1.5, max: -0.3, step: 0.05, value: -0.9, reset: false, fmt: (v) => Math.pow(10, v).toFixed(2) },
+    { type: 'toggle', name: 'basis', label: 'show basis sections', value: true },
+    { type: 'readout', name: 'ro' },
+  ],
+  setup(api) {
+    const centers = new Float32Array(n), targets = new Float32Array(n);
+    for (let k = 0; k < n; k++) { centers[k] = k / (n - 1); targets[k] = target(centers[k]); }
+    const xs = new Float32Array(M + 1); for (let i = 0; i <= M; i++) xs[i] = i / M;
+    api.state.centers = centers; api.state.targets = targets; api.state.xs = xs;
+    withJax(api);
+  },
+  draw(api) {
+    const { ctx, colors, size, state } = api; const W = size.W, H = size.H; if (W === 0) return;
+    if (!state.jaxReady) return drawJaxLoading(api);
+    const { accent, muted, faint, border } = colors; const { centers, targets, xs } = state;
+    const plotW = W - PADL - PADR, plotH = H - PADT - PADB, yMin = -1.0, yMax = 1.0, yRange = yMax - yMin;
+    const sx = (x) => PADL + x * plotW, sy = (y) => PADT + (yMax - y) / yRange * plotH;
+    ctx.strokeStyle = border; ctx.lineWidth = 1; ctx.beginPath();
+    ctx.moveTo(PADL, sy(yMin)); ctx.lineTo(W - PADR, sy(yMin)); ctx.moveTo(PADL, sy(0)); ctx.lineTo(W - PADR, sy(0)); ctx.moveTo(PADL, sy(yMax)); ctx.lineTo(W - PADR, sy(yMax)); ctx.stroke();
+    const sigma = Math.pow(10, api.get('sigma')); const inv2ss = 1 / (2 * sigma * sigma), lambda = 1e-4;
+    const alpha = fitAlpha(centers, targets, inv2ss, lambda);
+    // target (dashed)
+    ctx.strokeStyle = faint; ctx.setLineDash([4, 4]); ctx.lineWidth = 1.2; ctx.beginPath();
+    for (let i = 0; i <= M; i++) { const px = sx(xs[i]), py = sy(target(xs[i])); i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); } ctx.stroke(); ctx.setLineDash([]);
+    // basis sections + sum
+    const showBasis = api.get('basis');
+    if (showBasis) { ctx.strokeStyle = accent + '55'; ctx.lineWidth = 1;
+      for (let j = 0; j < n; j++) { ctx.beginPath(); for (let i = 0; i <= M; i++) { const d = xs[i] - centers[j]; const v = alpha[j] * Math.exp(-(d * d) * inv2ss); const px = sx(xs[i]), py = sy(v); i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); } ctx.stroke(); } }
+    ctx.strokeStyle = accent; ctx.lineWidth = 1.8; ctx.beginPath();
+    let sse = 0;
+    for (let i = 0; i <= M; i++) { let s = 0; for (let j = 0; j < n; j++) { const d = xs[i] - centers[j]; s += alpha[j] * Math.exp(-(d * d) * inv2ss); } const px = sx(xs[i]), py = sy(s); i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); const e = s - target(xs[i]); sse += e * e; } ctx.stroke();
+    ctx.fillStyle = muted; for (let k = 0; k < n; k++) { ctx.beginPath(); ctx.arc(sx(centers[k]), sy(targets[k]), 3, 0, Math.PI * 2); ctx.fill(); }
+    api.readout('ro', `σ ${sigma.toFixed(2)} · ${n} anchors · RMSE ${Math.sqrt(sse / (M + 1)).toFixed(3)} · jax-js`);
+  },
+});
 </script>

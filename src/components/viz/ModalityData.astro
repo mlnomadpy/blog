@@ -1,0 +1,93 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 300 } = Astro.props;
+const id = `md-${Math.random().toString(36).slice(2, 9)}`;
+---
+<figure class="viz" tabindex="0">
+  <div class="viz-cell">
+    <h4>The four distributions</h4>
+    <canvas id={`${id}-c`} height={height} aria-label="Two modalities, each with two classes: the raw setup. Modality A in blue on the left, modality B in orange on the right, classes shown as circles and crosses."></canvas>
+    {caption && <figcaption>{caption}</figcaption>}
+  </div>
+</figure>
+
+<script is:inline define:vars={{ id }}>
+(() => {
+  // The setup, drawn in-browser: two modalities (colour) × two classes (shape),
+  // each a 2-D structure (a class axis + an independent within-class factor t)
+  // lifted into R^16 and shown via its top-2 PCA. No precomputed assets.
+  const D = 16, N = 700;
+  const readColors = () => { const s = getComputedStyle(document.documentElement);
+    const v = (n, f) => (s.getPropertyValue(n).trim() || f);
+    return { accent: v('--accent', '#b3661b'), blue: '#4a7fb3', muted: v('--fg-muted', '#5a5f66'),
+             border: v('--border', '#e4e1d6'), fg: v('--fg', '#1a1a1a'), cellBg: v('--bg-elev', '#fff') }; };
+  let colors = readColors();
+
+  const setup = () => {
+    const c = document.getElementById(id + '-c'); if (!c || c.dataset.ready) return; c.dataset.ready = '1';
+    const ctx = c.getContext('2d');
+    const mat = (r, cc) => Array.from({ length: r }, () => new Float64Array(cc));
+    const rng = (() => { let s = 13 >>> 0; return () => { s |= 0; s = (s + 0x6D2B79F5) | 0;
+      let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; })();
+    const randn = () => { let u = 0, v = 0; while (!u) u = rng(); while (!v) v = rng();
+      return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v); };
+    const cls = new Int8Array(N), tA = new Float64Array(N);
+    const lift = () => { const W = []; for (let d = 0; d < D; d++) W.push([randn(), randn()]);
+      for (let m = 0; m < 2; m++) { let n = 0; for (let d = 0; d < D; d++) n += W[d][m]*W[d][m]; n = Math.sqrt(n)+1e-9;
+        for (let d = 0; d < D; d++) W[d][m] /= n; } const b = []; for (let d = 0; d < D; d++) b.push(randn()*0.1); return { W, b }; };
+    const LA = lift(), LB = lift();
+    const build = (L, useTA) => { const X = []; for (let i = 0; i < N; i++) {
+        if (useTA) { cls[i] = rng() < 0.5 ? 0 : 1; tA[i] = rng()*2 - 1; }
+        const k = cls[i], s = (k === 1 ? 1 : -1) + randn()*0.12, t = useTA ? tA[i] : (rng()*2 - 1);
+        const row = new Float64Array(D); for (let d = 0; d < D; d++) row[d] = s*L.W[d][0] + t*L.W[d][1] + L.b[d] + randn()*0.08;
+        X.push(row); } return X; };
+    const Xa = build(LA, true), Xb = build(LB, false);
+    const pca2 = (X) => { const mu = new Float64Array(D); for (let i = 0; i < N; i++) for (let d = 0; d < D; d++) mu[d] += X[i][d]/N;
+      const C = mat(D, D); for (let i = 0; i < N; i++) { const r = X[i]; for (let a = 0; a < D; a++) { const ra = r[a]-mu[a];
+        for (let b = 0; b < D; b++) C[a][b] += ra*(r[b]-mu[b])/N; } }
+      const mulC = (v) => { const o = new Float64Array(D); for (let a = 0; a < D; a++) { let s = 0; for (let b = 0; b < D; b++) s += C[a][b]*v[b]; o[a] = s; } return o; };
+      const nrm = (v) => { let s = 0; for (let a = 0; a < D; a++) s += v[a]*v[a]; s = Math.sqrt(s)+1e-12; for (let a = 0; a < D; a++) v[a] /= s; return v; };
+      const pit = () => { let v = new Float64Array(D); for (let a = 0; a < D; a++) v[a] = randn(); nrm(v); for (let it = 0; it < 150; it++) v = nrm(mulC(v)); return v; };
+      const v1 = pit(); const Cv1 = mulC(v1); let l1 = 0; for (let a = 0; a < D; a++) l1 += v1[a]*Cv1[a];
+      for (let a = 0; a < D; a++) for (let b = 0; b < D; b++) C[a][b] -= l1*v1[a]*v1[b]; const v2 = pit();
+      const Y = []; for (let i = 0; i < N; i++) { let y0 = 0, y1 = 0; for (let d = 0; d < D; d++) { const cc = X[i][d]-mu[d]; y0 += cc*v1[d]; y1 += cc*v2[d]; } Y.push([y0, y1]); } return Y; };
+    const norm01 = (Y) => { let mx = 1e-9; for (const p of Y) mx = Math.max(mx, Math.abs(p[0]), Math.abs(p[1])); return Y.map(p => [p[0]/mx, p[1]/mx]); };
+    const PA = norm01(pca2(Xa)), PB = norm01(pca2(Xb));
+
+    const state = { dpr: 1, w: 0, h: 0 };
+    const draw = () => { const W = state.w, H = state.h; if (W === 0) return;
+      ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = colors.cellBg; ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.strokeRect(0.5, 0.5, W-1, H-1);
+      const cy = H/2, half = Math.min(W*0.22, H*0.42), r = 2.6;
+      const cxA = W*0.27, cxB = W*0.73;
+      const drawMod = (P, cx, col, name) => { ctx.fillStyle = col; ctx.strokeStyle = col;
+        for (let i = 0; i < N; i++) { const x = cx + P[i][0]*half, y = cy - P[i][1]*half;
+          if (cls[i] === 0) { ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, r, 0, 2*Math.PI); ctx.fill(); }
+          else { ctx.lineWidth = 1.3; ctx.beginPath(); ctx.moveTo(x-r, y-r); ctx.lineTo(x+r, y+r); ctx.moveTo(x+r, y-r); ctx.lineTo(x-r, y+r); ctx.stroke(); } }
+        ctx.fillStyle = col; ctx.font = '600 12px ui-sans-serif, system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+        ctx.fillText(name, cx, 8); };
+      drawMod(PA, cxA, colors.blue, 'modality A'); drawMod(PB, cxB, colors.accent, 'modality B');
+      // legend
+      ctx.font = '11px ui-sans-serif, system-ui'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+      ctx.fillStyle = colors.muted; ctx.beginPath(); ctx.arc(12, H-14, 3, 0, 6.3); ctx.fill();
+      ctx.fillText('class 0 ○    class 1 ✕    (colour = modality)', 22, H-14);
+    };
+    const fit = () => { const rect = c.getBoundingClientRect(); const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+      state.dpr = dpr; state.w = rect.width; state.h = rect.height; c.width = Math.round(rect.width*dpr); c.height = Math.round(rect.height*dpr); };
+    const themeObs = new MutationObserver(() => { colors = readColors(); draw(); });
+    themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    const ro = new ResizeObserver(() => { fit(); draw(); }); ro.observe(c);
+    const io = new IntersectionObserver((e) => { if (e[0].isIntersecting) { fit(); draw(); } }, { rootMargin: '120px' }); io.observe(c);
+  };
+  setup();
+  document.addEventListener('astro:page-load', setup);
+  document.addEventListener('astro:after-swap', setup);
+})();
+</script>
+
+<style>.viz-cell canvas { width: 100%; display: block; }</style>

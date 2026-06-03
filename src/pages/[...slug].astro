@@ -2,10 +2,12 @@
 import { getCollection, render } from 'astro:content';
 import readingTime from 'reading-time';
 import PostLayout from '../layouts/PostLayout.astro';
+import { postFilter, buildPairs, pairFor } from '../utils/posts';
 
 export async function getStaticPaths() {
-  const posts = (await getCollection('blog', ({ data }) => !data.draft))
+  const posts = (await getCollection('blog', postFilter))
     .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+  const pairs = buildPairs(posts);
 
   return posts.map((post, i) => {
     // Score every other post by tag overlap with this one, then prefer the
@@ -30,6 +32,11 @@ export async function getStaticPaths() {
         pubDate: x.post.data.pubDate,
       }));
 
+    const pr = pairFor(post, pairs);
+    const pair = pr
+      ? { role: pr.role, slug: pr.other.id, title: pr.other.data.title }
+      : undefined;
+
     return {
       params: { slug: post.id },
       props: {
@@ -38,18 +45,22 @@ export async function getStaticPaths() {
         next: i > 0 ? { slug: posts[i - 1].id, title: posts[i - 1].data.title } : undefined,
         prev: i < posts.length - 1 ? { slug: posts[i + 1].id, title: posts[i + 1].data.title } : undefined,
         related,
+        pair,
       },
     };
   });
 }
 
-const { post, prev, next, related } = Astro.props;
+const { post, prev, next, related, pair } = Astro.props;
 const { Content } = await render(post);
 const stats = readingTime(post.body ?? '');
 ---
 <PostLayout
   title={post.data.title}
   description={post.data.description}
+  draft={post.data.draft}
+  pair={pair}
+  references={post.data.references}
   pubDate={post.data.pubDate}
   updatedDate={post.data.updatedDate}
   tags={post.data.tags}

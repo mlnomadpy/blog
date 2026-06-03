@@ -1,0 +1,109 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 320 } = Astro.props;
+---
+<figure class="viz rankbottleneck" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { heatmap, sparkline, text } from './engine/draw.js';
+
+const N = 36;
+
+defineViz('rankbottleneck', {
+  height: 320,
+  controls: [
+    { type: 'range', name: 'm', label: 'rank/features m', min: 2, max: 32, step: 2, value: 8, int: true, reset: false },
+    { type: 'range', name: 'sharp', label: 'lookup sharpness', min: 2, max: 12, step: 1, value: 8, int: true, reset: false },
+    { type: 'range', name: 'row', label: 'query row', min: 0, max: N - 1, step: 1, value: 14, int: true, reset: false },
+    { type: 'readout', name: 'ro' },
+  ],
+  draw(api) {
+    const { ctx, colors, size } = api;
+    const W = size.W, H = size.H;
+    if (!W) return;
+    const m = api.get('m'), sharp = api.get('sharp'), row = api.get('row');
+    const exact = exactLookup(sharp);
+    const approx = fourierLowRank(sharp, m);
+    const err = relError(exact, approx);
+    const rank = Math.min(N, 2 * m + 1);
+
+    const side = Math.min((W - 46) / 2, H - 120);
+    const x0 = (W - (side * 2 + 30)) / 2;
+    const y0 = 42;
+    text(ctx, 'exact sharp attention', x0 + side / 2, 18, colors, { align: 'center', size: 12, weight: '700', color: colors.blue });
+    text(ctx, `low-rank sketch  (rank ≈ ${rank})`, x0 + side + 30 + side / 2, 18, colors, { align: 'center', size: 12, weight: '700', color: colors.accent });
+    heatmap(ctx, { x: x0, y: y0, w: side, h: side }, exact, N, { ...colors, accent: colors.blue }, { activeRow: row });
+    heatmap(ctx, { x: x0 + side + 30, y: y0, w: side, h: side }, approx, N, colors, { activeRow: row });
+
+    const plotY = y0 + side + 24;
+    const plotH = Math.max(44, H - plotY - 18);
+    const exactRow = Array.from(exact.slice(row * N, row * N + N));
+    const approxRow = Array.from(approx.slice(row * N, row * N + N));
+    sparkline(ctx, { x: x0, y: plotY, w: side * 2 + 30, h: plotH }, [
+      { data: exactRow, color: colors.blue, scale: (v) => v / Math.max(...exactRow) },
+      { data: approxRow, color: colors.accent, scale: (v) => v / Math.max(...exactRow) },
+    ], colors);
+    text(ctx, 'one query row: exact spike vs sketched spread', x0 + 8, plotY + 8, colors, { size: 11, color: colors.muted });
+
+    api.readout('ro', `relative matrix error ${(err * 100).toFixed(1)}% · sharp lookup needs high rank`);
+  },
+});
+
+function exactLookup(sharp) {
+  const out = new Float64Array(N * N);
+  const sigma = 1 / sharp;
+  for (let i = 0; i < N; i++) {
+    let sum = 0;
+    for (let j = 0; j < N; j++) {
+      const d = circular(i - j) / N;
+      const v = Math.exp(-(d * d) / (2 * sigma * sigma));
+      out[i * N + j] = v;
+      sum += v;
+    }
+    for (let j = 0; j < N; j++) out[i * N + j] /= sum;
+  }
+  return out;
+}
+
+function fourierLowRank(sharp, m) {
+  const out = new Float64Array(N * N);
+  const sigma = 1 / sharp;
+  for (let i = 0; i < N; i++) {
+    let min = Infinity, sum = 0;
+    for (let j = 0; j < N; j++) {
+      const th = 2 * Math.PI * (i - j) / N;
+      let v = 1;
+      for (let k = 1; k <= m; k++) {
+        const coeff = Math.exp(-0.5 * (k * sigma * Math.PI * 2) ** 2);
+        v += 2 * coeff * Math.cos(k * th);
+      }
+      out[i * N + j] = v;
+      if (v < min) min = v;
+    }
+    if (min < 0) for (let j = 0; j < N; j++) out[i * N + j] -= min;
+    for (let j = 0; j < N; j++) sum += out[i * N + j];
+    for (let j = 0; j < N; j++) out[i * N + j] = sum > 0 ? out[i * N + j] / sum : 1 / N;
+  }
+  return out;
+}
+
+function circular(d) {
+  d = Math.abs(d);
+  return Math.min(d, N - d);
+}
+
+function relError(a, b) {
+  let num = 0, den = 0;
+  for (let i = 0; i < a.length; i++) {
+    num += (a[i] - b[i]) ** 2;
+    den += a[i] ** 2;
+  }
+  return Math.sqrt(num / den);
+}
+</script>

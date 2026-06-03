@@ -1,0 +1,266 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 390 } = Astro.props;
+---
+<figure class="viz attentionstorm" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { text, arrow } from './engine/draw.js';
+
+const TWO_PI = Math.PI * 2;
+const MAX_N = 96;
+const MAX_M = 24;
+
+defineViz('attentionstorm', {
+  height: 390,
+  minHeight: 320,
+  maxHeight: 500,
+  maxStep: 360,
+  controls: [
+    { type: 'play' },
+    { type: 'step', label: 'Tick' },
+    { type: 'reset' },
+    { type: 'speed', presets: [0.5, 1, 2, 4] },
+    { type: 'newrow' },
+    { type: 'range', name: 'N', label: 'tokens N', min: 16, max: MAX_N, step: 8, value: 64, int: true, reset: false },
+    { type: 'range', name: 'm', label: 'features m', min: 4, max: MAX_M, step: 2, value: 12, int: true, reset: false },
+    { type: 'readout', name: 'ro' },
+  ],
+  setup(api) {
+    api.state.t = 0;
+  },
+  step(api) {
+    api.state.t++;
+  },
+  draw(api) {
+    const { ctx, colors, size, state } = api;
+    const W = size.W, H = size.H;
+    if (!W) return;
+    const N = api.get('N');
+    const m = api.get('m');
+    const phase = (state.t % 360) / 360;
+    const activeN = N;
+    const pad = 12;
+    const gap = 12;
+    const costW = Math.min(220, Math.max(160, W * 0.22));
+    const simX = pad + costW + gap;
+    const simW = W - simX - pad;
+    const simMid = simX + simW / 2;
+    const panelW = simW / 2 - gap / 2;
+
+    drawCostComparison(api, { x: pad, y: 16, w: costW, h: H - 32 }, activeN, m);
+
+    ctx.strokeStyle = colors.border;
+    ctx.setLineDash([4, 5]);
+    ctx.beginPath();
+    ctx.moveTo(simMid, 14);
+    ctx.lineTo(simMid, H - 14);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    drawStorm(api, { x: simX, y: 16, w: panelW, h: H - 32 }, activeN, N);
+    drawReservoir(api, { x: simMid + gap / 2, y: 16, w: panelW, h: H - 32 }, activeN, N, m, phase);
+
+    const exact = activeN * activeN;
+    const linear = activeN * m;
+    api.readout('ro', `${N} tokens · exact ${fmt(exact)} pair scores · linear ${fmt(linear)} feature touches`);
+  },
+});
+
+function drawCostComparison(api, box, activeN, m) {
+  const { ctx, colors } = api;
+  const exact = activeN * activeN;
+  const linear = activeN * m;
+  const max = MAX_N * MAX_N;
+
+  ctx.fillStyle = colors.cellBg;
+  ctx.fillRect(box.x, box.y, box.w, box.h);
+  ctx.strokeStyle = colors.border;
+  ctx.strokeRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1);
+
+  text(ctx, 'compute cost', box.x + box.w / 2, box.y + 10, colors, { align: 'center', size: 12, weight: '700', color: colors.fg });
+  text(ctx, 'same visible tokens', box.x + box.w / 2, box.y + 28, colors, { align: 'center', size: 10.2, color: colors.muted });
+  const chart = { x: box.x + 16, y: box.y + 54, w: box.w - 32, h: box.h - 116 };
+  const axisY = chart.y + chart.h;
+  ctx.strokeStyle = colors.border;
+  ctx.beginPath();
+  ctx.moveTo(chart.x, axisY + 0.5);
+  ctx.lineTo(chart.x + chart.w, axisY + 0.5);
+  ctx.stroke();
+
+  const leftX = chart.x + chart.w * 0.33;
+  const rightX = chart.x + chart.w * 0.67;
+  const barW = Math.min(44, chart.w * 0.24);
+  drawVerticalCostBar(ctx, leftX, axisY, barW, chart.h, exact / max, colors.blue, colors, 'softmax', fmt(exact), 'N x N');
+  drawVerticalCostBar(ctx, rightX, axisY, barW, chart.h, linear / max, colors.accent, colors, 'linear', fmt(linear), `N x m, m=${m}`);
+  text(ctx, 'exact builds pair scores', box.x + box.w / 2, box.y + box.h - 22, colors, { align: 'center', size: 9.6, color: colors.muted });
+  text(ctx, 'linear writes a feature state', box.x + box.w / 2, box.y + box.h - 10, colors, { align: 'center', size: 9.6, color: colors.muted });
+}
+
+function drawVerticalCostBar(ctx, cx, axisY, w, maxH, frac, color, colors, label, value, detail) {
+  const minVisible = frac > 0 ? 0.025 : 0;
+  const h = maxH * Math.max(minVisible, clamp01(frac));
+  const x = cx - w / 2;
+  const y = axisY - h;
+  ctx.fillStyle = rgba(color, 0.12);
+  ctx.fillRect(x, axisY - maxH, w, maxH);
+  ctx.fillStyle = rgba(color, 0.86);
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = rgba(color, 0.78);
+  ctx.strokeRect(x + 0.5, axisY - maxH + 0.5, w - 1, maxH - 1);
+  text(ctx, value, cx, y - 13, colors, { align: 'center', mono: true, size: 10.5, weight: '700', color: colors.fg });
+  text(ctx, label, cx, axisY + 5, colors, { align: 'center', size: 10.3, color });
+  text(ctx, detail, cx, axisY + 19, colors, { align: 'center', size: 9.5, color: colors.muted });
+}
+
+function drawStorm(api, box, activeN, N) {
+  const { ctx, colors, iter } = api;
+  const cx = box.x + box.w * 0.5;
+  const cy = box.y + box.h * 0.52;
+  const R = Math.min(box.w, box.h) * 0.31;
+  const pts = tokenCircle(cx, cy, R, activeN, iter * 0.003);
+
+  text(ctx, 'exact attention', cx, box.y + 2, colors, { align: 'center', size: 14, weight: '700', color: colors.blue });
+  text(ctx, 'every token asks every token', cx, box.y + 24, colors, { align: 'center', size: 11.5, color: colors.muted });
+
+  const maxEdges = Math.min(1200, activeN * activeN);
+  ctx.lineWidth = 0.55;
+  for (let e = 0; e < maxEdges; e++) {
+    const i = (e * 37 + iter) % activeN;
+    const j = (e * 91 + 17) % activeN;
+    if (i === j) continue;
+    const a = pts[i], b = pts[j];
+    const glow = 0.04 + 0.16 * Math.abs(Math.sin((e + iter) * 0.021));
+    ctx.strokeStyle = rgba(colors.blue, glow);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+
+  for (let i = 0; i < activeN; i++) {
+    const p = pts[i];
+    ctx.fillStyle = i === activeN - 1 ? colors.accent : colors.blue;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, i === activeN - 1 ? 4.5 : 3, 0, TWO_PI);
+    ctx.fill();
+  }
+
+  text(ctx, 'score matrix grows with the square of tokens', cx, box.y + box.h - 16, colors, { align: 'center', size: 11, color: colors.muted });
+}
+
+function drawReservoir(api, box, activeN, N, m, phase) {
+  const { ctx, colors, iter } = api;
+  const cx = box.x + box.w * 0.5;
+  const top = box.y + 48;
+  const tokenY = box.y + box.h - 56;
+  const bank = {
+    x: box.x + box.w * 0.5 - Math.min(150, box.w * 0.46) / 2,
+    y: box.y + 92,
+    w: Math.min(150, box.w * 0.46),
+    h: Math.min(112, box.h * 0.34),
+  };
+
+  text(ctx, 'linear attention', cx, box.y + 2, colors, { align: 'center', size: 14, weight: '700', color: colors.accent });
+  text(ctx, 'tokens pour into a fixed feature state', cx, box.y + 24, colors, { align: 'center', size: 11.5, color: colors.muted });
+
+  drawFeatureBank(ctx, bank, m, phase, colors);
+  text(ctx, 'φ(K)^T V', bank.x + bank.w / 2, bank.y - 18, colors, { align: 'center', mono: true, size: 12, weight: '700', color: colors.accent });
+
+  const tokenCount = Math.min(activeN, 26);
+  const span = box.w - 54;
+  const startX = box.x + 27;
+  for (let i = 0; i < tokenCount; i++) {
+    const x = startX + (tokenCount === 1 ? 0.5 : i / (tokenCount - 1)) * span;
+    const y = tokenY + Math.sin(i * 0.8 + iter * 0.05) * 4;
+    ctx.fillStyle = i === tokenCount - 1 ? colors.blue : colors.green;
+    ctx.beginPath();
+    ctx.arc(x, y, i === tokenCount - 1 ? 4.5 : 3, 0, TWO_PI);
+    ctx.fill();
+    const slot = i % m;
+    const tx = bank.x + bank.w * (0.12 + 0.76 * ((slot % 6) / 5));
+    const ty = bank.y + bank.h * (0.12 + 0.76 * (Math.floor(slot / 6) / Math.max(1, Math.ceil(m / 6) - 1 || 1)));
+    const pulse = ((iter * 0.025 + i / tokenCount) % 1);
+    const px = x + (tx - x) * pulse;
+    const py = y + (ty - y) * pulse;
+    ctx.strokeStyle = rgba(colors.green, 0.14);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x, y - 5);
+    ctx.lineTo(tx, ty);
+    ctx.stroke();
+    ctx.fillStyle = colors.green;
+    ctx.beginPath();
+    ctx.arc(px, py, 2.1, 0, TWO_PI);
+    ctx.fill();
+  }
+
+  const qx = startX + span;
+  arrow(ctx, qx, tokenY - 14, bank.x + bank.w, bank.y + bank.h * 0.52, colors.blue, 1.7);
+  text(ctx, 'query reads state', qx - 16, tokenY - 32, colors, { align: 'right', size: 10.5, color: colors.blue });
+
+  text(ctx, 'feature state changes; its shape stays m x d', cx, box.y + box.h - 16, colors, { align: 'center', size: 11, color: colors.muted });
+}
+
+function tokenCircle(cx, cy, R, n, rot) {
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const a = rot + TWO_PI * i / n;
+    pts.push({ x: cx + Math.cos(a) * R, y: cy + Math.sin(a) * R });
+  }
+  return pts;
+}
+
+function drawFeatureBank(ctx, box, m, phase, colors) {
+  ctx.fillStyle = colors.cellBg;
+  ctx.fillRect(box.x, box.y, box.w, box.h);
+  ctx.strokeStyle = colors.border;
+  ctx.strokeRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1);
+  const cols = 6, rows = Math.ceil(m / cols);
+  const cw = (box.w - 10) / cols, ch = (box.h - 10) / rows;
+  for (let i = 0; i < m; i++) {
+    const c = i % cols, r = Math.floor(i / cols);
+    const x = box.x + 5 + c * cw, y = box.y + 5 + r * ch;
+    const v = 0.25 + 0.75 * Math.abs(Math.sin(phase * 8 + i * 0.9));
+    ctx.fillStyle = mix(colors.cellBg, colors.accent, v);
+    ctx.fillRect(x, y, cw - 2, ch - 2);
+  }
+}
+
+function fmt(n) {
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `${(n / 1e3).toFixed(n >= 1e4 ? 0 : 1)}K`;
+  return `${n}`;
+}
+
+function clamp01(x) {
+  return Math.max(0, Math.min(1, x));
+}
+
+function rgba(hex, a) {
+  const p = parse(hex);
+  return `rgba(${p[0]},${p[1]},${p[2]},${a})`;
+}
+
+function mix(a, b, t) {
+  const pa = parse(a), pb = parse(b);
+  t = Math.max(0, Math.min(1, t));
+  return `rgb(${Math.round(pa[0] + (pb[0] - pa[0]) * t)},${Math.round(pa[1] + (pb[1] - pa[1]) * t)},${Math.round(pa[2] + (pb[2] - pa[2]) * t)})`;
+}
+
+function parse(v) {
+  if (v[0] === '#') {
+    let s = v.slice(1);
+    if (s.length === 3) s = s.split('').map((c) => c + c).join('');
+    return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
+  }
+  const m = v.match(/\d+(\.\d+)?/g);
+  return m ? [+m[0], +m[1], +m[2]] : [0, 0, 0];
+}
+</script>

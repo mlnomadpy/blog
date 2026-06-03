@@ -2,164 +2,94 @@
 interface Props {
   caption?: string;
   size?: number;
+  height?: number;
 }
-const { caption, size = 12 } = Astro.props;
-const id = `ap-${Math.random().toString(36).slice(2, 9)}`;
-const cells = [
-  { id: `${id}-pos`, title: 'positional', kind: 'positional' },
-  { id: `${id}-ind`, title: 'induction', kind: 'induction' },
-  { id: `${id}-prv`, title: 'previous token', kind: 'previous' },
-];
+const { caption, size = 12, height = 270 } = Astro.props;
 ---
-<figure class="viz">
-  <div class="viz-grid">
-    {cells.map((cell) => (
-      <div class="viz-cell">
-        <h4>{cell.title}</h4>
-        <canvas id={cell.id} data-kind={cell.kind} data-size={size} aria-label={`Attention pattern: ${cell.title}`}></canvas>
-      </div>
-    ))}
-  </div>
-  {caption && <figcaption>{caption}</figcaption>}
+<figure class="viz attentionpatterns" data-size={size} data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
 </figure>
 
-<script is:inline define:vars={{ ids: cells.map((c) => c.id) }}>
-(() => {
-  const parseColor = (v) => {
-    v = v.trim();
-    if (v.startsWith('#')) {
-      let s = v.slice(1);
-      if (s.length === 3) s = s.split('').map((c) => c + c).join('');
-      return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
-    }
-    const m = v.match(/\d+/g);
-    return m ? [parseInt(m[0], 10), parseInt(m[1], 10), parseInt(m[2], 10)] : [0, 0, 0];
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { heatmap, text } from './engine/draw.js';
+import { np, nn, withJax, drawJaxLoading } from './engine/jax.js';
+
+// Real attention. Three causal heads over one token sequence, each a different
+// REAL Q/K projection — the attention matrices are computed live by jax-js
+// (softmax(QKᵀ/√d)), not hand-painted. The three "kernel structures":
+//   positional — Q,K read a sinusoidal position code → diagonal decay
+//   previous   — W_Q applies the rotary shift pᵢ→pᵢ₋₁ → sub-diagonal
+//   induction  — Q reads current-token content, K reads previous-token content
+// Animation sweeps the causal query frontier down the rows; τ sharpens softmax.
+
+const buildModel = (N) => {
+  const V = 4;                                   // vocabulary (one-hot content → cᵢ·cⱼ = δ)
+  const FREQ = [0.9, 0.45, 0.22]; const dp = FREQ.length * 2;
+  const D = 2 * V + dp, dh = Math.max(V, dp);
+  const tokens = Array.from({ length: N }, (_, i) => i % V);
+  const oh = (t) => { const v = new Array(V).fill(0); if (t >= 0) v[t] = 1; return v; };
+  const pe = (i) => { const p = []; for (const w of FREQ) p.push(Math.sin(i * w), Math.cos(i * w)); return p; };
+  const X = []; for (let i = 0; i < N; i++) X.push([...oh(tokens[i]), ...oh(i > 0 ? tokens[i - 1] : -1), ...pe(i)]);
+  const zero = () => Array.from({ length: D }, () => new Array(dh).fill(0));
+  const idBlock = (W, start, len, off = 0) => { for (let k = 0; k < len; k++) W[start + k][k + off] = 1; };
+  // positional / local
+  const posQ = zero(); idBlock(posQ, 2 * V, dp); const posK = zero(); idBlock(posK, 2 * V, dp);
+  // previous-token: W_Q rotates the position code back one step (rotary), W_K reads it straight
+  const prevK = zero(); idBlock(prevK, 2 * V, dp);
+  const prevQ = zero(); FREQ.forEach((w, f) => { const r = 2 * V + 2 * f, c = 2 * f, cs = Math.cos(w), sn = Math.sin(w);
+    prevQ[r][c] = cs; prevQ[r + 1][c] = -sn; prevQ[r][c + 1] = sn; prevQ[r + 1][c + 1] = cs; });
+  // induction: Q = current content, K = previous-token content
+  const indQ = zero(); idBlock(indQ, 0, V); const indK = zero(); idBlock(indK, V, V);
+  const mask = Array.from({ length: N }, (_, i) => Array.from({ length: N }, (_, j) => (j <= i ? 0 : -1e9)));
+  return { N, dh, tokens, X, mask, heads: [
+    { name: 'positional', WQ: posQ, WK: posK },
+    { name: 'previous token', WQ: prevQ, WK: prevK },
+    { name: 'induction', WQ: indQ, WK: indK },
+  ] };
+};
+
+// one real attention matrix via jax-js; fresh arrays each call (no .ref leak across calls)
+const attnMatrix = (m, head, tau) => {
+  const X = np.array(m.X), WQ = np.array(head.WQ), WK = np.array(head.WK);
+  const Q = np.matmul(X.ref, WQ), K = np.matmul(X, WK);
+  let s = np.matmul(Q, np.swapaxes(K, 0, 1)).mul(1 / (Math.sqrt(m.dh) * tau));
+  s = s.add(np.array(m.mask));
+  const A = nn.softmax(s, -1);
+  const nested = A.js(); const flat = new Float64Array(m.N * m.N);
+  for (let i = 0; i < m.N; i++) for (let j = 0; j < m.N; j++) flat[i * m.N + j] = nested[i][j];
+  return flat;
+};
+
+defineViz('attentionpatterns', (root) => {
+  const N = +root.dataset.size || 12;
+  const model = buildModel(N);
+  const recompute = (api) => { const tau = api.get('tau') || 1; api.state.mats = model.heads.map((h) => attnMatrix(model, h, tau)); };
+  return {
+    height: 270, stepsPerFrame: 0.04,
+    controls: [
+      { type: 'play' }, { type: 'step' }, { type: 'reset' }, { type: 'speed' },
+      { type: 'range', name: 'tau', label: 'temperature τ', min: 0.3, max: 3, step: 0.05, value: 1, reset: false, fmt: (v) => v.toFixed(2) },
+      { type: 'readout', name: 'ro' },
+    ],
+    onControl(name, value, api) { if (name === 'tau' && api.state.jaxReady) { recompute(api); } },
+    setup(api) {
+      api.state.qi = 0; api.state.mats = null;
+      withJax(api, recompute);
+    },
+    step(api) { api.state.qi = (api.state.qi + 1) % N; },
+    draw(api) {
+      const { ctx, colors, size, state } = api; const W = size.W, H = size.H;
+      if (!state.jaxReady || !state.mats) return drawJaxLoading(api);
+      const gap = 14, cw = (W - gap * 2) / 3, head = 18;
+      model.heads.forEach((h, k) => {
+        const bx = k * (cw + gap);
+        text(ctx, h.name, bx + cw / 2, 2, colors, { align: 'center', size: 11.5, weight: '600', color: colors.fg });
+        heatmap(ctx, { x: bx, y: head, w: cw, h: H - head }, state.mats[k], N, colors, { activeRow: state.qi });
+      });
+      const tau = api.get('tau');
+      api.readout('ro', `query t${state.qi} · τ ${(+tau).toFixed(2)} · ${N}×${N} causal · jax-js`);
+    },
   };
-  const readColors = () => {
-    const s = getComputedStyle(document.documentElement);
-    return {
-      bg: parseColor(s.getPropertyValue('--bg-sunken') || '#0a0d12'),
-      accent: parseColor(s.getPropertyValue('--accent') || '#ffb454'),
-    };
-  };
-  let colors = readColors();
-  const themeObs = new MutationObserver(() => { colors = readColors(); needs.forEach((c) => c.dataset.ready && c.__redraw && c.__redraw()); });
-  themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-  const needs = [];
-
-  const setup = () => {
-    ids.forEach((cid) => {
-      const c = document.getElementById(cid);
-      if (!c || c.dataset.ready) return;
-      c.dataset.ready = '1';
-      needs.push(c);
-      const ctx = c.getContext('2d');
-      const kind = c.dataset.kind;
-      const N = parseInt(c.dataset.size, 10) || 12;
-
-      // Deterministic "sentence" for induction visualization.
-      const tokenIds = (() => {
-        let s = 7919;
-        const r = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
-        return Array.from({ length: N }, () => Math.floor(r() * 5));
-      })();
-      tokenIds[N - 2] = tokenIds[2];
-      tokenIds[N - 1] = tokenIds[3];
-
-      const A = new Float32Array(N * N);
-      for (let i = 0; i < N; i++) {
-        let rowMax = -Infinity;
-        for (let j = 0; j < N; j++) {
-          let s = -Infinity;
-          if (j <= i) {
-            if (kind === 'positional') {
-              s = -(i - j) * 0.9;
-            } else if (kind === 'previous') {
-              s = j === i - 1 ? 4 : (j === i ? -8 : -2);
-            } else {
-              if (i >= 2) {
-                const target = tokenIds[i - 1];
-                const prev = j >= 1 ? tokenIds[j - 1] : -1;
-                s = prev === target ? 4 : -1.5;
-              } else {
-                s = -3;
-              }
-            }
-          }
-          A[i * N + j] = s;
-          if (s > rowMax) rowMax = s;
-        }
-        let sum = 0;
-        for (let j = 0; j < N; j++) {
-          const v = Math.exp(A[i * N + j] - rowMax);
-          A[i * N + j] = v;
-          sum += v;
-        }
-        for (let j = 0; j < N; j++) A[i * N + j] /= sum;
-      }
-
-      const state = { dpr: 1, w: 0 };
-
-      const fit = () => {
-        const rect = c.getBoundingClientRect();
-        const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
-        state.dpr = dpr;
-        state.w = rect.width;
-        c.style.height = rect.width + 'px';
-        c.width = Math.round(rect.width * dpr);
-        c.height = Math.round(rect.width * dpr);
-      };
-
-      const draw = () => {
-        const W = state.w;
-        if (W === 0) return;
-        ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
-        ctx.clearRect(0, 0, W, W);
-
-        const [br, bg, bb] = colors.bg;
-        const [ar, ag, ab] = colors.accent;
-        const pad = 1;
-        const inner = W - pad * 2;
-        const cell = inner / N;
-        for (let i = 0; i < N; i++) {
-          for (let j = 0; j < N; j++) {
-            const a = A[i * N + j];
-            const t = Math.min(1, Math.pow(a * N * 0.7, 0.6));
-            const r = Math.round(br + (ar - br) * t);
-            const g = Math.round(bg + (ag - bg) * t);
-            const b = Math.round(bb + (ab - bb) * t);
-            ctx.fillStyle = 'rgb(' + r + ',' + g + ',' + b + ')';
-            ctx.fillRect(pad + j * cell, pad + i * cell, cell + 0.5, cell + 0.5);
-          }
-        }
-      };
-      c.__redraw = draw;
-
-      let rafScheduled = false;
-      const requestRedraw = () => {
-        if (rafScheduled) return;
-        rafScheduled = true;
-        requestAnimationFrame(() => { rafScheduled = false; draw(); });
-      };
-
-      const ro = new ResizeObserver(() => { fit(); requestRedraw(); });
-      ro.observe(c);
-
-      let drawnOnce = false;
-      const io = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting && !drawnOnce) {
-          drawnOnce = true;
-          fit();
-          draw();
-          io.disconnect();
-        }
-      }, { rootMargin: '120px' });
-      io.observe(c);
-    });
-  };
-
-  setup();
-  document.addEventListener('astro:page-load', setup);
-  document.addEventListener('astro:after-swap', setup);
-})();
+});
 </script>

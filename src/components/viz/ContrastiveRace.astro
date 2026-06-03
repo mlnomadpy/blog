@@ -4,776 +4,267 @@ interface Props {
   height?: number;
 }
 const { caption, height = 640 } = Astro.props;
-const id = `cr-${Math.random().toString(36).slice(2, 9)}`;
 ---
-<figure class="viz" tabindex="0">
-  <div class="viz-cell">
-    <h4>Eight contrastive losses, one dataset</h4>
-    <div class="anim-controls">
-      <div class="anim-row">
-        <button data-act="play" id={`${id}-play`}>▶ Play</button>
-        <button data-act="step" id={`${id}-step`}>Step</button>
-        <button data-act="reset" id={`${id}-reset`}>Reset</button>
-        <div class="anim-spd-group">
-          <span>speed</span>
-          <button data-spd="0.5">0.5×</button>
-          <button data-spd="1" class="active">1×</button>
-          <button data-spd="2">2×</button>
-          <button data-spd="4">4×</button>
-        </div>
-      </div>
-      <div class="anim-row">
-        <label>data
-          <select id={`${id}-data`}>
-            <option value="random" selected>random (2 classes)</option>
-            <option value="random-4">random (4 classes)</option>
-            <option value="moons">two-moons</option>
-            <option value="blobs">overlapping blobs</option>
-            <option value="rings">concentric rings</option>
-            <option value="four">four classes</option>
-          </select>
-        </label>
-        <label>n
-          <select id={`${id}-n`}>
-            <option value="40">40</option>
-            <option value="60" selected>60</option>
-            <option value="80">80</option>
-            <option value="120">120</option>
-          </select>
-        </label>
-        <label>seed
-          <input type="number" id={`${id}-seed`} value="7" min="0" max="999" style="width:54px" />
-        </label>
-        <span class="anim-stage-readout" id={`${id}-iter`}>iter 0</span>
-      </div>
-    </div>
-    <canvas id={`${id}-c`} height={height} aria-label="Six contrastive losses racing on a 2D dataset"></canvas>
-    {caption && <figcaption>{caption}</figcaption>}
-  </div>
+<figure class="viz contrastiverace" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
 </figure>
 
-<script is:inline define:vars={{ id }}>
-(() => {
-  const readColors = () => {
-    const s = getComputedStyle(document.documentElement);
-    const v = (n, f) => (s.getPropertyValue(n).trim() || f);
-    return {
-      accent: v('--accent', '#b3661b'),
-      muted: v('--fg-muted', '#5a5f66'),
-      faint: v('--fg-faint', '#8d8d8d'),
-      border: v('--border', '#e4e1d6'),
-      fg: v('--fg', '#1a1a1a'),
-      bg: v('--bg', '#fbf8f1'),
-      cellBg: v('--bg-elev', '#fff'),
-    };
-  };
-  let colors = readColors();
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { rng32 } from './engine/datasets.js';
+import { PALETTE } from './engine/draw.js';
 
-  // ─── deterministic RNG ────────────────────────────────────────────────
-  const mulberry32 = (seed) => {
-    let s = seed >>> 0;
-    return () => {
-      s |= 0; s = (s + 0x6D2B79F5) | 0;
-      let t = Math.imul(s ^ (s >>> 15), 1 | s);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-  };
-  const randn = (rng) => {
-    let u = 0, v = 0;
-    while (u === 0) u = rng();
-    while (v === 0) v = rng();
-    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
-  };
+// Eight contrastive losses optimised in-place on the SAME 2-D dataset, side by
+// side. Each panel owns a copy of the points; its step() mutates them and
+// returns the loss. Boilerplate (controls, loop, speed, resize, theme,
+// visibility, keyboard) lives in vizkit — this file is just the losses + draw.
+const randn = (rng) => { let u = 0, v = 0; while (u === 0) u = rng(); while (v === 0) v = rng(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
 
-  // ─── datasets ─────────────────────────────────────────────────────────
-  const makeData = (kind, n, seed) => {
-    const rng = mulberry32(seed);
-    const pts = [], labels = [];
-    if (kind === 'moons') {
-      const half = Math.floor(n / 2);
-      for (let i = 0; i < half; i++) {
-        const t = Math.PI * (i / (half - 1));
-        pts.push([Math.cos(t) + randn(rng) * 0.07, Math.sin(t) + randn(rng) * 0.07]);
-        labels.push(0);
-      }
-      for (let i = 0; i < n - half; i++) {
-        const t = Math.PI * (i / (n - half - 1));
-        pts.push([1 - Math.cos(t) + randn(rng) * 0.07, 0.4 - Math.sin(t) + randn(rng) * 0.07]);
-        labels.push(1);
-      }
-    } else if (kind === 'blobs') {
-      const half = Math.floor(n / 2);
-      for (let i = 0; i < half; i++) {
-        pts.push([0.3 + randn(rng) * 0.4, 0.0 + randn(rng) * 0.4]);
-        labels.push(0);
-      }
-      for (let i = 0; i < n - half; i++) {
-        pts.push([-0.3 + randn(rng) * 0.4, 0.0 + randn(rng) * 0.4]);
-        labels.push(1);
-      }
-    } else if (kind === 'rings') {
-      const half = Math.floor(n / 2);
-      for (let i = 0; i < half; i++) {
-        const t = 2 * Math.PI * rng();
-        pts.push([0.4 * Math.cos(t) + randn(rng) * 0.05, 0.4 * Math.sin(t) + randn(rng) * 0.05]);
-        labels.push(0);
-      }
-      for (let i = 0; i < n - half; i++) {
-        const t = 2 * Math.PI * rng();
-        pts.push([1.1 * Math.cos(t) + randn(rng) * 0.05, 1.1 * Math.sin(t) + randn(rng) * 0.05]);
-        labels.push(1);
-      }
-    } else if (kind === 'four') {
-      const per = Math.floor(n / 4);
-      const centers = [[0.6, 0.6], [-0.6, 0.6], [-0.6, -0.6], [0.6, -0.6]];
-      for (let c = 0; c < 4; c++) {
-        const k = (c === 3) ? (n - 3 * per) : per;
-        for (let i = 0; i < k; i++) {
-          pts.push([centers[c][0] + randn(rng) * 0.18, centers[c][1] + randn(rng) * 0.18]);
-          labels.push(c);
+const makeData = (kind, n, seed) => {
+  const rng = rng32(seed); const pts = [], labels = [];
+  if (kind === 'moons') {
+    const half = Math.floor(n / 2);
+    for (let i = 0; i < half; i++) { const t = Math.PI * (i / (half - 1)); pts.push([Math.cos(t) + randn(rng) * 0.07, Math.sin(t) + randn(rng) * 0.07]); labels.push(0); }
+    for (let i = 0; i < n - half; i++) { const t = Math.PI * (i / (n - half - 1)); pts.push([1 - Math.cos(t) + randn(rng) * 0.07, 0.4 - Math.sin(t) + randn(rng) * 0.07]); labels.push(1); }
+  } else if (kind === 'blobs') {
+    const half = Math.floor(n / 2);
+    for (let i = 0; i < half; i++) { pts.push([0.3 + randn(rng) * 0.4, 0.0 + randn(rng) * 0.4]); labels.push(0); }
+    for (let i = 0; i < n - half; i++) { pts.push([-0.3 + randn(rng) * 0.4, 0.0 + randn(rng) * 0.4]); labels.push(1); }
+  } else if (kind === 'rings') {
+    const half = Math.floor(n / 2);
+    for (let i = 0; i < half; i++) { const t = 2 * Math.PI * rng(); pts.push([0.4 * Math.cos(t) + randn(rng) * 0.05, 0.4 * Math.sin(t) + randn(rng) * 0.05]); labels.push(0); }
+    for (let i = 0; i < n - half; i++) { const t = 2 * Math.PI * rng(); pts.push([1.1 * Math.cos(t) + randn(rng) * 0.05, 1.1 * Math.sin(t) + randn(rng) * 0.05]); labels.push(1); }
+  } else if (kind === 'four') {
+    const per = Math.floor(n / 4); const centers = [[0.6, 0.6], [-0.6, 0.6], [-0.6, -0.6], [0.6, -0.6]];
+    for (let c = 0; c < 4; c++) { const k = (c === 3) ? (n - 3 * per) : per; for (let i = 0; i < k; i++) { pts.push([centers[c][0] + randn(rng) * 0.18, centers[c][1] + randn(rng) * 0.18]); labels.push(c); } }
+  } else { // random / random-4
+    const k = (kind === 'random-4') ? 4 : 2;
+    for (let i = 0; i < n; i++) { pts.push([(rng() * 2 - 1) * 1.5, (rng() * 2 - 1) * 1.5]); labels.push(i % k); }
+    for (let i = n - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [labels[i], labels[j]] = [labels[j], labels[i]]; }
+  }
+  return { pts, labels };
+};
+
+// ── losses: each mutates pts in place and returns its loss value ──
+const projectSphere = (pts) => { for (let i = 0; i < pts.length; i++) { const n = Math.hypot(pts[i][0], pts[i][1]) + 1e-9; pts[i][0] /= n; pts[i][1] /= n; } };
+const applyGrad = (pts, grad, lr, n) => { for (let i = 0; i < pts.length; i++) { pts[i][0] -= lr * grad[i][0] / n; pts[i][1] -= lr * grad[i][1] / n; } };
+const newGrad = (n) => { const g = new Array(n); for (let i = 0; i < n; i++) g[i] = [0, 0]; return g; };
+
+const stepHadsell = (pts, labels, lr) => {
+  const n = pts.length, margin = 1.2; const grad = newGrad(n); let loss = 0, m = 0;
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+    const dx = pts[i][0] - pts[j][0], dy = pts[i][1] - pts[j][1]; const d2 = dx * dx + dy * dy; const d = Math.sqrt(d2 + 1e-9);
+    if (labels[i] === labels[j]) { loss += d2; m++; grad[i][0] += 2 * dx; grad[i][1] += 2 * dy; grad[j][0] -= 2 * dx; grad[j][1] -= 2 * dy; }
+    else if (d < margin) { loss += (margin - d) * (margin - d); m++; const f = -2 * (margin - d) / d; grad[i][0] += f * dx; grad[i][1] += f * dy; grad[j][0] -= f * dx; grad[j][1] -= f * dy; }
+  }
+  applyGrad(pts, grad, lr, n); return m ? loss / m : 0;
+};
+
+const stepTriplet = (pts, labels, lr, rng) => {
+  const n = pts.length, margin = 0.3; const grad = newGrad(n); let loss = 0, cnt = 0;
+  const byClass = {}; for (let i = 0; i < n; i++) (byClass[labels[i]] = byClass[labels[i]] || []).push(i);
+  for (let i = 0; i < n; i++) {
+    const pos = byClass[labels[i]].filter((j) => j !== i); const neg = []; for (const k in byClass) if (+k !== labels[i]) for (const j of byClass[k]) neg.push(j);
+    if (!pos.length || !neg.length) continue;
+    const p = pos[Math.floor(rng() * pos.length)]; const nd = neg[Math.floor(rng() * neg.length)];
+    const dap = (pts[i][0] - pts[p][0]) ** 2 + (pts[i][1] - pts[p][1]) ** 2; const dan = (pts[i][0] - pts[nd][0]) ** 2 + (pts[i][1] - pts[nd][1]) ** 2;
+    const slack = dap - dan + margin;
+    if (slack > 0) { loss += slack; cnt++; grad[i][0] += 2 * (pts[nd][0] - pts[p][0]); grad[i][1] += 2 * (pts[nd][1] - pts[p][1]); grad[p][0] -= 2 * (pts[i][0] - pts[p][0]); grad[p][1] -= 2 * (pts[i][1] - pts[p][1]); grad[nd][0] += 2 * (pts[i][0] - pts[nd][0]); grad[nd][1] += 2 * (pts[i][1] - pts[nd][1]); }
+  }
+  applyGrad(pts, grad, lr, n); return cnt ? loss / cnt : 0;
+};
+
+const stepInfoNCE = (pts, labels, lr, rng) => {
+  const n = pts.length, tau = 0.2; const grad = newGrad(n); projectSphere(pts); let loss = 0;
+  const sim = []; for (let i = 0; i < n; i++) { sim[i] = []; for (let j = 0; j < n; j++) sim[i][j] = (pts[i][0] * pts[j][0] + pts[i][1] * pts[j][1]) / tau; }
+  const byClass = {}; for (let i = 0; i < n; i++) (byClass[labels[i]] = byClass[labels[i]] || []).push(i);
+  for (let i = 0; i < n; i++) {
+    const pos = byClass[labels[i]].filter((j) => j !== i); if (!pos.length) continue;
+    const p = pos[Math.floor(rng() * pos.length)];
+    let mx = -Infinity; for (let j = 0; j < n; j++) if (j !== i) if (sim[i][j] > mx) mx = sim[i][j];
+    let denom = 0; const w = new Array(n).fill(0); for (let j = 0; j < n; j++) if (j !== i) { w[j] = Math.exp(sim[i][j] - mx); denom += w[j]; }
+    loss += -(sim[i][p] - mx - Math.log(denom));
+    let gx = 0, gy = 0; for (let j = 0; j < n; j++) { if (j === i) continue; const pij = w[j] / denom; gx += pij * pts[j][0]; gy += pij * pts[j][1]; }
+    gx -= pts[p][0]; gy -= pts[p][1]; grad[i][0] += gx / tau; grad[i][1] += gy / tau;
+  }
+  applyGrad(pts, grad, lr, n); projectSphere(pts); return loss / n;
+};
+
+const stepSupCon = (pts, labels, lr) => {
+  const n = pts.length, tau = 0.2; const grad = newGrad(n); projectSphere(pts); let loss = 0;
+  const sim = []; for (let i = 0; i < n; i++) { sim[i] = []; for (let j = 0; j < n; j++) sim[i][j] = (pts[i][0] * pts[j][0] + pts[i][1] * pts[j][1]) / tau; }
+  const byClass = {}; for (let i = 0; i < n; i++) (byClass[labels[i]] = byClass[labels[i]] || []).push(i);
+  for (let i = 0; i < n; i++) {
+    const P = byClass[labels[i]].filter((j) => j !== i); if (!P.length) continue;
+    let mx = -Infinity; for (let j = 0; j < n; j++) if (j !== i) if (sim[i][j] > mx) mx = sim[i][j];
+    let denom = 0; const w = new Array(n).fill(0); for (let j = 0; j < n; j++) if (j !== i) { w[j] = Math.exp(sim[i][j] - mx); denom += w[j]; }
+    let lloss = 0; for (const p of P) lloss += -(sim[i][p] - mx - Math.log(denom)); lloss /= P.length; loss += lloss;
+    let gx = 0, gy = 0; for (let j = 0; j < n; j++) { if (j === i) continue; const pij = w[j] / denom; gx += pij * pts[j][0]; gy += pij * pts[j][1]; }
+    let pmx = 0, pmy = 0; for (const p of P) { pmx += pts[p][0]; pmy += pts[p][1]; } pmx /= P.length; pmy /= P.length;
+    gx -= pmx; gy -= pmy; grad[i][0] += gx / tau; grad[i][1] += gy / tau;
+  }
+  applyGrad(pts, grad, lr, n); projectSphere(pts); return loss / n;
+};
+
+const stepAlignUnif = (pts, labels, lr) => {
+  const n = pts.length, t = 2.0, lam = 1.0; const grad = newGrad(n); projectSphere(pts); let lossA = 0, lossU = 0, pairsA = 0;
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+    if (labels[i] !== labels[j]) continue; const dx = pts[i][0] - pts[j][0], dy = pts[i][1] - pts[j][1]; lossA += dx * dx + dy * dy; pairsA++;
+    grad[i][0] += 2 * dx; grad[i][1] += 2 * dy; grad[j][0] -= 2 * dx; grad[j][1] -= 2 * dy;
+  }
+  let sumExp = 0; const E = [];
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) { const dx = pts[i][0] - pts[j][0], dy = pts[i][1] - pts[j][1]; const d2 = dx * dx + dy * dy; const e = Math.exp(-t * d2); E.push([i, j, e, dx, dy]); sumExp += e; }
+  lossU = Math.log(sumExp / E.length + 1e-12);
+  for (const [i, j, e, dx, dy] of E) { const fac = (lam * (-t)) * (e / sumExp); grad[i][0] += fac * 2 * dx; grad[i][1] += fac * 2 * dy; grad[j][0] -= fac * 2 * dx; grad[j][1] -= fac * 2 * dy; }
+  applyGrad(pts, grad, lr, n); projectSphere(pts); return (pairsA ? lossA / pairsA : 0) + lam * lossU;
+};
+
+const stepOrthog = (pts, labels, lr) => {
+  const n = pts.length; const grad = newGrad(n); projectSphere(pts); let loss = 0;
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+    const c = pts[i][0] * pts[j][0] + pts[i][1] * pts[j][1];
+    if (labels[i] === labels[j]) { loss += 1 - c; grad[i][0] += -pts[j][0]; grad[i][1] += -pts[j][1]; grad[j][0] += -pts[i][0]; grad[j][1] += -pts[i][1]; }
+    else { loss += c * c; grad[i][0] += 2 * c * pts[j][0]; grad[i][1] += 2 * c * pts[j][1]; grad[j][0] += 2 * c * pts[i][0]; grad[j][1] += 2 * c * pts[i][1]; }
+  }
+  applyGrad(pts, grad, lr, n); projectSphere(pts); return loss / (n * (n - 1) / 2);
+};
+
+const stepCLIP = (pts, labels, lr) => {
+  const n = pts.length, tau = 0.2; const grad = newGrad(n); projectSphere(pts); let loss = 0;
+  const sim = []; for (let i = 0; i < n; i++) { sim[i] = []; for (let j = 0; j < n; j++) sim[i][j] = (pts[i][0] * pts[j][0] + pts[i][1] * pts[j][1]) / tau; }
+  const byClass = {}; for (let i = 0; i < n; i++) (byClass[labels[i]] = byClass[labels[i]] || []).push(i);
+  const oneDir = (a, pp) => {
+    let mx = -Infinity; for (let j = 0; j < n; j++) if (j !== a && sim[a][j] > mx) mx = sim[a][j];
+    let denom = 0; const w = new Array(n).fill(0); for (let j = 0; j < n; j++) if (j !== a) { w[j] = Math.exp(sim[a][j] - mx); denom += w[j]; }
+    loss += 0.5 * -(sim[a][pp] - mx - Math.log(denom));
+    let gx = 0, gy = 0; for (let j = 0; j < n; j++) { if (j === a) continue; const pij = w[j] / denom; gx += pij * pts[j][0]; gy += pij * pts[j][1]; }
+    gx -= pts[pp][0]; gy -= pts[pp][1]; grad[a][0] += 0.5 * gx / tau; grad[a][1] += 0.5 * gy / tau;
+  };
+  for (let i = 0; i < n; i++) { const pos = byClass[labels[i]].filter((j) => j !== i); if (!pos.length) continue; const pp = pos[Math.floor(rng() * pos.length)]; oneDir(i, pp); oneDir(pp, i); }
+  applyGrad(pts, grad, lr, n); projectSphere(pts); return loss / n;
+};
+
+const stepSigLIP = (pts, labels, lr) => {
+  const n = pts.length, target = -0.05, t = 10.0, b = -t * target; const grad = newGrad(n); projectSphere(pts); let loss = 0;
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+    const y_ij = (labels[i] === labels[j]) ? 1 : -1; const s = pts[i][0] * pts[j][0] + pts[i][1] * pts[j][1]; const arg = t * s + b; const z = -y_ij * arg;
+    let lz; if (z > 30) lz = z; else if (z < -30) lz = 0; else lz = Math.log(1 + Math.exp(z)); loss += lz;
+    const sig = 1 / (1 + Math.exp(-z)); const dsim = -y_ij * t * sig;
+    grad[i][0] += dsim * pts[j][0]; grad[i][1] += dsim * pts[j][1]; grad[j][0] += dsim * pts[i][0]; grad[j][1] += dsim * pts[i][1];
+  }
+  applyGrad(pts, grad, lr, n); projectSphere(pts); return loss / (n * (n - 1) / 2);
+};
+// stepCLIP/stepTriplet/stepInfoNCE pull a random positive each step; give them a closure rng
+let rng = rng32(1);
+
+const LOSSES = [
+  { id: 'hadsell', name: 'Pair (Hadsell, 2006)', sub: 'L = d²₊ + max(0, m−d₋)²', step: stepHadsell, lr: 0.4, onSphere: false },
+  { id: 'triplet', name: 'Triplet (FaceNet, 2015)', sub: 'L = max(0, d²ₐₚ − d²ₐₙ + m)', step: stepTriplet, lr: 0.4, onSphere: false },
+  { id: 'infonce', name: 'InfoNCE / NT-Xent (2018)', sub: '−log eᶜᵒˢᐟᵗ / Σ eᶜᵒˢᐟᵗ', step: stepInfoNCE, lr: 0.05, onSphere: true },
+  { id: 'clip', name: 'CLIP (bidirectional, 2021)', sub: 'symmetrised InfoNCE', step: stepCLIP, lr: 0.05, onSphere: true },
+  { id: 'supcon', name: 'SupCon (2020)', sub: 'multi-positive InfoNCE', step: stepSupCon, lr: 0.05, onSphere: true },
+  { id: 'siglip', name: 'SigLIP (pairwise σ, 2023)', sub: 'log(1+exp(−y(t·sim+b)))', step: stepSigLIP, lr: 0.01, onSphere: true },
+  { id: 'alignunif', name: 'Align + Uniform (2020)', sub: 'L = d²₊ + λ log E[e⁻ᵗᵈ²]', step: stepAlignUnif, lr: 0.04, onSphere: true },
+  { id: 'orthog', name: 'Cosine→0', sub: 'L = (1 − cos₊) + cos²₋', step: stepOrthog, lr: 0.08, onSphere: true },
+];
+
+const accuracy = (pts, labels) => {
+  const sum = {}, cnt = {};
+  for (let i = 0; i < pts.length; i++) { const y = labels[i]; if (!(y in sum)) { sum[y] = [0, 0]; cnt[y] = 0; } sum[y][0] += pts[i][0]; sum[y][1] += pts[i][1]; cnt[y]++; }
+  const cents = {}; for (const y in sum) cents[y] = [sum[y][0] / cnt[y], sum[y][1] / cnt[y]];
+  let correct = 0;
+  for (let i = 0; i < pts.length; i++) { let best = null, bd = Infinity; for (const y in cents) { const d = (pts[i][0] - cents[y][0]) ** 2 + (pts[i][1] - cents[y][1]) ** 2; if (d < bd) { bd = d; best = +y; } } if (best === labels[i]) correct++; }
+  return correct / pts.length;
+};
+
+const classColor = (y, alpha = 1) => { const hex = PALETTE[y % PALETTE.length]; const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16); return `rgba(${r}, ${g}, ${b}, ${alpha})`; };
+
+// per-panel geometry, shared by draw() and the hover hit-test
+const COLS = 4, ROWS = 2, GAP = 8, PADTOP = 6, HEADER = 36, PLOTPAD = 10;
+const layout = (W, H) => {
+  const cellW = (W - GAP * (COLS + 1)) / COLS, cellH = (H - GAP * (ROWS + 1) - PADTOP) / ROWS; const rects = [];
+  for (let r = 0; r < ROWS; r++) for (let cc = 0; cc < COLS; cc++) rects.push({ x: GAP + cc * (cellW + GAP), y: PADTOP + GAP + r * (cellH + GAP), w: cellW, h: cellH });
+  return rects;
+};
+const plotGeom = (R, onSphere) => {
+  const px = R.x + PLOTPAD, py = R.y + HEADER + PLOTPAD, pw = R.w - PLOTPAD * 2, ph = R.h - HEADER - PLOTPAD * 2 - 18;
+  const range = onSphere ? 1.2 : 2.5; const cx = px + pw / 2, cy = py + ph / 2; const s = Math.min(pw, ph) / (range * 2);
+  return { px, py, pw, ph, cx, cy, s };
+};
+
+defineViz('contrastiverace', {
+  title: 'Eight contrastive losses, one dataset',
+  height: 640, autoplay: false, stepsPerFrame: 1,
+  controls: [
+    { type: 'play' }, { type: 'step' }, { type: 'reset' }, { type: 'speed' },
+    { type: 'newrow' },
+    { type: 'select', name: 'data', label: 'data', value: 'random', options: [
+      { value: 'random', label: 'random (2 classes)' }, { value: 'random-4', label: 'random (4 classes)' },
+      { value: 'moons', label: 'two-moons' }, { value: 'blobs', label: 'overlapping blobs' },
+      { value: 'rings', label: 'concentric rings' }, { value: 'four', label: 'four classes' } ] },
+    { type: 'select', name: 'n', label: 'n', value: '60', options: [{ value: '40', label: '40' }, { value: '60', label: '60' }, { value: '80', label: '80' }, { value: '120', label: '120' }] },
+    { type: 'number', name: 'seed', label: 'seed', value: 7, min: 0, max: 999, width: 54 },
+    { type: 'readout', name: 'iter' },
+  ],
+  setup(api) {
+    const kind = api.get('data'), n = parseInt(api.get('n'), 10), seed = parseInt(api.get('seed'), 10) || 0;
+    const { pts: base, labels } = makeData(kind, n, seed);
+    api.state.hover = -1;
+    api.state.panels = LOSSES.map((L) => {
+      const pts = base.map((p) => [p[0], p[1]]); if (L.onSphere) projectSphere(pts);
+      return { loss: L, pts, labels, rng: rng32(seed * 1000 + L.id.charCodeAt(0)), accHistory: [], lastLoss: NaN, lastAcc: accuracy(pts, labels) };
+    });
+    // hover hit-test across panels — wired once per canvas
+    if (!api.canvas.dataset.crHover) {
+      api.canvas.dataset.crHover = '1';
+      api.canvas.addEventListener('pointermove', (e) => {
+        const rect = api.canvas.getBoundingClientRect(); const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        const rects = layout(api.size.W, api.size.H); let found = -1;
+        for (let pi = 0; pi < api.state.panels.length && found < 0; pi++) {
+          const P = api.state.panels[pi], R = rects[pi];
+          if (mx < R.x || mx > R.x + R.w || my < R.y || my > R.y + R.h) continue;
+          const g = plotGeom(R, P.loss.onSphere);
+          for (let i = 0; i < P.pts.length; i++) { const x = g.cx + P.pts[i][0] * g.s, y = g.cy - P.pts[i][1] * g.s; if ((x - mx) ** 2 + (y - my) ** 2 <= 16) { found = i; break; } }
         }
-      }
-    } else if (kind === 'random' || kind === 'random-4') {
-      const k = (kind === 'random-4') ? 4 : 2;
-      for (let i = 0; i < n; i++) {
-        pts.push([(rng() * 2 - 1) * 1.5, (rng() * 2 - 1) * 1.5]);
-        labels.push(i % k);
-      }
-      for (let i = n - 1; i > 0; i--) {
-        const j = Math.floor(rng() * (i + 1));
-        [labels[i], labels[j]] = [labels[j], labels[i]];
-      }
-    }
-    return { pts, labels };
-  };
-
-  // ─── losses ───────────────────────────────────────────────────────────
-  // Every step function mutates pts in place and returns the loss value.
-  // It receives (pts, labels, lr, rng). Some losses project to the sphere.
-  const projectSphere = (pts) => {
-    for (let i = 0; i < pts.length; i++) {
-      const n = Math.hypot(pts[i][0], pts[i][1]) + 1e-9;
-      pts[i][0] /= n; pts[i][1] /= n;
-    }
-  };
-  const applyGrad = (pts, grad, lr, n) => {
-    for (let i = 0; i < pts.length; i++) {
-      pts[i][0] -= lr * grad[i][0] / n;
-      pts[i][1] -= lr * grad[i][1] / n;
-    }
-  };
-  const newGrad = (n) => { const g = new Array(n); for (let i = 0; i < n; i++) g[i] = [0, 0]; return g; };
-
-  const stepHadsell = (pts, labels, lr) => {
-    const n = pts.length, margin = 1.2;
-    const grad = newGrad(n);
-    let loss = 0, m = 0;
-    for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
-        const dx = pts[i][0] - pts[j][0], dy = pts[i][1] - pts[j][1];
-        const d2 = dx * dx + dy * dy;
-        const d = Math.sqrt(d2 + 1e-9);
-        if (labels[i] === labels[j]) {
-          loss += d2; m++;
-          grad[i][0] += 2 * dx; grad[i][1] += 2 * dy;
-          grad[j][0] -= 2 * dx; grad[j][1] -= 2 * dy;
-        } else if (d < margin) {
-          loss += (margin - d) * (margin - d); m++;
-          const f = -2 * (margin - d) / d;
-          grad[i][0] += f * dx; grad[i][1] += f * dy;
-          grad[j][0] -= f * dx; grad[j][1] -= f * dy;
-        }
-      }
-    }
-    applyGrad(pts, grad, lr, n);
-    return m ? loss / m : 0;
-  };
-
-  const stepTriplet = (pts, labels, lr, rng) => {
-    const n = pts.length, margin = 0.3;
-    const grad = newGrad(n);
-    let loss = 0, cnt = 0;
-    // index by class
-    const byClass = {};
-    for (let i = 0; i < n; i++) (byClass[labels[i]] = byClass[labels[i]] || []).push(i);
-    for (let i = 0; i < n; i++) {
-      const pos = byClass[labels[i]].filter((j) => j !== i);
-      const neg = []; for (const k in byClass) if (+k !== labels[i]) for (const j of byClass[k]) neg.push(j);
-      if (!pos.length || !neg.length) continue;
-      const p = pos[Math.floor(rng() * pos.length)];
-      const nd = neg[Math.floor(rng() * neg.length)];
-      const dap = (pts[i][0] - pts[p][0]) ** 2 + (pts[i][1] - pts[p][1]) ** 2;
-      const dan = (pts[i][0] - pts[nd][0]) ** 2 + (pts[i][1] - pts[nd][1]) ** 2;
-      const slack = dap - dan + margin;
-      if (slack > 0) {
-        loss += slack; cnt++;
-        grad[i][0] += 2 * (pts[nd][0] - pts[p][0]); grad[i][1] += 2 * (pts[nd][1] - pts[p][1]);
-        grad[p][0] -= 2 * (pts[i][0] - pts[p][0]); grad[p][1] -= 2 * (pts[i][1] - pts[p][1]);
-        grad[nd][0] += 2 * (pts[i][0] - pts[nd][0]); grad[nd][1] += 2 * (pts[i][1] - pts[nd][1]);
-      }
-    }
-    applyGrad(pts, grad, lr, n);
-    return cnt ? loss / cnt : 0;
-  };
-
-  const stepInfoNCE = (pts, labels, lr, rng) => {
-    const n = pts.length, tau = 0.2;
-    const grad = newGrad(n);
-    // ensure unit norm
-    projectSphere(pts);
-    let loss = 0;
-    // precompute sims
-    const sim = []; for (let i = 0; i < n; i++) { sim[i] = []; for (let j = 0; j < n; j++) sim[i][j] = (pts[i][0] * pts[j][0] + pts[i][1] * pts[j][1]) / tau; }
-    const byClass = {};
-    for (let i = 0; i < n; i++) (byClass[labels[i]] = byClass[labels[i]] || []).push(i);
-    for (let i = 0; i < n; i++) {
-      const pos = byClass[labels[i]].filter((j) => j !== i);
-      if (!pos.length) continue;
-      const p = pos[Math.floor(rng() * pos.length)];
-      let mx = -Infinity; for (let j = 0; j < n; j++) if (j !== i) if (sim[i][j] > mx) mx = sim[i][j];
-      let denom = 0; const w = new Array(n).fill(0);
-      for (let j = 0; j < n; j++) if (j !== i) { w[j] = Math.exp(sim[i][j] - mx); denom += w[j]; }
-      loss += -(sim[i][p] - mx - Math.log(denom));
-      let gx = 0, gy = 0;
-      for (let j = 0; j < n; j++) {
-        if (j === i) continue;
-        const pij = w[j] / denom;
-        gx += pij * pts[j][0]; gy += pij * pts[j][1];
-      }
-      gx -= pts[p][0]; gy -= pts[p][1];
-      grad[i][0] += gx / tau; grad[i][1] += gy / tau;
-    }
-    applyGrad(pts, grad, lr, n);
-    projectSphere(pts);
-    return loss / n;
-  };
-
-  const stepSupCon = (pts, labels, lr) => {
-    const n = pts.length, tau = 0.2;
-    const grad = newGrad(n);
-    projectSphere(pts);
-    let loss = 0;
-    const sim = []; for (let i = 0; i < n; i++) { sim[i] = []; for (let j = 0; j < n; j++) sim[i][j] = (pts[i][0] * pts[j][0] + pts[i][1] * pts[j][1]) / tau; }
-    const byClass = {};
-    for (let i = 0; i < n; i++) (byClass[labels[i]] = byClass[labels[i]] || []).push(i);
-    for (let i = 0; i < n; i++) {
-      const P = byClass[labels[i]].filter((j) => j !== i);
-      if (!P.length) continue;
-      let mx = -Infinity; for (let j = 0; j < n; j++) if (j !== i) if (sim[i][j] > mx) mx = sim[i][j];
-      let denom = 0; const w = new Array(n).fill(0);
-      for (let j = 0; j < n; j++) if (j !== i) { w[j] = Math.exp(sim[i][j] - mx); denom += w[j]; }
-      // L_i = -(1/|P|) Σ_{p∈P} [sim_ip - log(denom + sim_ip_term...)]; we use the LP→Khosla form
-      // gradient = (1/τ)[ Σ_{j≠i} p_ij z_j  -  (1/|P|) Σ_{p∈P} z_p ]
-      let lloss = 0;
-      for (const p of P) lloss += -(sim[i][p] - mx - Math.log(denom));
-      lloss /= P.length;
-      loss += lloss;
-      let gx = 0, gy = 0;
-      for (let j = 0; j < n; j++) {
-        if (j === i) continue;
-        const pij = w[j] / denom;
-        gx += pij * pts[j][0]; gy += pij * pts[j][1];
-      }
-      let pmx = 0, pmy = 0;
-      for (const p of P) { pmx += pts[p][0]; pmy += pts[p][1]; }
-      pmx /= P.length; pmy /= P.length;
-      gx -= pmx; gy -= pmy;
-      grad[i][0] += gx / tau; grad[i][1] += gy / tau;
-    }
-    applyGrad(pts, grad, lr, n);
-    projectSphere(pts);
-    return loss / n;
-  };
-
-  const stepAlignUnif = (pts, labels, lr) => {
-    const n = pts.length, t = 2.0, lam = 1.0;
-    const grad = newGrad(n);
-    projectSphere(pts);
-    let lossA = 0, lossU = 0, pairsA = 0;
-    // Alignment: pull positives together (squared distance, on sphere)
-    for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
-        if (labels[i] !== labels[j]) continue;
-        const dx = pts[i][0] - pts[j][0], dy = pts[i][1] - pts[j][1];
-        lossA += dx * dx + dy * dy; pairsA++;
-        grad[i][0] += 2 * dx; grad[i][1] += 2 * dy;
-        grad[j][0] -= 2 * dx; grad[j][1] -= 2 * dy;
-      }
-    }
-    // Uniformity: maximise mean exp(-t·d²) → push everyone apart
-    let sumExp = 0;
-    const E = []; // store per pair
-    for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
-        const dx = pts[i][0] - pts[j][0], dy = pts[i][1] - pts[j][1];
-        const d2 = dx * dx + dy * dy;
-        const e = Math.exp(-t * d2);
-        E.push([i, j, e, dx, dy]); sumExp += e;
-      }
-    }
-    lossU = Math.log(sumExp / E.length + 1e-12);
-    for (const [i, j, e, dx, dy] of E) {
-      const fac = (lam * (-t)) * (e / sumExp);
-      grad[i][0] += fac * 2 * dx; grad[i][1] += fac * 2 * dy;
-      grad[j][0] -= fac * 2 * dx; grad[j][1] -= fac * 2 * dy;
-    }
-    applyGrad(pts, grad, lr, n);
-    projectSphere(pts);
-    return (pairsA ? lossA / pairsA : 0) + lam * lossU;
-  };
-
-  const stepOrthog = (pts, labels, lr) => {
-    const n = pts.length;
-    const grad = newGrad(n);
-    projectSphere(pts);
-    let loss = 0;
-    for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
-        const c = pts[i][0] * pts[j][0] + pts[i][1] * pts[j][1];
-        if (labels[i] === labels[j]) {
-          loss += 1 - c;
-          grad[i][0] += -pts[j][0]; grad[i][1] += -pts[j][1];
-          grad[j][0] += -pts[i][0]; grad[j][1] += -pts[i][1];
-        } else {
-          loss += c * c;
-          grad[i][0] += 2 * c * pts[j][0]; grad[i][1] += 2 * c * pts[j][1];
-          grad[j][0] += 2 * c * pts[i][0]; grad[j][1] += 2 * c * pts[i][1];
-        }
-      }
-    }
-    applyGrad(pts, grad, lr, n);
-    projectSphere(pts);
-    return loss / (n * (n - 1) / 2);
-  };
-
-  // ─── extra losses: CLIP (symmetric InfoNCE) and SigLIP (pairwise sigmoid) ──
-  const stepCLIP = (pts, labels, lr) => {
-    const n = pts.length, tau = 0.2;
-    const grad = newGrad(n);
-    projectSphere(pts);
-    let loss = 0;
-    const sim = []; for (let i = 0; i < n; i++) { sim[i] = []; for (let j = 0; j < n; j++) sim[i][j] = (pts[i][0] * pts[j][0] + pts[i][1] * pts[j][1]) / tau; }
-    const byClass = {};
-    for (let i = 0; i < n; i++) (byClass[labels[i]] = byClass[labels[i]] || []).push(i);
-    const oneDir = (a, pp, rng) => {
-      let mx = -Infinity;
-      for (let j = 0; j < n; j++) if (j !== a && sim[a][j] > mx) mx = sim[a][j];
-      let denom = 0; const w = new Array(n).fill(0);
-      for (let j = 0; j < n; j++) if (j !== a) { w[j] = Math.exp(sim[a][j] - mx); denom += w[j]; }
-      loss += 0.5 * -(sim[a][pp] - mx - Math.log(denom));
-      let gx = 0, gy = 0;
-      for (let j = 0; j < n; j++) {
-        if (j === a) continue;
-        const pij = w[j] / denom;
-        gx += pij * pts[j][0]; gy += pij * pts[j][1];
-      }
-      gx -= pts[pp][0]; gy -= pts[pp][1];
-      grad[a][0] += 0.5 * gx / tau; grad[a][1] += 0.5 * gy / tau;
-    };
-    for (let i = 0; i < n; i++) {
-      const pos = byClass[labels[i]].filter((j) => j !== i);
-      if (!pos.length) continue;
-      const pp = pos[Math.floor(Math.random() * pos.length)];
-      oneDir(i, pp);
-      oneDir(pp, i);
-    }
-    applyGrad(pts, grad, lr, n);
-    projectSphere(pts);
-    return loss / n;
-  };
-
-  const stepSigLIP = (pts, labels, lr) => {
-    const n = pts.length;
-    const target = -0.05; // negatives target ≈ orthogonality
-    const t = 10.0, b = -t * target;
-    const grad = newGrad(n);
-    projectSphere(pts);
-    let loss = 0;
-    for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
-        const y_ij = (labels[i] === labels[j]) ? 1 : -1;
-        const s = pts[i][0] * pts[j][0] + pts[i][1] * pts[j][1];
-        const arg = t * s + b;
-        const z = -y_ij * arg;
-        let lz;
-        if (z > 30) lz = z;
-        else if (z < -30) lz = 0;
-        else lz = Math.log(1 + Math.exp(z));
-        loss += lz;
-        const sig = 1 / (1 + Math.exp(-z));
-        const dsim = -y_ij * t * sig;
-        grad[i][0] += dsim * pts[j][0]; grad[i][1] += dsim * pts[j][1];
-        grad[j][0] += dsim * pts[i][0]; grad[j][1] += dsim * pts[i][1];
-      }
-    }
-    applyGrad(pts, grad, lr, n);
-    projectSphere(pts);
-    return loss / (n * (n - 1) / 2);
-  };
-
-  const LOSSES = [
-    { id: 'hadsell', name: 'Pair (Hadsell, 2006)', sub: 'L = d²₊ + max(0, m−d₋)²', step: stepHadsell, lr: 0.4, onSphere: false },
-    { id: 'triplet', name: 'Triplet (FaceNet, 2015)', sub: 'L = max(0, d²ₐₚ − d²ₐₙ + m)', step: stepTriplet, lr: 0.4, onSphere: false },
-    { id: 'infonce', name: 'InfoNCE / NT-Xent (2018)', sub: '−log eᶜᵒˢᐟᵗ / Σ eᶜᵒˢᐟᵗ', step: stepInfoNCE, lr: 0.05, onSphere: true },
-    { id: 'clip', name: 'CLIP (bidirectional, 2021)', sub: 'symmetrised InfoNCE', step: stepCLIP, lr: 0.05, onSphere: true },
-    { id: 'supcon', name: 'SupCon (2020)', sub: 'multi-positive InfoNCE', step: stepSupCon, lr: 0.05, onSphere: true },
-    { id: 'siglip', name: 'SigLIP (pairwise σ, 2023)', sub: 'log(1+exp(−y(t·sim+b)))', step: stepSigLIP, lr: 0.01, onSphere: true },
-    { id: 'alignunif', name: 'Align + Uniform (2020)', sub: 'L = d²₊ + λ log E[e⁻ᵗᵈ²]', step: stepAlignUnif, lr: 0.04, onSphere: true },
-    { id: 'orthog', name: 'Cosine→0', sub: 'L = (1 − cos₊) + cos²₋', step: stepOrthog, lr: 0.08, onSphere: true },
-  ];
-
-  // ─── linear-separability metric (nearest centroid) ──────────────────
-  const accuracy = (pts, labels) => {
-    const sum = {}, cnt = {};
-    for (let i = 0; i < pts.length; i++) {
-      const y = labels[i];
-      if (!(y in sum)) { sum[y] = [0, 0]; cnt[y] = 0; }
-      sum[y][0] += pts[i][0]; sum[y][1] += pts[i][1]; cnt[y]++;
-    }
-    const cents = {};
-    for (const y in sum) cents[y] = [sum[y][0] / cnt[y], sum[y][1] / cnt[y]];
-    let correct = 0;
-    for (let i = 0; i < pts.length; i++) {
-      let best = null, bd = Infinity;
-      for (const y in cents) {
-        const d = (pts[i][0] - cents[y][0]) ** 2 + (pts[i][1] - cents[y][1]) ** 2;
-        if (d < bd) { bd = d; best = +y; }
-      }
-      if (best === labels[i]) correct++;
-    }
-    return correct / pts.length;
-  };
-
-  // ─── main setup ──────────────────────────────────────────────────────
-  const setup = () => {
-    const c = document.getElementById(id + '-c');
-    if (!c || c.dataset.ready) return;
-    c.dataset.ready = '1';
-    const ctx = c.getContext('2d');
-
-    const playBtn = document.getElementById(id + '-play');
-    const stepBtn = document.getElementById(id + '-step');
-    const resetBtn = document.getElementById(id + '-reset');
-    const dataSel = document.getElementById(id + '-data');
-    const nSel = document.getElementById(id + '-n');
-    const seedInp = document.getElementById(id + '-seed');
-    const iterReadout = document.getElementById(id + '-iter');
-
-    const state = {
-      dpr: 1, w: 0, h: 0,
-      panels: [], // per-loss
-      iter: 0,
-      playing: false,
-      speed: 1,
-      hover: -1, // hovered point index
-    };
-
-    const buildPanels = () => {
-      const kind = dataSel.value;
-      const n = parseInt(nSel.value, 10);
-      const seed = parseInt(seedInp.value, 10) || 0;
-      const { pts: base, labels } = makeData(kind, n, seed);
-      state.iter = 0;
-      state.panels = LOSSES.map((L) => {
-        // each panel gets its own copy
-        const pts = base.map((p) => [p[0], p[1]]);
-        if (L.onSphere) projectSphere(pts);
-        return {
-          loss: L,
-          pts,
-          labels,
-          rng: mulberry32(seed * 1000 + L.id.charCodeAt(0)),
-          history: [], // loss history
-          accHistory: [],
-          lastLoss: NaN,
-          lastAcc: accuracy(pts, labels),
-        };
+        if (found !== api.state.hover) { api.state.hover = found; api.render(); }
       });
-    };
-    buildPanels();
-
-    const fit = () => {
-      const rect = c.getBoundingClientRect();
-      const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
-      state.dpr = dpr;
-      state.w = rect.width;
-      state.h = rect.height;
-      c.width = Math.round(rect.width * dpr);
-      c.height = Math.round(rect.height * dpr);
-    };
-
-    // ─── drawing ────────────────────────────────────────────────────────
-    const classColor = (y, alpha = 1) => {
-      const palette = ['#b3661b', '#4a7fb3', '#3a8f5e', '#9a4f9c'];
-      const hex = palette[y % palette.length];
-      const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
-      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    };
-
-    const layout = () => {
-      const W = state.w, H = state.h;
-      const cols = 4, rows = 2;
-      const gap = 8;
-      const padTop = 6;
-      const cellW = (W - gap * (cols + 1)) / cols;
-      const cellH = (H - gap * (rows + 1) - padTop) / rows;
-      const rects = [];
-      for (let r = 0; r < rows; r++) {
-        for (let cc = 0; cc < cols; cc++) {
-          const x = gap + cc * (cellW + gap);
-          const y = padTop + gap + r * (cellH + gap);
-          rects.push({ x, y, w: cellW, h: cellH });
-        }
+      api.canvas.addEventListener('pointerleave', () => { if (api.state.hover !== -1) { api.state.hover = -1; api.render(); } });
+    }
+  },
+  step(api) {
+    for (const P of api.state.panels) { P.lastLoss = P.loss.step(P.pts, P.labels, P.loss.lr, P.rng); P.lastAcc = accuracy(P.pts, P.labels); P.accHistory.push(P.lastAcc); if (P.accHistory.length > 240) P.accHistory.shift(); }
+    api.readout('iter', 'iter ' + api.iter);
+  },
+  draw(api) {
+    const { ctx, colors, size, state } = api; const W = size.W, H = size.H; if (W === 0) return;
+    const { accent, muted, faint, border, fg, cellBg } = colors; const rects = layout(W, H);
+    for (let pi = 0; pi < state.panels.length; pi++) {
+      const P = state.panels[pi], R = rects[pi];
+      ctx.fillStyle = cellBg; ctx.strokeStyle = border; ctx.lineWidth = 1; ctx.fillRect(R.x, R.y, R.w, R.h); ctx.strokeRect(R.x + 0.5, R.y + 0.5, R.w - 1, R.h - 1);
+      ctx.fillStyle = fg; ctx.font = '600 12px ui-sans-serif, system-ui'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(P.loss.name, R.x + 8, R.y + 6);
+      ctx.fillStyle = faint; ctx.font = '10px ui-monospace, monospace'; ctx.fillText(P.loss.sub, R.x + 8, R.y + 22);
+      const acc = P.lastAcc, accColor = acc >= 0.95 ? colors.green : (acc >= 0.8 ? accent : muted);
+      ctx.fillStyle = accColor; ctx.font = '600 11px ui-monospace, monospace'; ctx.textAlign = 'right'; ctx.fillText('acc ' + (acc * 100).toFixed(0) + '%', R.x + R.w - 8, R.y + 6);
+      ctx.fillStyle = faint; ctx.font = '10px ui-monospace, monospace'; ctx.fillText(isFinite(P.lastLoss) ? ('L ' + P.lastLoss.toFixed(3)) : '', R.x + R.w - 8, R.y + 22);
+      const g = plotGeom(R, P.loss.onSphere);
+      ctx.save(); ctx.beginPath(); ctx.rect(g.px, g.py, g.pw, g.ph); ctx.clip();
+      if (P.loss.onSphere) { ctx.strokeStyle = border; ctx.lineWidth = 1; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.arc(g.cx, g.cy, g.s, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
+      ctx.strokeStyle = border; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(g.px, g.cy); ctx.lineTo(g.px + g.pw, g.cy); ctx.moveTo(g.cx, g.py); ctx.lineTo(g.cx, g.py + g.ph); ctx.stroke();
+      for (let i = 0; i < P.pts.length; i++) {
+        const isHover = (state.hover === i); const x = g.cx + P.pts[i][0] * g.s, y = g.cy - P.pts[i][1] * g.s;
+        ctx.fillStyle = classColor(P.labels[i], isHover ? 1 : 0.85); ctx.beginPath(); ctx.arc(x, y, isHover ? 4.5 : 3, 0, Math.PI * 2); ctx.fill();
+        if (isHover) { ctx.strokeStyle = fg; ctx.lineWidth = 1.2; ctx.stroke(); }
       }
-      return rects;
-    };
-
-    const draw = () => {
-      const W = state.w, H = state.h;
-      if (W === 0) return;
-      ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
-      ctx.clearRect(0, 0, W, H);
-      const { accent, muted, faint, border, fg, cellBg } = colors;
-
-      const rects = layout();
-
-      for (let pi = 0; pi < state.panels.length; pi++) {
-        const P = state.panels[pi];
-        const R = rects[pi];
-        // cell background
-        ctx.fillStyle = cellBg;
-        ctx.strokeStyle = border;
-        ctx.lineWidth = 1;
-        ctx.fillRect(R.x, R.y, R.w, R.h);
-        ctx.strokeRect(R.x + 0.5, R.y + 0.5, R.w - 1, R.h - 1);
-
-        // header
-        const headerH = 36;
-        ctx.fillStyle = fg;
-        ctx.font = '600 12px ui-sans-serif, system-ui';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        ctx.fillText(P.loss.name, R.x + 8, R.y + 6);
-        ctx.fillStyle = faint;
-        ctx.font = '10px ui-monospace, monospace';
-        ctx.fillText(P.loss.sub, R.x + 8, R.y + 22);
-
-        // accuracy badge top-right
-        const acc = P.lastAcc;
-        const accColor = acc >= 0.95 ? '#3a8f5e' : (acc >= 0.8 ? '#b3661b' : muted);
-        ctx.fillStyle = accColor;
-        ctx.font = '600 11px ui-monospace, monospace';
-        ctx.textAlign = 'right';
-        ctx.fillText('acc ' + (acc * 100).toFixed(0) + '%', R.x + R.w - 8, R.y + 6);
-        ctx.fillStyle = faint;
-        ctx.font = '10px ui-monospace, monospace';
-        ctx.fillText(isFinite(P.lastLoss) ? ('L ' + P.lastLoss.toFixed(3)) : '', R.x + R.w - 8, R.y + 22);
-
-        // plot region
-        const plotPad = 10;
-        const px = R.x + plotPad;
-        const py = R.y + headerH + plotPad;
-        const pw = R.w - plotPad * 2;
-        const ph = R.h - headerH - plotPad * 2 - 18; // 18 for bottom strip
-
-        // axes / sphere ref
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(px, py, pw, ph);
-        ctx.clip();
-
-        // compute scale: fit point cloud
-        const range = P.loss.onSphere ? 1.2 : 2.5;
-        const cx = px + pw / 2, cy = py + ph / 2;
-        const s = Math.min(pw, ph) / (range * 2);
-        const X = (vx) => cx + vx * s;
-        const Y = (vy) => cy - vy * s;
-
-        // sphere reference
-        if (P.loss.onSphere) {
-          ctx.strokeStyle = border;
-          ctx.lineWidth = 1;
-          ctx.setLineDash([2, 3]);
-          ctx.beginPath();
-          ctx.arc(cx, cy, s, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.setLineDash([]);
-        }
-
-        // axes
-        ctx.strokeStyle = border;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(px, cy); ctx.lineTo(px + pw, cy);
-        ctx.moveTo(cx, py); ctx.lineTo(cx, py + ph);
-        ctx.stroke();
-
-        // points
-        for (let i = 0; i < P.pts.length; i++) {
-          const isHover = (state.hover === i);
-          const x = X(P.pts[i][0]), y = Y(P.pts[i][1]);
-          ctx.fillStyle = classColor(P.labels[i], isHover ? 1 : 0.85);
-          ctx.beginPath();
-          ctx.arc(x, y, isHover ? 4.5 : 3, 0, Math.PI * 2);
-          ctx.fill();
-          if (isHover) {
-            ctx.strokeStyle = fg;
-            ctx.lineWidth = 1.2;
-            ctx.stroke();
-          }
-        }
-        ctx.restore();
-
-        // mini loss / acc sparkline at bottom
-        const sx = R.x + 8, sy = R.y + R.h - 14, sw = R.w - 16, sh = 10;
-        ctx.strokeStyle = border;
-        ctx.lineWidth = 1;
-        ctx.strokeRect(sx + 0.5, sy + 0.5, sw - 1, sh - 1);
-        const H_ = P.accHistory;
-        if (H_.length > 1) {
-          ctx.strokeStyle = accent;
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          for (let k = 0; k < H_.length; k++) {
-            const xx = sx + (k / (H_.length - 1)) * sw;
-            const yy = sy + (1 - H_[k]) * (sh - 2) + 1;
-            if (k === 0) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy);
-          }
-          ctx.stroke();
-        }
-      }
-
-      // global "press play" hint — only at iter 0 and not playing
-      if (state.iter === 0 && !state.playing) {
-        const hint = '▶ press Play to start the race';
-        ctx.font = '600 14px ui-sans-serif, system-ui';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        const tm = ctx.measureText(hint);
-        const bw = tm.width + 28, bh = 32;
-        const bx = W / 2 - bw / 2, by = H / 2 - bh / 2;
-        ctx.fillStyle = accent;
-        ctx.globalAlpha = 0.95;
-        ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(bx, by, bw, bh, 8); else ctx.rect(bx, by, bw, bh);
-        ctx.fill();
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = colors.bg;
-        ctx.fillText(hint, W / 2, H / 2);
-      }
-    };
-
-    // ─── animation ──────────────────────────────────────────────────────
-    let lastTick = 0;
-    let stepsPerFrame = 1;
-    const tickPanel = (P) => {
-      P.lastLoss = P.loss.step(P.pts, P.labels, P.loss.lr, P.rng);
-      P.lastAcc = accuracy(P.pts, P.labels);
-      P.accHistory.push(P.lastAcc);
-      if (P.accHistory.length > 240) P.accHistory.shift();
-    };
-    const stepOnce = () => {
-      for (const P of state.panels) tickPanel(P);
-      state.iter++;
-      iterReadout.textContent = 'iter ' + state.iter;
-    };
-    const loop = (now) => {
-      if (!state.playing) return;
-      if (!lastTick) lastTick = now;
-      const elapsed = now - lastTick;
-      const target = 1000 / 30;
-      if (elapsed >= target / state.speed) {
-        lastTick = now;
-        const n = Math.max(1, Math.round(state.speed));
-        for (let k = 0; k < n; k++) stepOnce();
-        draw();
-      }
-      requestAnimationFrame(loop);
-    };
-    const play = () => { if (state.playing) return; state.playing = true; lastTick = 0; playBtn.textContent = '❚❚ Pause'; requestAnimationFrame(loop); };
-    const pause = () => { state.playing = false; playBtn.textContent = '▶ Play'; };
-
-    // ─── events ─────────────────────────────────────────────────────────
-    playBtn.addEventListener('click', () => { state.playing ? pause() : play(); });
-    stepBtn.addEventListener('click', () => { pause(); stepOnce(); draw(); });
-    resetBtn.addEventListener('click', () => { pause(); buildPanels(); iterReadout.textContent = 'iter 0'; draw(); });
-    dataSel.addEventListener('change', () => { pause(); buildPanels(); iterReadout.textContent = 'iter 0'; draw(); });
-    nSel.addEventListener('change', () => { pause(); buildPanels(); iterReadout.textContent = 'iter 0'; draw(); });
-    seedInp.addEventListener('change', () => { pause(); buildPanels(); iterReadout.textContent = 'iter 0'; draw(); });
-
-    const spdBtns = c.parentElement.querySelectorAll('[data-spd]');
-    spdBtns.forEach((b) => b.addEventListener('click', () => {
-      spdBtns.forEach((x) => x.classList.remove('active'));
-      b.classList.add('active');
-      state.speed = parseFloat(b.dataset.spd);
-    }));
-
-    // hover detection across panels (uses panel 0's coordinate convention)
-    c.addEventListener('pointermove', (e) => {
-      const rect = c.getBoundingClientRect();
-      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-      const rects = layout();
-      let found = -1;
-      for (let pi = 0; pi < state.panels.length && found < 0; pi++) {
-        const P = state.panels[pi];
-        const R = rects[pi];
-        if (mx < R.x || mx > R.x + R.w || my < R.y || my > R.y + R.h) continue;
-        const headerH = 36, plotPad = 10;
-        const px = R.x + plotPad, py = R.y + headerH + plotPad;
-        const pw = R.w - plotPad * 2, ph = R.h - headerH - plotPad * 2 - 18;
-        const range = P.loss.onSphere ? 1.2 : 2.5;
-        const cx = px + pw / 2, cy = py + ph / 2;
-        const s = Math.min(pw, ph) / (range * 2);
-        for (let i = 0; i < P.pts.length; i++) {
-          const x = cx + P.pts[i][0] * s, y = cy - P.pts[i][1] * s;
-          if ((x - mx) ** 2 + (y - my) ** 2 <= 16) { found = i; break; }
-        }
-      }
-      if (found !== state.hover) { state.hover = found; draw(); }
-    });
-    c.addEventListener('pointerleave', () => { state.hover = -1; draw(); });
-
-    // keyboard
-    const fig = c.closest('figure');
-    fig.addEventListener('keydown', (e) => {
-      if (e.key === ' ') { e.preventDefault(); state.playing ? pause() : play(); }
-      else if (e.key === 's') { pause(); stepOnce(); draw(); }
-      else if (e.key === 'r') { pause(); buildPanels(); iterReadout.textContent = 'iter 0'; draw(); }
-    });
-
-    // theme
-    const themeObs = new MutationObserver(() => { colors = readColors(); draw(); });
-    themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-
-    const ro = new ResizeObserver(() => { fit(); draw(); });
-    ro.observe(c);
-
-    const io = new IntersectionObserver((entries) => {
-      const vis = entries[0].isIntersecting;
-      if (vis) { fit(); draw(); } else { pause(); }
-    }, { rootMargin: '120px' });
-    io.observe(c);
-
-    fit();
-    draw();
-  };
-
-  setup();
-  document.addEventListener('astro:page-load', setup);
-  document.addEventListener('astro:after-swap', setup);
-})();
+      ctx.restore();
+      const sx = R.x + 8, sy = R.y + R.h - 14, sw = R.w - 16, sh = 10; ctx.strokeStyle = border; ctx.lineWidth = 1; ctx.strokeRect(sx + 0.5, sy + 0.5, sw - 1, sh - 1);
+      const Hh = P.accHistory; if (Hh.length > 1) { ctx.strokeStyle = accent; ctx.lineWidth = 1.5; ctx.beginPath(); for (let k = 0; k < Hh.length; k++) { const xx = sx + (k / (Hh.length - 1)) * sw, yy = sy + (1 - Hh[k]) * (sh - 2) + 1; k === 0 ? ctx.moveTo(xx, yy) : ctx.lineTo(xx, yy); } ctx.stroke(); }
+    }
+    if (api.iter === 0 && !api.playing) {
+      const hint = '▶ press Play to start the race'; ctx.font = '600 14px ui-sans-serif, system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const tm = ctx.measureText(hint), bw = tm.width + 28, bh = 32, bx = W / 2 - bw / 2, by = H / 2 - bh / 2;
+      ctx.fillStyle = accent; ctx.globalAlpha = 0.95; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(bx, by, bw, bh, 8); else ctx.rect(bx, by, bw, bh); ctx.fill(); ctx.globalAlpha = 1;
+      ctx.fillStyle = colors.bg; ctx.fillText(hint, W / 2, H / 2);
+    }
+  },
+});
 </script>
-
-<style>
-.viz select, .viz input[type="number"] {
-  background: var(--bg-elev, #fff);
-  color: var(--fg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 2px 4px;
-  font: inherit;
-  font-size: 12px;
-}
-.viz label { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-muted); font-size: 12px; }
-</style>

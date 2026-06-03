@@ -1,0 +1,127 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 360 } = Astro.props;
+---
+<figure class="viz kernelpartition" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { PALETTE, parseColor, text } from './engine/draw.js';
+import { np, withJax, drawJaxLoading } from './engine/jax.js';
+
+// Which key wins where. Fix a handful of key vectors (stars) in the plane; for
+// every query point x, the attention score sⱼ(x) under a chosen feature map
+// decides which key dominates. Coloring the plane by argmaxⱼ sⱼ(x) draws the
+// partition that the kernel imposes on query space. Switch the feature map to
+// see the geometry change, and watch FAVOR+ random features converge to the
+// exact softmax cones as you add features. All score fields are computed on jax-js.
+const GRID = 76;                          // P = GRID² query points
+const DOM = 2.6;                          // plane spans [-DOM, DOM]²
+const PAD = 26;
+
+const lcg = (s) => () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+const randn = (rng) => { let u = 0, v = 0; while (u === 0) u = rng(); while (v === 0) v = rng(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+
+// score field S (P×nk) for the chosen feature map, on jax-js where it counts.
+// Xg: Float64Array P*2 grid points. keys: Float64Array nk*2. Returns nested P×nk.
+const scoreField = (Xg, keys, nk, P, mode, m, seed) => {
+  if (mode === 'dot') {                                   // softmax / linear dot product
+    const Xj = np.reshape(np.array(Xg), [P, 2]);
+    const Kj = np.reshape(np.array(keys), [nk, 2]);
+    return np.matmul(Xj, np.swapaxes(Kj, 0, 1)).js();
+  }
+  if (mode === 'favor') {                                 // FAVOR+ positive random features
+    const Xj = np.reshape(np.array(Xg), [P, 2]);
+    const Kj = np.reshape(np.array(keys), [nk, 2]);
+    const rng = lcg(seed >>> 0 || 1);
+    const Wf = new Float64Array(m * 2); for (let i = 0; i < m * 2; i++) Wf[i] = randn(rng);
+    const Wt = np.swapaxes(np.reshape(np.array(Wf), [m, 2]), 0, 1);   // (2,m)
+    const A = np.exp(np.matmul(Xj, Wt.ref));              // exp(Wx)   (P,m)
+    const B = np.exp(np.matmul(Kj, Wt));                 // exp(Wk)   (nk,m)
+    const S = np.matmul(A, np.swapaxes(B, 0, 1));         // (P,nk)
+    // common e^{-‖x‖²/2} factor is shared across j → drop; keep per-key e^{-‖k‖²/2}
+    const kw = new Float64Array(nk); for (let j = 0; j < nk; j++) kw[j] = Math.exp(-(keys[2 * j] ** 2 + keys[2 * j + 1] ** 2) / 2);
+    return S.mul(np.reshape(np.array(kw), [1, nk])).js();
+  }
+  // elu — linear attention with the elu+1 feature map (Katharopoulos et al.)
+  const elu = (z) => (z > 0 ? z + 1 : Math.exp(z));
+  const PX = new Float64Array(P * 2); for (let i = 0; i < P * 2; i++) PX[i] = elu(Xg[i]);
+  const PK = new Float64Array(nk * 2); for (let i = 0; i < nk * 2; i++) PK[i] = elu(keys[i]);
+  return np.matmul(np.reshape(np.array(PX), [P, 2]), np.swapaxes(np.reshape(np.array(PK), [nk, 2]), 0, 1)).js();
+};
+
+defineViz('kernelpartition', {
+  height: 360,
+  controls: [
+    { type: 'select', name: 'mode', label: 'feature map', value: 'favor', reset: false, options: [
+      { value: 'dot', label: '(a) softmax / dot product' },
+      { value: 'favor', label: '(b) FAVOR+ random features' },
+      { value: 'elu', label: '(c) linear, elu+1' },
+    ] },
+    { type: 'newrow' },
+    { type: 'range', name: 'm', label: 'FAVOR+ features m', min: 1, max: 200, step: 1, value: 8, int: true, reset: false, fmt: (v) => '' + v },
+    { type: 'range', name: 'nk', label: 'keys', min: 3, max: 6, step: 1, value: 5, int: true, reset: false, fmt: (v) => '' + v },
+    { type: 'button', name: 'resample', label: 'resample randoms' },
+    { type: 'readout', name: 'ro' },
+  ],
+  setup(api) {
+    // grid of query points in [-DOM, DOM]², row-major
+    const Xg = new Float64Array(GRID * GRID * 2);
+    for (let a = 0; a < GRID; a++) for (let b = 0; b < GRID; b++) {
+      const idx = (a * GRID + b) * 2; Xg[idx] = -DOM + (2 * DOM) * b / (GRID - 1); Xg[idx + 1] = DOM - (2 * DOM) * a / (GRID - 1);
+    }
+    api.state.Xg = Xg; api.state.seed = 13;
+    withJax(api);
+  },
+  onAction(name, api) { if (name === 'resample') { api.state.seed = (api.state.seed * 1103515245 + 12345) & 0x7fffffff; api.render(); } },
+  draw(api) {
+    const { ctx, colors, size, state } = api; const W = size.W, H = size.H; if (W === 0) return;
+    if (!state.jaxReady) return drawJaxLoading(api);
+    const { fg, muted, faint, border, bg } = colors;
+    const nk = api.get('nk'), mode = api.get('mode'), m = api.get('m');
+
+    // keys: fixed seeded layout, identical across feature maps (same stars, like the paper)
+    const krng = lcg(20260204); const keys = new Float64Array(nk * 2);
+    for (let j = 0; j < nk * 2; j++) keys[j] = (krng() * 2 - 1) * 1.9;
+
+    const P = GRID * GRID;
+    const S = scoreField(state.Xg, keys, nk, P, mode, m, state.seed);
+
+    // square plot region
+    const side = Math.min(W - PAD * 2, H - PAD * 2 - 18);
+    const ox = (W - side) / 2, oy = 14 + (H - 14 - side) / 2;
+    const cell = side / GRID;
+    const fillCols = []; const baseBg = parseColor(bg);
+    for (let j = 0; j < nk; j++) { const c = parseColor(PALETTE[j % PALETTE.length]); fillCols.push(`rgb(${Math.round(baseBg[0] + (c[0] - baseBg[0]) * 0.34)},${Math.round(baseBg[1] + (c[1] - baseBg[1]) * 0.34)},${Math.round(baseBg[2] + (c[2] - baseBg[2]) * 0.34)})`); }
+
+    // paint partition: argmaxⱼ Sⱼ per grid cell
+    for (let a = 0; a < GRID; a++) for (let b = 0; b < GRID; b++) {
+      const row = S[a * GRID + b]; let win = 0, best = row[0];
+      for (let j = 1; j < nk; j++) if (row[j] > best) { best = row[j]; win = j; }
+      ctx.fillStyle = fillCols[win]; ctx.fillRect(ox + b * cell, oy + a * cell, cell + 0.6, cell + 0.6);
+    }
+    // origin axes
+    const sx = (x) => ox + (x + DOM) / (2 * DOM) * side, sy = (y) => oy + (DOM - y) / (2 * DOM) * side;
+    ctx.strokeStyle = border; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(sx(-DOM), sy(0)); ctx.lineTo(sx(DOM), sy(0)); ctx.moveTo(sx(0), sy(-DOM)); ctx.lineTo(sx(0), sy(DOM)); ctx.stroke();
+    ctx.strokeStyle = border; ctx.lineWidth = 1; ctx.strokeRect(ox + 0.5, oy + 0.5, side - 1, side - 1);
+
+    // keys as stars
+    for (let j = 0; j < nk; j++) {
+      const kx = sx(keys[2 * j]), ky = sy(keys[2 * j + 1]); const col = PALETTE[j % PALETTE.length];
+      ctx.beginPath(); for (let p = 0; p < 10; p++) { const ang = -Math.PI / 2 + p * Math.PI / 5; const rr = p % 2 === 0 ? 8 : 3.4; const px = kx + Math.cos(ang) * rr, py = ky + Math.sin(ang) * rr; p === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); } ctx.closePath();
+      ctx.fillStyle = col; ctx.fill(); ctx.strokeStyle = fg; ctx.lineWidth = 1.2; ctx.stroke();
+    }
+
+    const labels = { dot: 'softmax / dot product', favor: `FAVOR+ (m=${m})`, elu: 'linear · elu+1' };
+    ctx.textAlign = 'center';
+    text(ctx, labels[mode], W / 2, 2, colors, { align: 'center', size: 12, weight: '600', color: fg });
+    const note = mode === 'favor' ? 'more features → cleaner cones' : mode === 'dot' ? 'exact: cones through the origin' : 'shifted, curved boundaries';
+    api.readout('ro', `${nk} keys · ${note} · jax-js`);
+  },
+});
+</script>

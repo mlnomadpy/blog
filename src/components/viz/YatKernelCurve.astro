@@ -1,0 +1,45 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 320 } = Astro.props;
+---
+<figure class="viz yatcurve" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+
+// The biased ⵟ-kernel on the sphere as a function of cosine S: zero at S = −b.
+const yat = (S, b, e) => { const Nn = S + b; return (Nn * Nn) / (e + 2 - 2 * S); };
+
+defineViz('yatcurve', {
+  title: 'The ⵟ-kernel as a function of similarity',
+  height: 320,
+  controls: [
+    { type: 'range', name: 'b', label: 'bias b', min: 0, max: 1, step: 0.05, value: 0.3, fmt: v => v.toFixed(2) },
+    { type: 'range', name: 'e', label: 'regulariser ε', min: 0.1, max: 4, step: 0.1, value: 1.0, fmt: v => v.toFixed(1) },
+    { type: 'readout', name: 'rd' },
+  ],
+  draw(api) {
+    const { ctx, colors, size } = api; const W = size.W, H = size.H, b = api.get('b'), e = api.get('e');
+    const padL = 44, padR = 14, padT = 14, padB = 30, pw = W - padL - padR, ph = H - padT - padB;
+    ctx.fillStyle = colors.cellBg; ctx.fillRect(padL, padT, pw, ph); ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.strokeRect(padL + 0.5, padT + 0.5, pw - 1, ph - 1);
+    const ymax = Math.max(2.0, yat(0.92, b, e)); const X = (S) => padL + (S + 1) / 2 * pw; const Y = (y) => padT + ph - Math.min(1, y / ymax) * ph;
+    ctx.fillStyle = colors.muted; ctx.font = '10px ui-monospace, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (const s of [-1, -0.5, 0, 0.5, 1]) ctx.fillText(s.toFixed(s === 0 ? 0 : 1), X(s), padT + ph + 6);
+    ctx.fillText('cosine similarity  S', padL + pw / 2, padT + ph + 16);
+    ctx.save(); ctx.translate(12, padT + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('ⵟ(S)', 0, 0); ctx.restore();
+    ctx.strokeStyle = colors.muted; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(X(-1), padT); ctx.lineTo(X(-1), padT + ph); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = colors.accent; ctx.lineWidth = 2; ctx.beginPath();
+    for (let px = 0; px <= pw; px++) { const S = -1 + 2 * px / pw, yy = Y(yat(S, b, e)); px === 0 ? ctx.moveTo(padL + px, yy) : ctx.lineTo(padL + px, yy); } ctx.stroke();
+    const tx = X(-b); ctx.strokeStyle = colors.green; ctx.lineWidth = 1.5; ctx.setLineDash([2, 2]); ctx.beginPath(); ctx.moveTo(tx, padT); ctx.lineTo(tx, padT + ph); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = colors.green; ctx.beginPath(); ctx.arc(tx, Y(0), 4, 0, 6.3); ctx.fill();
+    ctx.font = '11px ui-sans-serif, system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText('separate to S = −b', tx, padT + 14);
+    ctx.fillStyle = colors.muted; ctx.fillText('cosine’s −1', X(-1) + 28, padT + 14);
+    api.readout('rd', `target S = ${(-b).toFixed(2)} · ⵟ(aligned) = ${yat(0.999, b, e).toFixed(1)}`);
+  },
+});
+</script>

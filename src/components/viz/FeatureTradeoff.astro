@@ -1,0 +1,120 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 310 } = Astro.props;
+---
+<figure class="viz featuretradeoff" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { text } from './engine/draw.js';
+
+const PADL = 50, PADR = 54, PADT = 24, PADB = 38;
+
+defineViz('featuretradeoff', {
+  height: 310,
+  controls: [
+    { type: 'range', name: 'N', label: 'sequence N', min: 1024, max: 131072, step: 1024, value: 32768, int: true, reset: false, fmt: (v) => v >= 1000 ? `${Math.round(v / 1024)}k` : `${v}` },
+    { type: 'range', name: 'm', label: 'chosen m', min: 16, max: 512, step: 16, value: 128, int: true, reset: false },
+    { type: 'range', name: 'task', label: 'task sharpness', min: 1, max: 5, step: 1, value: 3, int: true, reset: false },
+    { type: 'readout', name: 'ro' },
+  ],
+  draw(api) {
+    const { ctx, colors, size } = api;
+    const W = size.W, H = size.H;
+    if (!W) return;
+    const N = api.get('N'), mSel = api.get('m'), task = api.get('task');
+    const d = 64;
+    const plotW = W - PADL - PADR, plotH = H - PADT - PADB;
+    const mMin = 16, mMax = 512;
+    const x = (m) => PADL + (Math.log2(m) - Math.log2(mMin)) / (Math.log2(mMax) - Math.log2(mMin)) * plotW;
+    const yErr = (e) => PADT + Math.max(0, Math.min(1, e)) * plotH;
+    const yCost = (c) => PADT + (1 - Math.max(0, Math.min(1, c))) * plotH;
+    const exactCost = 4 * N * N * d;
+    const linCost = (m) => 5 * N * m * d;
+    const err = (m) => Math.min(1, 0.04 + (0.52 + task * 0.14) / Math.sqrt(m / 16));
+    const costFrac = (m) => Math.min(1, linCost(m) / exactCost);
+
+    drawAxes(ctx, colors, W, H, plotW, plotH);
+    drawLine(ctx, colors.blue, (m) => yErr(err(m)), x, mMin, mMax);
+    drawLine(ctx, colors.accent, (m) => yCost(costFrac(m)), x, mMin, mMax);
+
+    const px = x(mSel);
+    ctx.strokeStyle = colors.fg;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(px, PADT);
+    ctx.lineTo(px, H - PADB);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    point(ctx, px, yErr(err(mSel)), colors.blue);
+    point(ctx, px, yCost(costFrac(mSel)), colors.accent);
+
+    text(ctx, 'approximation error ↓ as m grows', PADL + 10, PADT + 8, colors, { size: 11, color: colors.blue });
+    text(ctx, 'linear cost ↑ as m grows', W - PADR - 10, PADT + 8, colors, { align: 'right', size: 11, color: colors.accent });
+    text(ctx, 'features m', PADL + plotW / 2, H - 14, colors, { align: 'center', size: 11, color: colors.muted });
+    text(ctx, 'error', 14, PADT + 10, colors, { size: 10, color: colors.blue });
+    text(ctx, 'cost / exact', W - 12, PADT + 10, colors, { align: 'right', size: 10, color: colors.accent });
+
+    const cheaper = exactCost / linCost(mSel);
+    api.readout('ro', `m=${mSel} · est. error ${(err(mSel) * 100).toFixed(1)}% · ${cheaper.toFixed(cheaper < 10 ? 1 : 0)}× less compute than exact`);
+  },
+});
+
+function drawAxes(ctx, colors, W, H, plotW, plotH) {
+  ctx.fillStyle = colors.cellBg;
+  ctx.fillRect(PADL, PADT, plotW, plotH);
+  ctx.strokeStyle = colors.border;
+  ctx.strokeRect(PADL + 0.5, PADT + 0.5, plotW - 1, plotH - 1);
+  ctx.font = '10px ui-monospace, monospace';
+  ctx.fillStyle = colors.faint;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  for (const m of [16, 32, 64, 128, 256, 512]) {
+    const px = PADL + (Math.log2(m) - 4) / 5 * plotW;
+    ctx.strokeStyle = colors.border;
+    ctx.beginPath();
+    ctx.moveTo(px, PADT);
+    ctx.lineTo(px, H - PADB);
+    ctx.stroke();
+    ctx.fillText(`${m}`, px, H - PADB + 6);
+  }
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  for (const v of [0, 0.25, 0.5, 0.75, 1]) {
+    const py = PADT + v * plotH;
+    ctx.strokeStyle = colors.border;
+    ctx.beginPath();
+    ctx.moveTo(PADL, py);
+    ctx.lineTo(W - PADR, py);
+    ctx.stroke();
+    ctx.fillText(`${Math.round((1 - v) * 100)}%`, PADL - 6, py);
+  }
+}
+
+function drawLine(ctx, color, yFn, xFn, mMin, mMax) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let i = 0; i <= 160; i++) {
+    const m = mMin * Math.pow(mMax / mMin, i / 160);
+    const px = xFn(m), py = yFn(m);
+    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+}
+
+function point(ctx, x, y, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(x, y, 4.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+</script>

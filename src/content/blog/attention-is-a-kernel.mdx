@@ -3,6 +3,68 @@ title: Attention is Explainable Because it is a Kernel
 description: Self-attention in transformers is a Nadaraya–Watson kernel smoother. That fact — and not "we visualize the matrix" — is why attention heads are readable while MLPs are not.
 pubDate: 2026-05-14
 tags: [ml, attention, kernels, interpretability, transformers, rkhs, self-attention, mechanistic-interpretability]
+references:
+  - authors: "Mercer, J."
+    year: 1909
+    title: "Functions of Positive and Negative Type, and their Connection with the Theory of Integral Equations"
+    venue: "Philosophical Transactions of the Royal Society A 209, 415–446"
+  - authors: "Nadaraya, E. A."
+    year: 1964
+    title: "On Estimating Regression"
+    venue: "Theory of Probability & Its Applications 9(1), 141–142"
+  - authors: "Watson, G. S."
+    year: 1964
+    title: "Smooth Regression Analysis"
+    venue: "Sankhyā: The Indian Journal of Statistics, Series A 26(4), 359–372"
+  - authors: "Jain, S., Wallace, B. C."
+    year: 2019
+    title: "Attention is not Explanation"
+    venue: "NAACL-HLT 2019"
+    arxiv: "1902.10186"
+  - authors: "Tsai, Y.-H. H., et al."
+    year: 2019
+    title: "Transformer Dissection: An Unified Understanding for Transformer's Attention via the Lens of Kernel"
+    venue: "EMNLP-IJCNLP 2019"
+    url: "https://aclanthology.org/D19-1443/"
+  - authors: "Wiegreffe, S., Pinter, Y."
+    year: 2019
+    title: "Attention is not not Explanation"
+    venue: "EMNLP-IJCNLP 2019"
+    arxiv: "1908.04626"
+  - authors: "Olah, C., Cammarata, N., Schubert, L., Goh, G., Petrov, M., Carter, S."
+    year: 2020
+    title: "Zoom In: An Introduction to Circuits"
+    venue: "Distill"
+    url: "https://distill.pub/2020/circuits/zoom-in/"
+  - authors: "Katharopoulos, A., Vyas, A., Pappas, N., Fleuret, F."
+    year: 2020
+    title: "Transformers are RNNs: Fast Autoregressive Transformers with Linear Attention"
+    venue: "ICML 2020"
+    arxiv: "2006.16236"
+  - authors: "Choromanski, K., et al."
+    year: 2021
+    title: "Rethinking Attention with Performers"
+    venue: "ICLR 2021"
+    arxiv: "2009.14794"
+  - authors: "Song, K., Jung, Y., Kim, D., Moon, I.-C."
+    year: 2021
+    title: "Implicit Kernel Attention"
+    venue: "AAAI 2021, 9713–9721"
+    arxiv: "2006.06147"
+  - authors: "Han, X., et al."
+    year: 2022
+    title: "Designing Robust Transformers using Robust Kernel Density Estimation"
+    venue: "NeurIPS 2023"
+    arxiv: "2210.05794"
+  - authors: "Elhage, N., Hume, T., Olsson, C., et al."
+    year: 2022
+    title: "Toy Models of Superposition"
+    venue: "Transformer Circuits Thread"
+    url: "https://transformer-circuits.pub/2022/toy_model/index.html"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
 keywords:
   - self-attention
   - transformer attention
@@ -178,7 +240,7 @@ The MLP lacks those objects natively. Until it has them, every explanation of ML
 
 ---
 
-*References inline. The kernel-smoother view of attention is due to [Tsai et al.](https://aclanthology.org/D19-1443/), with related developments by [Song et al.](https://ojs.aaai.org/index.php/AAAI/article/view/17172), [Choromanski et al.](https://arxiv.org/abs/2009.14794), [Katharopoulos et al.](https://arxiv.org/abs/2006.16236), and [Han et al.](https://arxiv.org/abs/2210.05794). The Yat kernel is from [Bouhsine, 2026](https://arxiv.org/abs/2605.03262). The superposition framing is from [Elhage et al.](https://transformer-circuits.pub/2022/toy_model/index.html), and the mechanistic interpretability descriptions are from the [circuits thread](https://distill.pub/2020/circuits/zoom-in/) and related work.*
+*References inline. The kernel-smoother view of attention is due to [Tsai et al.](https://aclanthology.org/D19-1443/), with related developments by [Song et al.](https://ojs.aaai.org/index.php/AAAI/article/view/17168), [Choromanski et al.](https://arxiv.org/abs/2009.14794), [Katharopoulos et al.](https://arxiv.org/abs/2006.16236), and [Han et al.](https://arxiv.org/abs/2210.05794). The Yat kernel is from [Bouhsine, 2026](https://arxiv.org/abs/2605.03262). The superposition framing is from [Elhage et al.](https://transformer-circuits.pub/2022/toy_model/index.html), and the mechanistic interpretability descriptions are from the [circuits thread](https://distill.pub/2020/circuits/zoom-in/) and related work.*
 
 <CiteAs
   slug="attention-is-a-kernel"

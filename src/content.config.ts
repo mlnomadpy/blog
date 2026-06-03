@@ -13,6 +13,27 @@ const blog = defineCollection({
     categories: z.array(z.string()).default([]),
     draft: z.boolean().default(false),
     heroImage: z.string().optional(),
+    // Declared on an explainer post; value is the slug (id) of its runnable JAX
+    // companion. Drives the paired callout on each post and the nested link on
+    // the home page. Only set this on the main/explainer side — the reverse link
+    // is derived.
+    companion: z.string().optional(),
+    // Bibliography rendered at the end of the post. Each entry is one cited work;
+    // `key` (optional) lets you anchor inline citations to it (#ref-<key>).
+    references: z
+      .array(
+        z.object({
+          key: z.string().optional(),
+          authors: z.string(),
+          year: z.union([z.number(), z.string()]),
+          title: z.string(),
+          venue: z.string().optional(),
+          url: z.string().optional(),
+          arxiv: z.string().optional(),
+          doi: z.string().optional(),
+        }),
+      )
+      .optional(),
   }),
 });
 

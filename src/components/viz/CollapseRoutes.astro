@@ -1,0 +1,61 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 300 } = Astro.props;
+---
+<figure class="viz collapseroutes" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { grid, panel, unitCircle, dot, text } from './engine/draw.js';
+import * as ng from './engine/nanograd.js';
+
+// Self-supervised: two augmented views of N samples through a shared encoder,
+// trained live on nanograd. Left: alignment only → collapse. Right: + ⵟ inter
+// repulsion (no negatives) → spread.
+const D = 16, H = 24, DE = 2, N = 80;
+const randn = () => { let u = Math.random(), v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+
+defineViz('collapseroutes', {
+  title: 'Collapse, and the route around it — live',
+  height: 300, stepsPerFrame: 1, maxStep: 1300,
+  controls: [{ type: 'play' }, { type: 'step' }, { type: 'reset' }, { type: 'speed' }, { type: 'readout', name: 'rd' }],
+  setup(api) {
+    const base = []; for (let i = 0; i < N; i++) { const r = new Float64Array(D); for (let d = 0; d < D; d++) r[d] = randn(); base.push(r); }
+    const aug = () => { const a = new Float64Array(N * D); for (let i = 0; i < N; i++) for (let d = 0; d < D; d++) a[i * D + d] = base[i][d] + randn() * 0.3; return a; };
+    const wh = (a) => { for (let d = 0; d < D; d++) { let mu = 0, sd = 0; for (let i = 0; i < N; i++) mu += a[i * D + d] / N; for (let i = 0; i < N; i++) sd += (a[i * D + d] - mu) ** 2 / N; sd = Math.sqrt(sd) + 1e-6; for (let i = 0; i < N; i++) a[i * D + d] = (a[i * D + d] - mu) / sd; } return a; };
+    const X1 = ng.tensor(N, D, wh(aug())), X2 = ng.tensor(N, D, wh(aug()));
+    const diag = new Float64Array(N * N), off = new Float64Array(N * N); for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) { if (i === j) diag[i * N + j] = 1; else off[i * N + j] = 1; }
+    const Mdiag = ng.tensor(N, N, diag), Moff = ng.tensor(N, N, off), nOff = N * N - N;
+    const model = (lamInter) => {
+      const W1 = ng.param(D, H, () => randn() * Math.sqrt(2 / D)), b1 = ng.param(1, H, () => 0), W2 = ng.param(H, DE, () => randn() * Math.sqrt(2 / H)), b2 = ng.param(1, DE, () => 0);
+      const enc = (X) => ng.normRows(ng.add(ng.matmul(ng.relu(ng.add(ng.matmul(X, W1), b1)), W2), b2));
+      const lossFn = () => { const zA = enc(X1), zB = enc(X2), S = ng.matmul(zA, ng.transpose(zB));
+        if (lamInter === 0) return ng.mulk(ng.div(ng.sumAll(ng.mul(S, Mdiag)), ng.scalar(N)), -1);
+        const y = ng.yatk(S, 0.3, 1.0);
+        const intra = ng.div(ng.sumAll(ng.mul(ng.recip(ng.addk(y, 1)), Mdiag)), ng.scalar(N));
+        const inter = ng.div(ng.sumAll(ng.mul(ng.addk(y, 1), Moff)), ng.scalar(nOff)); return ng.add(intra, inter); };
+      return { params: [W1, b1, W2, b2], adam: new ng.Adam([W1, b1, W2, b2], 0.01), enc: () => enc(X1), lossFn };
+    };
+    api.state.models = [model(0), model(1)];
+  },
+  step(api) { for (const m of api.state.models) { const L = m.lossFn(); ng.backward(L); m.adam.step(); } },
+  draw(api) {
+    const { ctx, colors, size, state } = api; const cells = grid(size.W, size.H, 2, 1, 12);
+    const names = ['alignment only — no repulsion', 'ⵟ-kernel — repulsion by construction'];
+    state.models.forEach((m, k) => {
+      const box = cells[k], mp = panel(ctx, box, colors, { header: 18 }); unitCircle(ctx, mp, colors);
+      const z = m.enc(); const col = k === 0 ? colors.muted : colors.accent;
+      ctx.globalAlpha = 0.6; for (let i = 0; i < N; i++) { const [px, py] = mp.map([z.d[i * DE], z.d[i * DE + 1]]); dot(ctx, px, py, 2.8, col); } ctx.globalAlpha = 1;
+      let mc = 0, np = 0; for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) { mc += z.d[i * DE] * z.d[j * DE] + z.d[i * DE + 1] * z.d[j * DE + 1]; np++; }
+      text(ctx, names[k], box.x + 6, box.y + 3, colors, { size: 11.5, color: colors.fg });
+      text(ctx, `pairwise cos ${(mc / np).toFixed(2)}` + (k === 0 ? ' → collapsing' : ' → spread'), box.x + 6, box.y + box.h - 14, colors, { size: 10, mono: true, color: colors.muted });
+    });
+    api.readout('rd', 'iter ' + api.iter);
+  },
+});
+</script>
