@@ -6,6 +6,16 @@
       window.dataLayer = window.dataLayer || [];
       function gtag(){ dataLayer.push(arguments); }
       window.gtag = window.gtag || gtag;
+      window.__gaEventQueue = window.__gaEventQueue || [];
+      window.__trackGA = function (eventName, params) {
+        if (!eventName) return;
+        var item = { name: eventName, params: params || {} };
+        if (window.__gaLoaded) {
+          gtag('event', item.name, item.params);
+        } else {
+          window.__gaEventQueue.push(item);
+        }
+      };
 
       // Track whether the first astro:page-load has fired, so a mid-session
       // Accept can still record the current page.
@@ -21,6 +31,9 @@
         document.head.appendChild(s);
         gtag('js', new Date());
         gtag('config', GA_ID, { send_page_view: false });
+        (window.__gaEventQueue || []).splice(0).forEach(function (item) {
+          gtag('event', item.name, item.params);
+        });
         function sendPV() {
           gtag('event', 'page_view', {
             page_title: document.title,
@@ -112,7 +125,7 @@
     document.addEventListener('astro:page-load', init);
     document.addEventListener('astro:after-swap', init);
   })();
-</script> <article data-pagefind-body data-pagefind-meta="date:2021-09-22"> <header class="post-header">  <h1 data-pagefind-meta="title">Morocco and AI Illiteracy — Part I: The Cost of Staying Behind</h1> <p class="meta"> <time datetime="2021-09-22T00:00:00.000Z">September 22, 2021</time>   · 2 min read </p> <p style="margin-top:0.65rem" data-pagefind-meta="tags:morocco,ai,ai-education,ai-literacy,africa-tech,policy"> <a class="tag" href="/blog/tag/morocco/">#morocco</a><a class="tag" href="/blog/tag/ai/">#ai</a><a class="tag" href="/blog/tag/ai-education/">#ai-education</a><a class="tag" href="/blog/tag/ai-literacy/">#ai-literacy</a><a class="tag" href="/blog/tag/africa-tech/">#africa-tech</a><a class="tag" href="/blog/tag/policy/">#policy</a> </p> </header>   <p>One of the things that got me to pursue my passion for artificial intelligence was the saying of Dr. Andrew Ng back in 2017.</p>
+</script> <article data-blog-post data-pagefind-body data-pagefind-meta="date:2021-09-22"> <header class="post-header">  <h1 data-pagefind-meta="title">Morocco and AI Illiteracy — Part I: The Cost of Staying Behind</h1> <p class="meta"> <time datetime="2021-09-22T00:00:00.000Z">September 22, 2021</time>   · 2 min read </p> <p style="margin-top:0.65rem" data-pagefind-meta="tags:morocco,ai,ai-education,ai-literacy,africa-tech,policy"> <a class="tag" href="/blog/tag/morocco/">#morocco</a><a class="tag" href="/blog/tag/ai/">#ai</a><a class="tag" href="/blog/tag/ai-education/">#ai-education</a><a class="tag" href="/blog/tag/ai-literacy/">#ai-literacy</a><a class="tag" href="/blog/tag/africa-tech/">#africa-tech</a><a class="tag" href="/blog/tag/policy/">#policy</a> </p> </header>   <p>One of the things that got me to pursue my passion for artificial intelligence was the saying of Dr. Andrew Ng back in 2017.</p>
 <blockquote>
 <p>AI is the new electricity.
 <cite>— Dr. Andrew Ng, 2017</cite></p>
@@ -122,7 +135,77 @@
 <p>Thus, it has become a crucial task for leaders around the globe to include AI education for young people and add it to the learning material starting from elementary school — and to inform people as much as possible about the dangers and importance of this technology in life. As for Morocco, it is still 12 years behind in teaching its people computer science in general. As for AI, there is not enough focus and support for creating its own AI experts.</p>
 <p>The results, if we keep neglecting those problems in the next five years: Morocco, as usual, will buy all of its AI products from other advanced countries. Most of the time, those products do not use state-of-the-art technologies because of licensing and regulations. Hence, Morocco will be forever behind and again inclined to follow the old steps and make the same mistakes other countries have already made. And Morocco will still be considered a third-world country, and if it sits still and does nothing, it will forever be.</p>
 <p>The problem that will soon arise without a doubt: we will be facing an epidemic of AI illiteracy. Africans will not lack clean water only, but also clean data and AI specialists. The advanced countries are recruiting AI talents silently. While African countries are facing a flood of legacy code maintenance jobs, especially from one of the European countries.</p>
-<p>I am not trying to sound like an alarmist, but if we do not implement any solution for this matter soon, most African countries will face the point of no return.</p>   </article>  <nav class="post-nav" aria-label="Adjacent posts"><a href="/blog/poem-0-1/" class="prev" rel="prev"><div class="label">← Previous</div><div class="title">Poem 0.1</div></a><a href="/blog/activations-are-bad-for-geometry/" class="next" rel="next"><div class="label">Next →</div><div class="title">Activations Are Bad for Geometry</div></a></nav> <section aria-label="Comments" id="giscus-mount" style="margin-top:3rem" data-giscus="{&#34;repo&#34;:&#34;mlnomadpy/blog&#34;,&#34;repoId&#34;:&#34;MDEwOlJlcG9zaXRvcnk0MDQ4MzY2NDU=&#34;,&#34;category&#34;:&#34;Announcements&#34;,&#34;categoryId&#34;:&#34;DIC_kwDOGCFRJc4C9EiR&#34;,&#34;mapping&#34;:&#34;pathname&#34;,&#34;reactionsEnabled&#34;:&#34;1&#34;,&#34;emitMetadata&#34;:&#34;0&#34;,&#34;inputPosition&#34;:&#34;top&#34;,&#34;theme&#34;:&#34;preferred_color_scheme&#34;,&#34;lang&#34;:&#34;en&#34;}"></section><script>
+<p>I am not trying to sound like an alarmist, but if we do not implement any solution for this matter soon, most African countries will face the point of no return.</p>   </article> <script>(function(){const payload = {"post_title":"Morocco and AI Illiteracy — Part I: The Cost of Staying Behind","post_slug":"ai-illiteracy-pt1","post_path":"/blog/ai-illiteracy-pt1/","post_tags":"morocco,ai,ai-education,ai-literacy,africa-tech,policy","word_count":381,"reading_time_minutes":2,"is_draft":false};
+
+  (() => {
+    const thresholds = [25, 50, 75, 90, 100];
+    const state = { viewed: false, sent: new Set() };
+
+    const track = (name, params = {}) => {
+      if (typeof window.__trackGA === 'function') {
+        window.__trackGA(name, {
+          ...payload,
+          ...params,
+          non_interaction: name === 'blog_post_view',
+        });
+      }
+    };
+
+    const init = () => {
+      const article = document.querySelector('[data-blog-post]');
+      if (!article) return;
+
+      if (!state.viewed) {
+        state.viewed = true;
+        track('blog_post_view');
+      }
+
+      const progress = () => {
+        const rect = article.getBoundingClientRect();
+        const articleTop = window.scrollY + rect.top;
+        const articleHeight = Math.max(1, article.offsetHeight);
+        const viewportBottom = window.scrollY + window.innerHeight;
+        return Math.max(0, Math.min(100, ((viewportBottom - articleTop) / articleHeight) * 100));
+      };
+
+      const update = () => {
+        const pct = progress();
+        thresholds.forEach((threshold) => {
+          if (pct >= threshold && !state.sent.has(threshold)) {
+            state.sent.add(threshold);
+            track('blog_post_read_depth', { read_percent: threshold });
+            if (threshold === 90) {
+              track('blog_post_read', { read_percent: threshold });
+            }
+          }
+        });
+      };
+
+      if (window.__postAnalyticsCleanup) window.__postAnalyticsCleanup();
+
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => {
+          update();
+          ticking = false;
+        });
+      };
+
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+      window.__postAnalyticsCleanup = () => {
+        window.removeEventListener('scroll', onScroll);
+        window.removeEventListener('resize', onScroll);
+      };
+      update();
+    };
+
+    init();
+    document.addEventListener('astro:page-load', init, { once: true });
+  })();
+})();</script>  <nav class="post-nav" aria-label="Adjacent posts"><a href="/blog/poem-0-1/" class="prev" rel="prev"><div class="label">← Previous</div><div class="title">Poem 0.1</div></a><a href="/blog/activations-are-bad-for-geometry/" class="next" rel="next"><div class="label">Next →</div><div class="title">Activations Are Bad for Geometry</div></a></nav> <section aria-label="Comments" id="giscus-mount" style="margin-top:3rem" data-giscus="{&#34;repo&#34;:&#34;mlnomadpy/blog&#34;,&#34;repoId&#34;:&#34;MDEwOlJlcG9zaXRvcnk0MDQ4MzY2NDU=&#34;,&#34;category&#34;:&#34;Announcements&#34;,&#34;categoryId&#34;:&#34;DIC_kwDOGCFRJc4C9EiR&#34;,&#34;mapping&#34;:&#34;pathname&#34;,&#34;reactionsEnabled&#34;:&#34;1&#34;,&#34;emitMetadata&#34;:&#34;0&#34;,&#34;inputPosition&#34;:&#34;top&#34;,&#34;theme&#34;:&#34;preferred_color_scheme&#34;,&#34;lang&#34;:&#34;en&#34;}"></section><script>
     (() => {
       const load = () => {
         const mount = document.getElementById('giscus-mount');

@@ -6,6 +6,16 @@
       window.dataLayer = window.dataLayer || [];
       function gtag(){ dataLayer.push(arguments); }
       window.gtag = window.gtag || gtag;
+      window.__gaEventQueue = window.__gaEventQueue || [];
+      window.__trackGA = function (eventName, params) {
+        if (!eventName) return;
+        var item = { name: eventName, params: params || {} };
+        if (window.__gaLoaded) {
+          gtag('event', item.name, item.params);
+        } else {
+          window.__gaEventQueue.push(item);
+        }
+      };
 
       // Track whether the first astro:page-load has fired, so a mid-session
       // Accept can still record the current page.
@@ -21,6 +31,9 @@
         document.head.appendChild(s);
         gtag('js', new Date());
         gtag('config', GA_ID, { send_page_view: false });
+        (window.__gaEventQueue || []).splice(0).forEach(function (item) {
+          gtag('event', item.name, item.params);
+        });
         function sendPV() {
           gtag('event', 'page_view', {
             page_title: document.title,
@@ -81,16 +94,18 @@
     document.addEventListener('astro:page-load', init);
   })();
 </script> </nav> </div> </header> <main id="main">  <h1>Tags</h1> <p class="lead">Browse posts by topic.</p> <div class="tag-cloud"> <a class="tag-link" href="/blog/tag/ml/">
-#ml<span class="count">9</span> </a><a class="tag-link" href="/blog/tag/interpretability/">
-#interpretability<span class="count">5</span> </a><a class="tag-link" href="/blog/tag/contrastive-learning/">
+#ml<span class="count">10</span> </a><a class="tag-link" href="/blog/tag/interpretability/">
+#interpretability<span class="count">6</span> </a><a class="tag-link" href="/blog/tag/kernels/">
+#kernels<span class="count">5</span> </a><a class="tag-link" href="/blog/tag/contrastive-learning/">
 #contrastive-learning<span class="count">4</span> </a><a class="tag-link" href="/blog/tag/embeddings/">
-#embeddings<span class="count">4</span> </a><a class="tag-link" href="/blog/tag/kernels/">
-#kernels<span class="count">4</span> </a><a class="tag-link" href="/blog/tag/representation-learning/">
+#embeddings<span class="count">4</span> </a><a class="tag-link" href="/blog/tag/representation-learning/">
 #representation-learning<span class="count">4</span> </a><a class="tag-link" href="/blog/tag/clip/">
 #clip<span class="count">3</span> </a><a class="tag-link" href="/blog/tag/contrastive/">
 #contrastive<span class="count">3</span> </a><a class="tag-link" href="/blog/tag/infonce/">
 #infonce<span class="count">3</span> </a><a class="tag-link" href="/blog/tag/siglip/">
-#siglip<span class="count">3</span> </a><a class="tag-link" href="/blog/tag/deep-learning/">
+#siglip<span class="count">3</span> </a><a class="tag-link" href="/blog/tag/transformers/">
+#transformers<span class="count">3</span> </a><a class="tag-link" href="/blog/tag/attention/">
+#attention<span class="count">2</span> </a><a class="tag-link" href="/blog/tag/deep-learning/">
 #deep-learning<span class="count">2</span> </a><a class="tag-link" href="/blog/tag/frame-theory/">
 #frame-theory<span class="count">2</span> </a><a class="tag-link" href="/blog/tag/geometry/">
 #geometry<span class="count">2</span> </a><a class="tag-link" href="/blog/tag/implementation/">
@@ -99,19 +114,19 @@
 #latent-space<span class="count">2</span> </a><a class="tag-link" href="/blog/tag/mechanistic-interpretability/">
 #mechanistic-interpretability<span class="count">2</span> </a><a class="tag-link" href="/blog/tag/neural-collapse/">
 #neural-collapse<span class="count">2</span> </a><a class="tag-link" href="/blog/tag/neural-networks/">
-#neural-networks<span class="count">2</span> </a><a class="tag-link" href="/blog/tag/self-supervised-learning/">
+#neural-networks<span class="count">2</span> </a><a class="tag-link" href="/blog/tag/self-attention/">
+#self-attention<span class="count">2</span> </a><a class="tag-link" href="/blog/tag/self-supervised-learning/">
 #self-supervised-learning<span class="count">2</span> </a><a class="tag-link" href="/blog/tag/simplex-etf/">
 #simplex-etf<span class="count">2</span> </a><a class="tag-link" href="/blog/tag/supcon/">
-#supcon<span class="count">2</span> </a><a class="tag-link" href="/blog/tag/transformers/">
-#transformers<span class="count">2</span> </a><a class="tag-link" href="/blog/tag/triplet-loss/">
+#supcon<span class="count">2</span> </a><a class="tag-link" href="/blog/tag/triplet-loss/">
 #triplet-loss<span class="count">2</span> </a><a class="tag-link" href="/blog/tag/welch-bound/">
 #welch-bound<span class="count">2</span> </a><a class="tag-link" href="/blog/tag/activation-functions/">
 #activation-functions<span class="count">1</span> </a><a class="tag-link" href="/blog/tag/africa-tech/">
 #africa-tech<span class="count">1</span> </a><a class="tag-link" href="/blog/tag/ai/">
 #ai<span class="count">1</span> </a><a class="tag-link" href="/blog/tag/ai-education/">
 #ai-education<span class="count">1</span> </a><a class="tag-link" href="/blog/tag/ai-literacy/">
-#ai-literacy<span class="count">1</span> </a><a class="tag-link" href="/blog/tag/attention/">
-#attention<span class="count">1</span> </a><a class="tag-link" href="/blog/tag/cosine-similarity/">
+#ai-literacy<span class="count">1</span> </a><a class="tag-link" href="/blog/tag/bilinear/">
+#bilinear<span class="count">1</span> </a><a class="tag-link" href="/blog/tag/cosine-similarity/">
 #cosine-similarity<span class="count">1</span> </a><a class="tag-link" href="/blog/tag/cross-entropy/">
 #cross-entropy<span class="count">1</span> </a><a class="tag-link" href="/blog/tag/hallucination/">
 #hallucination<span class="count">1</span> </a><a class="tag-link" href="/blog/tag/information-theory/">
@@ -125,10 +140,10 @@
 #orthogonality<span class="count">1</span> </a><a class="tag-link" href="/blog/tag/packing/">
 #packing<span class="count">1</span> </a><a class="tag-link" href="/blog/tag/poem/">
 #poem<span class="count">1</span> </a><a class="tag-link" href="/blog/tag/policy/">
-#policy<span class="count">1</span> </a><a class="tag-link" href="/blog/tag/relu/">
+#policy<span class="count">1</span> </a><a class="tag-link" href="/blog/tag/query-key/">
+#query-key<span class="count">1</span> </a><a class="tag-link" href="/blog/tag/relu/">
 #relu<span class="count">1</span> </a><a class="tag-link" href="/blog/tag/rkhs/">
-#rkhs<span class="count">1</span> </a><a class="tag-link" href="/blog/tag/self-attention/">
-#self-attention<span class="count">1</span> </a><a class="tag-link" href="/blog/tag/simclr/">
+#rkhs<span class="count">1</span> </a><a class="tag-link" href="/blog/tag/simclr/">
 #simclr<span class="count">1</span> </a><a class="tag-link" href="/blog/tag/simplex-packing/">
 #simplex-packing<span class="count">1</span> </a><a class="tag-link" href="/blog/tag/tight-frames/">
 #tight-frames<span class="count">1</span> </a><a class="tag-link" href="/blog/tag/yat-unit/">
