@@ -204,17 +204,17 @@ The direction `pi @ r` always lands in the hull; the gate scales how loudly that
 One caveat the explainer makes and the code makes vivid: with more hidden units than residual dimensions, the prototypes are an overcomplete dictionary, so the same output $y$ has many convex decompositions. "Unit $u$ contributed 30%" is a fact about the mechanism $a(x)$, not about $y$.
 
 ```python
-# A fixed point y inside the hull of 4 prototypes in 2-D, two different convex decompositions.
+# A fixed point y inside the hull of 4 prototypes in 2-D, two EXACT convex decompositions.
 R = jnp.array([[1.0, 0.0], [0.0, 1.0], [-1.0, 0.0], [0.0, -1.0]])
 y = jnp.array([0.1, 0.1])
 
-a1 = jnp.array([0.55, 0.55, 0.0, 0.0]) - jnp.array([0.0, 0.0, 0.45, 0.45]) * 0  # via {r1, r2}
-a1 = jnp.array([0.55, 0.55, 0.45, 0.45]); a1 = a1 / a1.sum()                    # one mixture
-a2 = jnp.array([0.80, 0.30, 0.20, 0.70]); a2 = a2 / a2.sum()                    # another
+a1 = jnp.array([0.5, 0.1, 0.4, 0.0])
+a2 = jnp.array([0.1, 0.5, 0.0, 0.4])
 
-# project each onto the affine constraint {sum=1, a@R = y} would be exact; here we just show
-# two convex vectors can be tuned to the same y up to the dictionary's slack:
-print("same prototypes, different shares:", a1, a2)
+assert jnp.allclose(a1.sum(), 1.0) and jnp.allclose(a2.sum(), 1.0)   # both sum to one
+assert (a1 >= 0).all() and (a2 >= 0).all()                          # both nonnegative
+assert jnp.allclose(a1 @ R, y) and jnp.allclose(a2 @ R, y)          # both give exactly y
+print("same y, different shares:", a1, a2)
 ```
 
 The honest readout of a contribution number is therefore: it describes *this* coefficient vector, the one the layer happened to produce, not a canonical property recoverable from the output.
