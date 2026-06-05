@@ -1,0 +1,228 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 430 } = Astro.props;
+---
+<figure class="viz readoutcoeffsemantics" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { panel, text, PALETTE, parseColor } from './engine/draw.js';
+import { np, nn, withJax, drawJaxLoading } from './engine/jax.js';
+
+const PROTOS = [
+  [ 0.72,  0.12],
+  [ 0.36,  0.70],
+  [-0.45,  0.55],
+  [-0.70, -0.20],
+  [ 0.18, -0.68],
+];
+const NAMES = ['r1', 'r2', 'r3', 'r4', 'r5'];
+
+// monotone-chain convex hull → ordered vertices of the prototype hull
+function hull(pts) {
+  const p = pts.map((q) => ({ x: q[0], y: q[1] })).sort((a, b) => a.x - b.x || a.y - b.y);
+  const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lo = []; for (const q of p) { while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); }
+  const hi = []; for (let k = p.length - 1; k >= 0; k--) { const q = p[k]; while (hi.length >= 2 && cross(hi[hi.length - 2], hi[hi.length - 1], q) <= 0) hi.pop(); hi.push(q); }
+  return lo.slice(0, -1).concat(hi.slice(0, -1));
+}
+const HULL = hull(PROTOS);
+
+function inHull(p) {
+  let sign = 0;
+  for (let i = 0; i < HULL.length; i++) {
+    const a = HULL[i], b = HULL[(i + 1) % HULL.length];
+    const c = (b.x - a.x) * (p[1] - a.y) - (b.y - a.y) * (p[0] - a.x);
+    if (Math.abs(c) < 1e-9) continue;
+    const s = c > 0 ? 1 : -1;
+    if (sign === 0) sign = s; else if (s !== sign) return false;
+  }
+  return true;
+}
+
+function scores(phase) {
+  return [
+    1.10 + 0.60 * Math.cos(phase),
+    0.25 + 0.90 * Math.sin(phase * 0.8 + 0.6),
+    -0.15 + 0.75 * Math.cos(phase * 1.3 + 1.2),
+    -0.65 + 0.95 * Math.sin(phase * 1.1 - 0.4),
+    0.35 + 0.80 * Math.cos(phase * 0.7 - 1.1),
+  ];
+}
+
+function coeffs(mode, phase, sharpness, gain) {
+  const s = scores(phase).map((v) => v * sharpness);
+  const pi = nn.softmax(np.array(s), -1).js();
+  if (mode === 'simplex') return pi;
+  if (mode === 'conic') return pi.map((v) => v * gain);
+  return s.map((v, i) => Math.tanh(v) * (0.34 + 0.16 * i));
+}
+
+function readout(a) {
+  return np.matmul(np.reshape(np.array(a), [1, PROTOS.length]), np.array(PROTOS)).js()[0];
+}
+
+function blend(c0, c1, t) {
+  return `rgb(${Math.round(c0[0] + (c1[0] - c0[0]) * t)},${Math.round(c0[1] + (c1[1] - c0[1]) * t)},${Math.round(c0[2] + (c1[2] - c0[2]) * t)})`;
+}
+
+function arrow(ctx, x0, y0, x1, y1, color, width = 2) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  ctx.lineTo(x1, y1);
+  ctx.stroke();
+  const a = Math.atan2(y1 - y0, x1 - x0);
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x1 - 7 * Math.cos(a - 0.45), y1 - 7 * Math.sin(a - 0.45));
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x1 - 7 * Math.cos(a + 0.45), y1 - 7 * Math.sin(a + 0.45));
+  ctx.stroke();
+}
+
+defineViz('readoutcoeffsemantics', {
+  title: 'The same W_out readout has three coefficient semantics',
+  height: 430,
+  controls: [
+    { type: 'select', name: 'mode', label: 'coefficients', value: 'simplex', reset: false,
+      options: [
+        { value: 'simplex', label: 'normalized nonnegative' },
+        { value: 'conic', label: 'positive with intensity' },
+        { value: 'signed', label: 'signed expansion' },
+      ] },
+    { type: 'range', name: 'phase', label: 'feature pattern', min: 0, max: 6.28, step: 0.02, value: 1.25, fmt: v => v.toFixed(2) },
+    { type: 'range', name: 'sharp', label: 'selectivity', min: 0.45, max: 2.4, step: 0.02, value: 1.15, fmt: v => v.toFixed(2) },
+    { type: 'range', name: 'gain', label: 'intensity', min: 0.35, max: 2.6, step: 0.02, value: 1.55, fmt: v => v.toFixed(2) },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) {
+    withJax(api);
+  },
+  draw(api) {
+    if (!api.state.jaxReady) return drawJaxLoading(api);
+    const { ctx, colors, size } = api;
+    const box = { x: 6, y: 4, w: size.W - 12, h: size.H - 8 };
+    panel(ctx, box, colors, {});
+
+    const mode = api.get('mode');
+    const a = coeffs(mode, api.get('phase'), api.get('sharp'), api.get('gain'));
+    const y = readout(a);
+    const sum = a.reduce((p, v) => p + v, 0);
+    const l1 = a.reduce((p, v) => p + Math.abs(v), 0);
+    const neg = a.reduce((p, v) => p + Math.max(0, -v), 0);
+
+    const left = { x: box.x + 12, y: box.y + 34, w: box.w * 0.28, h: box.h - 64 };
+    const mid = { x: box.x + box.w * 0.34, y: box.y + 34, w: box.w * 0.36, h: box.h - 64 };
+    const right = { x: box.x + box.w * 0.73, y: box.y + 34, w: box.w * 0.24, h: box.h - 64 };
+
+    text(ctx, 'coefficients a_u(x)', left.x, box.y + 11, colors, { size: 12, weight: '600' });
+    panel(ctx, left, colors, {});
+    const zeroY = left.y + left.h * 0.56;
+    ctx.strokeStyle = colors.border;
+    ctx.beginPath();
+    ctx.moveTo(left.x + 10, zeroY);
+    ctx.lineTo(left.x + left.w - 10, zeroY);
+    ctx.stroke();
+    const bw = (left.w - 34) / a.length;
+    const scale = Math.max(0.65, ...a.map(v => Math.abs(v))) * 1.2;
+    for (let i = 0; i < a.length; i++) {
+      const x = left.x + 17 + i * bw;
+      const h = (Math.abs(a[i]) / scale) * (left.h * 0.42);
+      ctx.fillStyle = a[i] >= 0 ? PALETTE[i] : colors.blue;
+      ctx.fillRect(x, a[i] >= 0 ? zeroY - h : zeroY, Math.max(8, bw - 8), h);
+      text(ctx, NAMES[i], x + (bw - 8) / 2, left.y + left.h - 22, colors, { align: 'center', size: 10, mono: true, color: colors.muted });
+    }
+
+    text(ctx, 'prototype writes summed as vectors', mid.x, box.y + 11, colors, { size: 12, weight: '600' });
+    panel(ctx, mid, colors, {});
+    const cx = mid.x + mid.w / 2, cy = mid.y + mid.h / 2;
+    const R = Math.min(mid.w, mid.h) * 0.38;
+    const map = p => [cx + p[0] * R, cy - p[1] * R];
+    ctx.strokeStyle = colors.border;
+    ctx.beginPath();
+    ctx.moveTo(cx - R * 1.05, cy);
+    ctx.lineTo(cx + R * 1.05, cy);
+    ctx.moveTo(cx, cy - R * 1.05);
+    ctx.lineTo(cx, cy + R * 1.05);
+    ctx.stroke();
+
+    // convex hull of the output prototypes — the region a convex readout cannot leave
+    const hullColor = mode === 'simplex' ? colors.accent : mode === 'conic' ? colors.blue : '#c2553a';
+    ctx.beginPath();
+    HULL.forEach((p, k) => { const [hx, hy] = map([p.x, p.y]); k ? ctx.lineTo(hx, hy) : ctx.moveTo(hx, hy); });
+    ctx.closePath();
+    ctx.fillStyle = hullColor + '12'; ctx.fill();
+    ctx.strokeStyle = hullColor + '70'; ctx.lineWidth = 1.1; ctx.setLineDash(mode === 'simplex' ? [] : [4, 3]); ctx.stroke(); ctx.setLineDash([]);
+
+    let sx = 0, sy = 0;
+    for (let i = 0; i < PROTOS.length; i++) {
+      const p = PROTOS[i];
+      const [px, py] = map(p);
+      ctx.fillStyle = PALETTE[i];
+      ctx.beginPath();
+      ctx.arc(px, py, 5.5, 0, Math.PI * 2);
+      ctx.fill();
+      text(ctx, NAMES[i], px + 7, py - 7, colors, { size: 10, mono: true, color: colors.muted });
+
+      const nx = sx + a[i] * p[0];
+      const ny = sy + a[i] * p[1];
+      const [x0, y0] = map([sx, sy]);
+      const [x1, y1] = map([nx, ny]);
+      const alpha = Math.min(1, Math.max(0.25, Math.abs(a[i]) / scale));
+      ctx.globalAlpha = alpha;
+      arrow(ctx, x0, y0, x1, y1, a[i] >= 0 ? PALETTE[i] : colors.blue, 1.5 + 2 * alpha);
+      ctx.globalAlpha = 1;
+      sx = nx; sy = ny;
+    }
+    const [yx, yy] = map(y);
+    const inside = inHull(y);
+    ctx.fillStyle = colors.fg;
+    ctx.beginPath();
+    ctx.arc(yx, yy, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = colors.cellBg; ctx.lineWidth = 1.6; ctx.stroke();
+    text(ctx, 'y', yx + 9, yy - 10, colors, { size: 12, weight: '700', mono: true });
+    text(ctx, inside ? 'inside hull' : 'outside hull', cx, mid.y + mid.h - 12, colors,
+      { align: 'center', size: 10, mono: true, color: inside ? hullColor : '#c2553a' });
+
+    text(ctx, 'diagnostics', right.x, box.y + 11, colors, { size: 12, weight: '600' });
+    panel(ctx, right, colors, {});
+    const rows = [
+      ['sum a', sum, mode === 'simplex' ? 1 : Math.max(1, api.get('gain'))],
+      ['|a| mass', l1, Math.max(1, api.get('gain'), l1)],
+      ['negative', neg, Math.max(0.5, l1)],
+      ['|y|', Math.hypot(y[0], y[1]), 1.4],
+    ];
+    const base = parseColor(colors.cellBg);
+    const hi = parseColor(colors.accent);
+    for (let i = 0; i < rows.length; i++) {
+      const [label, val, den] = rows[i];
+      const y0 = right.y + 30 + i * 54;
+      text(ctx, label, right.x + 12, y0, colors, { size: 11, mono: true, color: colors.muted });
+      text(ctx, val.toFixed(2), right.x + right.w - 12, y0, colors, { size: 11, mono: true, align: 'right' });
+      const bx = right.x + 12, by = y0 + 20, bw2 = right.w - 24, bh = 9;
+      ctx.fillStyle = colors.bg;
+      ctx.fillRect(bx, by, bw2, bh);
+      ctx.fillStyle = blend(base, i === 2 ? parseColor(colors.blue) : hi, Math.min(1, Math.abs(val / den)));
+      ctx.fillRect(bx, by, bw2 * Math.min(1, Math.abs(val / den)), bh);
+      ctx.strokeStyle = colors.border;
+      ctx.strokeRect(bx + 0.5, by + 0.5, bw2 - 1, bh - 1);
+    }
+
+    const note = mode === 'simplex'
+      ? 'inside contribution semantics: nonnegative shares sum to one'
+      : mode === 'conic'
+        ? 'direction is a normalized mixture; gain controls write intensity'
+        : 'signed coefficients allow subtraction and cancellation';
+    text(ctx, note, box.x + 12, box.y + box.h - 20, colors, { size: 10.5, mono: true, color: colors.fg });
+    api.readout('rd', `sum ${sum.toFixed(2)} · negative mass ${neg.toFixed(2)}`);
+  },
+});
+</script>

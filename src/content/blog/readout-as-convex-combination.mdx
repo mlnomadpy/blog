@@ -1,0 +1,285 @@
+---
+title: 'The Readout is a Convex Combination of Prototypes'
+description: 'The second linear map in a transformer MLP is not just a projection. If the hidden activations are nonnegative and normalized, W_out reads the active neurons as a convex combination of output prototypes. Two independent constraints — nonnegativity and summing to one — sort the readout into four regimes: convex, conic, affine, and linear. This reframes the MLP readout as the same object that makes attention legible (a weighted sum over named basis elements), connects it to feed-forward key-value memories and modern Hopfield retrieval, and shows when a kernel makes it convex by construction.'
+pubDate: 2026-06-04T12:00:00-07:00
+draft: false
+companion: convex-readout-jax-flax-nnx
+tags: [ml, transformers, mlp, attention, interpretability, kernels, prototypes, residual-stream, mechanistic-interpretability]
+references:
+  - authors: "Vaswani, A., et al."
+    year: 2017
+    title: "Attention Is All You Need"
+    venue: "NeurIPS 2017"
+    arxiv: "1706.03762"
+  - authors: "Nadaraya, E. A."
+    year: 1964
+    title: "On Estimating Regression"
+    venue: "Theory of Probability & Its Applications 9(1), 141–142"
+  - authors: "Watson, G. S."
+    year: 1964
+    title: "Smooth Regression Analysis"
+    venue: "Sankhyā: The Indian Journal of Statistics, Series A 26(4), 359–372"
+  - authors: "Elhage, N., et al."
+    year: 2021
+    title: "A Mathematical Framework for Transformer Circuits"
+    venue: "Transformer Circuits Thread"
+    url: "https://transformer-circuits.pub/2021/framework/index.html"
+  - authors: "Geva, M., Schuster, R., Berant, J., Levy, O."
+    year: 2021
+    title: "Transformer Feed-Forward Layers Are Key-Value Memories"
+    venue: "EMNLP 2021"
+    arxiv: "2012.14913"
+  - authors: "Geva, M., Caciularu, A., Wang, K., Goldberg, Y."
+    year: 2022
+    title: "Transformer Feed-Forward Layers Build Predictions by Promoting Concepts in the Vocabulary Space"
+    venue: "EMNLP 2022"
+    arxiv: "2203.14680"
+  - authors: "Tsai, Y.-H. H., Bai, S., Yamada, M., Morency, L.-P., Salakhutdinov, R."
+    year: 2019
+    title: "Transformer Dissection: A Unified Understanding of Transformer's Attention via the Lens of Kernel"
+    venue: "EMNLP-IJCNLP 2019"
+    arxiv: "1908.11775"
+  - authors: "Ramsauer, H., et al."
+    year: 2020
+    title: "Hopfield Networks is All You Need"
+    venue: "ICLR 2021"
+    arxiv: "2008.02217"
+  - authors: "Martins, A. F. T., Astudillo, R. F."
+    year: 2016
+    title: "From Softmax to Sparsemax: A Sparse Model of Attention and Multi-Label Classification"
+    venue: "ICML 2016"
+    arxiv: "1602.02068"
+  - authors: "Peters, B., Niculae, V., Martins, A. F. T."
+    year: 2019
+    title: "Sparse Sequence-to-Sequence Models"
+    venue: "ACL 2019"
+    arxiv: "1905.05702"
+  - authors: "Belrose, N., et al."
+    year: 2023
+    title: "Eliciting Latent Predictions from Transformers with the Tuned Lens"
+    venue: "arXiv preprint"
+    arxiv: "2303.08112"
+keywords:
+  - transformer MLP readout
+  - W_out
+  - output projection
+  - convex combination
+  - prototype basis
+  - residual stream
+  - MLP interpretability
+---
+import ReadoutCoefficientSemantics from '../../components/viz/ReadoutCoefficientSemantics.astro';
+import HullLattice from '../../components/viz/HullLattice.astro';
+import NonIdentifiability from '../../components/viz/NonIdentifiability.astro';
+import ActivationRegimes from '../../components/viz/ActivationRegimes.astro';
+import KernelReadoutField from '../../components/viz/KernelReadoutField.astro';
+import KernelQuadrant from '../../components/viz/KernelQuadrant.astro';
+import CiteAs from '../../components/CiteAs.astro';
+
+Write the hidden activation vector of a transformer MLP as $a(x) \in \mathbb{R}^{m}$ and write the columns of $W_{\text{out}}$ as output vectors $r_1,\ldots,r_m$ in the residual stream. Then
+
+$$
+W_{\text{out}}a(x)=\sum_{u=1}^{m} a_u(x)\,r_u.
+$$
+
+That is the readout. The MLP computes a population of feature responses, then reads them out by mixing a set of learned residual-stream prototypes.
+
+## The columns of W_out are output prototypes
+
+The first linear map plus activation decides **which hidden features are active**. The second linear map decides **what each active feature writes**. Its $u$-th column is the vector written when hidden unit $u$ fires alone:
+
+$$
+W_{\text{out}}e_u = r_u.
+$$
+
+So $r_u$ is not an abstract weight. It is a one-neuron message to the residual stream: the direction, token-logit effect, downstream feature, or circuit ingredient that unit $u$ contributes when it turns on. The readout is the superposition of those messages.
+
+This is the MLP analogue of attention's value vectors. Attention mixes value prototypes indexed by source tokens. The MLP mixes output prototypes indexed by hidden units.
+
+## Convex, conic, affine, linear
+
+The exact geometry depends on the coefficients, and it depends on exactly two yes/no questions: are the coefficients **nonnegative**, and do they **sum to one**? Those two constraints are independent, so together they carve the readout into four regimes, each with its own reachable set.
+
+**Convex** ($a_u(x)\ge 0$, $\sum_u a_u(x)=1$). Then
+
+$$
+y(x)=\sum_u a_u(x)\,r_u
+$$
+
+is a convex combination: a point inside the **convex hull** of the prototypes. This is the cleanest regime. The coefficients are a probability distribution over hidden units, so the output is an expectation, $y(x)=\mathbb{E}_{u\sim a(x)}[r_u]$ — the layer chooses a categorical distribution over its messages and writes the mean. Every unit contributes a nonnegative share, and the shares add to one.
+
+**Conic** ($a_u(x)\ge 0$, sum free). Drop the normalization and
+
+$$
+y(x)=\Bigl(\sum_u a_u(x)\Bigr)\sum_u \frac{a_u(x)}{\sum_v a_v(x)}\,r_u.
+$$
+
+The direction is still a convex mixture; the norm is an intensity. The reachable set is the **conical hull** — the cone the prototypes generate from the origin. This is the natural reading for a ReLU-style MLP: pick a point in the hull, then scale how loudly you write it into the residual stream.
+
+**Affine** ($\sum_u a_u(x)=1$, signs free). Keep the sum-to-one but allow negative coefficients, and the output slides along the **affine hull** of the prototypes — the flat through them. It can leave the hull while staying on its plane; negative coefficients subtract prototypes while the total still normalizes.
+
+**Linear** (no constraint). With signs and magnitudes both free, the readout is an arbitrary linear combination and can reach the entire **linear span**. This is the regime of GELU tails, gated and bilinear MLPs, and anything where the hidden state is neither a probability vector nor confined to a cone.
+
+So the slogan needs a 2×2 footnote, not a one-line one:
+
+> The MLP readout is a **convex** combination when the coefficients are nonnegative and sum to one; **conic** when they are merely nonnegative; **affine** when they merely sum to one; and a **linear** expansion when they are unconstrained. Nonnegativity buys you the hull; summing to one pins you to the affine flat; both together give the simplex.
+
+<HullLattice caption="Two yes/no constraints — nonnegative? and sum to one? — produce four reachable sets for the same prototypes. The prototypes sit on a line off the origin so all four are visible at once: the convex hull is the green segment, the conical hull the blue wedge from the origin, the affine hull the purple line through them, and the linear span the whole plane. One score vector is read out under each regime; sweep the sliders and watch each readout stay inside its own set — convex ⊂ conic, and convex ⊂ affine ⊂ linear. The four readouts are computed live in jax-js." />
+
+That distinction matters because interpretability statements inherit it. "This unit contributed 30%" only means what it says in the convex or normalized-conic regime. In a signed regime, the correct statement is not contribution mass but vector cancellation.
+
+And even in the convex regime there is a subtlety worth stating plainly. Because a transformer has far more hidden units than residual dimensions ($m \gg d$), the prototypes are an **overcomplete** dictionary — so by Carathéodory's theorem the same output $y$ can be written as a convex combination of them in infinitely many ways, in fact using as few as $d+1$ at a time. The coefficient vector $a(x)$ the network produces is therefore *a* convex decomposition, not *the* one. "Unit $u$ contributed 30%" is a fact about the mechanism that generated $a(x)$, not a fact recoverable from $y$ alone. Contribution mass is a property of the readout map, not of its output.
+
+The figure below makes that literal: it holds the output $y$ fixed and continuously rewrites it as different convex combinations of the same prototypes. The point never moves; the "contributions" change completely.
+
+<NonIdentifiability caption="Carathéodory non-identifiability, made literal. The black point y is held fixed while the coefficients morph through a whole family of convex decompositions of it — each a valid set of nonnegative shares summing to one. The cycle passes through sparse decompositions that use only three prototypes (Carathéodory's bound in the plane) and dense ones that spread mass across more. Because the set of valid decompositions is convex, interpolating between any two stays valid, so y is provably constant — recomputed live in jax-js each frame and shown unchanged in the readout. 'How much did prototype u contribute?' has many equally-correct answers." />
+
+<ReadoutCoefficientSemantics caption="A readout is always a weighted sum over output prototypes, but the coefficient constraints decide what the weights mean. Normalized nonnegative coefficients behave like shares. Positive unnormalized coefficients separate mixture direction from write intensity. Signed coefficients introduce subtraction, so the visual language shifts from contribution mass to cancellation." />
+
+## Why attention feels more legible
+
+The attention block forces the clean case:
+
+Attention has three convenient pieces:
+
+- the values $v_j$ are named by source tokens,
+- the weights $\alpha_{ij}$ are nonnegative,
+- the weights sum to one.
+
+The MLP readout has the first piece but not always the other two. Its prototypes $r_u$ are real: the columns of $W_{\text{out}}$. But the coefficients $a_u(x)$ are whatever the hidden nonlinearity produces. If the architecture gives you a positive normalized activation over hidden units, the MLP readout becomes attention-like. If it gives you arbitrary signed features, the readout remains a linear expansion but loses the simple mass interpretation.
+
+This reframes a familiar asymmetry. Attention is not interpretable because it has a matrix we can plot. It is interpretable because it presents the output as a convex mixture over named sources. The MLP can be read the same way only after we identify its sources: the hidden-unit output prototypes.
+
+This convex reading of attention is not new: Tsai et al. (2019) showed that attention *is* a kernel smoother — the Nadaraya–Watson estimator with the exponential kernel $\kappa(q,k)=\exp(q^\top k/\sqrt{d})$ as its similarity. The softmax denominator is exactly the kernel normalization. Seen that way, the question of this post is whether the MLP readout admits the same kernel-smoother reading — and under what conditions on its coefficients it does.
+
+## The MLP block, rewritten
+
+Rewrite it with columns exposed:
+
+$$
+h(x)=\phi(W_{\text{in}}x+b_{\text{in}}),
+\qquad
+W_{\text{out}}=[r_1\ r_2\ \cdots\ r_m],
+$$
+
+so
+
+$$
+\operatorname{MLP}(x)-b_{\text{out}}
+= \sum_{u=1}^{m} h_u(x)r_u.
+$$
+
+This is the whole mechanism. The hidden layer is a detector bank. The output matrix is a dictionary of things the detector bank can write. The MLP output is the detector-weighted mixture of that dictionary. This is not just a notational trick: Geva et al. (2021) found empirically that exactly this decomposition holds in trained language models — the rows of $W_{\text{in}}$ act as *keys* that fire on human-interpretable input patterns, and the columns of $W_{\text{out}}$ act as *values* that write predictable updates to the stream. The feed-forward layer is a key-value memory, and the readout is the composition of its memories.
+
+Two bookkeeping points keep the geometry honest. First, the prototype sum is written into the residual stream as an *additive update*, not as the stream's new state — $y(x)$ is a delta the block contributes, in the spirit of the residual-stream view of Elhage et al. (2021). Second, the bias $b_{\text{out}}$ **anchors** the picture: the readout is affine, so the prototype hull is centered at $b_{\text{out}}$ rather than the origin. The convex/conic/affine/linear taxonomy describes where $y-b_{\text{out}}$ can land.
+
+Once written this way, several interpretability operations become obvious.
+
+**Name the output prototypes.** For each $r_u$, ask what direction it writes into the residual stream. Does it point toward a token-logit direction? Does it align with another feature basis? Does it feed a known attention query or key direction in the next block? This is what the **logit lens** does — reading a residual-stream direction directly in vocabulary space (the tuned lens of Belrose et al. (2023) is its calibrated form) — and it is exactly how Geva et al. (2022) interpret the $r_u$: each value vector promotes a human-readable set of concepts in the output distribution.
+
+**Measure the coefficient mass.** For an input $x$, inspect $h_u(x)$ or its normalized version. Which prototypes is the MLP mixing? Is the output concentrated on a few prototypes or spread across many?
+
+**Separate choice from intensity.** The normalized vector $h/\|h\|_1$ says what mixture the layer chose. The norm $\|h\|_1$ says how loudly it wrote that mixture. These are different facts and should not be collapsed.
+
+**Watch cancellation.** If the activation can be signed, inspect positive and negative mass separately. A large output may come from aligned positive prototypes, or from cancellation failing to cancel. A small output may mean no feature fired, or two strong features subtracted.
+
+## The prototype duality
+
+There are really two prototype spaces in an MLP.
+
+The rows of $W_{\text{in}}$ are **input-side detectors**. They decide what the unit listens for. In a kernel-shaped MLP, these become literal input prototypes: points or sections in the input geometry.
+
+The columns of $W_{\text{out}}$ are **output-side writers**. They decide what the unit says when it fires. These are residual-stream prototypes.
+
+A hidden unit is therefore a small rule:
+
+> when the input looks like this, write that.
+
+The standard notation hides the rule because it names the matrices, not the columns. But the rule is there. $W_{\text{in}}$ supplies the condition; $W_{\text{out}}$ supplies the message.
+
+This is the sense in which the MLP readout is an attention-like object. Attention says: "given this query, mix these token values." The MLP says: "given this feature pattern, mix these hidden-unit values." The index set changed from tokens to neurons, but the readout logic is the same.
+
+## What would make it truly convex?
+
+A standard transformer MLP does not usually enforce a simplex over hidden units. But it could.
+
+One can imagine an MLP block of the form
+
+$$
+\pi(x)=\operatorname{softmax}(s(x)),
+\qquad
+y(x)=\sum_u \pi_u(x)r_u,
+$$
+
+where the hidden network computes scores over output prototypes and the readout is explicitly a convex combination. This would make the MLP's contribution mass as readable as attention's. It would also impose a strong constraint: the block can only write inside the learned prototype hull unless another scalar gate controls intensity.
+
+This is not a hypothetical architecture so much as a rediscovery of two known ones. A softmax over stored prototypes followed by a weighted readout is exactly one retrieval step of a **modern Hopfield network** (Ramsauer et al., 2020), whose update rule is the attention mechanism; its three regimes — converging to a single prototype, to a metastable average over a few, or to the global mean — are precisely the temperature regimes of the softmax. And if a *sparse* convex code is wanted instead of a dense one, **sparsemax** and **entmax** (Martins & Astudillo, 2016; Peters et al., 2019) replace the softmax with a projection onto the simplex that sets most coefficients to exactly zero — a readout that is convex *and* sparse, so only a handful of prototypes are ever mixed.
+
+The temperature on that softmax is itself an interpretability dial. As it sharpens, $\pi$ approaches one-hot and $y$ snaps to the nearest prototype — hard assignment, a vertex of the hull, vector quantization. As it flattens, $\pi$ approaches uniform and $y$ relaxes to the centroid of the prototypes. The whole interior of the hull lives between those two limits, and the same dial appears as the bandwidth of the kernel readout below.
+
+A less restrictive version keeps the scale:
+
+$$
+g(x)\ge 0,\qquad
+\pi(x)=\operatorname{softmax}(s(x)),
+\qquad
+y(x)=g(x)\sum_u \pi_u(x)r_u.
+$$
+
+Now the MLP chooses **what** to write by convex mixture and **how much** to write by the gate. This is close to how one should mentally parse a positive unnormalized MLP anyway: direction as mixture, norm as intensity.
+
+The gate also tells you what convexity costs. A pure convex readout can only reach the convex hull of $\{r_u\}$; adding the nonnegative gate $g(x)$ extends the reach to the conical hull, the cone the prototypes generate. Neither covers all of $\mathbb{R}^d$. To write in *every* direction with nonnegative coefficients, the prototypes must form a **positive spanning set** — and a positive spanning set of $\mathbb{R}^d$ needs at least $d+1$ vectors in general position. So the interpretability of nonnegative coefficients is not free: it either restricts the block's output cone or forces redundancy in the prototype dictionary. Signed coefficients buy the full span back, at the price of the clean mass interpretation. That is the whole trade in one sentence.
+
+The design question is whether that constraint is worth the interpretability. Attention already made that bargain. Its output is a convex mix before the output projection. The MLP historically did not; it bought flexibility by allowing arbitrary signed linear readout. The cost is that its contribution semantics are weaker.
+
+## The point
+
+The output projection in an MLP is not a boring shape-fixing layer. It is the dictionary of messages the hidden layer can write to the residual stream.
+
+If the hidden activations are normalized and nonnegative, the MLP readout is literally a convex combination of those messages. If they are merely nonnegative, it is a scaled convex combination. If they are signed, it is a signed expansion over the same prototypes.
+
+That is the useful reframing:
+
+> An MLP block is a detector bank followed by a prototype readout. Attention mixes token-indexed prototypes. The MLP mixes neuron-indexed prototypes. The difference is not the existence of a readout; it is whether the coefficients form a clean probability distribution.
+
+Once you see $W_{\text{out}}$ this way, the natural unit of analysis is not a neuron activation by itself. It is the pair: the detector that made the coefficient, and the output prototype that coefficient writes.
+
+## What if the coefficients came from a kernel?
+
+Everything above treats the coefficients $a_u(x)$ as whatever the hidden nonlinearity happens to produce, and then asks, after the fact, whether they are nonnegative, normalized, or signed. The interpretability we get is the interpretability the activation function chose to leave us. A ReLU bank gives a conic readout; a GELU bank gives a signed one; only a softmax over hidden units would hand us a clean convex combination — and standard MLPs do not do that.
+
+You can watch this directly. Fix the hidden scores $s_u$ and change only the nonlinearity applied to them. The same scores, read out through four different activations, land in three different geometric regimes — and only one of them keeps the readout inside the prototype hull.
+
+<ActivationRegimes caption="Hold the hidden scores fixed and change only the nonlinearity. Softmax is the single choice that makes the coefficients a probability vector, so its readout is a convex combination that stays inside the prototype hull. ReLU keeps them nonnegative but unnormalized — a conic mixture pointing the right way but scaled past the hull. GELU and the identity admit negative coefficients, so the readout becomes a signed expansion that can leave the hull entirely. The readout y = Σ a_u r_u in each row is computed live by jax-js." />
+
+Modern transformers, if anything, lean the wrong way. Gated MLPs — GLU, SwiGLU — form their hidden activations as an elementwise *product* of two linear projections, $h(x)=\sigma(W_a x)\odot(W_b x)$, so the coefficients are products of signed quantities and live squarely in the linear regime. The trend in architectures has been toward more expressive, less convex readouts, which makes the question of how to read them only more pressing.
+
+But there is a more direct way to make the readout genuinely convex, and it is the same move that makes attention legible in the first place. Instead of computing scores with a linear map and hoping the activation behaves, compute the coefficients with a kernel against the input-side prototypes:
+
+$$
+a_u(x)=\frac{\kappa(x, p_u)}{\sum_v \kappa(x, p_v)},
+\qquad
+y(x)=\sum_u a_u(x)\,r_u.
+$$
+
+Two things have to be true for this to be a *convex* readout, and they are not the same thing. The sum-to-one is automatic — it is just the normalization, true for any kernel wherever the denominator is nonzero. Nonnegativity of the coefficients is the real requirement, and it asks that the kernel be **pointwise nonnegative**, $\kappa(x,p)\ge 0$ — *not* that it be positive definite. These are independent properties, and it is worth being careful here because they are easy to conflate. The linear kernel $\kappa(x,y)=x^\top y$ is positive definite yet takes negative values; the boxcar kernel $\mathbb{1}[\lVert x-y\rVert\le h]$ is nonnegative yet not positive definite. Positive-definiteness is what makes $\kappa$ a *Mercer similarity* with an RKHS — the property that ties this construction back to "attention is a kernel" — but it is nonnegativity, not positive-definiteness, that makes the readout convex.
+
+The kernels worth reaching for satisfy **both**. The exponential kernel behind softmax attention, the Gaussian, and the Yat kernel $\kappa(x,y)=(x^\top y)^2/(\lVert x-y\rVert^2+\varepsilon)$ are each nonnegative *and* positive definite — Yat by a Schur product of a squared-linear numerator (PSD, and manifestly $\ge 0$) with an inverse-multiquadric factor (PSD). That intersection is the corner you want: a similarity that is simultaneously a legitimate Mercer kernel and a source of convex weights.
+
+<KernelQuadrant caption="Positive-definite and pointwise-nonnegative are independent axes, and only the second is what a convex readout needs. For each kernel the figure computes, live, the profile κ(x₀, ·) — a dip below zero means it is not nonnegative — and the smallest eigenvalue of a Gram matrix (via the engine's symmetric eigendecomposition) — λ_min < 0 means it is not positive definite. The linear kernel is PSD but signed; the boxcar is nonnegative but not PSD; the Gaussian and Yat kernels occupy the useful top-right corner, nonnegative and Mercer at once." />
+
+With such a kernel, the readout is exactly a convex combination of the output prototypes $r_u$ — a Nadaraya–Watson estimator over a learned prototype set. The detector bank stops being an arbitrary feature extractor and becomes a similarity to named input prototypes; the readout stops being a hopeful interpretation and becomes the actual mechanism.
+
+One caveat the normalization hides: where every $\kappa(x,p_v)$ is tiny — a query far from all prototypes, for a fast-decaying kernel like the Gaussian — the denominator collapses and $a(x)$ becomes ill-conditioned, the familiar extrapolation pathology of Nadaraya–Watson. A heavier-tailed kernel like Yat or the inverse-multiquadric, whose weights fall off only polynomially, normalizes far more gracefully off-support. Convexity holds wherever the readout is defined; stability off the prototype set is a separate, kernel-dependent matter — and another reason the Yat kernel is a natural choice here.
+
+This is the whole construction in one picture. Every hidden unit pairs an input-side prototype $p_u$ with an output-side prototype $r_u$. The query $x$ lives in the input space on the left; its kernel similarities to the $p_u$ become the coefficients; those same coefficients mix the $r_u$ in the residual stream on the right. Drag $x$ anywhere and the readout $y$ can never escape the output hull — convexity is not something you check afterward, it is built into how the coefficients are formed.
+
+<KernelReadoutField caption="A readout that is convex by construction. Each hidden unit pairs an input prototype p_u (left) with an output prototype r_u (right). The coefficient is the normalized kernel similarity a_u(x) = κ(x, p_u) / Σ κ(x, p_v); because κ is nonnegative, the coefficients are nonnegative, and the normalization makes them sum to one. Drag the query x and watch the readout y = Σ a_u r_u trace the interior of the output-prototype hull, never leaving it. The bandwidth control is the same temperature dial as before — narrow pulls y toward the nearest prototype, wide relaxes it toward the centroid. Switch between a Gaussian and a Yat kernel — both are nonnegative and Mercer, so both stay convex. Kernel weights, normalization, and the readout matmul all run live in jax-js." />
+
+That is the question these posts keep circling. Attention already pays for convexity with its softmax. The MLP could pay for it the same way — with a kernel over prototypes instead of a linear map into an activation — and get a readout that is convex by construction rather than by accident.
+
+<CiteAs
+  slug="readout-as-convex-combination"
+  title="The Readout is a Convex Combination of Prototypes"
+  pubDate="2026-06-04"
+/>
