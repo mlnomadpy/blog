@@ -1,0 +1,146 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 470 } = Astro.props;
+---
+<figure class="viz kernelquadrant" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { panel, text, parseColor } from './engine/draw.js';
+import { np, eigh, withJax, drawJaxLoading } from './engine/jax.js';
+
+// Positive-definite and pointwise-nonnegative are INDEPENDENT properties, and a
+// Nadaraya–Watson readout needs the second, not the first. This figure puts both
+// on their own axis. For each kernel we compute, live: the profile κ(x₀, ·) — a
+// dip below zero means it is not nonnegative — and the smallest eigenvalue of a
+// Gram matrix on sample points (via the engine's eigh) — λ_min < 0 means it is
+// not positive definite. The four canonical kernels land in four quadrants.
+//   Gaussian, Yat  → nonnegative AND PSD (the useful corner)
+//   linear x·y     → PSD but signed
+//   boxcar 1[·]    → nonnegative but not PSD
+const ANCHOR = 0.6;
+const PTS = Array.from({ length: 9 }, (_, i) => -1 + (2 * i) / 8);   // Gram sample points
+const M = 90;
+const KERNELS = [
+  { key: 'gaussian', name: 'Gaussian  e^(−d²/2h²)' },
+  { key: 'yat', name: 'Yat  (x·y)²/(d²+ε)' },
+  { key: 'linear', name: 'linear  x·y' },
+  { key: 'boxcar', name: 'boxcar  1[|d|≤h]' },
+];
+
+function kappa(key, a, b, h, eps) {
+  const d2 = (a - b) * (a - b);
+  if (key === 'gaussian') return Math.exp(-d2 / (2 * h * h));
+  if (key === 'yat') return (a * b) * (a * b) / (d2 + eps);
+  if (key === 'linear') return a * b;
+  return Math.sqrt(d2) <= h ? 1 : 0;                                   // boxcar
+}
+
+// λ_min of the Gram matrix on PTS, computed through the engine's symmetric eigh.
+function lambdaMin(key, h, eps) {
+  const n = PTS.length;
+  const G = PTS.map((a) => PTS.map((b) => kappa(key, a, b, h, eps)));
+  const { values } = eigh(G);
+  return values[values.length - 1];
+}
+
+function verdicts(h, eps) {
+  return KERNELS.map((k) => {
+    let pmin = Infinity;
+    for (let i = 0; i <= M; i++) { const x = -1 + (2 * i) / M; pmin = Math.min(pmin, kappa(k.key, ANCHOR, x, h, eps)); }
+    const lmin = lambdaMin(k.key, h, eps);
+    return { ...k, nonneg: pmin >= -1e-4, psd: lmin >= -1e-3, pmin, lmin };
+  });
+}
+
+defineViz('kernelquadrant', {
+  title: 'Nonnegative and positive-definite are different axes',
+  height: 470,
+  controls: [
+    { type: 'select', name: 'kernel', label: 'kernel', value: 'linear', reset: false,
+      options: KERNELS.map((k) => ({ value: k.key, label: k.name.split('  ')[0] })) },
+    { type: 'range', name: 'h', label: 'bandwidth h', min: 0.2, max: 1.1, step: 0.02, value: 0.45, reset: false, fmt: v => v.toFixed(2) },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) { withJax(api); },
+  draw(api) {
+    if (!api.state.jaxReady) return drawJaxLoading(api);
+    const { ctx, colors, size } = api;
+    const box = { x: 6, y: 4, w: size.W - 12, h: size.H - 8 };
+    panel(ctx, box, colors, {});
+    const h = api.get('h'), eps = h * h * 0.5;
+    const sel = api.get('kernel');
+    const vs = verdicts(h, eps);
+    const cur = vs.find((v) => v.key === sel);
+    const yesCol = '#3a8f5e', noCol = '#c2553a';
+
+    // ── top: the 2×2 quadrant map ──
+    const qh = box.h * 0.46;
+    const q = { x: box.x + 70, y: box.y + 24, w: box.w - 90, h: qh - 30 };
+    text(ctx, 'where each kernel lives', box.x + 12, box.y + 9, colors, { size: 12, weight: '600' });
+    ctx.fillStyle = colors.bg; ctx.fillRect(q.x, q.y, q.w, q.h);
+    // quadrant tints: top-right (nonneg & PSD) is the good corner
+    ctx.fillStyle = yesCol + '12'; ctx.fillRect(q.x + q.w / 2, q.y, q.w / 2, q.h / 2);
+    ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.strokeRect(q.x + 0.5, q.y + 0.5, q.w - 1, q.h - 1);
+    ctx.beginPath(); ctx.moveTo(q.x + q.w / 2, q.y); ctx.lineTo(q.x + q.w / 2, q.y + q.h);
+    ctx.moveTo(q.x, q.y + q.h / 2); ctx.lineTo(q.x + q.w, q.y + q.h / 2); ctx.stroke();
+    // axis labels
+    text(ctx, 'positive definite →', box.x + 12, q.y + q.h / 2 - 38, colors, { size: 10.5, color: colors.muted });
+    ctx.save(); ctx.translate(box.x + 20, q.y + q.h / 2); ctx.rotate(-Math.PI / 2);
+    text(ctx, 'PSD (Mercer)', 0, 0, colors, { align: 'center', size: 10, mono: true, color: colors.muted }); ctx.restore();
+    text(ctx, 'no', q.x + q.w * 0.25, q.y + q.h + 5, colors, { align: 'center', size: 10, mono: true, color: colors.muted });
+    text(ctx, 'pointwise nonnegative  →  yes', q.x + q.w * 0.72, q.y + q.h + 5, colors, { align: 'center', size: 10, mono: true, color: colors.muted });
+    text(ctx, 'no', q.x - 16, q.y + q.h * 0.75, colors, { align: 'center', size: 10, mono: true, color: colors.muted });
+    text(ctx, 'yes', q.x - 16, q.y + q.h * 0.25, colors, { align: 'center', size: 10, mono: true, color: colors.muted });
+    // place markers from live verdicts (jitter within quadrant by index)
+    vs.forEach((v, i) => {
+      const qx = q.x + q.w * (v.nonneg ? 0.62 + 0.13 * ((i % 2)) : 0.16 + 0.13 * ((i % 2)));
+      const qy = q.y + q.h * (v.psd ? 0.24 + 0.16 * (i < 2 ? 0 : 1) : 0.6 + 0.16 * (i % 2));
+      const on = v.key === sel;
+      ctx.fillStyle = on ? colors.accent : colors.muted;
+      ctx.beginPath(); ctx.arc(qx, qy, on ? 6 : 4, 0, Math.PI * 2); ctx.fill();
+      text(ctx, v.name.split('  ')[0], qx + 9, qy - 5, colors, { size: on ? 11 : 10, weight: on ? '700' : '500', color: on ? colors.fg : colors.muted });
+    });
+
+    // ── bottom-left: profile κ(x₀, ·) — nonnegativity ──
+    const pb = { x: box.x + 12, y: box.y + qh + 10, w: (box.w - 36) / 2, h: box.h - qh - 54 };
+    text(ctx, `profile  κ(${ANCHOR}, x)`, pb.x, pb.y - 12, colors, { size: 11, weight: '600' });
+    panel(ctx, pb, colors, {});
+    const prof = []; let pmax = 1e-6;
+    for (let i = 0; i <= M; i++) { const x = -1 + (2 * i) / M; const v = kappa(sel, ANCHOR, x, h, eps); prof.push(v); pmax = Math.max(pmax, Math.abs(v)); }
+    const zY = pb.y + pb.h * 0.62;
+    ctx.strokeStyle = colors.border; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(pb.x + 4, zY); ctx.lineTo(pb.x + pb.w - 4, zY); ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath();
+    for (let i = 0; i <= M; i++) { const px = pb.x + 4 + (i / M) * (pb.w - 8); const py = zY - (prof[i] / pmax) * (pb.h * 0.5); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
+    ctx.strokeStyle = cur.nonneg ? yesCol : noCol; ctx.lineWidth = 1.8; ctx.stroke();
+    text(ctx, cur.nonneg ? 'nonnegative ✓' : `dips to ${cur.pmin.toFixed(2)} ✗`, pb.x + 6, pb.y + pb.h - 14, colors, { size: 10.5, mono: true, color: cur.nonneg ? yesCol : noCol });
+
+    // ── bottom-right: signed Gram heatmap — positive definiteness ──
+    const gb = { x: box.x + 24 + (box.w - 36) / 2, y: box.y + qh + 10, w: (box.w - 36) / 2, h: box.h - qh - 54 };
+    text(ctx, 'Gram matrix · λ_min', gb.x, gb.y - 12, colors, { size: 11, weight: '600' });
+    panel(ctx, gb, colors, {});
+    const n = PTS.length;
+    const side = Math.min(gb.w, gb.h) - 30;
+    const ox = gb.x + (gb.w - side) / 2, oy = gb.y + 8;
+    const cell = side / n;
+    const G = PTS.map((a) => PTS.map((b) => kappa(sel, a, b, h, eps)));
+    let gmax = 1e-6; for (const r of G) for (const v of r) gmax = Math.max(gmax, Math.abs(v));
+    const baseC = parseColor(colors.cellBg), posC = parseColor(colors.accent), negC = parseColor(colors.blue);
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+      const v = G[i][j], t = Math.min(1, Math.abs(v) / gmax), tgt = v >= 0 ? posC : negC;
+      ctx.fillStyle = `rgb(${Math.round(baseC[0] + (tgt[0] - baseC[0]) * t)},${Math.round(baseC[1] + (tgt[1] - baseC[1]) * t)},${Math.round(baseC[2] + (tgt[2] - baseC[2]) * t)})`;
+      ctx.fillRect(ox + j * cell, oy + i * cell, cell + 0.5, cell + 0.5);
+    }
+    ctx.strokeStyle = colors.border; ctx.strokeRect(ox + 0.5, oy + 0.5, side - 1, side - 1);
+    text(ctx, cur.psd ? `λ_min ${cur.lmin.toFixed(3)} ≥ 0  PSD ✓` : `λ_min ${cur.lmin.toFixed(3)} < 0  not PSD ✗`,
+      gb.x + 6, gb.y + gb.h - 14, colors, { size: 10.5, mono: true, color: cur.psd ? yesCol : noCol });
+
+    api.readout('rd', `${cur.name.split('  ')[0]} · nonneg ${cur.nonneg ? 'y' : 'n'} · PSD ${cur.psd ? 'y' : 'n'} · jax-js`);
+  },
+});
+</script>

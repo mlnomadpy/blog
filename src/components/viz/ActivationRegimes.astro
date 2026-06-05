@@ -1,0 +1,157 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 440 } = Astro.props;
+---
+<figure class="viz activationregimes" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { panel, text, PALETTE } from './engine/draw.js';
+import { np, withJax, drawJaxLoading } from './engine/jax.js';
+
+// Same hidden scores s_u, four nonlinearities. The activation alone decides
+// whether the readout coefficients are a clean probability vector (softmax →
+// convex), a nonnegative-but-unnormalised cone (ReLU → conic), or a signed
+// expansion that can leave the prototype hull (GELU, identity → signed). Each
+// row reads out y = Σ a_u r_u live through jax-js so you can watch the geometry
+// follow the algebra as you sweep the feature pattern.
+const R = [[0.66, 0.22], [0.22, 0.80], [-0.62, 0.50], [-0.66, -0.36], [0.32, -0.72]];
+
+function hull(pts) {
+  const p = pts.map((q) => ({ x: q[0], y: q[1] })).sort((a, b) => a.x - b.x || a.y - b.y);
+  const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lo = []; for (const q of p) { while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); }
+  const hi = []; for (let k = p.length - 1; k >= 0; k--) { const q = p[k]; while (hi.length >= 2 && cross(hi[hi.length - 2], hi[hi.length - 1], q) <= 0) hi.pop(); hi.push(q); }
+  return lo.slice(0, -1).concat(hi.slice(0, -1));
+}
+
+function scores(phase, shift) {
+  return [
+    0.9 * Math.cos(phase) + shift,
+    0.95 * Math.sin(phase * 0.8 + 0.6) + shift,
+    0.8 * Math.cos(phase * 1.3 + 1.2) + shift,
+    0.95 * Math.sin(phase * 1.1 - 0.4) + shift,
+    0.85 * Math.cos(phase * 0.7 - 1.1) + shift,
+  ];
+}
+const gelu = (z) => 0.5 * z * (1 + Math.tanh(0.7978845608 * (z + 0.044715 * z * z * z)));
+
+const ROWS = [
+  { key: 'softmax', name: 'softmax(s)', desc: 'scores → probabilities' },
+  { key: 'relu', name: 'ReLU(s)', desc: 'nonnegative, unnormalised' },
+  { key: 'gelu', name: 'GELU(s)', desc: 'small negative tail' },
+  { key: 'linear', name: 'identity s', desc: 'raw signed scores' },
+];
+
+function coeffs(key, s) {
+  if (key === 'softmax') {
+    const e = s.map((v) => Math.exp(v - Math.max(...s)));
+    const z = e.reduce((p, v) => p + v, 0);
+    return e.map((v) => v / z);
+  }
+  if (key === 'relu') return s.map((v) => Math.max(0, v));
+  if (key === 'gelu') return s.map(gelu);
+  return s.slice();
+}
+
+// y = a @ R via jax-js (the actual readout linear algebra runs on the engine)
+function readout(a) {
+  return np.matmul(np.reshape(np.array(a), [1, a.length]), np.array(R)).js()[0];
+}
+
+function pointInHull(p, hv) {
+  let sign = 0;
+  for (let i = 0; i < hv.length; i++) {
+    const a = hv[i], b = hv[(i + 1) % hv.length];
+    const c = (b.x - a.x) * (p[1] - a.y) - (b.y - a.y) * (p[0] - a.x);
+    if (Math.abs(c) < 1e-9) continue;
+    const s = c > 0 ? 1 : -1;
+    if (sign === 0) sign = s; else if (s !== sign) return false;
+  }
+  return true;
+}
+
+function verdict(a, hv, y) {
+  const neg = a.some((v) => v < -1e-6);
+  const sum = a.reduce((p, v) => p + v, 0);
+  if (neg) return { label: 'linear (signed)', color: '#c2553a' };
+  if (Math.abs(sum - 1) < 1e-3) return { label: 'convex', color: '#3a8f5e' };
+  return { label: pointInHull(y, hv) ? 'conic (in hull)' : 'conic', color: '#4a7fb3' };
+}
+
+defineViz('activationregimes', {
+  title: 'The nonlinearity chooses the readout’s interpretability',
+  height: 440,
+  controls: [
+    { type: 'range', name: 'phase', label: 'feature pattern', min: 0, max: 6.28, step: 0.02, value: 1.4, reset: false, fmt: v => v.toFixed(2) },
+    { type: 'range', name: 'shift', label: 'score bias', min: -0.6, max: 0.9, step: 0.02, value: 0.1, reset: false, fmt: v => v.toFixed(2) },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) { api.state.hull = hull(R); withJax(api); },
+  draw(api) {
+    if (!api.state.jaxReady) return drawJaxLoading(api);
+    const { ctx, colors, size, state } = api;
+    const box = { x: 6, y: 4, w: size.W - 12, h: size.H - 8 };
+    panel(ctx, box, colors, {});
+    const s = scores(api.get('phase'), api.get('shift'));
+    const hv = state.hull;
+
+    const rowH = box.h / ROWS.length;
+    for (let r = 0; r < ROWS.length; r++) {
+      const ry = box.y + r * rowH;
+      if (r > 0) { ctx.strokeStyle = colors.border; ctx.beginPath(); ctx.moveTo(box.x, ry); ctx.lineTo(box.x + box.w, ry); ctx.stroke(); }
+      const row = ROWS[r];
+      const a = coeffs(row.key, s);
+      const y = readout(a);
+      const v = verdict(a, hv, y);
+
+      // ── label + verdict chip ──
+      const lx = box.x + 14;
+      text(ctx, row.name, lx, ry + 16, colors, { size: 13, weight: '700', mono: true });
+      text(ctx, row.desc, lx, ry + 36, colors, { size: 10.5, color: colors.muted });
+      const chipW = 108, chipX = lx, chipY = ry + rowH - 30;
+      ctx.fillStyle = v.color + '22'; ctx.strokeStyle = v.color; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(chipX, chipY, chipW, 19, 5); ctx.fill(); ctx.stroke();
+      text(ctx, v.label, chipX + chipW / 2, chipY + 9.5, colors, { align: 'center', baseline: 'middle', size: 11, weight: '600', color: v.color });
+
+      // ── coefficient bars (signed) ──
+      const barBox = { x: box.x + box.w * 0.30, y: ry + 12, w: box.w * 0.40, h: rowH - 24 };
+      const zeroY = barBox.y + barBox.h * 0.62;
+      ctx.strokeStyle = colors.border; ctx.beginPath(); ctx.moveTo(barBox.x, zeroY); ctx.lineTo(barBox.x + barBox.w, zeroY); ctx.stroke();
+      const scale = Math.max(0.8, ...a.map((q) => Math.abs(q)));
+      const bw = barBox.w / a.length;
+      for (let i = 0; i < a.length; i++) {
+        const bx = barBox.x + i * bw + 3;
+        const up = barBox.h * 0.5;
+        const dn = barBox.h * 0.34;
+        const bh = (Math.abs(a[i]) / scale) * (a[i] >= 0 ? up : dn);
+        ctx.fillStyle = a[i] >= 0 ? PALETTE[i] : colors.blue;
+        ctx.fillRect(bx, a[i] >= 0 ? zeroY - bh : zeroY, Math.max(8, bw - 6), bh);
+      }
+      const sum = a.reduce((p, q) => p + q, 0);
+      const neg = a.reduce((p, q) => p + Math.max(0, -q), 0);
+      text(ctx, `Σa ${sum.toFixed(2)}   negative mass ${neg.toFixed(2)}`, barBox.x, barBox.y + barBox.h + 1, colors, { size: 9.5, mono: true, color: colors.muted, baseline: 'bottom' });
+
+      // ── mini residual-stream hull with y ──
+      const side = Math.min(rowH - 16, box.w * 0.20);
+      const mx = box.x + box.w * 0.84, my = ry + rowH / 2, RR = side * 0.42;
+      const map = (p) => [mx + p[0] * RR, my - p[1] * RR];
+      ctx.beginPath();
+      hv.forEach((p, k) => { const [hx, hy] = map([p.x, p.y]); k ? ctx.lineTo(hx, hy) : ctx.moveTo(hx, hy); });
+      ctx.closePath();
+      ctx.fillStyle = v.color + '14'; ctx.fill(); ctx.strokeStyle = v.color + '88'; ctx.lineWidth = 1; ctx.stroke();
+      for (let i = 0; i < R.length; i++) { const [px, py] = map(R[i]); ctx.fillStyle = PALETTE[i]; ctx.beginPath(); ctx.arc(px, py, 2.6, 0, Math.PI * 2); ctx.fill(); }
+      const [ypx, ypy] = map(y);
+      ctx.fillStyle = colors.fg; ctx.beginPath(); ctx.arc(ypx, ypy, 4.5, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = colors.cellBg; ctx.lineWidth = 1.4; ctx.stroke();
+    }
+
+    api.readout('rd', 'only softmax keeps y a convex mix · jax-js');
+  },
+});
+</script>
