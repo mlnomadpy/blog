@@ -7,6 +7,7 @@ import PostNav from '../components/PostNav.astro';
 import RelatedPosts from '../components/RelatedPosts.astro';
 import CompanionCallout from '../components/CompanionCallout.astro';
 import References from '../components/References.astro';
+import PostAnalytics from '../components/PostAnalytics.astro';
 
 interface NavItem { slug: string; title: string }
 interface RelatedPost { slug: string; title: string; description?: string; pubDate: Date }
@@ -48,6 +49,10 @@ const {
 } = Astro.props;
 const dateFmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const postPath = Astro.url.pathname;
+const postSlug = base && postPath.startsWith(`${base}/`)
+  ? postPath.slice(base.length).replace(/^\/+|\/+$/g, '')
+  : postPath.replace(/^\/+|\/+$/g, '');
 ---
 <BaseLayout
   title={title}
@@ -62,6 +67,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 >
   <ReadingProgress />
   <article
+    data-blog-post
     data-pagefind-body
     data-pagefind-meta={`date:${pubDate.toISOString().slice(0, 10)}`}
   >
@@ -85,6 +91,15 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     <slot />
     <References items={references} />
   </article>
+  <PostAnalytics
+    title={title}
+    slug={postSlug}
+    path={postPath}
+    tags={tags}
+    wordCount={wordCount}
+    readingTimeText={readingTimeText}
+    draft={draft}
+  />
   <RelatedPosts posts={related} />
   <PostNav prev={prev} next={next} />
   <Giscus />

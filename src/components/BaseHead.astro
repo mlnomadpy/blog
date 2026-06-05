@@ -317,6 +317,16 @@ const jsonLdNodes = [blogPosting, breadcrumb, website, blogIndex, profilePage].f
       window.dataLayer = window.dataLayer || [];
       function gtag(){ dataLayer.push(arguments); }
       window.gtag = window.gtag || gtag;
+      window.__gaEventQueue = window.__gaEventQueue || [];
+      window.__trackGA = function (eventName, params) {
+        if (!eventName) return;
+        var item = { name: eventName, params: params || {} };
+        if (window.__gaLoaded) {
+          gtag('event', item.name, item.params);
+        } else {
+          window.__gaEventQueue.push(item);
+        }
+      };
 
       // Track whether the first astro:page-load has fired, so a mid-session
       // Accept can still record the current page.
@@ -332,6 +342,9 @@ const jsonLdNodes = [blogPosting, breadcrumb, website, blogIndex, profilePage].f
         document.head.appendChild(s);
         gtag('js', new Date());
         gtag('config', GA_ID, { send_page_view: false });
+        (window.__gaEventQueue || []).splice(0).forEach(function (item) {
+          gtag('event', item.name, item.params);
+        });
         function sendPV() {
           gtag('event', 'page_view', {
             page_title: document.title,

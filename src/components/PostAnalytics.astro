@@ -1,0 +1,106 @@
+---
+interface Props {
+  title: string;
+  slug: string;
+  path: string;
+  tags?: string[];
+  wordCount?: number;
+  readingTimeText?: string;
+  draft?: boolean;
+}
+
+const {
+  title,
+  slug,
+  path,
+  tags = [],
+  wordCount,
+  readingTimeText,
+  draft = false,
+} = Astro.props;
+
+const readingTimeMinutes = readingTimeText
+  ? Number.parseInt(readingTimeText, 10)
+  : undefined;
+
+const payload = {
+  post_title: title,
+  post_slug: slug,
+  post_path: path,
+  post_tags: tags.join(','),
+  word_count: wordCount,
+  reading_time_minutes: Number.isFinite(readingTimeMinutes) ? readingTimeMinutes : undefined,
+  is_draft: draft,
+};
+---
+
+<script is:inline define:vars={{ payload }}>
+  (() => {
+    const thresholds = [25, 50, 75, 90, 100];
+    const state = { viewed: false, sent: new Set() };
+
+    const track = (name, params = {}) => {
+      if (typeof window.__trackGA === 'function') {
+        window.__trackGA(name, {
+          ...payload,
+          ...params,
+          non_interaction: name === 'blog_post_view',
+        });
+      }
+    };
+
+    const init = () => {
+      const article = document.querySelector('[data-blog-post]');
+      if (!article) return;
+
+      if (!state.viewed) {
+        state.viewed = true;
+        track('blog_post_view');
+      }
+
+      const progress = () => {
+        const rect = article.getBoundingClientRect();
+        const articleTop = window.scrollY + rect.top;
+        const articleHeight = Math.max(1, article.offsetHeight);
+        const viewportBottom = window.scrollY + window.innerHeight;
+        return Math.max(0, Math.min(100, ((viewportBottom - articleTop) / articleHeight) * 100));
+      };
+
+      const update = () => {
+        const pct = progress();
+        thresholds.forEach((threshold) => {
+          if (pct >= threshold && !state.sent.has(threshold)) {
+            state.sent.add(threshold);
+            track('blog_post_read_depth', { read_percent: threshold });
+            if (threshold === 90) {
+              track('blog_post_read', { read_percent: threshold });
+            }
+          }
+        });
+      };
+
+      if (window.__postAnalyticsCleanup) window.__postAnalyticsCleanup();
+
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => {
+          update();
+          ticking = false;
+        });
+      };
+
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+      window.__postAnalyticsCleanup = () => {
+        window.removeEventListener('scroll', onScroll);
+        window.removeEventListener('resize', onScroll);
+      };
+      update();
+    };
+
+    init();
+    document.addEventListener('astro:page-load', init, { once: true });
+  })();
+</script>
