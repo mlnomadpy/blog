@@ -1,7 +1,7 @@
 ---
 title: 'Why Attention Needs Q and K Projections'
 description: 'The dot product in attention is not enough by itself. Without learned query and key projections, attention can only compare tokens in the residual stream’s native geometry. With a shared projection it learns a symmetric metric. With separate Q and K projections, the score becomes a learned bilinear form x_iᵀW_QW_Kᵀx_j: directional, role-aware, low-rank, and different per head. That bilinearity is what lets attention ask one kind of question and let tokens advertise another kind of answer.'
-pubDate: 2026-06-04T18:13:00-07:00
+pubDate: 2026-06-04T12:30:00-07:00
 draft: false
 tags: [ml, attention, transformers, self-attention, kernels, bilinear, query-key, interpretability]
 references:
@@ -118,9 +118,9 @@ $$
 s_{ij}=s_{ji}.
 $$
 
-The same representation is used for asking and answering. Token $i$ is similar to token $j$ exactly when token $j$ is similar to token $i$. That is a metric, not a directed relation.
+The same representation is used for asking and answering: token $i$ scores against token $j$ exactly as $j$ scores against $i$. The compatibility *score* cannot be role-asymmetric.
 
-Attention usually needs a directed relation.
+That is a claim about the score, not the whole layer. The full attention operator can still be directional — the softmax normalizes per row, causal masking only looks backward, and values are written through a separate OV map. But the *score* a shared projection computes is symmetric, and a head usually needs the score itself to be directed.
 
 <QKBilinearMap caption="Three score functions for the same token vectors. Raw dot product compares tokens in the residual stream's existing geometry. A shared projection learns a symmetric metric. Separate Q and K projections learn a bilinear compatibility: each token has a query role and a key role, and the score matrix can become asymmetric. Rows ask; columns answer." />
 
@@ -165,7 +165,7 @@ $$
 s_{ij}=x_i^\top S\,x_j + x_i^\top A\,x_j.
 $$
 
-The symmetric part $S$ is a signed metric — precisely the shared-projection regime, where asking and answering are the same job. The antisymmetric part $A$ is pure directedness: $x_i^\top A\,x_j = -\,x_j^\top A\,x_i$, so it contributes the *opposite* amount to $s_{ij}$ and $s_{ji}$. A shared projection can only produce $S$. Separate $Q$ and $K$ unlock $A$, and $A$ is the entire source of the asymmetry that makes "A asks for B" different from "B asks for A."
+The symmetric part $S$ is a signed metric; the antisymmetric part $A$ is pure directedness, with $x_i^\top A\,x_j = -\,x_j^\top A\,x_i$, so it contributes the *opposite* amount to $s_{ij}$ and $s_{ji}$. This sharpens what separate $Q$ and $K$ actually add. A shared projection can only produce $WW^\top$ — symmetric *and* **positive semidefinite**. Separate $Q$ and $K$ relax that in two independent ways at once: they unlock the antisymmetric part $A$, which is the entire source of the asymmetry that makes "A asks for B" different from "B asks for A"; and they let the symmetric part $S$ itself be **indefinite**, free to score some aligned directions as *incompatible*. Directedness and indefinite compatibility are both out of reach for a shared projection. The low-rank bilinear form buys both.
 
 The split also explains a subtlety in the kernel view below. The self-score and, more generally, the quadratic form sees only the symmetric part: $x^\top B\,x = x^\top S\,x$, because the antisymmetric part vanishes on the diagonal. So a head's directedness is completely invisible if you only look at how a token scores against itself — it lives entirely off-diagonal, in $A$.
 
@@ -193,15 +193,15 @@ That last point is often treated as an efficiency detail, but it is also an indu
 
 ## What about position?
 
-The relations in the examples — previous occurrence, matching delimiter, the token after an earlier copy — are mostly *positional*, and so far position is nowhere in the score. Rotary position embeddings (Su et al., 2021) put it exactly where the bilinear form lives. RoPE rotates each query and key by an angle proportional to its position, in a set of 2-D planes, so that
+The relations in the examples — previous occurrence, matching delimiter, the token after an earlier copy — are mostly *positional*, and so far position is nowhere in the score. Rotary position embeddings (Su et al., 2021) put it exactly where the bilinear form lives. RoPE rotates the query and key by an angle proportional to their positions, in a set of 2-D planes: $\tilde q_i = R_i\,W_Q^\top x_i$ and $\tilde k_j = R_j\,W_K^\top x_j$, where $R_m$ is a block-diagonal rotation by $m\theta$ per plane. Their score is
 
 $$
-s_{ij}=x_i^\top W_Q\,R_{\Theta,\,i-j}\,W_K^\top x_j.
+s_{ij}=\tilde q_i^\top \tilde k_j = x_i^\top W_Q\,R_i^\top R_j\,W_K^\top x_j.
 $$
 
-The rotation $R_{\Theta,\,i-j}$ sits inside the bilinear form and depends only on the **relative** position $i-j$. The same query and key now score differently depending on the gap between the tokens — and because high-frequency planes dephase quickly while low-frequency planes stay aligned, the dependence decays smoothly with distance. Position is not a separate additive signal here; it is a modulation of the relation itself.
+The product $R_i^\top R_j$ is a rotation by an angle proportional to $j-i$, so the score depends on the two positions only through their **relative** offset. The same query and key now score differently depending on the gap between the tokens. In many frequency mixtures this yields a distance-sensitive compatibility, with high-frequency planes decorrelating faster than low-frequency ones — though the exact profile depends on the content vectors and is not monotone in general. Position is not a separate additive signal here; it is a modulation of the relation itself.
 
-<RoPERelative caption="RoPE makes the bilinear score a function of relative position. Rotating qₘ by m·θ and kₙ by n·θ in each plane leaves a score that depends only on Δ = i − j (orange), instead of the constant q·k a position-free dot product would give (blue dashed). Summing planes with geometric frequencies produces RoPE's signature falloff: inter-token dependence is strongest at Δ = 0 and decays with distance. Reroll the query/key pair to see different relative-position profiles. The Δ-curve is evaluated in jax-js." />
+<RoPERelative caption="RoPE makes the bilinear score a function of relative position. Rotating qₘ by m·θ and kₙ by n·θ in each plane leaves a score that depends only on Δ = i − j (orange), instead of the constant q·k a position-free dot product would give (blue dashed). Summing planes with geometric frequencies typically concentrates the compatibility near Δ = 0, with high-frequency planes decorrelating faster — though the exact shape depends on the content vectors and need not be monotone. Reroll the query/key pair to see different relative-position profiles. The Δ-curve is evaluated in jax-js." />
 
 ## The kernel view
 
@@ -219,9 +219,7 @@ $$
 
 If $B_h$ were symmetric positive semidefinite, this would be a standard learned inner-product kernel after projection. With separate $Q$ and $K$, $B_h$ need not be symmetric or positive semidefinite. That is the price of directionality and the reason attention is a kernel smoother in the operational sense rather than always a Mercer kernel in the strict sense.
 
-The softmax then turns this compatibility into contribution mass:
-
-So the full head reads:
+The softmax then turns this compatibility into contribution mass, so the full head reads:
 
 $$
 y_i=\sum_j
@@ -274,18 +272,22 @@ The attention mechanism is therefore not "dot product similarity" in the ordinar
 
 A bilinear form is the simplest object that can express a directed relation, and that simplicity is also its ceiling. $s(x,y)=x^\top B y$ is linear in each argument separately. It can only score relations that decompose into pairwise feature products selected by $B$. Whatever compatibility a head needs that is not a sum of such products, the bilinear form cannot represent — it has to be approximated by stacking heads and layers around it.
 
-The Q/K factorization makes this concrete: $B=W_QW_K^\top$ is at most rank $d_k$, and even at full rank it is still bilinear. We bought directionality by giving up symmetry and positive semidefiniteness, which is exactly why $\exp(x^\top B x)$ is a kernel smoother only in the operational sense and not a Mercer kernel in the strict one.
+The Q/K factorization makes this concrete: $B=W_QW_K^\top$ is at most rank $d_k$, and even at full rank it is still bilinear. We bought directionality by giving up symmetry and positive semidefiniteness, which is exactly why $\exp(x_i^\top B\,x_j)$ is a kernel smoother only in the operational sense and not a Mercer kernel in the strict one.
 
-So the closing question is the obvious one. The bilinear score is a stand-in for "how compatible are these two tokens?" — and that is precisely the question a kernel is built to answer. What happens if we stop approximating the compatibility with a bilinear form and instead compute it with a genuine nonlinear kernel,
+So the closing question is the obvious one — but it has a trap in it. The bilinear score is a stand-in for "how compatible are these two tokens?", and that is precisely the question a kernel is built to answer. The tempting move is to replace it with a genuine nonlinear kernel $s_{ij}=\kappa(x_i,x_j)$, positive definite by construction. But a Mercer kernel on the raw residual vectors is **symmetric**, $\kappa(x_i,x_j)=\kappa(x_j,x_i)$ — so it throws away the very thing this whole post defended. You would gain a real geometry and a richer-than-bilinear comparison, and pay for it by collapsing attention back into symmetric similarity: no query role, no key role.
+
+The sharper move keeps the roles and kernelizes the compatibility *between* them:
 
 $$
-s_{ij}=\kappa(x_i, x_j),
+s_{ij}=\kappa\big(f_Q(x_i),\,f_K(x_j)\big)
+\qquad\text{or}\qquad
+s_{ij}=\big\langle \Phi_Q(x_i),\,\Phi_K(x_j)\big\rangle.
 $$
 
-chosen so that $\kappa$ is positive definite by construction? Then the relation a head learns is no longer capped at pairwise feature products, the score inherits a real geometry instead of an arbitrary matrix, and the kernel view of attention stops being an analogy and becomes the actual mechanism. That is where these posts have been heading.
+The query map $f_Q$ still extracts what a token is asking for; the key map $f_K$ still extracts what it advertises. Only the comparison between them changes — no longer capped at a low-rank bilinear form, but a nonlinear, learnable, deliberately *role-asymmetric* compatibility. That is the real kernel version of attention: not a similarity kernel on tokens, but a compatibility kernel between roles. And it is the question these posts have been heading toward — can the QK relation be made nonlinear and richer while keeping the routing readable and cheap?
 
 <CiteAs
   slug="why-attention-needs-qk-projections"
   title="Why Attention Needs Q and K Projections"
-  pubDate="2026-06-04T18:13:00-07:00"
+  pubDate="2026-06-04T12:30:00-07:00"
 />
