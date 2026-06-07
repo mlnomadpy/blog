@@ -1,0 +1,96 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 380 } = Astro.props;
+---
+<figure class="viz saddledescent" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { panel, text, parseColor } from './engine/draw.js';
+
+// Why a plateau happens: a saddle. Real gradient descent on f(x,y) = (x²−1)² + y²,
+// which has minima at (±1, 0) and a saddle at the origin (a minimum along y, a
+// maximum along x). Starting just off the saddle, the trajectory drops in y fast,
+// then *creeps* along the flat x-direction where the gradient is tiny (that creep
+// is the plateau) before the instability takes over and it falls into a basin.
+// The loss trace on the right shows the same flat-then-drop. Real GD, live.
+const X0 = 0.05, Y0 = 0.82, LR = 0.02;
+const DOM = 1.6;
+const f = (x, y) => (x * x - 1) ** 2 + y * y;
+const grad = (x, y) => [4 * x * (x * x - 1), 2 * y];
+
+defineViz('saddledescent', {
+  title: 'A plateau is the creep across a saddle',
+  height: 380, autoplay: true, stepsPerFrame: 0.7, maxStep: 520,
+  controls: [
+    { type: 'play' }, { type: 'step' }, { type: 'reset' },
+    { type: 'speed', presets: [0.5, 1, 2] },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) {
+    api.state = { x: X0, y: Y0, path: [[X0, Y0]], hist: [f(X0, Y0)] };
+  },
+  step(api) {
+    const s = api.state;
+    const [gx, gy] = grad(s.x, s.y);
+    s.x -= LR * gx; s.y -= LR * gy;
+    s.path.push([s.x, s.y]);
+    s.hist.push(f(s.x, s.y));
+  },
+  draw(api) {
+    const { ctx, colors, size, state } = api;
+    const box = { x: 6, y: 4, w: size.W - 12, h: size.H - 8 };
+    panel(ctx, box, colors, {});
+
+    const sq = { x: box.x + 10, y: box.y + 28, w: Math.min(box.w * 0.52, box.h - 56), h: box.h - 56 };
+    text(ctx, 'loss surface  f(x,y) = (x²−1)² + y²', sq.x, box.y + 9, colors, { size: 11.5, weight: '600' });
+    // contour heatmap
+    const G = 64, base = parseColor(colors.cellBg), hi = parseColor(colors.accent);
+    let fmax = 0; for (let i = 0; i <= G; i++) for (let j = 0; j <= G; j++) { const v = f(-DOM + 2 * DOM * i / G, -DOM + 2 * DOM * j / G); if (v > fmax) fmax = v; }
+    const cw = sq.w / G, ch = sq.h / G;
+    for (let i = 0; i < G; i++) for (let j = 0; j < G; j++) {
+      const x = -DOM + 2 * DOM * (i + 0.5) / G, y = -DOM + 2 * DOM * (j + 0.5) / G;
+      const t = Math.pow(f(x, y) / fmax, 0.55);
+      ctx.fillStyle = `rgb(${Math.round(base[0] + (hi[0] - base[0]) * t)},${Math.round(base[1] + (hi[1] - base[1]) * t)},${Math.round(base[2] + (hi[2] - base[2]) * t)})`;
+      ctx.fillRect(sq.x + i * cw, sq.y + (G - 1 - j) * ch, cw + 0.6, ch + 0.6);
+    }
+    ctx.strokeStyle = colors.border; ctx.strokeRect(sq.x + 0.5, sq.y + 0.5, sq.w - 1, sq.h - 1);
+    const map = (x, y) => [sq.x + (x + DOM) / (2 * DOM) * sq.w, sq.y + (DOM - y) / (2 * DOM) * sq.h];
+    // mark saddle + minima
+    for (const [mx, my, lab] of [[0, 0, 'saddle'], [-1, 0, 'min'], [1, 0, 'min']]) {
+      const [px, py] = map(mx, my);
+      ctx.strokeStyle = colors.muted; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(px, py, 3, 0, Math.PI * 2); ctx.stroke();
+      text(ctx, lab, px + 5, py - 4, colors, { size: 8.5, mono: true, color: colors.muted });
+    }
+    // trajectory
+    ctx.strokeStyle = colors.fg; ctx.lineWidth = 1.8; ctx.beginPath();
+    for (let k = 0; k < state.path.length; k++) { const [px, py] = map(state.path[k][0], state.path[k][1]); k ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
+    ctx.stroke();
+    const [cxp, cyp] = map(state.x, state.y);
+    ctx.fillStyle = colors.fg; ctx.beginPath(); ctx.arc(cxp, cyp, 5, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = colors.bg; ctx.lineWidth = 1.5; ctx.stroke();
+
+    // loss trace
+    const lp = { x: sq.x + sq.w + 22, y: box.y + 28, w: box.x + box.w - (sq.x + sq.w + 22) - 10, h: sq.h };
+    text(ctx, 'loss vs iteration', lp.x, box.y + 9, colors, { size: 11.5, weight: '600' });
+    panel(ctx, lp, colors, {});
+    const h = state.hist, n = h.length, hmax = h[0] || 1;
+    if (n >= 2) {
+      ctx.strokeStyle = colors.accent; ctx.lineWidth = 2; ctx.beginPath();
+      for (let k = 0; k < n; k++) { const px = lp.x + 6 + (k / (n - 1)) * (lp.w - 12); const py = lp.y + 8 + (1 - h[k] / hmax) * (lp.h - 30); k ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
+      ctx.stroke();
+    }
+    text(ctx, 'iteration →', lp.x + lp.w / 2, lp.y + lp.h - 13, colors, { align: 'center', size: 9.5, mono: true, color: colors.muted });
+
+    const [gx, gy] = grad(state.x, state.y);
+    const gnorm = Math.hypot(gx, gy);
+    const phase = gnorm < 0.08 ? 'gradient tiny: creeping across the saddle (plateau)' : (Math.abs(state.x) > 0.9 ? 'fallen into a basin' : 'escaping the saddle, loss dropping');
+    text(ctx, phase, box.x + 12, box.y + box.h - 15, colors, { size: 10.5, mono: true, color: colors.fg });
+    api.readout('rd', `iter ${api.iter} · |grad| ${gnorm.toFixed(3)} · loss ${(h[n - 1] ?? 0).toFixed(3)}`);
+  },
+});
+</script>

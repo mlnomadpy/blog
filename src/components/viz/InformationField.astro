@@ -1,0 +1,138 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 400 } = Astro.props;
+---
+<figure class="viz infofield" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { panel, text, parseColor, PALETTE } from './engine/draw.js';
+import { np, nn, withJax, drawJaxLoading } from './engine/jax.js';
+
+// Information is not stored AT the prototypes — it lives in the continuous field
+// BETWEEN them. Three superclass prototypes anchor the corners; every interior point
+// is a soft mixture, and its colour is that mixture. The corners are pure and
+// saturated (a confident prototype carries one bit: "I am an animal"); the interior
+// is graded and rich (a half-animal-half-plant point carries the relation). Real
+// features drift through this field carrying colour, not labels. Crank sharpness τ
+// and the field hardens into three flat tiles: neural collapse swallowing the
+// spectrum, leaving only the corners.
+// The field is one big batched softmax over a grid of locations — computed on jax-js
+// (nn.softmax) and cached per τ; the drifting cloud is JS glue.
+const NAMES = ['animals', 'vehicles', 'plants'];
+const TRI = [[0, -1], [0.866, 0.5], [-0.866, 0.5]];   // equilateral barycentric anchors
+const GRID = 44, SPAN = 1.08;                          // normalized field resolution / extent
+const randn = () => { const u = Math.random() || 1e-9, v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+
+function inside(x, y) {
+  const d = (ax, ay, bx, by, px, py) => (px - bx) * (ay - by) - (ax - bx) * (py - by);
+  const d1 = d(TRI[0][0], TRI[0][1], TRI[1][0], TRI[1][1], x, y);
+  const d2 = d(TRI[1][0], TRI[1][1], TRI[2][0], TRI[2][1], x, y);
+  const d3 = d(TRI[2][0], TRI[2][1], TRI[0][0], TRI[0][1], x, y);
+  const hasNeg = d1 < 0 || d2 < 0 || d3 < 0, hasPos = d1 > 0 || d2 > 0 || d3 > 0;
+  return !(hasNeg && hasPos);
+}
+
+// the soft-assignment field: for every in-triangle grid cell, softmax of -τ·dist² to
+// the three prototypes. Runs as a single batched nn.softmax on jax-js, cached by τ.
+function computeField(api, tau) {
+  const key = tau.toFixed(2);
+  if (api.state.fieldKey === key && api.state.field) return;
+  const cells = [], logits = [];
+  const cs = (2 * SPAN) / GRID;
+  for (let gx = 0; gx < GRID; gx++) for (let gy = 0; gy < GRID; gy++) {
+    const x = -SPAN + (gx + 0.5) * cs, y = -SPAN + (gy + 0.5) * cs;
+    if (!inside(x, y)) continue;
+    cells.push([x, y, cs]);
+    logits.push(TRI.map(t => -tau * ((x - t[0]) ** 2 + (y - t[1]) ** 2) * 1.4));
+  }
+  const W = nn.softmax(np.array(logits), -1).js();    // ← jax-js: (M,3) soft assignment
+  api.state.field = { cells, W }; api.state.fieldKey = key;
+}
+
+defineViz('infofield', {
+  title: 'The field between the prototypes',
+  height: 400, stepsPerFrame: 1, autoplay: true,
+  controls: [
+    { type: 'play' }, { type: 'speed' },
+    { type: 'newrow' },
+    { type: 'range', name: 'tau', label: 'sharpness τ (→ collapse)', min: 0.6, max: 9, step: 0.1, value: 1.6, fmt: v => v.toFixed(1) },
+    { type: 'toggle', name: 'pts', label: 'feature cloud', value: true },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) {
+    const N = 40, pts = [];
+    for (let k = 0; k < N; k++) {
+      let w = [Math.random(), Math.random(), Math.random()]; const ws = w[0] + w[1] + w[2]; w = w.map(v => v / ws);
+      const x = w[0] * TRI[0][0] + w[1] * TRI[1][0] + w[2] * TRI[2][0];
+      const y = w[0] * TRI[0][1] + w[1] * TRI[1][1] + w[2] * TRI[2][1];
+      pts.push({ x, y, vx: randn() * 0.003, vy: randn() * 0.003 });
+    }
+    api.state.pts = pts; api.state.field = null; api.state.fieldKey = '';
+    withJax(api, (a) => computeField(a, a.get('tau')));
+  },
+  step(api) {
+    if (!api.state.jaxReady) return;
+    computeField(api, api.get('tau'));               // recomputes the jax-js field only when τ changes
+    for (const p of api.state.pts) {
+      p.x += p.vx; p.y += p.vy;
+      p.vx += randn() * 0.0008; p.vy += randn() * 0.0008; p.vx *= 0.96; p.vy *= 0.96;
+      const r = Math.hypot(p.x, p.y);
+      if (r > 0.92) { p.vx -= 0.02 * p.x; p.vy -= 0.02 * p.y; }
+    }
+  },
+  draw(api) {
+    const { ctx, colors, size, state } = api;
+    const box = { x: 6, y: 4, w: size.W - 12, h: size.H - 8 };
+    panel(ctx, box, colors, { header: 24 });
+    if (!state.jaxReady || !state.field) return drawJaxLoading(api);
+    const tau = api.get('tau');
+    const cx = box.x + box.w / 2, cy = box.y + box.h / 2 + 10, R = Math.min(box.w, box.h) * 0.40;
+    const toScreen = (x, y) => [cx + x * R, cy + y * R];
+    const cols = [parseColor(PALETTE[0]), parseColor(PALETTE[2]), parseColor(PALETTE[1])];
+    const bg = parseColor(colors.cellBg || colors.bg);
+
+    // paint the cached field
+    const { cells, W } = state.field;
+    for (let m = 0; m < cells.length; m++) {
+      const [x, y, cs] = cells[m], w = W[m];
+      const r = bg[0] + (w[0] * cols[0][0] + w[1] * cols[1][0] + w[2] * cols[2][0] - bg[0]);
+      const g = bg[1] + (w[0] * cols[0][1] + w[1] * cols[1][1] + w[2] * cols[2][1] - bg[1]);
+      const b = bg[2] + (w[0] * cols[0][2] + w[1] * cols[1][2] + w[2] * cols[2][2] - bg[2]);
+      const peak = Math.max(w[0], w[1], w[2]), sat = 0.35 + 0.65 * ((peak - 1 / 3) / (1 - 1 / 3));
+      const fr = Math.round(bg[0] + (r - bg[0]) * sat), fg = Math.round(bg[1] + (g - bg[1]) * sat), fb = Math.round(bg[2] + (b - bg[2]) * sat);
+      ctx.fillStyle = `rgb(${fr},${fg},${fb})`;
+      const [sx, sy] = toScreen(x - cs / 2, y - cs / 2);
+      ctx.fillRect(sx, sy, cs * R + 1, cs * R + 1);
+    }
+
+    if (api.get('pts')) {
+      for (const p of state.pts) {
+        if (!inside(p.x, p.y)) continue;
+        const [px, py] = toScreen(p.x, p.y);
+        ctx.fillStyle = colors.fg; ctx.globalAlpha = 0.8; ctx.beginPath(); ctx.arc(px, py, 2.2, 0, 2 * Math.PI); ctx.fill(); ctx.globalAlpha = 1;
+      }
+    }
+
+    for (let i = 0; i < 3; i++) {
+      const [px, py] = toScreen(TRI[i][0], TRI[i][1]);
+      ctx.fillStyle = PALETTE[[0, 2, 1][i]]; ctx.beginPath(); ctx.arc(px, py, 7, 0, 2 * Math.PI); ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = colors.bg; ctx.stroke();
+      const off = TRI[i][1] < 0 ? -16 : 18;
+      text(ctx, NAMES[i], px, py + off, colors, { align: 'center', size: 11, color: PALETTE[[0, 2, 1][i]], weight: '600' });
+    }
+
+    text(ctx, 'the field between the prototypes', box.x + 10, box.y + 6, colors, { size: 12, color: colors.fg, weight: '600' });
+    const collapsed = tau > 5.5;
+    text(ctx, collapsed ? 'τ high → three flat tiles: the corners survive, the spectrum is gone (collapse)'
+      : 'corners are pure · the interior is graded · information lives in the blend',
+      box.x + 10, box.y + box.h - 14, colors, { size: 10, mono: true, color: collapsed ? (colors.red || '#c2553a') : colors.muted });
+    api.readout('rd', `τ ${tau.toFixed(1)} · ${collapsed ? 'collapsed' : 'spectrum intact'} · jax-js`);
+  },
+});
+</script>

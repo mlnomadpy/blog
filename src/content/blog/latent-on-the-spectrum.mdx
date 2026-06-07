@@ -1,0 +1,227 @@
+---
+title: 'Latent on the Spectrum: Why Cats Sit Closer to Dogs Than to Cars'
+description: 'The regular simplex is the perfect codebook only when classes are strangers. Real labels carry a similarity structure, and a latent space is a lossy, finite-dimensional encoding of a kernel — its codebook is the top eigenmodes of the label-similarity matrix. But the prototypes are only the top of the spectrum: the information lives in the modes below them, the continuum between prototypes, and the Welch bound sets the geometry of that channel. A follow-up to the Welch-bound post, with live in-browser experiments — steer a codebook from simplex to taxonomy and watch its spectrum, spend a dimension budget, watch supervision erase structure, watch neural collapse grind the information spectrum to zero, read dark knowledge off a feature wandering the frame, and see a structured codebook make better mistakes.'
+seoDescription: "A latent space is a finite encoding of a label-similarity kernel: its codebook is the top eigenmodes of that matrix, and the Welch bound sets the rest."
+pubDate: 2026-06-07T12:00:00-07:00
+draft: false
+tags: [ml, representation-learning, neural-collapse, simplex-etf, latent-space, hierarchy, label-structure, contrastive-learning, kernel-methods, spectral-embedding, taxonomy]
+references:
+  - authors: "Welch, L. R."
+    year: 1974
+    title: "Lower Bounds on the Maximum Cross Correlation of Signals"
+    venue: "IEEE Transactions on Information Theory 20(3), 397–399"
+    doi: "10.1109/TIT.1974.1055219"
+  - authors: "Cristianini, N., Shawe-Taylor, J., Elisseeff, A., Kandola, J."
+    year: 2002
+    title: "On Kernel-Target Alignment"
+    venue: "NIPS 2001"
+  - authors: "Diaconis, P., Goel, S., Holmes, S."
+    year: 2008
+    title: "Horseshoes in Multidimensional Scaling and Local Kernel Methods"
+    venue: "Annals of Applied Statistics 2(3), 777–807"
+    arxiv: "0811.1477"
+  - authors: "Hinton, G., Vinyals, O., Dean, J."
+    year: 2015
+    title: "Distilling the Knowledge in a Neural Network"
+    arxiv: "1503.02531"
+  - authors: "Nickel, M., Kiela, D."
+    year: 2017
+    title: "Poincaré Embeddings for Learning Hierarchical Representations"
+    venue: "NeurIPS 2017"
+    arxiv: "1705.08039"
+  - authors: "Müller, R., Kornblith, S., Hinton, G."
+    year: 2019
+    title: "When Does Label Smoothing Help?"
+    venue: "NeurIPS 2019"
+    arxiv: "1906.02629"
+  - authors: "Papyan, V., Han, X. Y., Donoho, D. L."
+    year: 2020
+    title: "Prevalence of Neural Collapse During the Terminal Phase of Deep Learning Training"
+    venue: "Proceedings of the National Academy of Sciences 117(40)"
+    arxiv: "2008.08186"
+  - authors: "Bertinetto, L., Mueller, R., Tertikas, K., Samangooei, S., Lord, N. A."
+    year: 2020
+    title: "Making Better Mistakes: Leveraging Class Hierarchies with Deep Networks"
+    venue: "CVPR 2020"
+    arxiv: "1912.09393"
+  - authors: "Liang, T., et al."
+    year: 2023
+    title: "Inducing Neural Collapse to a Fixed Hierarchy-Aware Frame for Reducing Mistake Severity"
+    venue: "ICCV 2023"
+    arxiv: "2303.05689"
+  - authors: "Jiang, J., Zhou, J., Wang, P., Qu, Q., Mixon, D., You, C., Zhu, Z."
+    year: 2024
+    title: "Generalized Neural Collapse for a Large Number of Classes"
+    venue: "ICML 2024"
+    arxiv: "2310.05351"
+keywords:
+  - structured latent space
+  - spectral embedding
+  - label kernel
+  - kernel target alignment
+  - hierarchy-aware frame
+  - neural collapse beyond simplex
+  - classical MDS
+  - dark knowledge
+  - label smoothing
+  - dimension budget
+---
+import SpectralCodebook from '../../components/viz/SpectralCodebook.astro';
+import SpectrumManifold from '../../components/viz/SpectrumManifold.astro';
+import DimensionBudget from '../../components/viz/DimensionBudget.astro';
+import GramResidual from '../../components/viz/GramResidual.astro';
+import DataVsLabel from '../../components/viz/DataVsLabel.astro';
+import InformationSpectrum from '../../components/viz/InformationSpectrum.astro';
+import InformationField from '../../components/viz/InformationField.astro';
+import CoefficientMeter from '../../components/viz/CoefficientMeter.astro';
+import KernelSourceMixer from '../../components/viz/KernelSourceMixer.astro';
+import HierarchyCascade from '../../components/viz/HierarchyCascade.astro';
+import AccuracySeverityPareto from '../../components/viz/AccuracySeverityPareto.astro';
+import MistakeChord from '../../components/viz/MistakeChord.astro';
+import CiteAs from '../../components/CiteAs.astro';
+
+*A follow-up to [What Makes a Good Latent Space?](/blog/welch-bound-good-latent-space/). There the answer was the regular simplex — every class equally far from every other. That answer is exactly right, and quietly wrong. It is right for classes that are strangers, and real classes are not strangers. The fix turns out to be spectral, and it's more beautiful than the simplex.*
+
+The Welch-bound post ended on a clean note: a good latent space packs its class codes as far apart as geometry allows, and for $C$ classes that fit the dimension the optimum is the **regular simplex** — every pair of codes at the same angle, cosine $-1/(C-1)$. Every class gets the same deal.
+
+"The same deal" should make you suspicious. It is fair only if the classes are equivalent — if the *only* thing you know is that they differ. Take three real labels:
+
+> **cat**, **dog**, **car**.
+
+The simplex demands $\langle\text{cat},\text{dog}\rangle = \langle\text{cat},\text{car}\rangle = \langle\text{dog},\text{car}\rangle$ — all three pairs at one angle. But a cat and a dog are *both animals*; a car is not. Any space that puts `cat` exactly as far from `dog` as from `car` has thrown away something true. The simplex is the perfect codebook **for strangers**, and these classes are not strangers.
+
+## A codebook is an encoding of a similarity
+
+Here is the move that makes everything click. Stop thinking of the codebook as "points to spread out" and start thinking of it as an **encoding of a similarity matrix**. You have a desired similarity between every pair of classes, $S^\star_{ij}$ — high for `cat`–`dog`, low for `cat`–`car`. The codebook is the set of unit vectors whose Gram matrix (their pairwise cosines) best matches $S^\star$:
+
+$$
+\min_{\;\lVert\mathbf{e}_i\rVert=1}\ \big\lVert\, \mathbf{E}^\top\mathbf{E} - S^\star \,\big\rVert_F^2 .
+$$
+
+The Welch simplex is **one special case of this** — the case $S^\star = $ "every off-diagonal equal," the *structureless* target. The label kernel is the identity: no class resembles any other. Feed in a different $S^\star$ and the codebook follows it. This is the old, exactly-right idea of **kernel-target alignment** (Cristianini et al., 2002): the ideal embedding kernel *is* the label kernel.
+
+Steer it. Below, nine codes descend toward a target similarity you control. With **structure** at 0 the target is flat and they settle into the even simplex — equidistant strangers. Turn it up and the codes split into superclasses: the within-group pull keeps `cat` and `dog` close while the across-group push sends `car` to the far side. The middle panel is the kernel you're dialing; ignore the third panel for one more paragraph.
+
+<SpectralCodebook caption="Nine class codes descending toward a target similarity (middle), live. Structure = 0: a flat label kernel → the regular simplex, every class equidistant. Structure = 1: a block kernel → the codes clump by superclass. The right panel is the kernel's eigenspectrum — read on. Drag 'label structure' to morph between strangers and a taxonomy; 'superclasses' sets the number of groups. Because these codes live on a 2-D circle, two superclasses spread into clean arcs — push to three and the members pile onto their group's vertex: there aren't enough dimensions left for within-group spread. That collapse is the dimension-budget lesson in miniature; the next visualization embeds the same structure with the optimal coordinates and keeps the three groups apart." />
+
+## The spectral law: the codebook is the top modes of the kernel
+
+That third panel is the whole post. The best $d$-dimensional codebook for a kernel $S^\star$ is not found by trial and error — it is the **top-$d$ eigenvectors of $S^\star$**, scaled by their eigenvalues. This is classical multidimensional scaling, the same spectral fact behind kernel PCA and Laplacian eigenmaps: to embed a similarity, diagonalise it and keep the strongest modes.
+
+So a kernel's **eigenspectrum** tells you everything about how it wants to be embedded:
+
+- A **flat spectrum** — all eigenvalues equal — is a kernel with no preferred direction. Every mode matters the same. That is the white kernel, and its embedding is the maximally even one: **the simplex** (a tight frame is exactly the flat-spectrum condition from the Welch post). Slide structure to 0 above and watch all the bars snap to the same height.
+- A **peaked spectrum** — a few large eigenvalues, the rest small — is a kernel with dominant structure. The top mode is the coarsest distinction (animals vs vehicles); the next modes are finer. Slide structure up and watch one bar shoot up.
+
+The simplex was never the universal answer. It was the answer for the one spectrum that has no shape.
+
+And the shape is not a metaphor. Diagonalise the kernel, keep its top two modes, and *look* — the codebook has a geometry you can see, and it changes with the spectrum. Independent labels give the even spread of the simplex. A taxonomy gives tight clusters — a simplex of simplexes. But the most telling case is a **graded** label kernel, where similarity falls off smoothly with how related two classes are (cat–dog–wolf–…–trout, each close to its neighbours, far from the ends). Embed *that* and the classes don't scatter and don't clump — they fall onto a **curved arch**. This is the famous *horseshoe* of multidimensional scaling (Diaconis, Goel & Holmes, 2008): the first eigenmode recovers the latent ordering, the second bends it into a curve. The classes literally lie on a spectrum — a one-dimensional manifold curled into two dimensions. "Latent on the spectrum" is not a figure of speech; it is what the eigenvectors do.
+
+<SpectrumManifold caption="One label kernel, three regimes, embedded live with classical MDS (top two eigenmodes). Independent → an even spread, the simplex (flat spectrum, right). Taxonomy → tight clusters, a simplex of simplexes (two dominant modes). Spectrum → the horseshoe: a graded similarity becomes a curved one-dimensional manifold, classes ordered along the arc, warm-to-cool. The right panel is the live eigenspectrum — flat for strangers, peaked for structure. Switch the kernel and drag the structure strength; watch the geometry morph between simplex, clusters, and curve." />
+
+## Your dimension budget buys eigenmodes
+
+If the codebook is the top-$d$ eigenmodes, then **the embedding dimension is a budget**: $d$ dimensions buy you the $d$ strongest relationships in the label kernel, and the rest are discarded. A latent space is a *lossy compression of a similarity*.
+
+This reframes the over-complete regime of the Welch post. Watch the budget at work: a structured (hierarchical) kernel concentrates almost everything into a couple of modes, so even one or two dimensions reconstruct it well. The flat simplex kernel has *no* dominant mode — every eigenvalue is equal — so there is nothing to compress, and you need the full $C-1$ dimensions to represent it. Structure is what makes a latent space *compressible*.
+
+<DimensionBudget caption="A latent space as lossy compression. Left: the target label kernel. Middle: what survives when you keep only the top-d eigenmodes (your embedding dimensions). Right: the eigenspectrum, with the kept modes highlighted, and the share of the kernel they capture. Drag the dimension budget; toggle the flat (simplex) kernel to see the difference — a structured kernel compresses into one or two modes, the flat one does not compress at all." />
+
+The residual makes the compression literal. Keeping $d$ modes does not make a smaller picture of the same kernel; it leaves a specific error pattern behind. If the discarded modes were fine-grained within-family distinctions, the residual lights up inside families. If the kernel is flat, every omitted mode matters equally.
+
+<GramResidual caption="A residual view of the dimension budget. Left: the target similarity S*. Next: the Gram matrix rebuilt from the kept eigenmodes. Third: the residual S* − EEᵀ, the relationships the latent space could not afford. Right: the spectrum and relative Frobenius error. Structured kernels lose specific details; flat simplex kernels lose everything evenly until nearly all modes are kept." />
+
+## Where does the structure even come from? The data.
+
+You might still object: maybe in practice labels really are independent, and the simplex is what you get. It isn't — and the reason is that **the structure doesn't come from the labels at all. It comes from the data.**
+
+Cats and dogs *look alike*. Their images occupy overlapping regions of feature space long before any label is attached. So a representation feels two forces at once: the data pulls perceptually similar classes together, and the supervised loss pushes every class apart to make them classifiable. The geometry you end up with is the negotiation between them — and crucially, the one-hot label only ever supplies the *second* force. Left to itself it whitens the kernel toward the simplex.
+
+This is exactly what Müller, Kornblith & Hinton (2019) found for **label smoothing**: nudging targets toward uniform tightens each class and **"erases information in the logits about resemblances between classes."** Smoothing turns up the simplex force and grinds the data's structure away. It is also why **dark knowledge** works (Hinton, Vinyals & Dean, 2015): a teacher's soft outputs — "mostly dog, a little cat, never car" — are the surviving structure that the hard label tried to delete.
+
+Turn the supervision up below and watch the codebook tear itself off the data:
+
+<DataVsLabel caption="The faint clouds are the data — perceptually similar classes (cats, dogs) overlap in feature space. The bold points are the class codes, pulled between two forces: the data's structure, and a supervision pressure that pushes every class equally apart (one-hot / label smoothing). At low supervision the codes inherit the data's structure for free; crank it up and they tear into a featureless simplex, erasing exactly the resemblances the data handed them. Drag 'supervision pressure'." />
+
+So far the spectrum belonged to a target label kernel. Now the object changes: we ask what spectrum the trained **features** keep after the data force and supervision force have negotiated.
+
+## The spectrum of information: the prototypes are only the top
+
+Everything so far has been about the **prototypes** — the $C$ class codes. But a prototype is a single point, and a real feature isn't a prototype; it's a point *near* one, leaning toward its neighbours. So the codebook is only part of the story. The rest — the part that actually carries information — is the spectrum *below* the prototypes.
+
+Make it exact. Decompose the feature covariance the way Fisher and neural collapse both do:
+
+$$
+\Sigma_{\text{total}} = \underbrace{\Sigma_B}_{\text{between prototypes}} \;+\; \underbrace{\Sigma_W}_{\text{within / residual}} .
+$$
+
+$\Sigma_B$ has rank $\le C-1$ and is spanned by the prototypes — **its geometry is the codebook**, the simplex or Welch frame or structured kernel we've been steering. $\Sigma_W$ is everything else: the within-class variation, the fine distinctions, the gradations between classes. Stack them and a representation's eigenspectrum has two regimes — the **top $C-1$ modes are the prototype frame** (the separation channel), and the **tail is the information**.
+
+Press Play and watch what training does to it. As the network collapses — $\Sigma_W \to 0$, the celebrated *neural collapse* — the information tail is ground to nothing. The clusters get tighter, the prototypes lock into their frame, and the spectrum the features lived in is erased. Drag **label structure** to shape the prototype modes: flat for a simplex, peaked for a taxonomy.
+
+<InformationSpectrum caption="The eigenspectrum of a representation, live. The top C−1 bars (orange) are the prototype frame — the simplex / Welch packing / label kernel, the separation channel; drag 'label structure' to shape them. The tail (green) is the information the features carry between prototypes. Press Play to run training: neural collapse drives the within-class variance Σ_W → 0 and the information tail vanishes. Maximal separation and maximal information pull in opposite directions — collapse buys the first by spending the second." />
+
+This is the trade-off the [modality-gap post](/blog/modality-gap-complementary/) called *separate or represent*, now readable off a single picture: **how much spectrum you leave standing below the prototypes.** Pure separation — a fully collapsed simplex — is a representation that has thrown its information away.
+
+## Information is a coordinate between prototypes
+
+So where, exactly, does that information live? **Between the prototypes.** Project a feature onto the prototype frame and you get its *soft assignment* — how much it leans toward each code. A feature halfway between `cat` and `dog` reads "70% cat, 30% dog, 0% car." That vector is not noise around the label; it **is** the information — and it is exactly the **dark knowledge** a teacher distills (Hinton et al., 2015). The codebook is the basis; the information is the **coefficients**.
+
+Watch a feature wander the frame and read its coordinates:
+
+<InformationField caption="Information is not stored AT the prototypes — it lives in the continuous field BETWEEN them. Three superclass prototypes anchor the corners; every interior point is a soft mixture, and its colour IS that mixture (the dark knowledge). The corners are pure and saturated — a confident prototype carries one bit, 'I am an animal.' The interior is graded and rich: a half-animal-half-plant point carries the relation. Real features (the dots) drift through the field carrying colour, not labels. Now crank sharpness τ: the field hardens into three flat tiles — that is neural collapse swallowing the spectrum, leaving only the corners. Toggle the feature cloud; drag τ toward collapse." />
+
+Colour is useful, but the actual object is a coefficient vector. Read it as logits, soft labels, or frame coefficients — the point is the same: the information is the mixture.
+
+<CoefficientMeter caption="A coefficient meter for dark knowledge. Move the feature around the prototype frame and sharpen the softmax. The left point is a continuous location between cat, dog, and car; the right bars are its coefficients. At low sharpness the vector carries relations. At high sharpness it becomes almost one-hot, and the relation is erased." />
+
+And here is where **Welch closes the loop**. The prototypes pack on the sphere *subject to the Welch bound* — that floor on their coherence is what fixes the basis vectors of this between-space. Two regimes, both from the first post:
+
+- **Under-complete** ($C \le d+1$): the simplex spends exactly $C-1$ dimensions on prototypes and **leaves $d-(C-1)$ dimensions free for information** — a clean split into a label channel and an information channel.
+- **Over-complete** ($C > d$): the prototypes now span the whole space, so every feature is a **frame expansion** $\mathbf{z} = \sum_c a_c\,\boldsymbol{\mu}_c$, and the coefficients $a_c$ *are* the information. The Welch bound on the prototypes is the floor on how well-conditioned that expansion is — the lower the coherence, the more stably the features can be written in the codebook.
+
+So Welch was never only about packing the labels. It sets the geometry of the channel the *information* rides on. The prototypes are the top of the spectrum; the features live in the rest; and the bound governs both.
+
+## Hierarchy is a spectral cascade — and the field already builds it
+
+Real label structure is usually a **hierarchy**, and a hierarchy is just a particular spectrum: the coarsest split is the top eigenmode, the next level the next modes, and so on — a cascade from general to specific. The codebook that matches it is a *simplex of simplexes*: superclasses arranged as a simplex, each refined into a smaller one.
+
+<HierarchyCascade caption="A hierarchy cascade. Left: a small taxonomy. Middle: the eigenmodes it spends — first the superclass split, then within-group splits, then leaf detail. Right: the resulting codebook geometry. Increase the visible depth and watch each deeper level buy another mode. Hierarchy is not extra decoration on top of the spectrum; it is a spectrum with coarse modes first and fine modes later." />
+
+This is not hypothetical. **Hierarchy-aware frames** (Liang et al., ICCV 2023) replace the fixed simplex-ETF classifier with a target geometry where related classes sit closer, and show a network collapsing to *that* frame makes **less severe mistakes**. In the crowded regime — vocabularies, retrieval, faces, where there are far more classes than dimensions — **generalized neural collapse** (Jiang et al., ICML 2024) proves the class means form a **"softmax code"** maximising the minimum one-vs-rest margin, an object tied directly to the **Tammes/Welch** packing from the previous post. The packing carries over; structure bends it.
+
+One geometric caveat worth a sentence: deep trees don't fit in flat Euclidean space. A tree's leaves grow exponentially with depth while Euclidean volume grows polynomially, so something has to give. Hyperbolic space — negative curvature, exponential volume — fits them naturally; Nickel & Kiela (2017) showed Poincaré embeddings capture hierarchy and similarity together at a fraction of the dimensions. If your label kernel is a deep taxonomy, the right codebook may not live on a sphere at all.
+
+## Why it's worth the trouble: better mistakes
+
+The clean payoff. A structured codebook fails *toward* the right neighbours. Here is the same nearest-code classifier under the same feature noise, run two ways — once on a simplex, once on a structured codebook:
+
+<AccuracySeverityPareto caption="A Pareto view of the trade-off. The simplex end keeps the largest margin and slightly higher top-1 accuracy in this toy model, but its error mass is severe because wrong answers jump across superclasses. Adding structure lowers catastrophic error mass while spending some margin. This is why raw accuracy and mistake cost are not the same metric." />
+
+<MistakeChord caption="Where the errors flow. Twelve classes sit on the rim, grouped into three superclass arcs (animals · vehicles · plants). Each ribbon is a confusion — it leaves the true class and lands on the predicted one, its width the error mass, its colour mild (stays inside the superclass — a cat called a dog) or severe (jumps the rim — a cat called a car). The error RATE is held fixed; only its destination changes. Drag the codebook from simplex to taxonomy: at the simplex the ribbons spray across every group — most error mass is severe; as structure rises they pull home into the arcs, severe mass collapsing toward zero. Same accuracy, completely different cost of being wrong." />
+
+That last detail is the honest trade-off, and it's real: the simplex often wins raw top-1 accuracy, because maximal margin is maximal margin. But its mistakes are catastrophic — cat→car — because it has no notion of a *nearer* wrong answer. This is the whole point of Bertinetto et al.'s "Making Better Mistakes" (CVPR 2020): a hierarchy-aware geometry turns absurd errors into forgivable ones. And the same structure is what a retrieval index, a transfer head, or a few-shot learner leans on — the cat-is-like-dog prior that makes downstream learning cheap. Look at a real CLIP space: `cat` sits near `dog`, nowhere near `car`. That was never a failure to reach the simplex. It is the space correctly encoding a label spectrum.
+
+## The honest caveats
+
+A reframing, not a free lunch, and it carries choices:
+
+<KernelSourceMixer caption="A target-kernel mixer. A practical S* can come from a taxonomy, teacher logits, co-occurrence, class-name text embeddings, or a blend. Move the weights and watch the target kernel, top-2 codebook, and spectrum change. The model faithfully embeds the similarity you give it, which is why choosing the source is a modeling decision rather than a formality." />
+
+- **Where does $S^\star$ come from?** A taxonomy, soft labels from a teacher, co-occurrence counts, the text embedding of the class names — each is a modelling decision, and a *wrong* similarity is worse than none.
+- **It's a trade-off, not a strict win.** Maximal margin (the simplex) versus fidelity to structure — the *structure* slider is literally that dial, and you saw it cost top-1 accuracy. Leave it at zero and you're back to strangers; push it too far and you sacrifice separation.
+- **This is the *inter*-class story.** How class codes relate to one another is a different axis from the within-class manifold. Both matter; we touched only the first.
+
+## The picture, completed
+
+Three posts, one picture. The Welch-bound post asked how to **pack** the prototypes and answered with the simplex and its over-complete frame. This post gave that packing **structure** — match the label kernel, and the simplex is just its flat-spectrum corner. And the final act says the prototypes are only the **top** of the spectrum: the features live in the modes below them, the continuum between the codes, where the information rides — and the Welch bound, which fixed the packing, also fixes the geometry of that channel.
+
+> A latent space is a spectrum. The top is the **label frame** — prototypes packed as far apart as the Welch bound allows, shaped by whatever structure the label kernel carries. The bottom is the **information** — the residual the features spend between prototypes, the dark knowledge, the fine distinctions. A good latent space packs the top tightly *and* leaves the bottom standing; collapse the bottom and you have separation with nothing left to say. The regular simplex is the special, beautiful, structureless top — the codebook for classes that have nothing to do with each other.
+
+Cats end up closer to dogs than to cars. And between them is where the information lives.
+
+<CiteAs
+  slug="latent-on-the-spectrum"
+  title="Latent on the Spectrum: Why Cats Sit Closer to Dogs Than to Cars"
+  pubDate="2026-06-07T12:00:00-07:00"
+/>

@@ -1,0 +1,125 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 400 } = Astro.props;
+---
+<figure class="viz gramresidual" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { panel, text, parseColor } from './engine/draw.js';
+import { np, withJax, drawJaxLoading, eigh } from './engine/jax.js';
+
+const C = 8;
+
+function kernel(kind, structure) {
+  const A = Array.from({ length: C }, () => new Array(C).fill(0));
+  for (let i = 0; i < C; i++) for (let j = 0; j < C; j++) {
+    if (i === j) A[i][j] = 1;
+    else if (kind === 'flat') A[i][j] = -1 / (C - 1);
+    else {
+      const gSame = Math.floor(i / 4) === Math.floor(j / 4);
+      const local = Math.exp(-Math.abs(i - j) / 1.8);
+      A[i][j] = structure * (0.72 * (gSame ? 1 : -0.55) + 0.28 * local);
+    }
+  }
+  return A;
+}
+
+function reconstruct(eig, d) {
+  const G = Array.from({ length: C }, () => new Array(C).fill(0));
+  for (let k = 0; k < d; k++) {
+    const lk = Math.max(0, eig.values[k]);
+    const v = eig.vectors[k];
+    for (let i = 0; i < C; i++) for (let j = 0; j < C; j++) G[i][j] += lk * v[i] * v[j];
+  }
+  return G;
+}
+
+function frob(A) {
+  let s = 0;
+  for (let i = 0; i < C; i++) for (let j = 0; j < C; j++) s += A[i][j] * A[i][j];
+  return Math.sqrt(s);
+}
+
+function diff(A, B) {
+  return A.map((r, i) => r.map((v, j) => v - B[i][j]));
+}
+
+function reconstructJax(A, eig, d) {
+  const V = Array.from({ length: C }, (_, i) => Array.from({ length: d }, (_, k) => eig.vectors[k][i]));
+  const lam = Array.from({ length: d }, (_, k) => Math.max(0, eig.values[k]));
+  const At = np.array(A);
+  const Vt = np.array(V);
+  const Lt = np.diag(np.array(lam));
+  const Gt = np.matmul(np.matmul(Vt.ref, Lt), np.transpose(Vt.ref));
+  const Rt = np.subtract(At.ref, Gt.ref);
+  const num = np.sqrt(np.sum(np.multiply(Rt.ref, Rt.ref)));
+  const den = np.sqrt(np.sum(np.multiply(At.ref, At.ref)));
+  return { G: Gt.js(), R: Rt.js(), err: +np.divide(num, den) };
+}
+
+function drawHeat(ctx, box, mat, title, colors, signed = true) {
+  panel(ctx, box, colors, {});
+  text(ctx, title, box.x + 8, box.y + 5, colors, { size: 11, color: colors.fg, weight: '600' });
+  const side = Math.min(box.w - 18, box.h - 34);
+  const ox = box.x + (box.w - side) / 2, oy = box.y + 25, cs = side / C;
+  const bg = parseColor(colors.cellBg), pos = parseColor(colors.accent), neg = parseColor(colors.blue);
+  for (let i = 0; i < C; i++) for (let j = 0; j < C; j++) {
+    const v = Math.max(-1, Math.min(1, mat[i][j]));
+    const t = signed ? Math.min(1, Math.abs(v)) : Math.min(1, v);
+    const hi = signed && v < 0 ? neg : pos;
+    ctx.fillStyle = `rgb(${Math.round(bg[0] + (hi[0] - bg[0]) * t)},${Math.round(bg[1] + (hi[1] - bg[1]) * t)},${Math.round(bg[2] + (hi[2] - bg[2]) * t)})`;
+    ctx.fillRect(ox + j * cs, oy + i * cs, cs + 0.5, cs + 0.5);
+  }
+  ctx.strokeStyle = colors.border; ctx.strokeRect(ox + 0.5, oy + 0.5, side - 1, side - 1);
+}
+
+defineViz('gramresidual', {
+  title: 'What the dimension budget throws away',
+  height: 400,
+  controls: [
+    { type: 'range', name: 'd', label: 'kept modes', min: 1, max: 7, step: 1, value: 2, int: true, fmt: v => v },
+    { type: 'range', name: 'structure', label: 'structure', min: 0, max: 1, step: 0.02, value: 0.85, fmt: v => v.toFixed(2) },
+    { type: 'select', name: 'kind', label: 'kernel', value: 'structured', reset: false,
+      options: [{ value: 'structured', label: 'structured' }, { value: 'flat', label: 'flat simplex' }] },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) {
+    withJax(api);
+  },
+  draw(api) {
+    if (!api.state.jaxReady) return drawJaxLoading(api);
+    const { ctx, colors, size } = api;
+    const A = kernel(api.get('kind'), api.get('structure'));
+    const eig = eigh(A);
+    const { G, R, err } = reconstructJax(A, eig, api.get('d'));
+    const gap = 10, w = (size.W - 12 - 3 * gap) / 4, h = size.H - 8;
+    drawHeat(ctx, { x: 6, y: 4, w, h }, A, 'target S*', colors);
+    drawHeat(ctx, { x: 6 + w + gap, y: 4, w, h }, G, `rebuild in ${api.get('d')}D`, colors);
+    drawHeat(ctx, { x: 6 + 2 * (w + gap), y: 4, w, h }, R, 'residual', colors);
+
+    const box = { x: 6 + 3 * (w + gap), y: 4, w, h };
+    panel(ctx, box, colors, {});
+    text(ctx, 'error left behind', box.x + 8, box.y + 5, colors, { size: 11, color: colors.fg, weight: '600' });
+    const vals = eig.values.map(v => Math.max(0, v));
+    const vmax = Math.max(1, ...vals);
+    const px = box.x + 14, py = box.y + 34, pw = box.w - 28, ph = box.h - 118, bw = pw / C;
+    ctx.strokeStyle = colors.border; ctx.beginPath(); ctx.moveTo(px, py + ph); ctx.lineTo(px + pw, py + ph); ctx.stroke();
+    for (let k = 0; k < C; k++) {
+      ctx.fillStyle = k < api.get('d') ? colors.accent : colors.border;
+      ctx.globalAlpha = k < api.get('d') ? 0.95 : 0.65;
+      const bh = vals[k] / vmax * ph;
+      ctx.fillRect(px + k * bw + bw * 0.18, py + ph - bh, bw * 0.64, bh);
+    }
+    ctx.globalAlpha = 1;
+    text(ctx, `${(100 * err).toFixed(0)}%`, box.x + box.w / 2, box.y + box.h - 66, colors, { align: 'center', size: 34, color: err > 0.35 ? (colors.red || '#c2553a') : colors.accent, weight: '700' });
+    text(ctx, 'relative Frobenius error', box.x + box.w / 2, box.y + box.h - 30, colors, { align: 'center', size: 10, color: colors.muted });
+    api.readout('rd', `${api.get('d')} modes kept · residual ${(100 * err).toFixed(0)}%`);
+  },
+});
+</script>

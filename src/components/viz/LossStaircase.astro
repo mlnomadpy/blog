@@ -1,0 +1,111 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 420 } = Astro.props;
+---
+<figure class="viz lossstaircase" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { panel, text, PALETTE } from './engine/draw.js';
+import * as ng from './engine/nanograd.js';
+
+// Why training loss falls in steps. A two-layer linear network W2·W1 learns a
+// diagonal target diag(s1>s2>...) from a whitened input (X = I). With small
+// initialization the net sits near a saddle, then learns one mode at a time:
+// each plateau is the slow escape from a saddle, each drop is a mode "switching
+// on." Trained live in your browser on the nanograd autodiff engine; the loss
+// staircase and the climbing gains are real gradient descent, not a script.
+const R = 4, H = 8;
+const S = [1.0, 0.62, 0.36, 0.17];          // target gains, decreasing
+const NAMES = ['mode 1', 'mode 2', 'mode 3', 'mode 4'];
+
+defineViz('lossstaircase', {
+  title: 'Loss falls in steps: one mode per plateau',
+  height: 420, stepsPerFrame: 1.1, maxStep: 1500,
+  controls: [
+    { type: 'play' }, { type: 'step' }, { type: 'reset' },
+    { type: 'speed', presets: [0.5, 1, 2, 4] },
+    { type: 'range', name: 'init', label: 'init scale', min: 0.02, max: 0.25, step: 0.01, value: 0.07, reset: true, fmt: v => v.toFixed(2) },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) {
+    const sc = api.get('init') || 0.07;
+    const X = new Float64Array(R * R); for (let i = 0; i < R; i++) X[i * R + i] = 1;   // identity input
+    const Y = new Float64Array(R * R); for (let i = 0; i < R; i++) Y[i * R + i] = S[i]; // diag(S)
+    const Xt = ng.tensor(R, R, X), Yt = ng.tensor(R, R, Y);
+    const W1 = ng.param(R, H, () => (Math.random() * 2 - 1) * sc);
+    const W2 = ng.param(H, R, () => (Math.random() * 2 - 1) * sc);
+    const pred = () => ng.matmul(ng.matmul(Xt, W1), W2);   // X = I  ->  pred = W1·W2  (R×R)
+    api.state = {
+      pred,
+      adam: new ng.Adam([W1, W2], 0.02),
+      lossFn: () => ng.sumAll(ng.square(ng.sub(pred(), Yt))),
+      hist: [],
+      loss0: S.reduce((p, v) => p + v * v, 0),
+    };
+  },
+  step(api) {
+    const L = api.state.lossFn();
+    ng.backward(L);
+    api.state.adam.step();
+    api.state.hist.push(L.d[0]);
+    if (api.state.hist.length > 2000) api.state.hist.shift();
+  },
+  draw(api) {
+    const { ctx, colors, size, state } = api;
+    const box = { x: 6, y: 4, w: size.W - 12, h: size.H - 8 };
+    panel(ctx, box, colors, {});
+    const P = state.pred();
+    const gains = []; for (let i = 0; i < R; i++) gains.push(P.d[i * R + i]);
+
+    // ── left: loss staircase ──
+    const lb = { x: box.x + 12, y: box.y + 28, w: box.w * 0.54 - 18, h: box.h - 70 };
+    text(ctx, 'training loss', lb.x, box.y + 9, colors, { size: 12, weight: '600' });
+    panel(ctx, lb, colors, {});
+    const hist = state.hist, n = hist.length;
+    const ymax = state.loss0 * 1.02;
+    const sx = (i) => lb.x + 6 + (n < 2 ? 0 : (i / (n - 1)) * (lb.w - 12));
+    const sy = (v) => lb.y + 6 + (1 - Math.max(0, Math.min(1, v / ymax))) * (lb.h - 28);
+    // gridlines at cumulative mode contributions (where each plateau sits)
+    let acc = state.loss0;
+    ctx.strokeStyle = colors.border; ctx.setLineDash([2, 3]);
+    for (let i = 0; i < R; i++) { const yy = sy(acc); ctx.beginPath(); ctx.moveTo(lb.x + 6, yy); ctx.lineTo(lb.x + lb.w - 6, yy); ctx.stroke(); acc -= S[i] * S[i]; }
+    ctx.setLineDash([]);
+    if (n >= 2) {
+      ctx.strokeStyle = colors.accent; ctx.lineWidth = 2; ctx.beginPath();
+      for (let i = 0; i < n; i++) { const px = sx(i), py = sy(hist[i]); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
+      ctx.stroke();
+    }
+    text(ctx, 'iteration →', lb.x + lb.w / 2, lb.y + lb.h - 14, colors, { align: 'center', size: 9.5, mono: true, color: colors.muted });
+    text(ctx, `loss ${(hist[n - 1] ?? state.loss0).toFixed(3)}`, lb.x + lb.w - 6, lb.y + 4, colors, { align: 'right', size: 10, mono: true, color: colors.muted });
+
+    // ── right: recovered gains climbing one at a time ──
+    const rb = { x: box.x + box.w * 0.56, y: box.y + 28, w: box.w * 0.44 - 18, h: box.h - 70 };
+    text(ctx, 'recovered gains (the structure)', rb.x, box.y + 9, colors, { size: 12, weight: '600' });
+    panel(ctx, rb, colors, {});
+    const bw = (rb.w - 20) / R, base = rb.y + rb.h - 22, full = rb.h - 40;
+    let learning = -1;
+    for (let i = 0; i < R; i++) {
+      const bx = rb.x + 10 + i * bw;
+      const tgtY = base - (S[i] / S[0]) * full;
+      const curY = base - (Math.max(0, gains[i]) / S[0]) * full;
+      ctx.fillStyle = PALETTE[i % PALETTE.length];
+      ctx.fillRect(bx, curY, Math.max(10, bw - 10), base - curY);
+      ctx.strokeStyle = colors.fg; ctx.setLineDash([3, 2]); ctx.beginPath(); ctx.moveTo(bx, tgtY); ctx.lineTo(bx + Math.max(10, bw - 10), tgtY); ctx.stroke(); ctx.setLineDash([]);
+      text(ctx, NAMES[i].replace('mode ', 'm'), bx + (bw - 10) / 2, base + 4, colors, { align: 'center', size: 9, mono: true, color: colors.muted });
+      const frac = Math.max(0, gains[i]) / S[i];
+      if (frac > 0.1 && frac < 0.9 && learning < 0) learning = i;
+    }
+    text(ctx, 'dashed = target gain', rb.x + 10, rb.y + 6, colors, { size: 9.5, mono: true, color: colors.muted });
+
+    const phase = learning >= 0 ? `learning ${NAMES[learning]}…` : (gains[R - 1] > 0.9 * S[R - 1] ? 'all modes learned' : 'on a plateau (near a saddle)');
+    text(ctx, phase, box.x + 12, box.y + box.h - 16, colors, { size: 10.5, mono: true, color: colors.fg });
+    api.readout('rd', `iter ${api.iter} · loss ${(hist[n - 1] ?? state.loss0).toFixed(3)}`);
+  },
+});
+</script>

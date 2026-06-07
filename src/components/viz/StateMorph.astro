@@ -1,0 +1,105 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 360 } = Astro.props;
+---
+<figure class="viz statemorph" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { panel, dot, text, PALETTE } from './engine/draw.js';
+
+// The three states, looping. A real 2-D force system, integrated live: satellites
+// are attracted to their class leader (clustering = organization), and leaders
+// repel one another while seeking a ring (spreading = structure). From a random
+// scatter it passes through RANDOM -> ORGANIZED -> STRUCTURED, then re-randomizes
+// and does it again. No labels are scripted; the state is read from the geometry.
+const K = 4, M = 10, N = K * M, PERIOD = 560;
+const rand = (a, b) => a + Math.random() * (b - a);
+
+function randomize(s) {
+  for (let c = 0; c < K; c++) { s.L[c] = [rand(-1, 1), rand(-1, 1)]; }
+  for (let i = 0; i < N; i++) { s.P[i] = [rand(-1.1, 1.1), rand(-1.1, 1.1)]; s.lab[i] = (i / M) | 0; }
+}
+
+defineViz('statemorph', {
+  title: 'Random → organized → structured (looping)',
+  height: 360, autoplay: true, stepsPerFrame: 0.7,
+  controls: [
+    { type: 'play' }, { type: 'button', name: 'reroll', label: 're-roll' },
+    { type: 'speed', presets: [0.5, 1, 2] },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) {
+    const s = { L: [], P: [], lab: new Int32Array(N) };
+    randomize(s);
+    api.state = s;
+  },
+  onAction(name, api) { if (name === 'reroll') randomize(api.state); },
+  step(api) {
+    const s = api.state;
+    if (api.iter > 0 && api.iter % PERIOD === 0) randomize(s);
+    const ka = 0.05, krep = 0.018, kr = 0.05, Rr = 0.82;
+    // satellites follow their leader
+    for (let i = 0; i < N; i++) {
+      const c = s.lab[i], L = s.L[c], P = s.P[i];
+      P[0] += ka * (L[0] - P[0]);
+      P[1] += ka * (L[1] - P[1]);
+    }
+    // leaders repel + seek the ring
+    for (let a = 0; a < K; a++) {
+      let fx = 0, fy = 0;
+      for (let b = 0; b < K; b++) {
+        if (a === b) continue;
+        const dx = s.L[a][0] - s.L[b][0], dy = s.L[a][1] - s.L[b][1];
+        const d2 = dx * dx + dy * dy + 0.05;
+        fx += krep * dx / d2; fy += krep * dy / d2;
+      }
+      const r = Math.hypot(s.L[a][0], s.L[a][1]) + 1e-6;
+      fx += kr * (Rr / r - 1) * s.L[a][0];
+      fy += kr * (Rr / r - 1) * s.L[a][1];
+      s.L[a][0] += fx; s.L[a][1] += fy;
+    }
+  },
+  draw(api) {
+    const { ctx, colors, size, state } = api;
+    const box = { x: 6, y: 4, w: size.W - 12, h: size.H - 8 };
+    panel(ctx, box, colors, {});
+    const cx = box.x + box.w / 2, cy = box.y + box.h / 2 + 6, R = Math.min(box.w, box.h - 30) * 0.42;
+    const map = (p) => [cx + p[0] * R, cy - p[1] * R];
+
+    // metrics
+    let tight = 0; for (let i = 0; i < N; i++) { const c = state.lab[i]; tight += Math.hypot(state.P[i][0] - state.L[c][0], state.P[i][1] - state.L[c][1]); } tight /= N;
+    let minSep = Infinity; for (let a = 0; a < K; a++) for (let b = a + 1; b < K; b++) minSep = Math.min(minSep, Math.hypot(state.L[a][0] - state.L[b][0], state.L[a][1] - state.L[b][1]));
+
+    let label, lcol;
+    if (tight > 0.4) { label = 'RANDOM'; lcol = colors.muted; }
+    else if (minSep < 0.85) { label = 'ORGANIZED'; lcol = colors.blue; }
+    else { label = 'STRUCTURED'; lcol = colors.green; }
+
+    // faint ring (the target shell)
+    ctx.strokeStyle = colors.border; ctx.setLineDash([3, 4]); ctx.beginPath(); ctx.arc(cx, cy, 0.82 * R, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    // satellites
+    ctx.globalAlpha = 0.6;
+    for (let i = 0; i < N; i++) { const [px, py] = map(state.P[i]); dot(ctx, px, py, 2.6, PALETTE[state.lab[i] % PALETTE.length]); }
+    ctx.globalAlpha = 1;
+    // leaders + spokes between adjacent leaders when structured
+    if (label === 'STRUCTURED') {
+      const order = [...Array(K).keys()].sort((a, b) => Math.atan2(state.L[a][1], state.L[a][0]) - Math.atan2(state.L[b][1], state.L[b][0]));
+      ctx.strokeStyle = colors.border; ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let k = 0; k < K; k++) { const [x0, y0] = map(state.L[order[k]]); k ? ctx.lineTo(x0, y0) : ctx.moveTo(x0, y0); }
+      ctx.closePath(); ctx.stroke();
+    }
+    for (let c = 0; c < K; c++) { const [px, py] = map(state.L[c]); ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2); ctx.fillStyle = PALETTE[c % PALETTE.length]; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = colors.bg; ctx.stroke(); }
+
+    // badge
+    text(ctx, label, box.x + box.w / 2, box.y + 14, colors, { align: 'center', size: 15, weight: '700', color: lcol });
+    api.readout('rd', `${label.toLowerCase()} · tightness ${tight.toFixed(2)}`);
+  },
+});
+</script>

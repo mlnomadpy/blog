@@ -1,0 +1,133 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 420 } = Astro.props;
+---
+<figure class="viz spectralcb" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { grid, panel, unitCircle, dot, text, parseColor, PALETTE } from './engine/draw.js';
+
+// The deep view: a codebook is the top-d spectral embedding of a label kernel.
+// Left: C codes descend toward the target kernel. Middle: the label kernel you
+// dial. Right: its eigenspectrum — a FLAT spectrum (all equal) is the simplex
+// (white kernel); structure concentrates the spectrum into a few dominant modes,
+// and a 2-D space keeps only the top two. Jacobi eigensolver runs live.
+const C = 9, INTRA = 0.40;
+
+// target similarity between classes i,j: structure=0 → flat (the simplex);
+// structure=1 → block (within a superclass INTRA, across the group-simplex value).
+function targetSim(structure, G, lab, i, j) {
+  if (i === j) return 1;
+  return structure * (lab[i] === lab[j] ? INTRA : -1 / (G - 1));
+}
+
+function jacobiEig(Ain, n, iters = 80) {
+  const a = Ain.map((r) => r.slice());
+  const V = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => (i === j ? 1 : 0)));
+  for (let s = 0; s < iters; s++) {
+    let p = 0, q = 1, mx = 0;
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (Math.abs(a[i][j]) > mx) { mx = Math.abs(a[i][j]); p = i; q = j; }
+    if (mx < 1e-9) break;
+    const phi = 0.5 * Math.atan2(2 * a[p][q], a[p][p] - a[q][q]), c = Math.cos(phi), sn = Math.sin(phi);
+    for (let i = 0; i < n; i++) { const aip = a[i][p], aiq = a[i][q]; a[i][p] = c * aip - sn * aiq; a[i][q] = sn * aip + c * aiq; }
+    for (let i = 0; i < n; i++) { const pi = a[p][i], qi = a[q][i]; a[p][i] = c * pi - sn * qi; a[q][i] = sn * pi + c * qi; }
+    for (let i = 0; i < n; i++) { const vp = V[i][p], vq = V[i][q]; V[i][p] = c * vp - sn * vq; V[i][q] = sn * vp + c * vq; }
+  }
+  const val = a.map((r, i) => r[i]);
+  const idx = val.map((v, i) => i).sort((x, y) => val[y] - val[x]);
+  return idx.map((i) => val[i]);
+}
+
+defineViz('spectralcb', {
+  title: 'The codebook is the top modes of the label kernel',
+  height: 420, stepsPerFrame: 0.6,
+  controls: [
+    { type: 'play' }, { type: 'button', name: 'reroll', label: 're-roll', reset: true }, { type: 'speed' },
+    { type: 'newrow' },
+    { type: 'range', name: 'structure', label: 'label structure', min: 0, max: 1, step: 0.02, value: 0.7, fmt: v => v.toFixed(2) },
+    { type: 'range', name: 'G', label: 'superclasses', min: 2, max: 3, step: 1, value: 2, int: true, reset: true, fmt: v => v },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) {
+    const G = api.get('G'), per = C / G, z = [], lab = new Int32Array(C);
+    for (let i = 0; i < C; i++) { const a = 2 * Math.PI * Math.random(); z.push([Math.cos(a), Math.sin(a)]); lab[i] = Math.min(G - 1, Math.floor(i / per)); }
+    api.state.z = z; api.state.lab = lab; api.state.G = G;
+  },
+  step(api) {
+    const z = api.state.z, lr = 0.018, g = z.map(() => [0, 0]);
+    const a = api.get('structure'), G = api.state.G, lab = api.state.lab;
+    for (let i = 0; i < C; i++) for (let j = 0; j < C; j++) {
+      if (i === j) continue;
+      const diff = (z[i][0] * z[j][0] + z[i][1] * z[j][1]) - targetSim(a, G, lab, i, j);
+      g[i][0] += 4 * diff * z[j][0]; g[i][1] += 4 * diff * z[j][1];
+    }
+    for (let i = 0; i < C; i++) {
+      const gu = g[i][0] * z[i][0] + g[i][1] * z[i][1];
+      let x = z[i][0] - lr * (g[i][0] - gu * z[i][0]), y = z[i][1] - lr * (g[i][1] - gu * z[i][1]);
+      const n = Math.hypot(x, y) + 1e-12; z[i] = [x / n, y / n];
+    }
+  },
+  draw(api) {
+    const { ctx, colors, size, state } = api;
+    const lab = state.lab, z = state.z;
+    const lw = size.W * 0.46, gap = 12;
+    const lbox = { x: 6, y: 4, w: lw - 6, h: size.H - 8 };
+    const kbox = { x: lw + gap, y: 4, w: (size.W - lw - gap - 6) , h: (size.H - 8) * 0.5 - 6 };
+    const sbox = { x: lw + gap, y: 4 + (size.H - 8) * 0.5 + 6, w: kbox.w, h: (size.H - 8) * 0.5 - 6 };
+
+    // ── codebook ──
+    const m = panel(ctx, lbox, colors, { header: 20 });
+    unitCircle(ctx, m, colors);
+    for (let i = 0; i < C; i++) for (let j = i + 1; j < C; j++) {
+      const [ax, ay] = m.map(z[i]), [bx, by] = m.map(z[j]);
+      ctx.strokeStyle = lab[i] === lab[j] ? colors.accent : colors.border;
+      ctx.globalAlpha = lab[i] === lab[j] ? 0.3 : 0.16; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    for (let i = 0; i < C; i++) { const [px, py] = m.map(z[i]); dot(ctx, px, py, 7, PALETTE[lab[i] % PALETTE.length]); ctx.lineWidth = 1.6; ctx.strokeStyle = colors.bg; ctx.beginPath(); ctx.arc(px, py, 7, 0, 2 * Math.PI); ctx.stroke(); }
+    text(ctx, 'class codes', lbox.x + 8, lbox.y + 4, colors, { size: 11.5, color: colors.fg });
+    text(ctx, api.get('structure') < 0.05 ? 'flat kernel → the even simplex' : 'structured kernel → superclass clusters', lbox.x + 8, lbox.y + lbox.h - 13, colors, { size: 10, mono: true, color: colors.muted });
+
+    // ── label kernel heatmap ──
+    panel(ctx, kbox, colors, {});
+    text(ctx, 'label kernel', kbox.x + 8, kbox.y + 5, colors, { size: 11, color: colors.fg });
+    const side = Math.min(kbox.w - 16, kbox.h - 28), ox = kbox.x + (kbox.w - side) / 2, oy = kbox.y + 22, cs = side / C;
+    const acc = parseColor(colors.accent), blu = parseColor(colors.blue), bs = parseColor(colors.cellBg);
+    const a = api.get('structure'), G = state.G;
+    for (let i = 0; i < C; i++) for (let j = 0; j < C; j++) {
+      const v = targetSim(a, G, lab, i, j), t = Math.min(1, Math.abs(v)), hi = v < 0 ? blu : acc;
+      ctx.fillStyle = `rgb(${Math.round(bs[0] + (hi[0] - bs[0]) * t)},${Math.round(bs[1] + (hi[1] - bs[1]) * t)},${Math.round(bs[2] + (hi[2] - bs[2]) * t)})`;
+      ctx.fillRect(ox + j * cs, oy + i * cs, cs + 0.5, cs + 0.5);
+    }
+    ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.strokeRect(ox + 0.5, oy + 0.5, side - 1, side - 1);
+
+    // ── eigenspectrum ──
+    panel(ctx, sbox, colors, {});
+    text(ctx, 'kernel eigenspectrum', sbox.x + 8, sbox.y + 5, colors, { size: 11, color: colors.fg });
+    const A = []; for (let i = 0; i < C; i++) { A.push([]); for (let j = 0; j < C; j++) A[i].push(targetSim(a, G, lab, i, j)); }
+    const ev = jacobiEig(A, C);
+    const px0 = sbox.x + 14, py0 = sbox.y + 24, pw = sbox.w - 28, ph = sbox.h - 46;
+    const vmax = Math.max(1, ...ev.map(Math.abs)), zeroY = py0 + ph * (vmax / (2 * vmax));
+    ctx.strokeStyle = colors.border; ctx.beginPath(); ctx.moveTo(px0, zeroY); ctx.lineTo(px0 + pw, zeroY); ctx.stroke();
+    const bw = pw / C;
+    for (let k = 0; k < C; k++) {
+      const h = (ev[k] / (2 * vmax)) * ph, top = k < 2; // top-2 modes survive in 2-D
+      ctx.fillStyle = top ? colors.accent : colors.border;
+      ctx.globalAlpha = top ? 0.95 : 0.7;
+      ctx.fillRect(px0 + k * bw + bw * 0.18, zeroY, bw * 0.64, -h);
+    }
+    ctx.globalAlpha = 1;
+    text(ctx, 'highlighted = the 2 modes a 2-D space keeps', sbox.x + 8, sbox.y + sbox.h - 12, colors, { size: 9, color: colors.muted });
+
+    const flat = ev[0] - ev[C - 1];
+    api.readout('rd', `structure ${api.get('structure').toFixed(2)} · spectrum spread ${flat.toFixed(2)} (0 = simplex)`);
+  },
+});
+</script>
