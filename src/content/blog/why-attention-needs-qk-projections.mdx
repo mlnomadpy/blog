@@ -1,6 +1,7 @@
 ---
 title: 'Why Attention Needs Q and K Projections'
 description: 'The dot product in attention is not enough by itself. Without learned query and key projections, attention can only compare tokens in the residual stream’s native geometry. With a shared projection it learns a symmetric metric. With separate Q and K projections, the score becomes a learned bilinear form x_iᵀW_QW_Kᵀx_j: directional, role-aware, low-rank, and different per head. That bilinearity is what lets attention ask one kind of question and let tokens advertise another kind of answer.'
+seoDescription: "Q and K projections turn attention's dot product into a learned, low-rank bilinear form x_iᵀW_QW_Kᵀx_j: directional, role-aware, and different per head."
 pubDate: 2026-06-04T12:30:00-07:00
 draft: false
 companion: qk-projections-jax-flax-nnx

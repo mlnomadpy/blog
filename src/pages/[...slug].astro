@@ -57,7 +57,7 @@ const stats = readingTime(post.body ?? '');
 ---
 <PostLayout
   title={post.data.title}
-  description={post.data.description}
+  description={post.data.seoDescription ?? post.data.description}
   draft={post.data.draft}
   pair={pair}
   references={post.data.references}
