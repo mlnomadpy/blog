@@ -1,0 +1,40 @@
+# Records of the !mmortal Data Scientist
+
+> Machine learning research notes by Taha Bouhsine — neural network interpretability, kernel methods, contrastive learning, attention mechanisms, RKHS, and transformer architectures. Long-form pieces with interactive visualisations.
+
+Long-form machine-learning research notes by Taha Bouhsine (Machine Learning Researcher). Every post is built around live, in-browser interactive visualizations: the math actually runs in the page, not as pre-rendered figures. Recurring threads: neural-network interpretability, kernel methods and RKHS, contrastive learning, attention mechanisms, the Welch bound and simplex/ETF geometry, and white-box architectures.
+
+## Posts
+
+- [Latent on the Spectrum: Why Cats Sit Closer to Dogs Than to Cars](https://tahabouhsine.com/blog/latent-on-the-spectrum/) (2026-06-07): A latent space is a finite encoding of a label-similarity kernel: its codebook is the top eigenmodes of that matrix, and the Welch bound sets the rest.
+- [The Three States of Information](https://tahabouhsine.com/blog/three-states-of-information/) (2026-06-07): Representations pass through three states while training (random, organized, structured), and the transitions are the loss plateaus. With live training viz.
+- [Q and K Projections in JAX/Flax NNX](https://tahabouhsine.com/blog/qk-projections-jax-flax-nnx/) (2026-06-04): Q and K projections in JAX/Flax NNX: pull B=W_QW_Kᵀ from the weights, split it into a metric and a directed part, add RoPE, check the rank budget.
+- [Why Attention Needs Q and K Projections](https://tahabouhsine.com/blog/why-attention-needs-qk-projections/) (2026-06-04): Q and K projections turn attention's dot product into a learned, low-rank bilinear form x_iᵀW_QW_Kᵀx_j: directional, role-aware, and different per head.
+- [The Prototype Readout in JAX/Flax NNX](https://tahabouhsine.com/blog/convex-readout-jax-flax-nnx/) (2026-06-04): Prototype readout in JAX/Flax NNX: W_out as output prototypes, the convex/conic/affine/linear regimes, and a kernel readout that is convex by construction.
+- [The Readout is a Convex Combination of Prototypes](https://tahabouhsine.com/blog/readout-as-convex-combination/) (2026-06-04): The transformer MLP readout is a weighted sum over output prototypes (the columns of W_out); nonnegative, normalized coefficients make it a convex combination.
+- [What Makes a Good Latent Space? The Welch Bound and the Simplex](https://tahabouhsine.com/blog/welch-bound-good-latent-space/) (2026-06-02): Why class means form a simplex, and why the Welch bound from radio engineering gives the best latent geometry when too many concepts share too few dimensions.
+- [Auditing Latent Space Geometry in JAX](https://tahabouhsine.com/blog/welch-bound-jax-analysis/) (2026-06-02): A runnable JAX companion to the Welch-bound post: metrics that tell you whether embeddings collapse, waste rank, form a simplex, or press the Welch floor.
+- [Cheap Attention in JAX/Flax NNX](https://tahabouhsine.com/blog/linear-attention-jax-flax-nnx/) (2026-05-31): Positive-feature linear attention in JAX and Flax NNX: turn the all-pairs softmax ledger into a shared feature state where the N×N matrix never forms.
+- [Cheap Attention: Linear-Time Kernel Approximation](https://tahabouhsine.com/blog/cheap-attention-is-linear-attention/) (2026-05-31): Softmax attention is a kernel; approximate its feature map with random features and the N×N matrix becomes an O(N) shared state. Linear attention with live viz.
+- [Organizing Randomness: Contrastive Learning in JAX](https://tahabouhsine.com/blog/organizing-randomness-jax/) (2026-05-29): Six contrastive losses in JAX and Optax, each an animated GIF turning random 2D points into organized embeddings. Companion to Untangling the Moons.
+- [Untangling the Moons: A Visual History of Contrastive Learning](https://tahabouhsine.com/blog/untangling-the-moons/) (2026-05-26): Eight contrastive losses (pair, triplet, InfoNCE, CLIP, SupCon, SigLIP, alignment+uniformity, cosine) organizing 2D points in one interactive playground.
+- [What an MLP Knows, When It's a Kernel](https://tahabouhsine.com/blog/what-an-mlp-knows/) (2026-05-21): The transformer MLP is illegible because its primitive carries no kernel. Give it one and the objects that make attention legible follow, network-wide.
+- [Attention is Explainable Because it is a Kernel](https://tahabouhsine.com/blog/attention-is-a-kernel/) (2026-05-14): Self-attention is a Nadaraya-Watson kernel smoother. That fact, not the plottable matrix, is why attention heads are readable while MLPs are not.
+- [Not All Infinities Are Equal: The Cross-Entropy Asymmetry Behind Hallucination](https://tahabouhsine.com/blog/not-all-infinities-are-equal/) (2026-02-23): Cross-entropy's singularity structure is asymmetric, and that explains LLM hallucination, the CLIP modality gap, and why contrastive losses need huge batches.
+- [Opposite Is Not Different: The Cosine-Similarity Bug in CLIP and Contrastive Learning](https://tahabouhsine.com/blog/opposite-is-not-different/) (2026-02-22): Maximum difference between unit vectors is orthogonality (cos 0), not opposition (cos -1). CLIP, InfoNCE, and SimCLR optimize the wrong target.
+- [Activations Are Bad for Geometry](https://tahabouhsine.com/blog/activations-are-bad-for-geometry/) (2026-02-20): ReLU and GELU enter a layer's Jacobian as a diagonal modulation that wrecks the data manifold's geometry. Pointwise activations as a representational bug.
+- [Morocco and AI Illiteracy — Part I: The Cost of Staying Behind](https://tahabouhsine.com/blog/ai-illiteracy-pt1/) (2021-09-22): Morocco's AI gap is not a talent problem but an education, access, and policy problem, and the cost of falling behind compounds every year.
+- [Poem 0.1](https://tahabouhsine.com/blog/poem-0-1/) (2021-09-20): A short poem.
+
+## About & feeds
+- [About Taha Bouhsine](https://tahabouhsine.com/blog/about/): author background and research interests.
+- [Homepage](https://tahabouhsine.com/blog/): all posts.
+- [RSS feed](https://tahabouhsine.com/blog/rss.xml)
+- [Sitemap](https://tahabouhsine.com/blog/sitemap-index.xml)
+
+## Author profiles
+- https://github.com/mlnomadpy
+- https://github.com/mlnomadpy
+- https://www.linkedin.com/in/tahabsn/
+- https://scholar.google.com/citations?user=IsBjb3EAAAAJ
+- https://g.dev/tahabsn
