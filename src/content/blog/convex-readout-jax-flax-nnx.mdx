@@ -1,6 +1,6 @@
 ---
 title: "The Prototype Readout in JAX/Flax NNX"
-description: "A runnable companion to The Readout is a Convex Combination of Prototypes: read the columns of W_out as output prototypes in Flax NNX, measure the convex/conic/affine/linear regimes numerically, then build a Nadaraya–Watson kernel readout that is convex by construction — nonnegative weights that sum to one, a point that never leaves the prototype hull — with the nonnegativity-vs-positive-definiteness distinction checked in code."
+description: "A runnable companion to The Readout is a Convex Combination of Prototypes: read the columns of W_out as output prototypes in Flax NNX, measure the convex/conic/affine/linear regimes numerically, then build a Nadaraya–Watson kernel readout that is convex by construction (nonnegative weights that sum to one, a point that never leaves the prototype hull), with the nonnegativity-vs-positive-definiteness distinction checked in code."
 pubDate: 2026-06-04T12:15:00-07:00
 draft: false
 tags: [ml, transformers, mlp, interpretability, kernels, prototypes, jax, flax, nnx, implementation, nadaraya-watson]
@@ -31,11 +31,11 @@ keywords:
 ---
 import CiteAs from '../../components/CiteAs.astro';
 
-*The [explainer](/blog/readout-as-convex-combination/) reframed the MLP readout $W_\text{out}\,a(x)=\sum_u a_u(x)\,r_u$ as a mixture over output prototypes, whose geometry (convex, conic, affine, or linear) is set by two constraints on the coefficients: are they nonnegative, and do they sum to one? This is the implementation companion: pull the prototypes out of an NNX `Linear`, measure which regime each activation lands in, and build a kernel readout that is convex by construction — with the correctness checks that the explainer's claims rest on written as `assert`s.*
+*The [explainer](/blog/readout-as-convex-combination/) reframed the MLP readout $W_\text{out}\,a(x)=\sum_u a_u(x)\,r_u$ as a mixture over output prototypes, whose geometry (convex, conic, affine, or linear) is set by two constraints on the coefficients: are they nonnegative, and do they sum to one? This is the implementation companion: pull the prototypes out of an NNX `Linear`, measure which regime each activation lands in, and build a kernel readout that is convex by construction, with the correctness checks that the explainer's claims rest on written as `assert`s.*
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/convex-readout-field.gif" alt="Animated kernel readout: a query roams the input space while the readout traces the interior of the output prototype hull" loading="eager" width="1100" height="560" />
-  <figcaption>The kernel readout, computed in JAX. As the query $x$ roams the input space (left), its normalized Gaussian similarities to the input prototypes become convex coefficients that mix the output prototypes (right). The readout $y=\sum_u a_u r_u$ traces the interior of the output hull and never leaves it — because $\sum_u a_u = 1$ with every $a_u \ge 0$ by construction, not by a check after the fact.</figcaption>
+  <figcaption>The kernel readout, computed in JAX. As the query $x$ roams the input space (left), its normalized Gaussian similarities to the input prototypes become convex coefficients that mix the output prototypes (right). The readout $y=\sum_u a_u r_u$ traces the interior of the output hull and never leaves it, because $\sum_u a_u = 1$ with every $a_u \ge 0$ by construction, not by a check after the fact.</figcaption>
 </figure>
 
 Everything here is plain JAX and [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html). The dimensions are tiny so the geometry is legible.
@@ -81,7 +81,7 @@ This is the same key-value picture Geva et al. (2021) found empirically: `w_in` 
 
 ## Which regime is the readout in?
 
-The geometry is decided by the coefficients $a(x)$, and the coefficients are decided by the activation. Two yes/no questions — nonnegative? sum to one? — sort the readout into four regimes. Here is the measurement, for the same pre-activations under different nonlinearities.
+The geometry is decided by the coefficients $a(x)$, and the coefficients are decided by the activation. Two yes/no questions (nonnegative? sum to one?) sort the readout into four regimes. Here is the measurement, for the same pre-activations under different nonlinearities.
 
 ```python
 def regime(a, tol=1e-6):
@@ -102,7 +102,7 @@ print("gelu    ", regime(jax.nn.gelu(s)))       # linear: negative tail
 print("identity", regime(s))                    # linear: signed
 ```
 
-Only `softmax` gives a probability vector over hidden units, so only it makes the readout a convex combination — a point guaranteed to sit inside the convex hull of the prototypes. `relu` keeps the coefficients nonnegative but unnormalized (the conic regime: direction in the hull, norm as intensity). `gelu` and the identity admit negative coefficients, and the output can leave the hull entirely. "Unit $u$ contributed 30%" only means what it says in the first two cases.
+Only `softmax` gives a probability vector over hidden units, so only it makes the readout a convex combination: a point guaranteed to sit inside the convex hull of the prototypes. `relu` keeps the coefficients nonnegative but unnormalized (the conic regime: direction in the hull, norm as intensity). `gelu` and the identity admit negative coefficients, and the output can leave the hull entirely. "Unit $u$ contributed 30%" only means what it says in the first two cases.
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/convex-readout-regimes.gif" alt="Four small panels showing the same hidden scores read out through softmax, relu, gelu, and identity, landing in convex, conic, and linear regimes" loading="lazy" width="1100" height="470" />
@@ -119,7 +119,7 @@ a_u(x)=\frac{\kappa(x,p_u)}{\sum_v \kappa(x,p_v)},
 y(x)=\sum_u a_u(x)\,r_u.
 $$
 
-The requirement is that $\kappa$ be **pointwise nonnegative** — *not* that it be positive definite; these are different properties, and only nonnegativity is what convexity needs. A Flax NNX module with learnable input prototypes `p`, output prototypes `r`, and a bandwidth:
+The requirement is that $\kappa$ be **pointwise nonnegative**, *not* that it be positive definite; these are different properties, and only nonnegativity is what convexity needs. A Flax NNX module with learnable input prototypes `p`, output prototypes `r`, and a bandwidth:
 
 ```python
 class KernelReadout(nnx.Module):
@@ -178,11 +178,11 @@ for name, k in [("linear", linear), ("gaussian", gaussian), ("yat", yat)]:
 # yat      nonnegative=True  PSD=True   -> also the useful corner
 ```
 
-A normalized linear kernel can produce negative "weights" and a denominator that crosses zero — meaningless as a mixture. The kernels you actually reach for sit in the nonnegative-and-PSD corner.
+A normalized linear kernel can produce negative "weights" and a denominator that crosses zero, meaningless as a mixture. The kernels you actually reach for sit in the nonnegative-and-PSD corner.
 
 ## Choice and intensity: a gated softmax readout
 
-If you want the convex *direction* but also a learnable write *intensity* — the explainer's "what to write by mixture, how much by a gate" — separate the two. This is the sparsemax/softmax-attention idea (Martins & Astudillo, 2016) applied to hidden units instead of tokens.
+If you want the convex *direction* but also a learnable write *intensity* (the explainer's "what to write by mixture, how much by a gate"), separate the two. This is the sparsemax/softmax-attention idea (Martins & Astudillo, 2016) applied to hidden units instead of tokens.
 
 ```python
 class GatedSoftmaxReadout(nnx.Module):
@@ -242,11 +242,11 @@ def train_step(model, optimizer, batch):
     return loss
 ```
 
-The detector bank stops being an arbitrary feature extractor and becomes a similarity to named input prototypes; the readout stops being a hopeful interpretation and becomes the actual mechanism — convex by construction, not by accident.
+The detector bank stops being an arbitrary feature extractor and becomes a similarity to named input prototypes; the readout stops being a hopeful interpretation and becomes the actual mechanism: convex by construction, not by accident.
 
 ## Rendering the GIFs
 
-Both animations are generated with Python, JAX, and matplotlib — the computation in JAX, the drawing in matplotlib:
+Both animations are generated with Python, JAX, and matplotlib: the computation in JAX, the drawing in matplotlib:
 
 ```bash
 python scripts/render_convex_readout_gif.py          # the kernel readout tracing the hull
