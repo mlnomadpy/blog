@@ -2,6 +2,7 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { getCollection } from 'astro:content';
 import { postFilter } from '../../utils/posts';
+import { tagMeta } from '../../utils/tags';
 
 export async function getStaticPaths() {
   const posts = await getCollection('blog', postFilter);
@@ -21,11 +22,36 @@ export async function getStaticPaths() {
 const { tag, posts } = Astro.props;
 const dateFmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+const meta = tagMeta(tag, posts.length);
+
+// Absolute URLs for the CollectionPage / ItemList structured data on this topic page.
+const abs = (p: string) => new URL(p, Astro.site).toString();
+const collectionLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': `${abs(`${base}/tag/${tag}/`)}#collection`,
+  name: meta.title,
+  description: meta.description,
+  url: abs(`${base}/tag/${tag}/`),
+  isPartOf: { '@type': 'WebSite', '@id': `${abs(`${base}/`)}#website` },
+  mainEntity: {
+    '@type': 'ItemList',
+    numberOfItems: posts.length,
+    itemListElement: posts.map((post, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      url: abs(`${base}/${post.id}/`),
+      name: post.data.title,
+    })),
+  },
+};
 ---
-<BaseLayout title={`#${tag}`} description={`Posts tagged #${tag}.`}>
+<BaseLayout title={meta.title} description={meta.description}>
   <p class="meta"><a href={`${base}/tags`}>← all tags</a></p>
-  <h1>#{tag}</h1>
-  <p class="lead">{posts.length} post{posts.length === 1 ? '' : 's'} tagged <code>#{tag}</code>.</p>
+  <h1>{meta.name}</h1>
+  <p class="lead">{meta.description}</p>
+  <p class="meta">{posts.length} post{posts.length === 1 ? '' : 's'} tagged <code>#{tag}</code>.</p>
 
   <ul class="post-list">
     {posts.map((post) => (
@@ -40,4 +66,6 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       </li>
     ))}
   </ul>
+
+  <script type="application/ld+json" set:html={JSON.stringify(collectionLd)} />
 </BaseLayout>
