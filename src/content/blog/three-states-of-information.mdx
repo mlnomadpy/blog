@@ -86,6 +86,8 @@ Watch a network train for long enough and the loss curve stops looking like a sm
 
 The cleanest way to see why is to stop watching the loss and watch the *representation*, the geometry of the activations the network is shaping. That geometry moves through three states, and the move from one to the next is exactly the plateau.
 
+By "information" here I mean label-relevant structure in representation space: not Shannon information in the abstract, but the geometry that makes classes recoverable.
+
 <StateMorph caption="The three states on a loop: a real 2-D force system, integrated live. Satellites are pulled toward their class leader (clustering); leaders repel each other and seek a ring (spreading). From a random scatter the system passes through RANDOM → ORGANIZED → STRUCTURED and then re-randomizes. The badge reads the state off the geometry; nothing about the labels is scripted." />
 
 ## Three states, like matter
@@ -102,11 +104,11 @@ The figure below is a supervised contrastive encoder trained live in your browse
 
 <InformationStates caption="A live contrastive training run, on the nanograd autodiff engine. Points are class blobs mapped onto the circle; the badge reads the current state from the geometry. RANDOM: scattered, no class structure. ORGANIZED: same-class points cluster, but the clusters are bunched, not spread. STRUCTURED: the clusters settle into a maximally-separated simplex (min class-pair cosine → −1/(K−1)). Notice that the structure curve (green) rises through the slow stretch of the loss (orange): the reorganization happens during the plateau, then the loss falls." />
 
-That two-step is not incidental to contrastive learning; it is its decomposition. Wang & Isola (2020) show the contrastive loss splits into **alignment**, pulling positive pairs together (the organized state), and **uniformity**, spreading features evenly on the sphere (the structured state). Watching the run above is watching alignment resolve first, then uniformity slowly break the symmetry into a simplex.
+That two-step mirrors the standard decomposition of contrastive learning into alignment and uniformity. Wang & Isola (2020) show the contrastive loss splits into **alignment**, pulling positive pairs together (the organized state), and **uniformity**, spreading features evenly on the sphere (the structured state). That decomposition is about which two properties the loss optimizes, not a guaranteed training-time order; but in the run above you can watch alignment resolve first, then uniformity slowly break the symmetry into a simplex.
 
 ## The plateau is the phase transition
 
-Here is the part that connects the two pictures. The representation does not move between states at a constant rate. It stalls near *saddle points* of the loss: configurations that are flat in most directions, where the gradient is tiny. The network creeps along until some symmetry breaks and it falls toward the next state. That creep is the plateau; the symmetry-breaking is the drop.
+Here is the part that connects the two pictures, in the feature-learning regimes this post is about. The representation does not move between states at a constant rate. It stalls near *saddle points* of the loss: configurations that are flat in most directions, where the gradient is tiny. The network creeps along until some symmetry breaks and it falls toward the next state. That creep is the plateau; the symmetry-breaking is the drop.
 
 <SaddleDescent caption="The mechanism, in miniature: real gradient descent on a surface with a saddle at the origin (a minimum along one axis, a maximum along the other). The trajectory drops fast in the steep direction, then creeps across the flat saddle where the gradient is nearly zero (that creep is the plateau) before the instability takes over and it falls into a basin. The loss trace on the right shows the same flat-then-drop." />
 
@@ -132,9 +134,9 @@ Once you see plateaus as transitions between the three states, a few practical r
 
 **A plateau is a question, not a failure.** Before killing a run that has flattened, ask which transition it is stuck on. Is the representation random (still no clusters, so maybe the signal is too weak), or organized but not structured (clusters formed but not yet separated, often a symmetry waiting to break)? The two call for different fixes.
 
-**Structure can lead the loss.** As the first figure shows, the geometry often reorganizes *during* the plateau, before the loss moves. If you only watch the loss you will miss it; a cheap structure probe (within-class tightness, between-class separation, distance to the simplex/Welch bound) sees the transition coming.
+**Structure can lead the loss.** As the first figure shows, the geometry often reorganizes *during* the plateau, before the loss moves. If you only watch the loss you will miss it; a cheap structure probe sees the transition coming. Concretely, during a plateau log three numbers: intra-class variance, mean inter-class cosine similarity, and the distance from the class-mean Gram matrix to a simplex ETF. If intra-class variance is still falling, the network is organizing; if the class means are drifting toward equiangularity, it is structuring.
 
-**The destination is a simplex.** The structured state is not arbitrary. For a classification or contrastive objective it is the maximally-separated, equiangular arrangement: the simplex ETF of neural collapse, the saturating configuration of the Welch bound. This is the same endpoint these posts keep arriving at from different directions: [a good latent space](/blog/welch-bound-good-latent-space/) is a structured one, and [organizing randomness](/blog/organizing-randomness-jax/) is the process of getting there.
+**The destination is a simplex, in the clean limit.** The structured state is not arbitrary. In the balanced supervised-classification limit it is the maximally-separated, equiangular arrangement: the simplex ETF of neural collapse, the saturating configuration of the Welch bound. More generally the endpoint is a globally constrained code whose geometry reflects the objective, the labels, and the data: hierarchy, class imbalance, and multi-label structure all bend it away from the plain simplex. But the *kind* of endpoint is the same one these posts keep arriving at from different directions: [a good latent space](/blog/welch-bound-good-latent-space/) is a structured one, and [organizing randomness](/blog/organizing-randomness-jax/) is the process of getting there.
 
 ## The point
 

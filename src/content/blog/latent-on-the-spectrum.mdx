@@ -106,11 +106,11 @@ Steer it. Below, nine codes descend toward a target similarity you control. With
 
 ## The spectral law: the codebook is the top modes of the kernel
 
-That third panel is the whole post. The best $d$-dimensional codebook for a kernel $S^\star$ is not found by trial and error — it is the **top-$d$ eigenvectors of $S^\star$**, scaled by their eigenvalues. This is classical multidimensional scaling, the same spectral fact behind kernel PCA and Laplacian eigenmaps: to embed a similarity, diagonalise it and keep the strongest modes.
+That third panel is the whole post. Ignore the unit-norm renormalisation for a moment: the best rank-$d$ approximation to the Gram matrix is $U_d\Lambda_d U_d^\top$, and a coordinate matrix that realises it is $\Lambda_d^{1/2}U_d^\top$ — the **top-$d$ eigenvectors of $S^\star$, scaled by the square roots of their eigenvalues**. If we want cosine codes we normalise those vectors afterward, which makes the exact Eckart–Young optimum a design principle rather than the literal constrained minimiser. This is classical multidimensional scaling, the same spectral fact behind kernel PCA and Laplacian eigenmaps: to embed a similarity, diagonalise it and keep the strongest modes.
 
 So a kernel's **eigenspectrum** tells you everything about how it wants to be embedded:
 
-- A **flat spectrum** — all eigenvalues equal — is a kernel with no preferred direction. Every mode matters the same. That is the white kernel, and its embedding is the maximally even one: **the simplex** (a tight frame is exactly the flat-spectrum condition from the Welch post). Slide structure to 0 above and watch all the bars snap to the same height.
+- A **flat spectrum on the centered label subspace** — all non-mean modes equal — is a kernel with no preferred direction among classes. (A regular-simplex Gram, once centered, has one zero mean-direction eigenvalue and $C-1$ equal nonzero ones, so "flat" means flat across those $C-1$ class modes, not all $C$.) Every class mode matters the same. That is the white kernel, and its embedding is the maximally even one: **the simplex** (a tight frame is exactly the flat-spectrum condition from the Welch post). Slide structure to 0 above and watch all the bars snap to the same height.
 - A **peaked spectrum** — a few large eigenvalues, the rest small — is a kernel with dominant structure. The top mode is the coarsest distinction (animals vs vehicles); the next modes are finer. Slide structure up and watch one bar shoot up.
 
 The simplex was never the universal answer. It was the answer for the one spectrum that has no shape.
@@ -155,7 +155,7 @@ $$
 \Sigma_{\text{total}} = \underbrace{\Sigma_B}_{\text{between prototypes}} \;+\; \underbrace{\Sigma_W}_{\text{within / residual}} .
 $$
 
-$\Sigma_B$ has rank $\le C-1$ and is spanned by the prototypes — **its geometry is the codebook**, the simplex or Welch frame or structured kernel we've been steering. $\Sigma_W$ is everything else: the within-class variation, the fine distinctions, the gradations between classes. Stack them and a representation's eigenspectrum has two regimes — the **top $C-1$ modes are the prototype frame** (the separation channel), and the **tail is the information**.
+$\Sigma_B$ has rank $\le C-1$ and is spanned by the prototypes — **its geometry is the codebook**, the simplex or Welch frame or structured kernel we've been steering. $\Sigma_W$ is everything else: the within-class variation, the fine distinctions, the gradations between classes. Stack them and a representation's eigenspectrum splits into two regimes — the **top $C-1$ modes are the prototype frame** (the separation channel), and the **tail is the information**. The split is clean only when the between-class variance dominates, as it does near neural collapse; when within-class variance is large the two regimes overlap and "top $C-1$" is an approximation, not a hard cut.
 
 Press Play and watch what training does to it. As the network collapses — $\Sigma_W \to 0$, the celebrated *neural collapse* — the information tail is ground to nothing. The clusters get tighter, the prototypes lock into their frame, and the spectrum the features lived in is erased. Drag **label structure** to shape the prototype modes: flat for a simplex, peaked for a taxonomy.
 
@@ -165,7 +165,7 @@ This is the trade-off the [modality-gap post](/blog/modality-gap-complementary/)
 
 ## Information is a coordinate between prototypes
 
-So where, exactly, does that information live? **Between the prototypes.** Project a feature onto the prototype frame and you get its *soft assignment* — how much it leans toward each code. A feature halfway between `cat` and `dog` reads "70% cat, 30% dog, 0% car." That vector is not noise around the label; it **is** the information — and it is exactly the **dark knowledge** a teacher distills (Hinton et al., 2015). The codebook is the basis; the information is the **coefficients**.
+So where, exactly, does that information live? **Between the prototypes.** Project a feature onto the prototype frame and you get its *soft assignment* — how much it leans toward each code. A feature halfway between `cat` and `dog` reads "70% cat, 30% dog, 0% car." That vector is not noise around the label; it **is** the information — and it is exactly the **dark knowledge** a teacher distills (Hinton et al., 2015). In this frame view, the information shows up as the **coefficients**: the soft mixture of nearby prototypes. (When the prototypes are overcomplete or non-orthogonal, those coefficients are pinned down only once you fix a decoding rule — a dual frame, or a logits/softmax convention.)
 
 Watch a feature wander the frame and read its coordinates:
 
