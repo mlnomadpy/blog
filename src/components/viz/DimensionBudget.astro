@@ -1,0 +1,84 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 360 } = Astro.props;
+---
+<figure class="viz dimbudget" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { panel, text, parseColor } from './engine/draw.js';
+import { eigh, withJax, drawJaxLoading } from './engine/jax.js';
+
+// A latent space is a lossy encoding of the label kernel. Classical MDS: the best
+// d-dimensional embedding keeps the top-d eigenmodes of the kernel. Slide the
+// dimension budget and watch the reconstructed kernel (right) sharpen toward the
+// target (left). A structured (hierarchical) kernel compresses into a couple of
+// dominant modes; the flat simplex kernel has no dominant mode, so it needs the
+// full C−1 dimensions — nothing to compress. Eigendecomposition runs on jax-js.
+const C = 6;
+
+// 2-superclass label kernel (or the flat simplex kernel when `flat` is on).
+function buildKernel(flat) {
+  const A = [];
+  for (let i = 0; i < C; i++) { A.push([]); for (let j = 0; j < C; j++) {
+    if (i === j) A[i].push(1);
+    else if (flat) A[i].push(-1 / (C - 1));
+    else A[i].push((i < 3) === (j < 3) ? 0.6 : -0.6);
+  } }
+  return A;
+}
+
+defineViz('dimbudget', {
+  height: 360, stepsPerFrame: 1,
+  controls: [
+    { type: 'range', name: 'd', label: 'embedding dims', min: 1, max: 5, step: 1, value: 1, int: true, fmt: v => v },
+    { type: 'toggle', name: 'flat', label: 'flat (simplex) kernel', value: false },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) { withJax(api); },
+  draw(api) {
+    const { ctx, colors, size } = api;
+    if (!api.state.jaxReady) return drawJaxLoading(api);
+    const A = buildKernel(api.get('flat')), eig = eigh(A), d = api.get('d');
+    // top-d reconstruction G_d = Σ_{k<d} λ_k v_k v_kᵀ  (positive part)
+    const G = Array.from({ length: C }, () => new Array(C).fill(0));
+    let capt = 0, tot = 0;
+    for (let k = 0; k < C; k++) { const lk = Math.max(eig.values[k], 0); tot += lk; if (k < d) capt += lk; }
+    for (let k = 0; k < d; k++) { const lk = Math.max(eig.values[k], 0), v = eig.vectors[k]; for (let i = 0; i < C; i++) for (let j = 0; j < C; j++) G[i][j] += lk * v[i] * v[j]; }
+
+    const acc = parseColor(colors.accent), blu = parseColor(colors.blue), bs = parseColor(colors.cellBg);
+    const hm = (box, mat, title) => {
+      panel(ctx, box, colors, {});
+      text(ctx, title, box.x + 8, box.y + 5, colors, { size: 11, color: colors.fg });
+      const side = Math.min(box.w - 20, box.h - 30), ox = box.x + (box.w - side) / 2, oy = box.y + 22, cs = side / C;
+      for (let i = 0; i < C; i++) for (let j = 0; j < C; j++) {
+        const val = Math.max(-1, Math.min(1, mat[i][j])), t = Math.min(1, Math.abs(val)), hi = val < 0 ? blu : acc;
+        ctx.fillStyle = `rgb(${Math.round(bs[0] + (hi[0] - bs[0]) * t)},${Math.round(bs[1] + (hi[1] - bs[1]) * t)},${Math.round(bs[2] + (hi[2] - bs[2]) * t)})`;
+        ctx.fillRect(ox + j * cs, oy + i * cs, cs + 0.5, cs + 0.5);
+      }
+      ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.strokeRect(ox + 0.5, oy + 0.5, side - 1, side - 1);
+    };
+    const W = size.W, gap = 12, third = (W - 12 - 2 * gap) / 3;
+    hm({ x: 6, y: 4, w: third, h: size.H - 8 }, A, 'target kernel');
+    hm({ x: 6 + third + gap, y: 4, w: third, h: size.H - 8 }, G, `kept in ${d}-D`);
+    // spectrum + captured panel
+    const box = { x: 6 + 2 * (third + gap), y: 4, w: third, h: size.H - 8 };
+    panel(ctx, box, colors, {});
+    text(ctx, 'eigenspectrum', box.x + 8, box.y + 5, colors, { size: 11, color: colors.fg });
+    const px0 = box.x + 12, py0 = box.y + 26, pw = box.w - 24, ph = box.h - 96;
+    const vmax = Math.max(1, ...eig.values.map(Math.abs)), zeroY = py0 + ph / 2, bw = pw / C;
+    ctx.strokeStyle = colors.border; ctx.beginPath(); ctx.moveTo(px0, zeroY); ctx.lineTo(px0 + pw, zeroY); ctx.stroke();
+    for (let k = 0; k < C; k++) { const h = (eig.values[k] / (2 * vmax)) * ph; ctx.fillStyle = k < d ? colors.accent : colors.border; ctx.globalAlpha = k < d ? 0.95 : 0.65; ctx.fillRect(px0 + k * bw + bw * 0.18, zeroY, bw * 0.64, -h); }
+    ctx.globalAlpha = 1;
+    const pct = tot > 0 ? (100 * capt / tot) : 100;
+    text(ctx, `${pct.toFixed(0)}%`, box.x + box.w / 2, box.y + box.h - 46, colors, { align: 'center', size: 30, color: colors.accent, weight: '700' });
+    text(ctx, 'of the kernel captured', box.x + box.w / 2, box.y + box.h - 16, colors, { align: 'center', size: 10, color: colors.muted });
+    api.readout('rd', api.get('flat') ? `flat kernel · ${d}-D keeps ${pct.toFixed(0)}% (no dominant mode) · jax-js` : `structured · ${d}-D keeps ${pct.toFixed(0)}% · jax-js`);
+  },
+});
+</script>

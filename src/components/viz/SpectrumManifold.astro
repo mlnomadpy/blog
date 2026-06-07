@@ -1,0 +1,174 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 420 } = Astro.props;
+---
+<figure class="viz spectrummanifold" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { panel, text, PALETTE } from './engine/draw.js';
+import { eigh, withJax, drawJaxLoading } from './engine/jax.js';
+
+// What shape does a label kernel want to be? Embed it with classical MDS — the same
+// spectral fact behind kernel PCA — and the geometry falls out of the spectrum:
+//   · independent labels (identity kernel, flat spectrum) → an even spread: the SIMPLEX.
+//   · a taxonomy (block kernel, two big modes) → tight clusters: a simplex of simplexes.
+//   · a graded SPECTRUM (similarity decays with order) → a curved arch, the famous
+//     "horseshoe" of MDS (Diaconis–Goel–Holmes). The first eigenmode recovers the
+//     latent ordering; the second bends it into a curve. Cats really do sit between
+//     dogs and the far end of the rainbow — on a manifold, not a circle.
+// The eigendecomposition runs on jax-js (engine `eigh`: Householder + QL); we recompute
+// only when the kernel changes and ease the embedding into place so it animates.
+const C = 12, GS = 4;                     // 12 classes, groups of 4 for the taxonomy
+const GROUP = i => Math.floor(i / GS);
+
+// the three label kernels, interpolated toward the identity by (1 - structure)
+function kernel(mode, structure, i, j) {
+  if (i === j) return 1;
+  let s;
+  if (mode === 'independent') s = 0;
+  else if (mode === 'taxonomy') s = GROUP(i) === GROUP(j) ? 0.75 : 0;
+  else s = Math.exp(-Math.abs(i - j) / 2.5);     // graded spectrum
+  return structure * s;
+}
+
+// classical MDS: double-centre the kernel (cheap JS glue), then the top-2 eigenmodes
+// from the jax-js eigensolver. Returns the 2-D embedding and the full spectrum.
+function mdsEmbed(mode, structure) {
+  const S = Array.from({ length: C }, (_, i) => Array.from({ length: C }, (_, j) => kernel(mode, structure, i, j)));
+  const mean = new Array(C).fill(0); let gm = 0;
+  for (let i = 0; i < C; i++) for (let j = 0; j < C; j++) { mean[i] += S[i][j]; gm += S[i][j]; }
+  for (let i = 0; i < C; i++) mean[i] /= C; gm /= C * C;
+  const B = Array.from({ length: C }, (_, i) => Array.from({ length: C }, (_, j) => S[i][j] - mean[i] - mean[j] + gm));
+  const e = eigh(B);                               // ← jax-js
+  const pts = [];
+  for (let i = 0; i < C; i++) pts.push([e.vectors[0][i] * Math.sqrt(Math.max(e.values[0], 0)), e.vectors[1][i] * Math.sqrt(Math.max(e.values[1], 0))]);
+  return { pts, vals: e.values };
+}
+
+// pick the sign/axis flip of the new embedding closest to the previous frame (eigvecs
+// have arbitrary sign; without this the cloud jumps every time the spectrum shifts)
+function alignTo(prev, pts) {
+  if (!prev) return pts;
+  let best = pts, bestErr = Infinity;
+  for (const sx of [1, -1]) for (const sy of [1, -1]) {
+    const cand = pts.map(p => [p[0] * sx, p[1] * sy]);
+    let err = 0; for (let i = 0; i < C; i++) err += (cand[i][0] - prev[i][0]) ** 2 + (cand[i][1] - prev[i][1]) ** 2;
+    if (err < bestErr) { bestErr = err; best = cand; }
+  }
+  return best;
+}
+
+// hue gradient so the spectrum reads as an ordered rainbow
+function hueColor(t) {
+  const h = 18 + 250 * t;                       // warm → cool along the order
+  const a = h / 360 * 2 * Math.PI;
+  const r = Math.round(150 + 90 * Math.cos(a)), g = Math.round(120 + 80 * Math.cos(a - 2.1)), b = Math.round(140 + 95 * Math.cos(a - 4.2));
+  return `rgb(${Math.max(40, r)},${Math.max(40, g)},${Math.max(40, b)})`;
+}
+
+// recompute the MDS target (jax-js eigensolve) only when the kernel actually changes
+function recompute(api) {
+  const mode = api.get('mode'), structure = api.get('structure');
+  const key = mode + ':' + structure.toFixed(3);
+  if (api.state.key === key && api.state.target) return;
+  api.state.key = key;
+  const { pts, vals } = mdsEmbed(mode, structure);
+  api.state.target = pts; api.state.vals = vals;
+}
+
+defineViz('spectrummanifold', {
+  title: 'What shape does a label kernel want to be?',
+  height: 420, stepsPerFrame: 0.5, autoplay: true,
+  controls: [
+    { type: 'select', name: 'mode', label: 'label kernel', value: 'spectrum',
+      options: [{ value: 'independent', label: 'independent (strangers)' }, { value: 'taxonomy', label: 'taxonomy (groups)' }, { value: 'spectrum', label: 'spectrum (graded)' }] },
+    { type: 'play' }, { type: 'speed' },
+    { type: 'newrow' },
+    { type: 'range', name: 'structure', label: 'structure strength', min: 0, max: 1, step: 0.02, value: 1, fmt: v => v.toFixed(2) },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) {
+    api.state.disp = null; api.state.target = null; api.state.vals = new Array(C).fill(1); api.state.key = '';
+    // the eigensolver needs jax-js; recompute the MDS target once the device is live
+    withJax(api, (a) => { recompute(a); });
+  },
+  step(api) {
+    if (!api.state.jaxReady) return;
+    recompute(api);                                 // recomputes eigh only when the kernel changes
+    const target = api.state.target; if (!target) return;
+    const aligned = alignTo(api.state.disp, target);
+    if (!api.state.disp) api.state.disp = aligned.map(p => p.slice());
+    else for (let i = 0; i < C; i++) { api.state.disp[i][0] += (aligned[i][0] - api.state.disp[i][0]) * 0.04; api.state.disp[i][1] += (aligned[i][1] - api.state.disp[i][1]) * 0.04; }
+  },
+  draw(api) {
+    const { ctx, colors, size, state } = api;
+    if (!state.jaxReady) return drawJaxLoading(api);
+    if (!state.disp) return drawJaxLoading(api);
+    const mode = api.get('mode');
+    // left: the embedding ; right: the eigenspectrum
+    const split = size.W * 0.70;
+    const box = { x: 6, y: 4, w: split - 10, h: size.H - 8 };
+    panel(ctx, box, colors, { header: 24 });
+    const disp = state.disp;
+    let mx = 0.4; for (const q of disp) mx = Math.max(mx, Math.abs(q[0]), Math.abs(q[1]));
+    const cx = box.x + box.w / 2, cy = box.y + box.h / 2 + 8, R = Math.min(box.w, box.h) * 0.40 / mx;
+    const xy = q => [cx + q[0] * R, cy + q[1] * R];
+
+    // edges: kin (taxonomy) or order-adjacency (spectrum) to make the shape legible
+    if (mode === 'taxonomy') {
+      for (let i = 0; i < C; i++) for (let j = i + 1; j < C; j++) {
+        if (GROUP(i) !== GROUP(j)) continue;
+        const [ax, ay] = xy(disp[i]), [bx, by] = xy(disp[j]);
+        ctx.strokeStyle = PALETTE[GROUP(i) % PALETTE.length]; ctx.globalAlpha = 0.30; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+      }
+    } else if (mode === 'spectrum') {
+      ctx.globalAlpha = 0.5; ctx.lineWidth = 2.5;
+      for (let i = 0; i < C - 1; i++) {
+        const [ax, ay] = xy(disp[i]), [bx, by] = xy(disp[i + 1]);
+        ctx.strokeStyle = hueColor(i / (C - 1));
+        ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // nodes
+    for (let i = 0; i < C; i++) {
+      const [x, y] = xy(disp[i]);
+      const col = mode === 'spectrum' ? hueColor(i / (C - 1)) : mode === 'taxonomy' ? PALETTE[GROUP(i) % PALETTE.length] : colors.muted;
+      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, 6.5, 0, 2 * Math.PI); ctx.fill();
+      ctx.lineWidth = 1.6; ctx.strokeStyle = colors.bg; ctx.stroke();
+    }
+    text(ctx, 'the kernel, embedded (classical MDS — top 2 modes)', box.x + 10, box.y + 6, colors, { size: 11, color: colors.fg, weight: '600' });
+    const tag = mode === 'independent' ? 'flat spectrum → an even spread: the simplex'
+      : mode === 'taxonomy' ? 'two big modes → tight clusters: a simplex of simplexes'
+      : 'one dominant mode → a curved arch: the horseshoe (classes on a spectrum)';
+    text(ctx, tag, box.x + 10, box.y + box.h - 14, colors, { size: 10, mono: true, color: colors.muted });
+
+    // right: eigenspectrum
+    const sb = { x: split + 2, y: 4, w: size.W - split - 8, h: size.H - 8 };
+    panel(ctx, sb, colors, { header: 22 });
+    text(ctx, 'eigenspectrum', sb.x + 8, sb.y + 5, colors, { size: 11, color: colors.fg });
+    const vals = state.vals, vmax = Math.max(1, ...vals.map(v => Math.abs(v)));
+    const px = sb.x + 14, pw = sb.w - 26, py = sb.y + 30, ph = sb.h - 58, bw = pw / C;
+    ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(px, py + ph); ctx.lineTo(px + pw, py + ph); ctx.stroke();
+    for (let k = 0; k < C; k++) {
+      const h = Math.max(0, vals[k]) / vmax * ph;
+      ctx.fillStyle = k < 2 ? colors.accent : colors.green; ctx.globalAlpha = k < 2 ? 0.92 : 0.6;
+      ctx.fillRect(px + k * bw + bw * 0.16, py + ph - h, bw * 0.68, h);
+    }
+    ctx.globalAlpha = 1;
+    const peaked = vals[0] / (vals.reduce((a, b) => a + Math.max(0, b), 0) + 1e-9);
+    text(ctx, mode === 'independent' ? 'flat — no preferred direction' : `top mode holds ${(100 * peaked).toFixed(0)}%`,
+      sb.x + 8, sb.y + sb.h - 16, colors, { size: 9.5, mono: true, color: colors.muted });
+
+    api.readout('rd', `${mode} · structure ${api.get('structure').toFixed(2)} · jax-js`);
+  },
+});
+</script>

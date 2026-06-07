@@ -1,0 +1,123 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 420 } = Astro.props;
+---
+<figure class="viz kernelsourcemixer" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { panel, text, parseColor, PALETTE } from './engine/draw.js';
+import { np, withJax, drawJaxLoading, eigh } from './engine/jax.js';
+
+const C = 9;
+const GROUP = i => Math.floor(i / 3);
+const NAMES = ['cat', 'dog', 'wolf', 'car', 'bus', 'jet', 'oak', 'rose', 'fern'];
+
+function source(kind, i, j) {
+  if (i === j) return 1;
+  if (kind === 'taxonomy') return GROUP(i) === GROUP(j) ? 0.75 : -0.35;
+  if (kind === 'teacher') return GROUP(i) === GROUP(j) ? 0.58 + 0.18 * Math.cos(i - j) : -0.18;
+  if (kind === 'cooc') return Math.exp(-Math.abs(i - j) / 2.1) - 0.25;
+  if (kind === 'text') return GROUP(i) === GROUP(j) ? 0.45 : (Math.abs(GROUP(i) - GROUP(j)) === 1 ? 0.05 : -0.28);
+  return 0;
+}
+
+function mixed(api) {
+  const ws = ['taxonomy', 'teacher', 'cooc', 'text'].map(k => api.get(k));
+  const sum = ws.reduce((a, b) => a + b, 0) || 1;
+  const mats = ['taxonomy', 'teacher', 'cooc', 'text'].map(k =>
+    np.array(Array.from({ length: C }, (_, i) => Array.from({ length: C }, (_, j) => source(k, i, j))))
+  );
+  let M = np.multiply(mats[0], ws[0] / sum);
+  for (let idx = 1; idx < mats.length; idx++) M = np.add(M, np.multiply(mats[idx], ws[idx] / sum));
+  return M.js();
+}
+
+function drawHeat(ctx, box, mat, title, colors) {
+  panel(ctx, box, colors, {});
+  text(ctx, title, box.x + 7, box.y + 5, colors, { size: 10.5, weight: '600', color: colors.fg });
+  const side = Math.min(box.w - 16, box.h - 28), ox = box.x + (box.w - side) / 2, oy = box.y + 23, cs = side / C;
+  const bg = parseColor(colors.cellBg), pos = parseColor(colors.accent), neg = parseColor(colors.blue);
+  for (let i = 0; i < C; i++) for (let j = 0; j < C; j++) {
+    const v = Math.max(-1, Math.min(1, mat[i][j]));
+    const t = Math.abs(v), hi = v < 0 ? neg : pos;
+    ctx.fillStyle = `rgb(${Math.round(bg[0] + (hi[0] - bg[0]) * t)},${Math.round(bg[1] + (hi[1] - bg[1]) * t)},${Math.round(bg[2] + (hi[2] - bg[2]) * t)})`;
+    ctx.fillRect(ox + j * cs, oy + i * cs, cs + 0.5, cs + 0.5);
+  }
+  ctx.strokeStyle = colors.border; ctx.strokeRect(ox + 0.5, oy + 0.5, side - 1, side - 1);
+}
+
+defineViz('kernelsourcemixer', {
+  title: 'Where the target kernel comes from',
+  height: 420,
+  controls: [
+    { type: 'range', name: 'taxonomy', label: 'taxonomy', min: 0, max: 1, step: 0.01, value: 0.7, fmt: v => v.toFixed(2) },
+    { type: 'range', name: 'teacher', label: 'teacher', min: 0, max: 1, step: 0.01, value: 0.5, fmt: v => v.toFixed(2) },
+    { type: 'newrow' },
+    { type: 'range', name: 'cooc', label: 'co-occurrence', min: 0, max: 1, step: 0.01, value: 0.25, fmt: v => v.toFixed(2) },
+    { type: 'range', name: 'text', label: 'text names', min: 0, max: 1, step: 0.01, value: 0.35, fmt: v => v.toFixed(2) },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) {
+    withJax(api);
+  },
+  draw(api) {
+    if (!api.state.jaxReady) return drawJaxLoading(api);
+    const { ctx, colors, size } = api;
+    const A = mixed(api), eig = eigh(A);
+    const left = { x: 6, y: 4, w: size.W * 0.48 - 8, h: size.H - 8 };
+    const right = { x: size.W * 0.48 + 4, y: 4, w: size.W * 0.52 - 10, h: size.H - 8 };
+    panel(ctx, left, colors, {});
+    text(ctx, 'source weights', left.x + 8, left.y + 8, colors, { size: 12, weight: '600', color: colors.fg });
+    const keys = ['taxonomy', 'teacher', 'cooc', 'text'];
+    const labels = ['taxonomy', 'teacher logits', 'co-occurrence', 'class-name text'];
+    const total = keys.reduce((a, k) => a + api.get(k), 0) || 1;
+    for (let idx = 0; idx < keys.length; idx++) {
+      const y = left.y + 48 + idx * 52, w = (left.w - 118) * api.get(keys[idx]) / total;
+      ctx.fillStyle = PALETTE[idx]; ctx.fillRect(left.x + 102, y, w, 12);
+      ctx.strokeStyle = colors.border; ctx.strokeRect(left.x + 102.5, y + 0.5, left.w - 118, 12);
+      text(ctx, labels[idx], left.x + 12, y - 1, colors, { size: 10.5, color: colors.muted });
+      text(ctx, `${Math.round(100 * api.get(keys[idx]) / total)}%`, left.x + left.w - 12, y - 1, colors, { align: 'right', size: 10, mono: true, color: colors.muted });
+    }
+    text(ctx, 'S* is a modeling choice, not a law of nature', left.x + left.w / 2, left.y + left.h - 28, colors, { align: 'center', size: 10.5, mono: true, color: colors.muted });
+
+    const top = { x: right.x, y: right.y, w: right.w * 0.45, h: right.h * 0.56 };
+    drawHeat(ctx, top, A, 'mixed target kernel', colors);
+    const emb = { x: right.x + right.w * 0.47, y: right.y, w: right.w * 0.53, h: right.h * 0.56 };
+    panel(ctx, emb, colors, {});
+    text(ctx, 'top-2 codebook', emb.x + 8, emb.y + 5, colors, { size: 10.5, weight: '600', color: colors.fg });
+    const cx = emb.x + emb.w / 2, cy = emb.y + emb.h / 2 + 12, R = Math.min(emb.w, emb.h) * 0.32;
+    let mx = 0.1;
+    const pts = Array.from({ length: C }, (_, i) => {
+      const x = eig.vectors[0][i] * Math.sqrt(Math.max(0, eig.values[0]));
+      const y = eig.vectors[1][i] * Math.sqrt(Math.max(0, eig.values[1]));
+      mx = Math.max(mx, Math.abs(x), Math.abs(y));
+      return [x, y];
+    });
+    for (let i = 0; i < C; i++) {
+      const x = cx + pts[i][0] / mx * R, y = cy + pts[i][1] / mx * R;
+      ctx.fillStyle = PALETTE[GROUP(i)]; ctx.beginPath(); ctx.arc(x, y, 5.5, 0, 2 * Math.PI); ctx.fill();
+      ctx.strokeStyle = colors.bg; ctx.lineWidth = 1.5; ctx.stroke();
+      text(ctx, NAMES[i], x, y + 9, colors, { align: 'center', size: 8.5, color: colors.muted });
+    }
+    const spec = { x: right.x, y: right.y + right.h * 0.60, w: right.w, h: right.h * 0.36 };
+    panel(ctx, spec, colors, {});
+    text(ctx, 'resulting spectrum', spec.x + 8, spec.y + 5, colors, { size: 10.5, weight: '600', color: colors.fg });
+    const vals = eig.values.map(v => Math.max(0, v)), vmax = Math.max(1, ...vals);
+    const px = spec.x + 18, py = spec.y + 34, pw = spec.w - 36, ph = spec.h - 54, bw = pw / C;
+    for (let k = 0; k < C; k++) {
+      ctx.fillStyle = k < 2 ? colors.accent : colors.border;
+      ctx.globalAlpha = k < 2 ? 0.95 : 0.6;
+      const bh = vals[k] / vmax * ph;
+      ctx.fillRect(px + k * bw + bw * 0.18, py + ph - bh, bw * 0.64, bh);
+    }
+    ctx.globalAlpha = 1;
+    api.readout('rd', `blend: ${keys.map(k => `${k} ${Math.round(100 * api.get(k) / total)}%`).join(' · ')}`);
+  },
+});
+</script>

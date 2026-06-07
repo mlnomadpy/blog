@@ -1,0 +1,175 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 420 } = Astro.props;
+---
+<figure class="viz mistakechord" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { panel, text, PALETTE } from './engine/draw.js';
+import { np, withJax, drawJaxLoading } from './engine/jax.js';
+
+// Where the errors flow. Classes sit on the rim, grouped into superclass arcs.
+// Each ribbon is a confusion: it leaves the true class and lands on the predicted
+// class, its width = how much error mass, its colour = mild (lands inside the same
+// superclass — a cat called a dog) or severe (jumps the rim to another superclass —
+// a cat called a car). A simplex codebook scatters its mistakes everywhere; a
+// structured codebook keeps them local. Same error RATE, completely different error
+// COST. Drag the slider to morph the codebook between the two regimes.
+// The confusion matrix (bias the base propensities toward kin, then row-normalise to a
+// fixed error mass) is computed on jax-js and cached per structure value.
+const NAMES = ['cat', 'dog', 'wolf', 'fox', 'car', 'bus', 'jet', 'ship', 'oak', 'fern', 'rose', 'palm'];
+const GROUP = [0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2];
+const GNAME = ['animals', 'vehicles', 'plants'];
+const C = NAMES.length, NG = 3;
+
+function gauss(seed) { let s = Math.sin(seed) * 43758.5453; return s - Math.floor(s); }
+
+// fixed per-class base propensities + kin mask (deterministic; built once in setup)
+function buildBase() {
+  const base = Array.from({ length: C }, () => new Array(C).fill(0));
+  const kin = Array.from({ length: C }, () => new Array(C).fill(0));
+  for (let i = 0; i < C; i++) for (let j = 0; j < C; j++) {
+    if (i === j) continue;
+    base[i][j] = 0.25 + 0.75 * gauss(11 + i * 31 + j * 7);
+    kin[i][j] = GROUP[i] === GROUP[j] ? 1 : 0;
+  }
+  return { base, kin };
+}
+
+// confusion on jax-js: biased = base · (kin·biasKin + (1−kin)·biasCross), row-normalised
+// to a fixed error mass (so the RATE is held while structure moves the destinations).
+function computeConfusion(api, structure) {
+  const key = structure.toFixed(3);
+  if (api.state.cKey === key && api.state.M) return;
+  const biasKin = 1 + 5.5 * structure, biasCross = Math.max(1 - 0.92 * structure, 0.02);
+  const Ba = np.array(api.state.base), K = np.array(api.state.kin);
+  const factor = np.add(np.multiply(K, biasKin - biasCross), biasCross);   // kin·(bk−bc)+bc
+  const biased = np.multiply(Ba, factor);
+  const rowsum = np.reshape(np.sum(biased.ref, 1), [C, 1]);
+  const M = np.divide(biased, np.add(rowsum, 1e-9)).js();                  // (C,C)/(C,1) broadcast
+  api.state.M = M; api.state.cKey = key;
+}
+
+defineViz('mistakechord', {
+  title: 'Where the errors flow',
+  height: 420, stepsPerFrame: 0.5, autoplay: true,
+  controls: [
+    { type: 'play' }, { type: 'speed' },
+    { type: 'newrow' },
+    { type: 'range', name: 'structure', label: 'codebook  simplex → taxonomy', min: 0, max: 1, step: 0.02, value: 0, fmt: v => v.toFixed(2) },
+    { type: 'range', name: 'show', label: 'ribbons shown', min: 0.05, max: 1, step: 0.01, value: 1, fmt: v => `${(v * 100).toFixed(0)}%` },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) {
+    api.state.t = 0; api.state.struct = api.get('structure');
+    const { base, kin } = buildBase(); api.state.base = base; api.state.kin = kin;
+    api.state.M = null; api.state.cKey = '';
+    withJax(api, (a) => computeConfusion(a, a.state.struct));
+  },
+  step(api) {
+    if (!api.state.jaxReady) return;
+    api.state.t += 0.02;
+    const tgt = api.get('structure');
+    api.state.struct += (tgt - api.state.struct) * 0.03;  // ease so dragging animates
+    computeConfusion(api, api.state.struct);              // recomputes the jax-js matrix on change
+  },
+  draw(api) {
+    const { ctx, colors, size, state } = api;
+    const box = { x: 6, y: 4, w: size.W - 12, h: size.H - 8 };
+    panel(ctx, box, colors, { header: 24 });
+    if (!state.jaxReady || !state.M) return drawJaxLoading(api);
+    const struct = state.struct;
+    const M = state.M;
+
+    const cx = box.x + box.w / 2, cy = box.y + box.h / 2 + 8;
+    const R = Math.min(box.w, box.h) * 0.40;
+    const rim = R + 4;
+
+    // angular layout: equal slot per class, small gaps between superclass arcs
+    const gap = 0.16;                 // radians between groups
+    const span = 2 * Math.PI - NG * gap;
+    const per = span / C;
+    const ang = [];
+    let a = -Math.PI / 2 + gap / 2;
+    let prevG = 0;
+    for (let i = 0; i < C; i++) {
+      if (GROUP[i] !== prevG) { a += gap; prevG = GROUP[i]; }
+      ang.push(a + per / 2);
+      a += per;
+    }
+    const pt = (i, r) => [cx + Math.cos(ang[i]) * r, cy + Math.sin(ang[i]) * r];
+
+    // superclass arcs on the rim
+    for (let gIdx = 0; gIdx < NG; gIdx++) {
+      const members = [];
+      for (let i = 0; i < C; i++) if (GROUP[i] === gIdx) members.push(i);
+      const a0 = ang[members[0]] - per / 2, a1 = ang[members[members.length - 1]] + per / 2;
+      ctx.strokeStyle = PALETTE[gIdx % PALETTE.length]; ctx.globalAlpha = 0.9; ctx.lineWidth = 7; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(cx, cy, rim + 6, a0, a1); ctx.stroke();
+      const mid = (a0 + a1) / 2;
+      const lx = cx + Math.cos(mid) * (rim + 24), ly = cy + Math.sin(mid) * (rim + 24);
+      text(ctx, GNAME[gIdx], lx, ly, colors, { align: 'center', size: 11, color: PALETTE[gIdx % PALETTE.length], weight: '600' });
+    }
+    ctx.globalAlpha = 1; ctx.lineCap = 'butt';
+
+    // collect ribbons, count cost
+    const show = api.get('show');
+    const ribbons = [];
+    let mild = 0, severe = 0, total = 0;
+    for (let i = 0; i < C; i++) for (let j = 0; j < C; j++) {
+      if (i === j) continue;
+      const w = M[i][j];
+      total += w;
+      const sev = GROUP[i] !== GROUP[j];
+      if (sev) severe += w; else mild += w;
+      if (w < 0.02) continue;
+      ribbons.push({ i, j, w, sev });
+    }
+    // draw thin→thick so the heavy ones sit on top; hide the lightest per `show`
+    ribbons.sort((p, q) => p.w - q.w);
+    const cutoff = ribbons.length ? ribbons[Math.floor((1 - show) * ribbons.length)].w : 0;
+    for (const r of ribbons) {
+      if (r.w < cutoff) continue;
+      const [ax, ay] = pt(r.i, rim), [bx, by] = pt(r.j, rim);
+      // bezier dipping toward the centre — deeper dip for cross-group jumps
+      const dip = r.sev ? 0.12 : 0.55;
+      const mx = cx + (ax + bx - 2 * cx) * dip, my = cy + (ay + by - 2 * cy) * dip;
+      const col = r.sev ? (colors.red || '#c2553a') : colors.accent;
+      ctx.strokeStyle = col; ctx.globalAlpha = (r.sev ? 0.5 : 0.32) * (0.5 + 0.5 * Math.min(1, r.w * 6));
+      ctx.lineWidth = Math.max(0.6, r.w * 26);
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo(mx, my, bx, by); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // class nodes
+    for (let i = 0; i < C; i++) {
+      const [x, y] = pt(i, rim);
+      ctx.fillStyle = PALETTE[GROUP[i] % PALETTE.length]; ctx.beginPath(); ctx.arc(x, y, 3.5, 0, 2 * Math.PI); ctx.fill();
+      const [tx, ty] = pt(i, rim + 14);
+      text(ctx, NAMES[i], tx, ty, colors, { align: 'center', size: 8.5, color: colors.muted });
+    }
+
+    // verdict
+    const sevPct = total > 0 ? 100 * severe / total : 0;
+    text(ctx, 'where the errors flow', box.x + 10, box.y + 6, colors, { size: 12, color: colors.fg, weight: '600' });
+    const verdict = sevPct > 45 ? 'mistakes scatter across superclasses — every error is a category error'
+      : sevPct < 12 ? 'mistakes stay home — a cat is mistaken for a dog, never a car'
+      : 'mistakes are starting to localise inside superclasses';
+    text(ctx, verdict, box.x + 10, box.y + box.h - 16, colors, { size: 10.5, mono: true, color: sevPct > 45 ? (colors.red || '#c2553a') : colors.fg });
+    // legend chips
+    const ly = box.y + 24;
+    ctx.fillStyle = colors.accent; ctx.fillRect(box.x + box.w - 168, ly, 14, 5);
+    text(ctx, 'mild (within group)', box.x + box.w - 150, ly - 1, colors, { size: 9, color: colors.muted, align: 'left' });
+    ctx.fillStyle = colors.red || '#c2553a'; ctx.fillRect(box.x + box.w - 168, ly + 14, 14, 5);
+    text(ctx, 'severe (crosses group)', box.x + box.w - 150, ly + 13, colors, { size: 9, color: colors.muted, align: 'left' });
+
+    api.readout('rd', `severe ${sevPct.toFixed(0)}% of error mass · structure ${struct.toFixed(2)} · jax-js`);
+  },
+});
+</script>

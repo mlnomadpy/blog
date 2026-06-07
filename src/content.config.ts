@@ -6,6 +6,10 @@ const blog = defineCollection({
   schema: z.object({
     title: z.string(),
     description: z.string().optional(),
+    // Short (<=160 char) meta description for SERP / OG / Twitter / JSON-LD. The
+    // long `description` stays the on-page excerpt (cards, RSS, OG image); this is
+    // the search-engine-facing version. Falls back to `description` when omitted.
+    seoDescription: z.string().optional(),
     pubDate: z.coerce.date(),
     updatedDate: z.coerce.date().optional(),
     tags: z.array(z.string()).default([]),

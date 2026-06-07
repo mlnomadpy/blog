@@ -1,0 +1,91 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 360 } = Astro.props;
+---
+<figure class="viz accseverity" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { panel, text } from './engine/draw.js';
+import { np, withJax, drawJaxLoading } from './engine/jax.js';
+
+function metrics(s) {
+  const accuracy = 94.2 - 3.7 * Math.pow(s, 1.35) + 0.8 * s * (1 - s);
+  const severe = 63 * Math.pow(1 - s, 2.15) + 5.5 * s;
+  const mild = 100 - severe;
+  const margin = 1.0 - 0.26 * s;
+  return { accuracy, severe, mild, margin };
+}
+
+function curveJax() {
+  const s = np.linspace(0, 1, 101);
+  const accuracy = np.add(
+    np.subtract(94.2, np.multiply(3.7, np.pow(s.ref, 1.35))),
+    np.multiply(0.8, np.multiply(s.ref, np.subtract(np.array(1), s.ref))),
+  );
+  const severe = np.add(
+    np.multiply(63, np.pow(np.subtract(np.array(1), s.ref), 2.15)),
+    np.multiply(5.5, s.ref),
+  );
+  return { accuracy: accuracy.js(), severe: severe.js() };
+}
+
+defineViz('accseverity', {
+  title: 'Accuracy is not the same as mistake cost',
+  height: 360,
+  controls: [
+    { type: 'range', name: 'structure', label: 'codebook structure', min: 0, max: 1, step: 0.01, value: 0.55, fmt: v => v.toFixed(2) },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) {
+    withJax(api);
+  },
+  draw(api) {
+    if (!api.state.jaxReady) return drawJaxLoading(api);
+    const { ctx, colors, size } = api;
+    const box = { x: 6, y: 4, w: size.W - 12, h: size.H - 8 };
+    panel(ctx, box, colors, {});
+    const plot = { x: box.x + 54, y: box.y + 34, w: box.w - 105, h: box.h - 92 };
+    ctx.strokeStyle = colors.border; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(plot.x, plot.y); ctx.lineTo(plot.x, plot.y + plot.h); ctx.lineTo(plot.x + plot.w, plot.y + plot.h); ctx.stroke();
+    text(ctx, 'top-1 accuracy', plot.x + plot.w / 2, box.y + box.h - 30, colors, { align: 'center', size: 10, color: colors.muted });
+    ctx.save(); ctx.translate(box.x + 18, plot.y + plot.h / 2); ctx.rotate(-Math.PI / 2);
+    text(ctx, 'severe error mass', 0, 0, colors, { align: 'center', size: 10, color: colors.muted });
+    ctx.restore();
+
+    const xOf = acc => plot.x + ((acc - 89.5) / (95 - 89.5)) * plot.w;
+    const yOf = sev => plot.y + plot.h - (sev / 70) * plot.h;
+    const curve = curveJax();
+    ctx.strokeStyle = colors.accent; ctx.lineWidth = 2.2; ctx.beginPath();
+    for (let i = 0; i < curve.accuracy.length; i++) {
+      const x = xOf(curve.accuracy[i]), y = yOf(curve.severe[i]);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    for (const mark of [0, 0.5, 1]) {
+      const m = metrics(mark), x = xOf(m.accuracy), y = yOf(m.severe);
+      ctx.fillStyle = mark === 0 ? colors.blue : mark === 1 ? colors.green : colors.border;
+      ctx.beginPath(); ctx.arc(x, y, 4, 0, 2 * Math.PI); ctx.fill();
+      text(ctx, mark === 0 ? 'simplex' : mark === 1 ? 'taxonomy' : 'mixed', x, y - 18, colors, { align: 'center', size: 9, color: colors.muted });
+    }
+    const s = api.get('structure'), m = metrics(s), x = xOf(m.accuracy), y = yOf(m.severe);
+    ctx.fillStyle = colors.accent; ctx.beginPath(); ctx.arc(x, y, 7, 0, 2 * Math.PI); ctx.fill();
+    ctx.strokeStyle = colors.bg; ctx.lineWidth = 2; ctx.stroke();
+
+    const side = { x: box.x + box.w - 160, y: box.y + 42, w: 124, h: 98 };
+    text(ctx, `${m.accuracy.toFixed(1)}%`, side.x, side.y, colors, { size: 28, weight: '700', color: colors.fg });
+    text(ctx, 'top-1 accuracy', side.x, side.y + 32, colors, { size: 10, color: colors.muted });
+    text(ctx, `${m.severe.toFixed(0)}%`, side.x, side.y + 58, colors, { size: 28, weight: '700', color: m.severe > 35 ? (colors.red || '#c2553a') : colors.green });
+    text(ctx, 'severe error mass', side.x, side.y + 90, colors, { size: 10, color: colors.muted });
+
+    text(ctx, 'same knob, two objectives', box.x + 10, box.y + 8, colors, { size: 12, weight: '600', color: colors.fg });
+    text(ctx, 'simplex maximizes margin; structure buys cheaper wrong answers', box.x + 10, box.y + box.h - 18, colors, { size: 10, mono: true, color: colors.muted });
+    api.readout('rd', `accuracy ${m.accuracy.toFixed(1)}% · severe ${m.severe.toFixed(0)}%`);
+  },
+});
+</script>

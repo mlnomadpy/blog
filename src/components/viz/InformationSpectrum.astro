@@ -1,0 +1,90 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 360 } = Astro.props;
+---
+<figure class="viz infospectrum" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { panel, text } from './engine/draw.js';
+import { eigh, withJax, drawJaxLoading } from './engine/jax.js';
+
+// The spectrum of a representation. The feature covariance splits into two stacked
+// regimes: the top C−1 modes are the PROTOTYPE FRAME (the simplex / Welch packing /
+// label kernel — the separation channel), and the tail is the INFORMATION the
+// features carry between the prototypes (within-class + fine structure). Press
+// Play to run training: as the model collapses (neural collapse, Σ_W → 0) the
+// information tail is ground to nothing. Drag 'label structure' to shape the
+// prototype modes. Eigenvalues of the label kernel via the jax-js eigensolver.
+const C = 6, D = 12, PROTO = C - 1, TAIL = D - (C - 1);
+
+// the prototype-frame modes = top C−1 eigenvalues of the label kernel (jax-js),
+// cached by structure since they only change when the slider moves
+function protoSpectrum(api, structure) {
+  const key = structure.toFixed(3);
+  if (api.state.protoKey === key && api.state.proto) return api.state.proto;
+  const A = [];
+  for (let i = 0; i < C; i++) { A.push([]); for (let j = 0; j < C; j++) A[i].push(i === j ? 1 : structure * (((i < 3) === (j < 3)) ? 0.4 : -0.5)); }
+  const proto = eigh(A).values.slice(0, PROTO).map(v => 1.5 * Math.max(v, 0.02));
+  api.state.proto = proto; api.state.protoKey = key;
+  return proto;
+}
+
+defineViz('infospectrum', {
+  title: 'The spectrum of a representation',
+  height: 360, stepsPerFrame: 1, maxStep: 560,
+  controls: [
+    { type: 'play' }, { type: 'button', name: 'reset', label: 'reset', reset: true }, { type: 'speed' },
+    { type: 'newrow' },
+    { type: 'range', name: 'structure', label: 'label structure', min: 0, max: 1, step: 0.02, value: 0.5, fmt: v => v.toFixed(2) },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) { api.state.within = 1.0; api.state.proto = null; api.state.protoKey = ''; withJax(api, (a) => protoSpectrum(a, a.get('structure'))); },
+  step(api) { if (!api.state.jaxReady) return; api.state.within = Math.max(0.05, api.state.within * 0.9925); }, // training collapses Σ_W (slow)
+  draw(api) {
+    const { ctx, colors, size, state } = api;
+    const box = { x: 6, y: 4, w: size.W - 12, h: size.H - 8 };
+    panel(ctx, box, colors, { header: 24 });
+    if (!state.jaxReady) return drawJaxLoading(api);
+    const proto = protoSpectrum(api, api.get('structure'));
+    const w = state.within * 0.85;
+    const vals = [...proto, ...Array.from({ length: TAIL }, () => w)];
+
+    const pad = { l: 44, r: 14, t: 30, b: 40 };
+    const px = box.x + pad.l, py = box.y + pad.t, pw = box.w - pad.l - pad.r, ph = box.h - pad.t - pad.b;
+    const vmax = 2.0, bw = pw / D;
+    // axis
+    ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(px, py + ph); ctx.lineTo(px + pw, py + ph); ctx.stroke();
+    text(ctx, 'eigenvalue', box.x + 8, box.y + 5, colors, { size: 10, color: colors.muted, mono: true });
+    // bars
+    for (let k = 0; k < D; k++) {
+      const h = Math.min(1, vals[k] / vmax) * ph;
+      const isProto = k < PROTO;
+      ctx.fillStyle = isProto ? colors.accent : colors.green;
+      ctx.globalAlpha = isProto ? 0.92 : 0.75;
+      ctx.fillRect(px + k * bw + bw * 0.16, py + ph - h, bw * 0.68, h);
+    }
+    ctx.globalAlpha = 1;
+    // region brackets
+    const bracket = (x0, x1, label, col, yoff) => {
+      ctx.strokeStyle = col; ctx.lineWidth = 1.4; ctx.beginPath();
+      ctx.moveTo(x0, py + ph + yoff); ctx.lineTo(x0, py + ph + yoff + 5); ctx.lineTo(x1, py + ph + yoff + 5); ctx.lineTo(x1, py + ph + yoff); ctx.stroke();
+      text(ctx, label, (x0 + x1) / 2, py + ph + yoff + 8, colors, { align: 'center', size: 9.5, color: col });
+    };
+    bracket(px + 2, px + PROTO * bw - 2, `prototype frame — Welch-packed (${PROTO} modes)`, colors.accent, 4);
+    bracket(px + PROTO * bw + 2, px + D * bw - 2, 'information', colors.green, 4);
+
+    const protoE = proto.reduce((a, b) => a + b, 0), infoE = TAIL * w;
+    const infoPct = 100 * infoE / (protoE + infoE + 1e-9);
+    const collapsed = state.within < 0.1;
+    text(ctx, collapsed ? 'neural collapse: Σ_W → 0, the information spectrum is erased' : `training step ${api.iter} · the information tail is collapsing`,
+      box.x + 10, box.y + box.h - 16, colors, { size: 11, color: collapsed ? (colors.red || '#c2553a') : colors.fg });
+    api.readout('rd', `information retained ${infoPct.toFixed(0)}% · structure ${api.get('structure').toFixed(2)} · jax-js`);
+  },
+});
+</script>

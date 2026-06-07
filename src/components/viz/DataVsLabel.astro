@@ -1,0 +1,88 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 380 } = Astro.props;
+const id = Math.random().toString(36).slice(2, 8);
+---
+<figure class="viz datavslabel" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { panel, unitCircle, dot, text, PALETTE } from './engine/draw.js';
+
+// Where does class structure come from? The DATA. Perceptually similar classes
+// (cats, dogs) sit in overlapping regions of feature space — the faint clouds.
+// A code descends under two forces: the data pulls it toward its perceptual
+// home, and supervision (a one-hot / label-smoothing pressure) pushes every
+// class equally apart, toward the simplex. Crank supervision and watch the
+// codebook tear away from the structure the data handed it for free.
+const C = 6, M = 10;
+const randn = () => { const u = Math.random() || 1e-9, v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+
+defineViz('datavslabel', {
+  title: 'Structure comes from the data — supervision can erase it',
+  height: 380, stepsPerFrame: 0.6,
+  controls: [
+    { type: 'play' }, { type: 'button', name: 'reroll', label: 're-roll', reset: true }, { type: 'speed' },
+    { type: 'newrow' },
+    { type: 'range', name: 'sup', label: 'supervision pressure', min: 0, max: 1, step: 0.02, value: 0.35, fmt: v => v.toFixed(2) },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) {
+    // two perceptual groups: animals near 0, vehicles near π; spread within group
+    const proto = [], lab = new Int32Array(C), samp = [];
+    const within = [-0.5, 0, 0.5];
+    for (let i = 0; i < C; i++) {
+      const g = i < 3 ? 0 : 1; lab[i] = g;
+      const ang = g * Math.PI + within[i % 3];
+      proto.push([Math.cos(ang), Math.sin(ang)]);
+      const s = []; for (let k = 0; k < M; k++) { const a = ang + randn() * 0.16; s.push([Math.cos(a), Math.sin(a)]); }
+      samp.push(s);
+    }
+    const z = proto.map(() => { const a = 2 * Math.PI * Math.random(); return [Math.cos(a), Math.sin(a)]; });
+    api.state = { proto, lab, samp, z };
+  },
+  step(api) {
+    const { proto, z } = api.state, b = api.get('sup'), lr = 0.022;
+    const g = z.map(() => [0, 0]);
+    for (let i = 0; i < C; i++) {
+      // data force: pull toward perceptual prototype
+      g[i][0] += (1 - b) * 2 * (z[i][0] - proto[i][0]); g[i][1] += (1 - b) * 2 * (z[i][1] - proto[i][1]);
+      // supervision force: frame potential → spread all classes apart (simplex)
+      for (let j = 0; j < C; j++) { if (i === j) continue; const c = z[i][0] * z[j][0] + z[i][1] * z[j][1]; g[i][0] += b * 4 * c * z[j][0]; g[i][1] += b * 4 * c * z[j][1]; }
+    }
+    for (let i = 0; i < C; i++) { const gu = g[i][0] * z[i][0] + g[i][1] * z[i][1]; let x = z[i][0] - lr * (g[i][0] - gu * z[i][0]), y = z[i][1] - lr * (g[i][1] - gu * z[i][1]); const n = Math.hypot(x, y) + 1e-12; z[i] = [x / n, y / n]; }
+  },
+  draw(api) {
+    const { ctx, colors, size, state } = api;
+    const box = { x: 6, y: 4, w: size.W - 12, h: size.H - 8 };
+    const m = panel(ctx, box, colors, { header: 22 });
+    unitCircle(ctx, m, colors);
+    const { lab, samp, z, proto } = state;
+    // faint data clouds (the perceptual truth, fixed)
+    ctx.globalAlpha = 0.32;
+    for (let i = 0; i < C; i++) for (const s of samp[i]) { const [px, py] = m.map(s); dot(ctx, px, py, 2.1, PALETTE[lab[i] % PALETTE.length]); }
+    ctx.globalAlpha = 1;
+    // codebook codes (bold)
+    for (let i = 0; i < C; i++) { const [px, py] = m.map(z[i]); dot(ctx, px, py, 7, PALETTE[lab[i] % PALETTE.length]); ctx.lineWidth = 1.8; ctx.strokeStyle = colors.bg; ctx.beginPath(); ctx.arc(px, py, 7, 0, 2 * Math.PI); ctx.stroke(); }
+    // structure retained: alignment between code-Gram and prototype-Gram (off-diagonal)
+    let dot1 = 0, n1 = 0, n2 = 0;
+    for (let i = 0; i < C; i++) for (let j = i + 1; j < C; j++) {
+      const gz = z[i][0] * z[j][0] + z[i][1] * z[j][1], gp = proto[i][0] * proto[j][0] + proto[i][1] * proto[j][1];
+      dot1 += gz * gp; n1 += gz * gz; n2 += gp * gp;
+    }
+    const align = dot1 / (Math.sqrt(n1 * n2) + 1e-9);
+    const b = api.get('sup');
+    text(ctx, 'faint = data (perceptual clouds) · bold = class codes', box.x + 8, box.y + 4, colors, { size: 11.5, color: colors.fg });
+    const verdict = b < 0.15 ? 'codes match the data — structure preserved'
+      : b > 0.8 ? 'codes torn into a simplex — structure erased'
+      : 'supervision pulling codes off the data structure';
+    text(ctx, `${verdict}  ·  structure retained ${(Math.max(0, align) * 100).toFixed(0)}%`, box.x + 8, box.y + box.h - 14, colors, { size: 10, mono: true, color: align > 0.6 ? colors.green : (align > 0.3 ? colors.accent : (colors.red || '#c2553a')) });
+    api.readout('rd', `supervision ${b.toFixed(2)}`);
+  },
+});
+</script>
