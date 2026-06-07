@@ -100,7 +100,7 @@ That is a fixed similarity in the residual stream's native coordinates. It asks:
 
 Sometimes that is useful, but it is too literal. The residual stream is a shared workspace. It contains lexical identity, position, syntax, local features, long-range features, partial predictions, and debris from other heads and MLPs. A head usually does not want "everything similar to me." It wants one relation: previous occurrence, matching delimiter, subject for this verb, value attached to this key, source token that should be copied.
 
-A raw dot product cannot choose that relation. It inherits whatever geometry the residual stream happens to have.
+A raw dot product cannot choose that relation inside the head. It inherits whatever geometry earlier layers happened to put into the residual stream.
 
 ## A shared projection learns a metric
 
@@ -166,7 +166,7 @@ $$
 s_{ij}=x_i^\top S\,x_j + x_i^\top A\,x_j.
 $$
 
-The symmetric part $S$ is a signed metric; the antisymmetric part $A$ is pure directedness, with $x_i^\top A\,x_j = -\,x_j^\top A\,x_i$, so it contributes the *opposite* amount to $s_{ij}$ and $s_{ji}$. This sharpens what separate $Q$ and $K$ actually add. A shared projection can only produce $WW^\top$ — symmetric *and* **positive semidefinite**. Separate $Q$ and $K$ relax that in two independent ways at once: they unlock the antisymmetric part $A$, which is the entire source of the asymmetry that makes "A asks for B" different from "B asks for A"; and they let the symmetric part $S$ itself be **indefinite**, free to score some aligned directions as *incompatible*. Directedness and indefinite compatibility are both out of reach for a shared projection. The low-rank bilinear form buys both.
+The symmetric part $S$ is a signed metric; the antisymmetric part $A$ is pure directedness, with $x_i^\top A\,x_j = -\,x_j^\top A\,x_i$, so it contributes the *opposite* amount to $s_{ij}$ and $s_{ji}$. This sharpens what separate $Q$ and $K$ actually add. A shared projection can only produce $WW^\top$ — symmetric *and* **positive semidefinite**. Separate $Q$ and $K$ relax that in two independent ways at once: they unlock the antisymmetric part $A$, which is the entire source of the *logit-level* asymmetry that makes "A asks for B" different from "B asks for A" before masking or row-normalization enter; and they let the symmetric part $S$ itself be **indefinite**, free to score some aligned directions as *incompatible*. Directedness and indefinite compatibility are both out of reach for a shared projection. The low-rank bilinear form buys both.
 
 The split also explains a subtlety in the kernel view below. The self-score and, more generally, the quadratic form sees only the symmetric part: $x^\top B\,x = x^\top S\,x$, because the antisymmetric part vanishes on the diagonal. So a head's directedness is completely invisible if you only look at how a token scores against itself — it lives entirely off-diagonal, in $A$.
 

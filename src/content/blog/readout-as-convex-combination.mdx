@@ -59,6 +59,11 @@ references:
     title: "Eliciting Latent Predictions from Transformers with the Tuned Lens"
     venue: "arXiv preprint"
     arxiv: "2303.08112"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    venue: "arXiv preprint"
+    arxiv: "2605.03262"
 keywords:
   - transformer MLP readout
   - W_out
@@ -83,6 +88,8 @@ W_{\text{out}}a(x)=\sum_{u=1}^{m} a_u(x)\,r_u.
 $$
 
 That is the readout. The MLP computes a population of feature responses, then reads them out by mixing a set of learned residual-stream prototypes.
+
+Two notes before we start. First, "convex" is the clean special case, not the default: a standard ReLU MLP is *conic*, and GELU or gated (SwiGLU) MLPs are *signed*. The title names the regime worth aiming for; much of the post is about when you do and do not get it. Second, throughout we classify the readout by its **coefficients** (not by the prototypes), treat the MLP output as an additive update to the residual stream, and ignore the bias $b_{\text{out}}$ unless stated — it only shifts the origin of the prototype hull.
 
 ## The columns of W_out are output prototypes
 
@@ -114,7 +121,7 @@ $$
 y(x)=\Bigl(\sum_u a_u(x)\Bigr)\sum_u \frac{a_u(x)}{\sum_v a_v(x)}\,r_u.
 $$
 
-The direction is still a convex mixture; the norm is an intensity. The reachable set is the **conical hull** — the cone the prototypes generate from the origin. This is the natural reading for a ReLU-style MLP: pick a point in the hull, then scale how loudly you write it into the residual stream.
+The direction is still a convex mixture; the **coefficient mass** $S=\sum_u a_u(x)$ is the write intensity, and the normalized $a/S$ chooses the mixture (when $S=0$ the direction is undefined). The actual output norm $\lVert y\rVert$ depends on the prototype geometry too, not on $S$ alone. The reachable set is the **conical hull** — the cone the prototypes generate from the origin. This is the natural reading for a ReLU-style MLP: pick a point in the hull, then scale how loudly you write it into the residual stream.
 
 **Affine** ($\sum_u a_u(x)=1$, signs free). Keep the sum-to-one but allow negative coefficients, and the output slides along the **affine hull** of the prototypes — the flat through them. It can leave the hull while staying on its plane; negative coefficients subtract prototypes while the total still normalizes.
 
@@ -128,11 +135,11 @@ So the slogan needs a 2×2 footnote, not a one-line one:
 
 That distinction matters because interpretability statements inherit it. "This unit contributed 30%" only means what it says in the convex or normalized-conic regime. In a signed regime, the correct statement is not contribution mass but vector cancellation.
 
-And even in the convex regime there is a subtlety worth stating plainly. Because a transformer has far more hidden units than residual dimensions ($m \gg d$), the prototypes are an **overcomplete** dictionary — so by Carathéodory's theorem the same output $y$ can be written as a convex combination of them in infinitely many ways, in fact using as few as $d+1$ at a time. The coefficient vector $a(x)$ the network produces is therefore *a* convex decomposition, not *the* one. "Unit $u$ contributed 30%" is a fact about the mechanism that generated $a(x)$, not a fact recoverable from $y$ alone. Contribution mass is a property of the readout map, not of its output.
+And even in the convex regime there is a subtlety worth stating plainly. Because a transformer usually has far more hidden units than residual dimensions ($m \gg d$), the prototypes are an **overcomplete** dictionary, and most *interior* points of their hull admit many convex decompositions. Carathéodory's theorem guarantees that any point in the hull has at least one decomposition using at most $d+1$ prototypes — but it does not make that decomposition unique (an extreme point can even have only one). So when the choice is not forced, the coefficient vector $a(x)$ the network produces is *a* convex decomposition, not *the* one. "Unit $u$ contributed 30%" is a fact about the mechanism that generated $a(x)$, not a fact recoverable from $y$ alone. Contribution mass is a property of the readout map, not of its output.
 
 The figure below makes that literal: it holds the output $y$ fixed and continuously rewrites it as different convex combinations of the same prototypes. The point never moves; the "contributions" change completely.
 
-<NonIdentifiability caption="Carathéodory non-identifiability, made literal. The black point y is held fixed while the coefficients morph through a whole family of convex decompositions of it — each a valid set of nonnegative shares summing to one. The cycle passes through sparse decompositions that use only three prototypes (Carathéodory's bound in the plane) and dense ones that spread mass across more. Because the set of valid decompositions is convex, interpolating between any two stays valid, so y is provably constant — recomputed live in jax-js each frame and shown unchanged in the readout. 'How much did prototype u contribute?' has many equally-correct answers." />
+<NonIdentifiability caption="Non-identifiability of the convex decomposition, made literal. The black point y is held fixed while the coefficients morph through a whole family of convex decompositions of it — each a valid set of nonnegative shares summing to one. The cycle passes through sparse decompositions that use only three prototypes (Carathéodory's bound in the plane) and dense ones that spread mass across more. Because the set of valid decompositions is convex, interpolating between any two stays valid, so y is provably constant — recomputed live in jax-js each frame and shown unchanged in the readout. 'How much did prototype u contribute?' has many equally-correct answers." />
 
 <ReadoutCoefficientSemantics caption="A readout is always a weighted sum over output prototypes, but the coefficient constraints decide what the weights mean. Normalized nonnegative coefficients behave like shares. Positive unnormalized coefficients separate mixture direction from write intensity. Signed coefficients introduce subtraction, so the visual language shifts from contribution mass to cancellation." />
 
@@ -228,9 +235,9 @@ $$
 
 Now the MLP chooses **what** to write by convex mixture and **how much** to write by the gate. This is close to how one should mentally parse a positive unnormalized MLP anyway: direction as mixture, norm as intensity.
 
-The gate also tells you what convexity costs. A pure convex readout can only reach the convex hull of $\{r_u\}$; adding the nonnegative gate $g(x)$ extends the reach to the conical hull, the cone the prototypes generate. Neither covers all of $\mathbb{R}^d$. To write in *every* direction with nonnegative coefficients, the prototypes must form a **positive spanning set** — and a positive spanning set of $\mathbb{R}^d$ needs at least $d+1$ vectors in general position. So the interpretability of nonnegative coefficients is not free: it either restricts the block's output cone or forces redundancy in the prototype dictionary. Signed coefficients buy the full span back, at the price of the clean mass interpretation. That is the whole trade in one sentence.
+The gate also tells you what convexity costs. A pure convex readout is bounded: it can only reach the convex hull of $\{r_u\}$. Adding the nonnegative gate $g(x)$ extends the reach to the conical hull — and a cone *can* cover all of $\mathbb{R}^d$, but only if the prototypes **positively span** the space; otherwise the output stays confined to the cone they generate. A positive spanning set of $\mathbb{R}^d$ needs at least $d+1$ vectors in general position. So the interpretability of nonnegative coefficients is not free: it either restricts the block's output cone or forces redundancy in the prototype dictionary. Signed coefficients buy the full span back unconditionally, at the price of the clean mass interpretation. That is the whole trade in one sentence.
 
-The design question is whether that constraint is worth the interpretability. Attention already made that bargain. Its output is a convex mix before the output projection. The MLP historically did not; it bought flexibility by allowing arbitrary signed linear readout. The cost is that its contribution semantics are weaker.
+The design question is whether that constraint is worth the interpretability. Attention already made that bargain: per head, its output is a convex mix of value vectors before the output projection (and, since that projection is linear, of the projected values too — though multi-head concatenation and $W_O$ then mix heads, so the whole block is not literally one token-simplex mixture). The MLP historically did not; it bought flexibility by allowing arbitrary signed linear readout. The cost is that its contribution semantics are weaker.
 
 ## The point
 
@@ -264,7 +271,7 @@ $$
 
 Two things have to be true for this to be a *convex* readout, and they are not the same thing. The sum-to-one is automatic — it is just the normalization, true for any kernel wherever the denominator is nonzero. Nonnegativity of the coefficients is the real requirement, and it asks that the kernel be **pointwise nonnegative**, $\kappa(x,p)\ge 0$ — *not* that it be positive definite. These are independent properties, and it is worth being careful here because they are easy to conflate. The linear kernel $\kappa(x,y)=x^\top y$ is positive definite yet takes negative values; the boxcar kernel $\mathbb{1}[\lVert x-y\rVert\le h]$ is nonnegative yet not positive definite. Positive-definiteness is what makes $\kappa$ a *Mercer similarity* with an RKHS — the property that ties this construction back to "attention is a kernel" — but it is nonnegativity, not positive-definiteness, that makes the readout convex.
 
-The kernels worth reaching for satisfy **both**. The exponential kernel behind softmax attention, the Gaussian, and the Yat kernel $\kappa(x,y)=(x^\top y)^2/(\lVert x-y\rVert^2+\varepsilon)$ are each nonnegative *and* positive definite — Yat by a Schur product of a squared-linear numerator (PSD, and manifestly $\ge 0$) with an inverse-multiquadric factor (PSD). That intersection is the corner you want: a similarity that is simultaneously a legitimate Mercer kernel and a source of convex weights.
+The kernels worth reaching for satisfy **both**. The exponential kernel behind softmax attention, the Gaussian, and the Yat kernel $\kappa(x,y)=(x^\top y)^2/(\lVert x-y\rVert^2+\varepsilon)$ are each nonnegative *and* positive definite. The Yat kernel — introduced by Bouhsine (2026), which proves it positive definite for $\varepsilon\ge 0$ and universal for $\varepsilon>0$ — earns the PSD property as a Schur product of a squared-linear numerator (PSD, and manifestly $\ge 0$) with an inverse-multiquadric factor (PSD). That intersection is the corner you want: a similarity that is simultaneously a legitimate Mercer kernel and a source of convex weights.
 
 <KernelQuadrant caption="Positive-definite and pointwise-nonnegative are independent axes, and only the second is what a convex readout needs. For each kernel the figure computes, live, the profile κ(x₀, ·) — a dip below zero means it is not nonnegative — and the smallest eigenvalue of a Gram matrix (via the engine's symmetric eigendecomposition) — λ_min < 0 means it is not positive definite. The linear kernel is PSD but signed; the boxcar is nonnegative but not PSD; the Gaussian and Yat kernels occupy the useful top-right corner, nonnegative and Mercer at once." />
 
