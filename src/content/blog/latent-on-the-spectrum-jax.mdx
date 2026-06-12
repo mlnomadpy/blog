@@ -1,0 +1,199 @@
+---
+title: "Latent on the Spectrum, in JAX"
+description: "A runnable companion to Latent on the Spectrum: build a codebook as the spectral embedding of a label kernel in JAX (classical MDS with square-root eigenvalue scaling), watch a flat spectrum become the simplex and a graded one become the horseshoe, measure kernel-target alignment, split a representation into its between-class prototype frame and within-class information spectrum, and watch neural collapse grind the information to zero."
+seoDescription: "Spectral codebooks in JAX: classical MDS with square-root scaling, flat→simplex and graded→horseshoe spectra, kernel-target alignment, and the Σ_B/Σ_W information split."
+pubDate: 2026-06-07T12:35:00-07:00
+draft: false
+tags: [ml, representation-learning, neural-collapse, simplex-etf, latent-space, spectral-embedding, kernel-methods, jax, implementation]
+references:
+  - authors: "Welch, L. R."
+    year: 1974
+    title: "Lower Bounds on the Maximum Cross Correlation of Signals"
+    venue: "IEEE Transactions on Information Theory 20(3)"
+    doi: "10.1109/TIT.1974.1055219"
+  - authors: "Cristianini, N., Shawe-Taylor, J., Elisseeff, A., Kandola, J."
+    year: 2002
+    title: "On Kernel-Target Alignment"
+    venue: "NIPS 2001"
+  - authors: "Diaconis, P., Goel, S., Holmes, S."
+    year: 2008
+    title: "Horseshoes in Multidimensional Scaling and Local Kernel Methods"
+    venue: "Annals of Applied Statistics 2(3)"
+    arxiv: "0811.1477"
+  - authors: "Papyan, V., Han, X. Y., Donoho, D. L."
+    year: 2020
+    title: "Prevalence of Neural Collapse During the Terminal Phase of Deep Learning Training"
+    venue: "PNAS 117(40)"
+    arxiv: "2008.08186"
+  - authors: "Hinton, G., Vinyals, O., Dean, J."
+    year: 2015
+    title: "Distilling the Knowledge in a Neural Network"
+    arxiv: "1503.02531"
+keywords:
+  - spectral embedding JAX
+  - classical MDS JAX
+  - kernel target alignment
+  - neural collapse spectrum
+  - between within class covariance
+  - label kernel codebook
+  - horseshoe MDS
+---
+import CiteAs from '../../components/CiteAs.astro';
+
+*The [explainer](/blog/latent-on-the-spectrum/) reframed a codebook as the spectral embedding of a label-similarity kernel: diagonalise the kernel, keep its strongest modes, and the geometry follows the spectrum. This is the implementation companion: the classical-MDS embedding in JAX (with the square-root scaling done right), the flat→simplex and graded→horseshoe morph, kernel-target alignment, and the split of a trained representation into its prototype frame and its information spectrum, all as runnable `jnp.linalg.eigh`.*
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/spectral-codebook.gif" alt="Animated spectral embedding of a label kernel morphing from an even ring to a horseshoe as the kernel spectrum goes from flat to peaked" loading="eager" width="1100" height="520" />
+  <figcaption>A codebook is the spectral embedding of a label kernel, computed live in JAX. As the kernel goes from flat (structureless) to graded (similarity falls off with class distance), its eigenspectrum peaks and the top two modes morph the codebook from an even ring (the simplex) into the horseshoe of classical MDS. The embedding and the spectrum are both `jnp.linalg.eigh`.</figcaption>
+</figure>
+
+Everything here is plain JAX. The objects are tiny (a `C × C` label kernel, a handful of features) so the linear algebra is legible.
+
+## A codebook is the spectral embedding of a kernel
+
+Given a target similarity `S` between classes, the best `d`-dimensional codebook whose Gram matrix approximates `S` is read straight off the spectrum. Ignoring the unit-norm step for a moment, the best rank-`d` Gram is $U_d\Lambda_d U_d^\top$, and a coordinate matrix that realises it is $\Lambda_d^{1/2}U_d^\top$: the top-`d` eigenvectors **scaled by the square roots of their eigenvalues**. If we want cosine codes, we normalise afterward.
+
+```python
+import jax
+import jax.numpy as jnp
+
+
+def spectral_codebook(S, d):
+    """S: (C, C) symmetric label kernel -> C unit-norm codes in R^d."""
+    w, V = jnp.linalg.eigh(S)                 # ascending eigenpairs
+    w, V = w[::-1], V[:, ::-1]                # to descending
+    coords = V[:, :d] * jnp.sqrt(jnp.clip(w[:d], 0.0, None))   # Lambda_d^{1/2} U_d^T : rows are codes
+    return coords / (jnp.linalg.norm(coords, axis=1, keepdims=True) + 1e-9)
+```
+
+That single eigendecomposition is classical multidimensional scaling, the spectral fact behind kernel PCA and Laplacian eigenmaps. The reconstruction error of the rank-`d` codebook is exactly the tail of the spectrum:
+
+```python
+def gram_error(S, d):
+    w, V = jnp.linalg.eigh(S)
+    w, V = jnp.clip(w[::-1], 0.0, None), V[:, ::-1]
+    Shat = (V[:, :d] * w[:d]) @ V[:, :d].T
+    return jnp.linalg.norm(Shat - S) / jnp.linalg.norm(S)     # falls as the kept modes capture more of S
+```
+
+## The spectrum decides the geometry
+
+Three label kernels, three spectra, three shapes. The structureless kernel is flat and gives the even simplex; a block kernel is two-peaked and gives clusters; a graded kernel (similarity falling off with class distance) is the horseshoe of Diaconis, Goel & Holmes (2008).
+
+```python
+C = 9
+i = jnp.arange(C)
+
+flat   = jnp.eye(C) - jnp.ones((C, C)) / C                       # structureless: the simplex
+blocks = (i[:, None] // 3 == i[None, :] // 3).astype(jnp.float32)  # 3 superclasses of 3: clusters
+graded = jnp.exp(-((i[:, None] - i[None, :]) / 2.2) ** 2)        # falls with class distance: the horseshoe
+
+for name, S in [("flat", flat), ("blocks", blocks), ("graded", graded - graded.mean())]:
+    codes = spectral_codebook(S, d=2)
+    w = jnp.clip(jnp.linalg.eigh(S)[0][::-1], 0.0, None)
+    print(name, "top-3 spectrum:", jnp.round(w[:3] / (w[0] + 1e-9), 2))
+# flat   -> [1.   1.   1.  ]  (no preferred direction -> even ring)
+# blocks -> [1.   ~.5  ~0  ]  (two dominant modes -> clusters)
+# graded -> [1.   ~.7  ~.3 ]  (a smooth tail -> a curved 1-D manifold, the horseshoe)
+```
+
+The hero animation above is exactly this `spectral_codebook(S, 2)` evaluated along a dial from `flat` to `graded`, with each frame's eigenvectors orthogonally aligned to the previous so the morph is smooth.
+
+## Kernel-target alignment
+
+The reason this works is the old, exactly-right idea that the *ideal* embedding kernel is the *label* kernel (Cristianini et al., 2002). The match is one cosine between two Gram matrices:
+
+```python
+def alignment(A, B):
+    return jnp.sum(A * B) / (jnp.linalg.norm(A) * jnp.linalg.norm(B) + 1e-9)
+
+
+codes = spectral_codebook(graded - graded.mean(), d=2)
+gram = codes @ codes.T                                   # the codebook's own similarity
+print(alignment(gram, graded - graded.mean()))           # high: the 2-D code already captures the kernel
+```
+
+Raise `d` and the alignment climbs toward 1 as the codebook is allowed to reproduce more of the kernel's spectrum. The figure below sweeps that budget directly: for each `d` it rebuilds the rank-`d` Gram from the top eigenmodes and lays the reconstruction next to the target kernel, with `alignment` and `gram_error` charting the spend.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/mds-reconstruction.gif" alt="Animated rank-d reconstruction of a graded label kernel sharpening into the target as the budget d grows, with kernel-target alignment rising and reconstruction error falling" loading="lazy" width="1100" height="520" />
+  <figcaption>How many modes to spend, computed live in JAX. For each budget `d` the rank-`d` Gram matrix (the top `d` eigenmodes of the label kernel) is laid beside the target. As `d` grows the reconstruction sharpens back into the kernel, `alignment` climbs toward 1, and `gram_error` falls toward 0: the error you carry is exactly the tail of the spectrum you chose not to spend on.</figcaption>
+</figure>
+
+A handful of modes already recover most of a graded kernel, which is the whole reason a low-dimensional codebook works: the kernel's mass lives in its top eigenvalues, and the rest is a tail you can drop.
+
+## The prototype frame and the information spectrum
+
+Now switch objects: from the *target* label kernel to a *trained* representation. Split a feature matrix into between-class and within-class covariance. The between-class part $\Sigma_B$ has rank at most `C-1` and spans the prototypes: it is the separation channel, the codebook. The within-class part $\Sigma_W$ is everything else: the gradations the codebook does not carry, the *information*.
+
+```python
+def class_covariances(Z, y, C):
+    mu = jnp.stack([Z[y == c].mean(0) for c in range(C)])
+    g, N = Z.mean(0), Z.shape[0]
+    SB = sum((y == c).sum() * jnp.outer(mu[c] - g, mu[c] - g) for c in range(C)) / N
+    SW = jnp.mean(jax.vmap(lambda z, c: jnp.outer(z - mu[c], z - mu[c]))(Z, y), 0)
+    return SB, SW
+
+
+SB, SW = class_covariances(Z, y, C)
+eig_B = jnp.clip(jnp.linalg.eigvalsh(SB)[::-1], 0.0, None)   # <= C-1 nonzero: the prototype frame
+eig_W = jnp.clip(jnp.linalg.eigvalsh(SW)[::-1], 0.0, None)   # the information tail
+print("nonzero prototype modes:", int((eig_B > 1e-6 * eig_B[0]).sum()), "  (C-1 =", C - 1, ")")
+```
+
+The split is clean only when the between-class variance dominates, as it does near neural collapse; with large within-class variance the two regimes overlap. The figure below trains a small encoder with cross-entropy and watches it happen: $\Sigma_B$ sharpens into a `C-1`-mode simplex frame while the $\Sigma_W$ spectrum is ground toward zero (Papyan, Han & Donoho, 2020).
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/information-collapse.gif" alt="Animated neural collapse: a representation's within-class covariance spectrum shrinks to zero while the between-class spectrum keeps exactly C-1 modes" loading="lazy" width="1100" height="520" />
+  <figcaption>Neural collapse, computed live in JAX. A small encoder is trained with cross-entropy; each frame splits the representation into Σ_B (between-class, the prototype frame, with exactly C−1 = 3 nonzero modes) and Σ_W (within-class, the information). As training proceeds Σ_W is ground toward zero: the codebook keeps the separation and discards the gradations.</figcaption>
+</figure>
+
+## Dark knowledge is the coefficients
+
+The explainer's last move: the information that survives lives *between* the prototypes, as the soft mixture a feature makes over them, the dark knowledge a teacher distils (Hinton et al., 2015). In this frame view it is a coefficient vector, a soft assignment over the prototype frame:
+
+```python
+def soft_assignment(z, prototypes, tau=0.1):
+    """z: (..., d) feature; prototypes: (C, d). Returns coefficients over the codebook."""
+    return jax.nn.softmax((z @ prototypes.T) / tau, axis=-1)
+
+
+a = soft_assignment(z, mu)        # e.g. [0.70, 0.27, 0.02, 0.01]: "mostly cat, a bit dog"
+```
+
+Sharpen `tau → 0` and the vector collapses to one-hot, and the relation between classes is erased, exactly the effect label smoothing and a low temperature have. The information is the off-one-hot mass. On a *graded* codebook the point is visible in the geometry: a feature near class `k` lends its mass to `k`'s neighbours on the horseshoe, so the assignment encodes which classes are similar, and cooling the temperature burns that structure away.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/dark-knowledge.gif" alt="Animated softmax temperature sweep over a graded codebook: a feature's soft assignment spreads onto neighbouring classes when warm and collapses to a one-hot spike when cold" loading="lazy" width="1100" height="520" />
+  <figcaption>Dark knowledge is the off-one-hot mass, computed live in JAX. A feature (★) sits near class 6 on a graded horseshoe codebook; its `soft_assignment` is shown as marker sizes (left) and bars (right). Warm: the mass spreads onto the geometric neighbours (5, 7, 8), encoding class similarity, with a high dark-knowledge mass and entropy. Cool the temperature and it collapses to a one-hot spike on class 6: the relation between classes is erased and the dark-knowledge mass goes to 0.</figcaption>
+</figure>
+
+## Rendering the GIFs
+
+All four animations are generated with Python, JAX, and matplotlib: the linear algebra in JAX, the drawing in matplotlib:
+
+```bash
+python scripts/render_spectral_codebook_gif.py     # flat -> simplex -> horseshoe morph
+python scripts/render_mds_reconstruction_gif.py    # rank-d Gram rebuild, alignment up / error down
+python scripts/render_information_collapse_gif.py  # neural collapse of the Σ_W spectrum
+python scripts/render_dark_knowledge_gif.py        # temperature sweep, soft assignment -> one-hot
+```
+
+The first sweeps a label kernel from flat to graded, recomputing `spectral_codebook(S, 2)` and the eigenspectrum each frame (with Procrustes alignment between frames so the morph is smooth). The second sweeps the budget `d`, rebuilding the rank-`d` Gram and recomputing `alignment` and `gram_error`. The third trains a small encoder and recomputes `class_covariances` each frame. The fourth fixes a graded codebook and sweeps the softmax temperature, recomputing `soft_assignment` each frame. None is a benchmark; they are visual audits of the spectrum.
+
+## What this leaves out
+
+A production embedding would use far more classes, real data, and a deep encoder, and the label kernel would be estimated rather than handed to you. The point this companion keeps is the one the explainer named: a codebook is a spectrum, the prototypes are its top, and the information is the tail.
+
+---
+
+*References: classical MDS / kernel-target alignment from [Cristianini et al. (2002)](https://papers.nips.cc/paper/2001); the horseshoe from [Diaconis, Goel & Holmes (2008)](https://arxiv.org/abs/0811.1477); neural collapse from [Papyan et al. (2020)](https://arxiv.org/abs/2008.08186); dark knowledge from [Hinton et al. (2015)](https://arxiv.org/abs/1503.02531); the Welch bound from [Welch (1974)](https://doi.org/10.1109/TIT.1974.1055219).*
+
+<CiteAs slug="latent-on-the-spectrum-jax" title="Latent on the Spectrum, in JAX" pubDate="2026-06-07T12:35:00-07:00" />
+
+<style>{`
+.jax-fig { margin: 1.8rem auto; text-align: center; }
+.jax-fig img { max-width: 520px; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; background: #fbf8f1; }
+.jax-fig-wide img { max-width: 900px; }
+.jax-fig figcaption { margin-top: 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--fg-muted); max-width: 64ch; margin-left: auto; margin-right: auto; }
+`}</style>
