@@ -1,0 +1,547 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="generator" content="Astro v5.18.1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#fbfaf6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)"><title>Latent on the Spectrum, in JAX</title><meta name="description" content="Spectral codebooks in JAX: classical MDS with square-root scaling, flat→simplex and graded→horseshoe spectra, kernel-target alignment, and the Σ_B/Σ_W information split."><meta name="keywords" content="spectral embedding JAX, classical MDS JAX, kernel target alignment, neural collapse spectrum, between within class covariance, label kernel codebook, horseshoe MDS, ml, representation-learning, neural-collapse, simplex-etf, latent-space, spectral-embedding, kernel-methods, jax, implementation"><meta name="author" content="Taha Bouhsine"><link rel="canonical" href="https://tahabouhsine.com/blog/latent-on-the-spectrum-jax/"><link rel="icon" href="/blog/favicon.svg" type="image/svg+xml"><link rel="alternate" type="application/rss+xml" title="Records of the !mmortal Data Scientist" href="/blog/rss.xml"><link rel="sitemap" href="/blog/sitemap-index.xml"><link rel="me" href="https://github.com/mlnomadpy"><link rel="me" href="https://www.linkedin.com/in/tahabsn/"><link rel="me" href="https://scholar.google.com/citations?user=IsBjb3EAAAAJ"><link rel="me" href="https://g.dev/tahabsn"><link rel="author" href="https://github.com/mlnomadpy"><meta property="og:type" content="article"><meta property="og:site_name" content="Records of the !mmortal Data Scientist"><meta property="og:title" content="Latent on the Spectrum, in JAX"><meta property="og:description" content="Spectral codebooks in JAX: classical MDS with square-root scaling, flat→simplex and graded→horseshoe spectra, kernel-target alignment, and the Σ_B/Σ_W information split."><meta property="og:url" content="https://tahabouhsine.com/blog/latent-on-the-spectrum-jax/"><meta property="og:locale" content="en_US"><meta property="og:image" content="https://tahabouhsine.com/blog/og/latent-on-the-spectrum-jax.png"><meta property="og:image:alt" content="Latent on the Spectrum, in JAX — Records of the !mmortal Data Scientist"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:type" content="image/png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Latent on the Spectrum, in JAX"><meta name="twitter:description" content="Spectral codebooks in JAX: classical MDS with square-root scaling, flat→simplex and graded→horseshoe spectra, kernel-target alignment, and the Σ_B/Σ_W information split."><meta name="twitter:image" content="https://tahabouhsine.com/blog/og/latent-on-the-spectrum-jax.png"><meta name="twitter:image:alt" content="Latent on the Spectrum, in JAX — Records of the !mmortal Data Scientist"><meta property="article:published_time" content="2026-06-07T19:35:00.000Z"><meta property="article:author" content="Taha Bouhsine"><meta property="article:section" content="Machine Learning"><meta property="article:tag" content="ml"><meta property="article:tag" content="representation-learning"><meta property="article:tag" content="neural-collapse"><meta property="article:tag" content="simplex-etf"><meta property="article:tag" content="latent-space"><meta property="article:tag" content="spectral-embedding"><meta property="article:tag" content="kernel-methods"><meta property="article:tag" content="jax"><meta property="article:tag" content="implementation"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","@id":"https://tahabouhsine.com/blog/latent-on-the-spectrum-jax/#article","headline":"Latent on the Spectrum, in JAX","name":"Latent on the Spectrum, in JAX","description":"Spectral codebooks in JAX: classical MDS with square-root scaling, flat→simplex and graded→horseshoe spectra, kernel-target alignment, and the Σ_B/Σ_W information split.","image":["https://tahabouhsine.com/blog/og/latent-on-the-spectrum-jax.png"],"datePublished":"2026-06-07T19:35:00.000Z","dateModified":"2026-06-07T19:35:00.000Z","author":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#author","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","jobTitle":"Machine Learning Researcher","sameAs":["https://github.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"publisher":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#publisher","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","sameAs":["https://github.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"mainEntityOfPage":{"@type":"WebPage","@id":"https://tahabouhsine.com/blog/latent-on-the-spectrum-jax/"},"keywords":"spectral embedding JAX, classical MDS JAX, kernel target alignment, neural collapse spectrum, between within class covariance, label kernel codebook, horseshoe MDS, ml, representation-learning, neural-collapse, simplex-etf, latent-space, spectral-embedding, kernel-methods, jax, implementation","url":"https://tahabouhsine.com/blog/latent-on-the-spectrum-jax/","inLanguage":"en-US","wordCount":1763,"timeRequired":"PT9M","articleSection":"Machine Learning","isPartOf":{"@type":"Blog","@id":"https://tahabouhsine.com/blog/","name":"Records of the !mmortal Data Scientist","url":"https://tahabouhsine.com/blog/"}}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Blog","item":"https://tahabouhsine.com/blog/"},{"@type":"ListItem","position":2,"name":"Machine Learning","item":"https://tahabouhsine.com/blog/tag/ml/"},{"@type":"ListItem","position":3,"name":"Latent on the Spectrum, in JAX","item":"https://tahabouhsine.com/blog/latent-on-the-spectrum-jax/"}]}</script><script>
+    (function () {
+      if (window.__gaSetup) return;
+      window.__gaSetup = true;
+      var GA_ID = 'G-373438VHJB';
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ dataLayer.push(arguments); }
+      window.gtag = window.gtag || gtag;
+      window.__gaEventQueue = window.__gaEventQueue || [];
+      window.__trackGA = function (eventName, params) {
+        if (!eventName) return;
+        var item = { name: eventName, params: params || {} };
+        if (window.__gaLoaded) {
+          gtag('event', item.name, item.params);
+        } else {
+          window.__gaEventQueue.push(item);
+        }
+      };
+
+      // Track whether the first astro:page-load has fired, so a mid-session
+      // Accept can still record the current page.
+      window.__gaFirstLoadDone = window.__gaFirstLoadDone || false;
+      document.addEventListener('astro:page-load', function () { window.__gaFirstLoadDone = true; });
+
+      window.__loadGA = function () {
+        if (window.__gaLoaded) return;
+        window.__gaLoaded = true;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+        document.head.appendChild(s);
+        gtag('js', new Date());
+        gtag('config', GA_ID, { send_page_view: false });
+        (window.__gaEventQueue || []).splice(0).forEach(function (item) {
+          gtag('event', item.name, item.params);
+        });
+        function sendPV() {
+          gtag('event', 'page_view', {
+            page_title: document.title,
+            page_location: location.href,
+            page_path: location.pathname + location.search,
+          });
+        }
+        document.addEventListener('astro:page-load', sendPV);
+        // If the initial page-load already happened (accept mid-session),
+        // record this page now; otherwise the listener catches the first one.
+        if (window.__gaFirstLoadDone) sendPV();
+      };
+
+      try {
+        if (localStorage.getItem('analytics-consent') === 'granted') window.__loadGA();
+      } catch (e) {}
+    })();
+  </script><script>
+  (() => {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'light' || stored === 'dark') {
+      document.documentElement.setAttribute('data-theme', stored);
+    }
+  })();
+</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.DstInXr_.css">
+<link rel="stylesheet" href="/blog/_astro/_slug_.1UYF8z3a.css"><style>.cite-as[data-astro-cid-p234urri]{margin:3.5rem 0 0;padding-top:1.5rem;border-top:1px solid var(--border)}.cite-as[data-astro-cid-p234urri] h2[data-astro-cid-p234urri]{font-family:var(--mono);font-size:.82rem;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-faint);font-weight:500;margin:0 0 .75rem}.cite-as[data-astro-cid-p234urri] h3[data-astro-cid-p234urri]{font-family:var(--mono);font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-faint);font-weight:500;margin:1.5rem 0 .6rem}.cite-line[data-astro-cid-p234urri]{font-family:var(--serif);font-size:.98rem;line-height:1.55;color:var(--fg-muted);margin:0 0 .5rem}.cite-line[data-astro-cid-p234urri] em[data-astro-cid-p234urri]{color:var(--fg)}.cite-bib[data-astro-cid-p234urri]{margin:.4rem 0 0;position:relative}.cite-bib[data-astro-cid-p234urri] summary[data-astro-cid-p234urri]{cursor:pointer;font-family:var(--mono);font-size:.78rem;color:var(--fg-muted);padding:.25rem 0;user-select:none}.cite-bib[data-astro-cid-p234urri] summary[data-astro-cid-p234urri]:hover{color:var(--accent)}.cite-bib[data-astro-cid-p234urri] pre[data-astro-cid-p234urri]{margin:.4rem 0 0;padding:.85rem 1rem;background:var(--bg-elev);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;font-size:.82rem;line-height:1.55}.cite-bib[data-astro-cid-p234urri] pre[data-astro-cid-p234urri] code[data-astro-cid-p234urri]{background:transparent;border:0;padding:0}.cite-copy[data-astro-cid-p234urri]{position:absolute;top:2.1rem;right:.55rem;background:var(--bg);border:1px solid var(--border);color:var(--fg-muted);font-family:var(--mono);font-size:.72rem;padding:.25rem .55rem;border-radius:var(--radius-sm);cursor:pointer;transition:color var(--transition-fast),border-color var(--transition-fast)}.cite-copy[data-astro-cid-p234urri]:hover,.cite-copy[data-astro-cid-p234urri].copied{color:var(--accent);border-color:var(--accent)}
+</style></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>
+  (() => {
+    const apply = (theme) => {
+      document.documentElement.setAttribute('data-theme', theme);
+      const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+      if (meta) meta.setAttribute('content', theme === 'dark' ? '#0e1116' : '#fbfaf6');
+      // Sync giscus iframe if present
+      const giscus = document.querySelector('iframe.giscus-frame');
+      if (giscus && giscus.contentWindow) {
+        giscus.contentWindow.postMessage(
+          { giscus: { setConfig: { theme: theme === 'dark' ? 'dark' : 'light' } } },
+          'https://giscus.app'
+        );
+      }
+    };
+
+    const init = () => {
+      const btns = document.querySelectorAll('[data-theme-toggle]');
+      btns.forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', () => {
+          const current = document.documentElement.getAttribute('data-theme')
+            || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          const next = current === 'dark' ? 'light' : 'dark';
+          localStorage.setItem('theme', next);
+          apply(next);
+        });
+      });
+    };
+
+    init();
+    document.addEventListener('astro:after-swap', init);
+    document.addEventListener('astro:page-load', init);
+  })();
+</script> </nav> </div> </header> <main id="main">  <div class="reading-progress" data-reading-progress aria-hidden="true"></div> <script>
+  (() => {
+    const init = () => {
+      const bar = document.querySelector('[data-reading-progress]');
+      if (!bar) return;
+      const update = () => {
+        const h = document.documentElement;
+        const scrolled = h.scrollTop;
+        const max = h.scrollHeight - h.clientHeight;
+        const pct = max > 0 ? Math.min(100, (scrolled / max) * 100) : 0;
+        bar.style.width = pct + '%';
+      };
+      // Coalesce scroll events into one paint per frame so fast/touch
+      // scrolling stays smooth.
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => { update(); ticking = false; });
+      };
+      update();
+      window.removeEventListener('scroll', window.__rp_onScroll || (() => {}));
+      window.removeEventListener('resize', window.__rp_onScroll || (() => {}));
+      window.__rp_onScroll = onScroll;
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+    };
+    init();
+    document.addEventListener('astro:page-load', init);
+    document.addEventListener('astro:after-swap', init);
+  })();
+</script> <article data-blog-post data-pagefind-body data-pagefind-meta="date:2026-06-07"> <header class="post-header">  <h1 data-pagefind-meta="title">Latent on the Spectrum, in JAX</h1> <p class="meta"> <time datetime="2026-06-07T19:35:00.000Z">June 7, 2026</time>   · 9 min read </p> <p style="margin-top:0.65rem" data-pagefind-meta="tags:ml,representation-learning,neural-collapse,simplex-etf,latent-space,spectral-embedding,kernel-methods,jax,implementation"> <a class="tag" href="/blog/tag/ml/">#ml</a><a class="tag" href="/blog/tag/representation-learning/">#representation-learning</a><a class="tag" href="/blog/tag/neural-collapse/">#neural-collapse</a><a class="tag" href="/blog/tag/simplex-etf/">#simplex-etf</a><a class="tag" href="/blog/tag/latent-space/">#latent-space</a><a class="tag" href="/blog/tag/spectral-embedding/">#spectral-embedding</a><a class="tag" href="/blog/tag/kernel-methods/">#kernel-methods</a><a class="tag" href="/blog/tag/jax/">#jax</a><a class="tag" href="/blog/tag/implementation/">#implementation</a> </p> </header> <a class="companion-callout companion" href="/blog/latent-on-the-spectrum/" data-astro-cid-x4o4rwnl><span class="cc-icon" aria-hidden="true" data-astro-cid-x4o4rwnl>📖</span><span class="cc-body" data-astro-cid-x4o4rwnl><span class="cc-eyebrow" data-astro-cid-x4o4rwnl>Explainer companion</span><span class="cc-title" data-astro-cid-x4o4rwnl>Latent on the Spectrum: Why Cats Sit Closer to Dogs Than to Cars</span><span class="cc-lead" data-astro-cid-x4o4rwnl>Want the full intuition first? This is the runnable companion to the explainer.</span></span><span class="cc-cta" data-astro-cid-x4o4rwnl>Read the explainer<span aria-hidden="true" data-astro-cid-x4o4rwnl>→</span></span></a>  <p><em>The <a href="/blog/latent-on-the-spectrum/">explainer</a> reframed a codebook as the spectral embedding of a label-similarity kernel: diagonalise the kernel, keep its strongest modes, and the geometry follows the spectrum. This is the implementation companion: the classical-MDS embedding in JAX (with the square-root scaling done right), the flat→simplex and graded→horseshoe morph, kernel-target alignment, and the split of a trained representation into its prototype frame and its information spectrum, all as runnable <code>jnp.linalg.eigh</code>.</em></p>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/spectral-codebook.gif" alt="Animated spectral embedding of a label kernel morphing from an even ring to a horseshoe as the kernel spectrum goes from flat to peaked" loading="eager" width="1100" height="520"/><figcaption>A codebook is the spectral embedding of a label kernel, computed live in JAX. As the kernel goes from flat (structureless) to graded (similarity falls off with class distance), its eigenspectrum peaks and the top two modes morph the codebook from an even ring (the simplex) into the horseshoe of classical MDS. The embedding and the spectrum are both <code>jnp.linalg.eigh</code>.</figcaption></figure>
+<p>Everything here is plain JAX. The objects are tiny (a <code>C × C</code> label kernel, a handful of features) so the linear algebra is legible.</p>
+<h2 id="a-codebook-is-the-spectral-embedding-of-a-kernel">A codebook is the spectral embedding of a kernel<a class="heading-anchor-link" aria-label="Link to heading" href="#a-codebook-is-the-spectral-embedding-of-a-kernel"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Given a target similarity <code>S</code> between classes, the best <code>d</code>-dimensional codebook whose Gram matrix approximates <code>S</code> is read straight off the spectrum. Ignoring the unit-norm step for a moment, the best rank-<code>d</code> Gram is <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>U</mi><mi>d</mi></msub><msub><mi mathvariant="normal">Λ</mi><mi>d</mi></msub><msubsup><mi>U</mi><mi>d</mi><mi mathvariant="normal">⊤</mi></msubsup></mrow><annotation encoding="application/x-tex">U_d\Lambda_d U_d^\top</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.1322em;vertical-align:-0.2831em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.109em">U</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:-0.109em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">d</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mord"><span class="mord">Λ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">d</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.109em">U</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8491em"><span style="top:-2.4169em;margin-left:-0.109em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">d</span></span></span><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">⊤</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2831em"><span></span></span></span></span></span></span></span></span></span>, and a coordinate matrix that realises it is <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi mathvariant="normal">Λ</mi><mi>d</mi><mrow><mn>1</mn><mi mathvariant="normal">/</mi><mn>2</mn></mrow></msubsup><msubsup><mi>U</mi><mi>d</mi><mi mathvariant="normal">⊤</mi></msubsup></mrow><annotation encoding="application/x-tex">\Lambda_d^{1/2}U_d^\top</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.3461em;vertical-align:-0.3013em"></span><span class="mord"><span class="mord">Λ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0448em"><span style="top:-2.3987em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">d</span></span></span><span style="top:-3.2198em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1/2</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3013em"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.109em">U</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8491em"><span style="top:-2.4169em;margin-left:-0.109em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">d</span></span></span><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">⊤</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2831em"><span></span></span></span></span></span></span></span></span></span>: the top-<code>d</code> eigenvectors <strong>scaled by the square roots of their eigenvalues</strong>. If we want cosine codes, we normalise afterward.</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">import</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jax</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">import</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jax.numpy </span><span style="color:#D73A49;--shiki-dark:#F47067">as</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp</span></span>
+<span class="line"></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> spectral_codebook</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(S, d):</span></span>
+<span class="line"><span style="color:#032F62;--shiki-dark:#96D0FF">    &quot;&quot;&quot;S: (C, C) symmetric label kernel -&gt; C unit-norm codes in R^d.&quot;&quot;&quot;</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    w, V </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.linalg.eigh(S)                 </span><span style="color:#6A737D;--shiki-dark:#768390"># ascending eigenpairs</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    w, V </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> w[::</span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">], V[:, ::</span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">]                </span><span style="color:#6A737D;--shiki-dark:#768390"># to descending</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    coords </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> V[:, :d] </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.sqrt(jnp.clip(w[:d], </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0.0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">None</span><span style="color:#24292E;--shiki-dark:#ADBAC7">))   </span><span style="color:#6A737D;--shiki-dark:#768390"># Lambda_d^{1/2} U_d^T : rows are codes</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> coords </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (jnp.linalg.norm(coords, </span><span style="color:#E36209;--shiki-dark:#F69D50">axis</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">keepdims</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">True</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1e-9</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span></code></pre>
+<p>That single eigendecomposition is classical multidimensional scaling, the spectral fact behind kernel PCA and Laplacian eigenmaps. The reconstruction error of the rank-<code>d</code> codebook is exactly the tail of the spectrum:</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> gram_error</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(S, d):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    w, V </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.linalg.eigh(S)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    w, V </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.clip(w[::</span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">], </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0.0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">None</span><span style="color:#24292E;--shiki-dark:#ADBAC7">), V[:, ::</span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">]</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    Shat </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (V[:, :d] </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> w[:d]) </span><span style="color:#D73A49;--shiki-dark:#F47067">@</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> V[:, :d].T</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.linalg.norm(Shat </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> S) </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.linalg.norm(S)     </span><span style="color:#6A737D;--shiki-dark:#768390"># falls as the kept modes capture more of S</span></span></code></pre>
+<h2 id="the-spectrum-decides-the-geometry">The spectrum decides the geometry<a class="heading-anchor-link" aria-label="Link to heading" href="#the-spectrum-decides-the-geometry"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Three label kernels, three spectra, three shapes. The structureless kernel is flat and gives the even simplex; a block kernel is two-peaked and gives clusters; a graded kernel (similarity falling off with class distance) is the horseshoe of Diaconis, Goel &amp; Holmes (2008).</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">C </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 9</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">i </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.arange(C)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">flat   </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.eye(C) </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.ones((C, C)) </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> C                       </span><span style="color:#6A737D;--shiki-dark:#768390"># structureless: the simplex</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">blocks </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (i[:, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">None</span><span style="color:#24292E;--shiki-dark:#ADBAC7">] </span><span style="color:#D73A49;--shiki-dark:#F47067">//</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 3</span><span style="color:#D73A49;--shiki-dark:#F47067"> ==</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> i[</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">None</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, :] </span><span style="color:#D73A49;--shiki-dark:#F47067">//</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 3</span><span style="color:#24292E;--shiki-dark:#ADBAC7">).astype(jnp.float32)  </span><span style="color:#6A737D;--shiki-dark:#768390"># 3 superclasses of 3: clusters</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">graded </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.exp(</span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7">((i[:, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">None</span><span style="color:#24292E;--shiki-dark:#ADBAC7">] </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> i[</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">None</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, :]) </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2.2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">**</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)        </span><span style="color:#6A737D;--shiki-dark:#768390"># falls with class distance: the horseshoe</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">for</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> name, S </span><span style="color:#D73A49;--shiki-dark:#F47067">in</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> [(</span><span style="color:#032F62;--shiki-dark:#96D0FF">&quot;flat&quot;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, flat), (</span><span style="color:#032F62;--shiki-dark:#96D0FF">&quot;blocks&quot;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, blocks), (</span><span style="color:#032F62;--shiki-dark:#96D0FF">&quot;graded&quot;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, graded </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> graded.mean())]:</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    codes </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> spectral_codebook(S, </span><span style="color:#E36209;--shiki-dark:#F69D50">d</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    w </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.clip(jnp.linalg.eigh(S)[</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">][::</span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">], </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0.0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">None</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">    print</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(name, </span><span style="color:#032F62;--shiki-dark:#96D0FF">&quot;top-3 spectrum:&quot;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, jnp.round(w[:</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">3</span><span style="color:#24292E;--shiki-dark:#ADBAC7">] </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (w[</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">] </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1e-9</span><span style="color:#24292E;--shiki-dark:#ADBAC7">), </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">))</span></span>
+<span class="line"><span style="color:#6A737D;--shiki-dark:#768390"># flat   -&gt; [1.   1.   1.  ]  (no preferred direction -&gt; even ring)</span></span>
+<span class="line"><span style="color:#6A737D;--shiki-dark:#768390"># blocks -&gt; [1.   ~.5  ~0  ]  (two dominant modes -&gt; clusters)</span></span>
+<span class="line"><span style="color:#6A737D;--shiki-dark:#768390"># graded -&gt; [1.   ~.7  ~.3 ]  (a smooth tail -&gt; a curved 1-D manifold, the horseshoe)</span></span></code></pre>
+<p>The hero animation above is exactly this <code>spectral_codebook(S, 2)</code> evaluated along a dial from <code>flat</code> to <code>graded</code>, with each frame’s eigenvectors orthogonally aligned to the previous so the morph is smooth.</p>
+<h2 id="kernel-target-alignment">Kernel-target alignment<a class="heading-anchor-link" aria-label="Link to heading" href="#kernel-target-alignment"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The reason this works is the old, exactly-right idea that the <em>ideal</em> embedding kernel is the <em>label</em> kernel (Cristianini et al., 2002). The match is one cosine between two Gram matrices:</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> alignment</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(A, B):</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.sum(A </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> B) </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (jnp.linalg.norm(A) </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.linalg.norm(B) </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1e-9</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"></span>
+<span class="line"></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">codes </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> spectral_codebook(graded </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> graded.mean(), </span><span style="color:#E36209;--shiki-dark:#F69D50">d</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">gram </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> codes </span><span style="color:#D73A49;--shiki-dark:#F47067">@</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> codes.T                                   </span><span style="color:#6A737D;--shiki-dark:#768390"># the codebook&#39;s own similarity</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">print</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(alignment(gram, graded </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> graded.mean()))           </span><span style="color:#6A737D;--shiki-dark:#768390"># high: the 2-D code already captures the kernel</span></span></code></pre>
+<p>Raise <code>d</code> and the alignment climbs toward 1 as the codebook is allowed to reproduce more of the kernel’s spectrum. The figure below sweeps that budget directly: for each <code>d</code> it rebuilds the rank-<code>d</code> Gram from the top eigenmodes and lays the reconstruction next to the target kernel, with <code>alignment</code> and <code>gram_error</code> charting the spend.</p>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/mds-reconstruction.gif" alt="Animated rank-d reconstruction of a graded label kernel sharpening into the target as the budget d grows, with kernel-target alignment rising and reconstruction error falling" loading="lazy" width="1100" height="520"/><figcaption>How many modes to spend, computed live in JAX. For each budget <code>d</code> the rank-<code>d</code> Gram matrix (the top <code>d</code> eigenmodes of the label kernel) is laid beside the target. As <code>d</code> grows the reconstruction sharpens back into the kernel, <code>alignment</code> climbs toward 1, and <code>gram_error</code> falls toward 0: the error you carry is exactly the tail of the spectrum you chose not to spend on.</figcaption></figure>
+<p>A handful of modes already recover most of a graded kernel, which is the whole reason a low-dimensional codebook works: the kernel’s mass lives in its top eigenvalues, and the rest is a tail you can drop.</p>
+<h2 id="the-prototype-frame-and-the-information-spectrum">The prototype frame and the information spectrum<a class="heading-anchor-link" aria-label="Link to heading" href="#the-prototype-frame-and-the-information-spectrum"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Now switch objects: from the <em>target</em> label kernel to a <em>trained</em> representation. Split a feature matrix into between-class and within-class covariance. The between-class part <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="normal">Σ</mi><mi>B</mi></msub></mrow><annotation encoding="application/x-tex">\Sigma_B</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em"></span><span class="mord"><span class="mord">Σ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0502em">B</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span></span></span></span> has rank at most <code>C-1</code> and spans the prototypes: it is the separation channel, the codebook. The within-class part <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="normal">Σ</mi><mi>W</mi></msub></mrow><annotation encoding="application/x-tex">\Sigma_W</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em"></span><span class="mord"><span class="mord">Σ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em">W</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span></span></span></span> is everything else: the gradations the codebook does not carry, the <em>information</em>.</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> class_covariances</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(Z, y, C):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    mu </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.stack([Z[y </span><span style="color:#D73A49;--shiki-dark:#F47067">==</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> c].mean(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">for</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> c </span><span style="color:#D73A49;--shiki-dark:#F47067">in</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> range</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(C)])</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    g, N </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> Z.mean(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">), Z.shape[</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">]</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">    SB</span><span style="color:#D73A49;--shiki-dark:#F47067"> =</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> sum</span><span style="color:#24292E;--shiki-dark:#ADBAC7">((y </span><span style="color:#D73A49;--shiki-dark:#F47067">==</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> c).sum() </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.outer(mu[c] </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> g, mu[c] </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> g) </span><span style="color:#D73A49;--shiki-dark:#F47067">for</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> c </span><span style="color:#D73A49;--shiki-dark:#F47067">in</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> range</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(C)) </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> N</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">    SW</span><span style="color:#D73A49;--shiki-dark:#F47067"> =</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.mean(jax.vmap(</span><span style="color:#D73A49;--shiki-dark:#F47067">lambda</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> z, c: jnp.outer(z </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> mu[c], z </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> mu[c]))(Z, y), </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> SB</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">SW</span></span>
+<span class="line"></span>
+<span class="line"></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">SB</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">SW</span><span style="color:#D73A49;--shiki-dark:#F47067"> =</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> class_covariances(Z, y, C)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">eig_B </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.clip(jnp.linalg.eigvalsh(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">SB</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)[::</span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">], </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0.0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">None</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)   </span><span style="color:#6A737D;--shiki-dark:#768390"># &lt;= C-1 nonzero: the prototype frame</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">eig_W </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.clip(jnp.linalg.eigvalsh(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">SW</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)[::</span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">], </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0.0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">None</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)   </span><span style="color:#6A737D;--shiki-dark:#768390"># the information tail</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">print</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(</span><span style="color:#032F62;--shiki-dark:#96D0FF">&quot;nonzero prototype modes:&quot;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">int</span><span style="color:#24292E;--shiki-dark:#ADBAC7">((eig_B </span><span style="color:#D73A49;--shiki-dark:#F47067">&gt;</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1e-6</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> eig_B[</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">]).sum()), </span><span style="color:#032F62;--shiki-dark:#96D0FF">&quot;  (C-1 =&quot;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, C </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#032F62;--shiki-dark:#96D0FF">&quot;)&quot;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span></code></pre>
+<p>The split is clean only when the between-class variance dominates, as it does near neural collapse; with large within-class variance the two regimes overlap. The figure below trains a small encoder with cross-entropy and watches it happen: <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="normal">Σ</mi><mi>B</mi></msub></mrow><annotation encoding="application/x-tex">\Sigma_B</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em"></span><span class="mord"><span class="mord">Σ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0502em">B</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span></span></span></span> sharpens into a <code>C-1</code>-mode simplex frame while the <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="normal">Σ</mi><mi>W</mi></msub></mrow><annotation encoding="application/x-tex">\Sigma_W</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em"></span><span class="mord"><span class="mord">Σ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em">W</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span></span></span></span> spectrum is ground toward zero (Papyan, Han &amp; Donoho, 2020).</p>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/information-collapse.gif" alt="Animated neural collapse: a representation's within-class covariance spectrum shrinks to zero while the between-class spectrum keeps exactly C-1 modes" loading="lazy" width="1100" height="520"/><figcaption>Neural collapse, computed live in JAX. A small encoder is trained with cross-entropy; each frame splits the representation into Σ_B (between-class, the prototype frame, with exactly C−1 = 3 nonzero modes) and Σ_W (within-class, the information). As training proceeds Σ_W is ground toward zero: the codebook keeps the separation and discards the gradations.</figcaption></figure>
+<h2 id="dark-knowledge-is-the-coefficients">Dark knowledge is the coefficients<a class="heading-anchor-link" aria-label="Link to heading" href="#dark-knowledge-is-the-coefficients"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The explainer’s last move: the information that survives lives <em>between</em> the prototypes, as the soft mixture a feature makes over them, the dark knowledge a teacher distils (Hinton et al., 2015). In this frame view it is a coefficient vector, a soft assignment over the prototype frame:</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> soft_assignment</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(z, prototypes, tau</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0.1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#032F62;--shiki-dark:#96D0FF">    &quot;&quot;&quot;z: (..., d) feature; prototypes: (C, d). Returns coefficients over the codebook.&quot;&quot;&quot;</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jax.nn.softmax((z </span><span style="color:#D73A49;--shiki-dark:#F47067">@</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> prototypes.T) </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> tau, </span><span style="color:#E36209;--shiki-dark:#F69D50">axis</span><span style="color:#D73A49;--shiki-dark:#F47067">=-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"></span>
+<span class="line"></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">a </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> soft_assignment(z, mu)        </span><span style="color:#6A737D;--shiki-dark:#768390"># e.g. [0.70, 0.27, 0.02, 0.01]: &quot;mostly cat, a bit dog&quot;</span></span></code></pre>
+<p>Sharpen <code>tau → 0</code> and the vector collapses to one-hot, and the relation between classes is erased, exactly the effect label smoothing and a low temperature have. The information is the off-one-hot mass. On a <em>graded</em> codebook the point is visible in the geometry: a feature near class <code>k</code> lends its mass to <code>k</code>’s neighbours on the horseshoe, so the assignment encodes which classes are similar, and cooling the temperature burns that structure away.</p>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/dark-knowledge.gif" alt="Animated softmax temperature sweep over a graded codebook: a feature's soft assignment spreads onto neighbouring classes when warm and collapses to a one-hot spike when cold" loading="lazy" width="1100" height="520"/><figcaption>Dark knowledge is the off-one-hot mass, computed live in JAX. A feature (★) sits near class 6 on a graded horseshoe codebook; its <code>soft_assignment</code> is shown as marker sizes (left) and bars (right). Warm: the mass spreads onto the geometric neighbours (5, 7, 8), encoding class similarity, with a high dark-knowledge mass and entropy. Cool the temperature and it collapses to a one-hot spike on class 6: the relation between classes is erased and the dark-knowledge mass goes to 0.</figcaption></figure>
+<h2 id="rendering-the-gifs">Rendering the GIFs<a class="heading-anchor-link" aria-label="Link to heading" href="#rendering-the-gifs"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>All four animations are generated with Python, JAX, and matplotlib: the linear algebra in JAX, the drawing in matplotlib:</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1;--shiki-dark:#F69D50">python</span><span style="color:#032F62;--shiki-dark:#96D0FF"> scripts/render_spectral_codebook_gif.py</span><span style="color:#6A737D;--shiki-dark:#768390">     # flat -&gt; simplex -&gt; horseshoe morph</span></span>
+<span class="line"><span style="color:#6F42C1;--shiki-dark:#F69D50">python</span><span style="color:#032F62;--shiki-dark:#96D0FF"> scripts/render_mds_reconstruction_gif.py</span><span style="color:#6A737D;--shiki-dark:#768390">    # rank-d Gram rebuild, alignment up / error down</span></span>
+<span class="line"><span style="color:#6F42C1;--shiki-dark:#F69D50">python</span><span style="color:#032F62;--shiki-dark:#96D0FF"> scripts/render_information_collapse_gif.py</span><span style="color:#6A737D;--shiki-dark:#768390">  # neural collapse of the Σ_W spectrum</span></span>
+<span class="line"><span style="color:#6F42C1;--shiki-dark:#F69D50">python</span><span style="color:#032F62;--shiki-dark:#96D0FF"> scripts/render_dark_knowledge_gif.py</span><span style="color:#6A737D;--shiki-dark:#768390">        # temperature sweep, soft assignment -&gt; one-hot</span></span></code></pre>
+<p>The first sweeps a label kernel from flat to graded, recomputing <code>spectral_codebook(S, 2)</code> and the eigenspectrum each frame (with Procrustes alignment between frames so the morph is smooth). The second sweeps the budget <code>d</code>, rebuilding the rank-<code>d</code> Gram and recomputing <code>alignment</code> and <code>gram_error</code>. The third trains a small encoder and recomputes <code>class_covariances</code> each frame. The fourth fixes a graded codebook and sweeps the softmax temperature, recomputing <code>soft_assignment</code> each frame. None is a benchmark; they are visual audits of the spectrum.</p>
+<h2 id="what-this-leaves-out">What this leaves out<a class="heading-anchor-link" aria-label="Link to heading" href="#what-this-leaves-out"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>A production embedding would use far more classes, real data, and a deep encoder, and the label kernel would be estimated rather than handed to you. The point this companion keeps is the one the explainer named: a codebook is a spectrum, the prototypes are its top, and the information is the tail.</p>
+<hr/>
+<p><em>References: classical MDS / kernel-target alignment from <a href="https://papers.nips.cc/paper/2001">Cristianini et al. (2002)</a>; the horseshoe from <a href="https://arxiv.org/abs/0811.1477">Diaconis, Goel &amp; Holmes (2008)</a>; neural collapse from <a href="https://arxiv.org/abs/2008.08186">Papyan et al. (2020)</a>; dark knowledge from <a href="https://arxiv.org/abs/1503.02531">Hinton et al. (2015)</a>; the Welch bound from <a href="https://doi.org/10.1109/TIT.1974.1055219">Welch (1974)</a>.</em></p>
+<section class="cite-as" aria-labelledby="cite-latent-on-the-spectrum-jax" data-astro-cid-p234urri> <h2 id="cite-latent-on-the-spectrum-jax" data-astro-cid-p234urri>Cite as</h2> <p class="cite-line" data-astro-cid-p234urri>
+Bouhsine, T. (<time datetime="2026-06-07T19:35:00.000Z" data-astro-cid-p234urri>2026, June 7</time>).
+<em data-astro-cid-p234urri>Latent on the Spectrum, in JAX</em>. Records of the !mmortal Data Scientist.
+<a href="https://tahabouhsine.com/blog/latent-on-the-spectrum-jax/" data-astro-cid-p234urri>https://tahabouhsine.com/blog/latent-on-the-spectrum-jax/</a> </p> <details class="cite-bib" data-astro-cid-p234urri> <summary data-astro-cid-p234urri>BibTeX</summary> <pre data-astro-cid-p234urri><code class="bibtex" data-astro-cid-p234urri>@misc{bouhsine2026latentonthespectrumjax,
+  author       = {Bouhsine, Taha},
+  title        = {Latent on the Spectrum, in JAX},
+  year         = {2026},
+  month        = {jun},
+  howpublished = {\url{https://tahabouhsine.com/blog/latent-on-the-spectrum-jax/}},
+  note         = {Blog post, Records of the !mmortal Data Scientist}
+}</code></pre> <button type="button" class="cite-copy" data-copy="@misc{bouhsine2026latentonthespectrumjax,
+  author       = {Bouhsine, Taha},
+  title        = {Latent on the Spectrum, in JAX},
+  year         = {2026},
+  month        = {jun},
+  howpublished = {\url{https://tahabouhsine.com/blog/latent-on-the-spectrum-jax/}},
+  note         = {Blog post, Records of the !mmortal Data Scientist}
+}" aria-label="Copy BibTeX" data-astro-cid-p234urri>copy</button> </details>  </section>  <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('.cite-copy').forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(btn.dataset.copy || '');
+            const original = btn.textContent;
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = original;
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>
+<style>
+.jax-fig { margin: 1.8rem auto; text-align: center; }
+.jax-fig img { max-width: 520px; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; background: #fbf8f1; }
+.jax-fig-wide img { max-width: 900px; }
+.jax-fig figcaption { margin-top: 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--fg-muted); max-width: 64ch; margin-left: auto; margin-right: auto; }
+</style>  <section class="references" aria-labelledby="references-heading" data-astro-cid-rn7nvbl4><h2 id="references-heading" data-astro-cid-rn7nvbl4>References</h2><ol data-astro-cid-rn7nvbl4><li id="ref-1" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Welch, L. R.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(1974)</span>. <a class="ref-title" href="https://doi.org/10.1109/TIT.1974.1055219" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>Lower Bounds on the Maximum Cross Correlation of Signals</a>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>IEEE Transactions on Information Theory 20(3)</span>.<a class="ref-ext" href="https://doi.org/10.1109/TIT.1974.1055219" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>doi:10.1109/TIT.1974.1055219</a></li><li id="ref-2" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Cristianini, N., Shawe-Taylor, J., Elisseeff, A., Kandola, J.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2002)</span>. <span class="ref-title" data-astro-cid-rn7nvbl4>On Kernel-Target Alignment</span>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>NIPS 2001</span>.</li><li id="ref-3" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Diaconis, P., Goel, S., Holmes, S.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2008)</span>. <a class="ref-title" href="https://arxiv.org/abs/0811.1477" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>Horseshoes in Multidimensional Scaling and Local Kernel Methods</a>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>Annals of Applied Statistics 2(3)</span>.<a class="ref-ext" href="https://arxiv.org/abs/0811.1477" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:0811.1477</a></li><li id="ref-4" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Papyan, V., Han, X. Y., Donoho, D. L.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2020)</span>. <a class="ref-title" href="https://arxiv.org/abs/2008.08186" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>Prevalence of Neural Collapse During the Terminal Phase of Deep Learning Training</a>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>PNAS 117(40)</span>.<a class="ref-ext" href="https://arxiv.org/abs/2008.08186" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:2008.08186</a></li><li id="ref-5" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Hinton, G., Vinyals, O., Dean, J.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2015)</span>. <a class="ref-title" href="https://arxiv.org/abs/1503.02531" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>Distilling the Knowledge in a Neural Network</a>.
+<a class="ref-ext" href="https://arxiv.org/abs/1503.02531" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:1503.02531</a></li></ol></section> </article> <script>(function(){const payload = {"post_title":"Latent on the Spectrum, in JAX","post_slug":"latent-on-the-spectrum-jax","post_path":"/blog/latent-on-the-spectrum-jax/","post_tags":"ml,representation-learning,neural-collapse,simplex-etf,latent-space,spectral-embedding,kernel-methods,jax,implementation","word_count":1763,"reading_time_minutes":9,"is_draft":false};
+
+  (() => {
+    const thresholds = [25, 50, 75, 90, 100];
+    const state = { viewed: false, sent: new Set() };
+
+    const track = (name, params = {}) => {
+      if (typeof window.__trackGA === 'function') {
+        window.__trackGA(name, {
+          ...payload,
+          ...params,
+          non_interaction: name === 'blog_post_view',
+        });
+      }
+    };
+
+    const init = () => {
+      const article = document.querySelector('[data-blog-post]');
+      if (!article) return;
+
+      if (!state.viewed) {
+        state.viewed = true;
+        track('blog_post_view');
+      }
+
+      const progress = () => {
+        const rect = article.getBoundingClientRect();
+        const articleTop = window.scrollY + rect.top;
+        const articleHeight = Math.max(1, article.offsetHeight);
+        const viewportBottom = window.scrollY + window.innerHeight;
+        return Math.max(0, Math.min(100, ((viewportBottom - articleTop) / articleHeight) * 100));
+      };
+
+      const update = () => {
+        const pct = progress();
+        thresholds.forEach((threshold) => {
+          if (pct >= threshold && !state.sent.has(threshold)) {
+            state.sent.add(threshold);
+            track('blog_post_read_depth', { read_percent: threshold });
+            if (threshold === 90) {
+              track('blog_post_read', { read_percent: threshold });
+            }
+          }
+        });
+      };
+
+      if (window.__postAnalyticsCleanup) window.__postAnalyticsCleanup();
+
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => {
+          update();
+          ticking = false;
+        });
+      };
+
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+      window.__postAnalyticsCleanup = () => {
+        window.removeEventListener('scroll', onScroll);
+        window.removeEventListener('resize', onScroll);
+      };
+      update();
+    };
+
+    init();
+    document.addEventListener('astro:page-load', init, { once: true });
+  })();
+})();</script> <aside class="related" aria-labelledby="related-heading" data-astro-cid-dpgbfi7r><h2 id="related-heading" data-astro-cid-dpgbfi7r>Related posts</h2><ul data-astro-cid-dpgbfi7r><li data-astro-cid-dpgbfi7r><a href="/blog/latent-on-the-spectrum/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>Latent on the Spectrum: Why Cats Sit Closer to Dogs Than to Cars</span><span class="related-desc" data-astro-cid-dpgbfi7r>The regular simplex is the perfect codebook only when classes are strangers. Real labels carry a similarity structure, and a latent space is a lossy, finite-dimensional encoding of a kernel — its codebook is the top eigenmodes of the label-similarity matrix. But the prototypes are only the top of the spectrum: the information lives in the modes below them, the continuum between prototypes, and the Welch bound sets the geometry of that channel. A follow-up to the Welch-bound post, with live in-browser experiments — steer a codebook from simplex to taxonomy and watch its spectrum, spend a dimension budget, watch supervision erase structure, watch neural collapse grind the information spectrum to zero, read dark knowledge off a feature wandering the frame, and see a structured codebook make better mistakes.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-06-07T19:00:00.000Z" data-astro-cid-dpgbfi7r>Jun 7, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/welch-bound-jax-analysis/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>Auditing Latent Space Geometry in JAX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion to the Welch-bound latent-space post: generate GIFs and implement the JAX metrics that tell you whether embeddings are collapsing, wasting rank, forming a simplex, or pressing against the Welch floor.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-06-02T00:00:00.000Z" data-astro-cid-dpgbfi7r>Jun 2, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/three-states-of-information-jax/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>The Three States of Information, in JAX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion to The Three States of Information: train tiny models in JAX and measure the three states directly: the feature-covariance spectrum collapsing from high-rank (random) to a C−1-mode frame (structured), the distributional simplicity bias that fits low-order structure first (organized), the neural-collapse simplex where class-mean cosines lock onto −1/(C−1), and the alignment/uniformity split of contrastive learning running on two separate clocks. Four live JAX visualizations, every number an eigenvalue or a loss.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-06-07T19:40:00.000Z" data-astro-cid-dpgbfi7r>Jun 7, 2026</time></span></a></li></ul></aside> <nav class="post-nav" aria-label="Adjacent posts"><a href="/blog/latent-on-the-spectrum/" class="prev" rel="prev"><div class="label">← Previous</div><div class="title">Latent on the Spectrum: Why Cats Sit Closer to Dogs Than to Cars</div></a><a href="/blog/three-states-of-information-jax/" class="next" rel="next"><div class="label">Next →</div><div class="title">The Three States of Information, in JAX</div></a></nav> <section aria-label="Comments" id="giscus-mount" style="margin-top:3rem" data-giscus="{&#34;repo&#34;:&#34;mlnomadpy/blog&#34;,&#34;repoId&#34;:&#34;MDEwOlJlcG9zaXRvcnk0MDQ4MzY2NDU=&#34;,&#34;category&#34;:&#34;Announcements&#34;,&#34;categoryId&#34;:&#34;DIC_kwDOGCFRJc4C9EiR&#34;,&#34;mapping&#34;:&#34;pathname&#34;,&#34;reactionsEnabled&#34;:&#34;1&#34;,&#34;emitMetadata&#34;:&#34;0&#34;,&#34;inputPosition&#34;:&#34;top&#34;,&#34;theme&#34;:&#34;preferred_color_scheme&#34;,&#34;lang&#34;:&#34;en&#34;}"></section><script>
+    (() => {
+      const load = () => {
+        const mount = document.getElementById('giscus-mount');
+        if (!mount || mount.dataset.loaded === '1') return;
+        const cfg = JSON.parse(mount.dataset.giscus);
+        const theme = document.documentElement.getAttribute('data-theme')
+          || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        const s = document.createElement('script');
+        s.src = 'https://giscus.app/client.js';
+        s.async = true;
+        s.crossOrigin = 'anonymous';
+        const attrs = {
+          'data-repo': cfg.repo,
+          'data-repo-id': cfg.repoId,
+          'data-category': cfg.category,
+          'data-category-id': cfg.categoryId,
+          'data-mapping': cfg.mapping,
+          'data-strict': '0',
+          'data-reactions-enabled': cfg.reactionsEnabled,
+          'data-emit-metadata': cfg.emitMetadata,
+          'data-input-position': cfg.inputPosition,
+          'data-theme': theme,
+          'data-lang': cfg.lang,
+          'data-loading': 'lazy',
+        };
+        for (const k in attrs) s.setAttribute(k, attrs[k]);
+        mount.appendChild(s);
+        mount.dataset.loaded = '1';
+      };
+      load();
+      document.addEventListener('astro:page-load', load);
+      document.addEventListener('astro:after-swap', load);
+    })();
+  </script> <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('pre').forEach((pre) => {
+        if (pre.dataset.copyEnhanced) return;
+        pre.dataset.copyEnhanced = '1';
+        const btn = document.createElement('button');
+        btn.className = 'code-copy';
+        btn.type = 'button';
+        btn.textContent = 'copy';
+        btn.setAttribute('aria-label', 'Copy code');
+        btn.addEventListener('click', async () => {
+          const code = pre.querySelector('code');
+          const text = (code ? code.innerText : pre.innerText) || '';
+          try {
+            await navigator.clipboard.writeText(text);
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = 'copy';
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+        pre.appendChild(btn);
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>  </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span class="site-footer__links"> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> <a class="site-footer__support" href="https://buymeacoffee.com/mlnomadpy" target="_blank" rel="noopener noreferrer" aria-label="Support this blog on Buy Me a Coffee">
+buy me a coffee
+</a> </span> </footer> <div id="consent-banner" class="consent-banner" role="dialog" aria-live="polite" aria-label="Analytics consent" hidden><p class="consent-text">
+I use Google Analytics to see which posts get read. It sets cookies only
+      if you accept. No ads, no selling data.
+</p><div class="consent-actions"><button type="button" id="consent-decline" class="consent-btn consent-decline">Decline</button><button type="button" id="consent-accept" class="consent-btn consent-accept">Accept</button></div></div>
+
+  <script>
+    (() => {
+      const KEY = 'analytics-consent';
+      const setup = () => {
+        const banner = document.getElementById('consent-banner');
+        if (!banner) return;
+        let choice = null;
+        try { choice = localStorage.getItem(KEY); } catch (e) {}
+        // Already decided → keep hidden.
+        if (choice === 'granted' || choice === 'denied') { banner.hidden = true; return; }
+        banner.hidden = false;
+
+        const decide = (value) => {
+          try { localStorage.setItem(KEY, value); } catch (e) {}
+          banner.hidden = true;
+          if (value === 'granted' && typeof window.__loadGA === 'function') window.__loadGA();
+        };
+        const accept = document.getElementById('consent-accept');
+        const decline = document.getElementById('consent-decline');
+        if (accept && !accept.dataset.bound) {
+          accept.dataset.bound = '1';
+          accept.addEventListener('click', () => decide('granted'));
+        }
+        if (decline && !decline.dataset.bound) {
+          decline.dataset.bound = '1';
+          decline.addEventListener('click', () => decide('denied'));
+        }
+      };
+      setup();
+      document.addEventListener('astro:page-load', setup);
+    })();
+  </script>
+
+  <style>
+    /* Author `display:flex` below would otherwise override the UA [hidden]
+       rule, leaving the banner visible after a choice. This wins on specificity. */
+    .consent-banner[hidden] { display: none !important; }
+    .consent-banner {
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      right: 1rem;
+      max-width: 30rem;
+      margin-left: auto;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+      padding: 0.95rem 1.1rem;
+      background: var(--bg-elev, #fff);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      font-family: var(--sans);
+    }
+    .consent-text {
+      margin: 0;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: var(--fg-muted);
+    }
+    .consent-actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+    }
+    .consent-btn {
+      font-family: var(--sans);
+      font-size: 0.82rem;
+      padding: 0.4rem 0.95rem;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    }
+    .consent-decline {
+      background: transparent;
+      color: var(--fg-muted);
+    }
+    .consent-decline:hover { color: var(--fg); border-color: var(--fg-faint); }
+    .consent-accept {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg);
+      font-weight: 600;
+    }
+    .consent-accept:hover { filter: brightness(1.05); }
+    @media (max-width: 520px) {
+      .consent-banner { left: 0.6rem; right: 0.6rem; bottom: 0.6rem; }
+    }
+  </style> <script>
+      // Inject a fullscreen toggle button onto every .viz figure on the page.
+      (() => {
+        const ENTER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10V4h6"/><path d="M20 10V4h-6"/><path d="M4 14v6h6"/><path d="M20 14v6h-6"/></svg>';
+        const EXIT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H4v6"/><path d="M14 4h6v6"/><path d="M10 20H4v-6"/><path d="M14 20h6v-6"/></svg>';
+        const inFs = () => document.fullscreenElement || document.webkitFullscreenElement;
+        const enhance = () => {
+          document.querySelectorAll('.viz').forEach((fig) => {
+            if (fig.dataset.fsReady) return;
+            fig.dataset.fsReady = '1';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'viz-fs-btn';
+            btn.setAttribute('aria-label', 'Toggle fullscreen');
+            btn.innerHTML = ENTER_SVG + '<span>fullscreen</span>';
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              try {
+                if (inFs() === fig) {
+                  await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen?.());
+                } else if (fig.requestFullscreen) {
+                  await fig.requestFullscreen();
+                } else if (fig.webkitRequestFullscreen) {
+                  await fig.webkitRequestFullscreen();
+                }
+              } catch (_) {}
+            });
+            fig.appendChild(btn);
+          });
+          const sync = () => {
+            document.querySelectorAll('.viz-fs-btn').forEach((b) => {
+              const fig = b.parentElement;
+              const open = inFs() === fig;
+              b.innerHTML = (open ? EXIT_SVG : ENTER_SVG) + '<span>' + (open ? 'exit' : 'fullscreen') + '</span>';
+            });
+          };
+          document.addEventListener('fullscreenchange', sync);
+          document.addEventListener('webkitfullscreenchange', sync);
+        };
+        enhance();
+        document.addEventListener('astro:page-load', enhance);
+        document.addEventListener('astro:after-swap', enhance);
+      })();
+    </script> </body> </html>
