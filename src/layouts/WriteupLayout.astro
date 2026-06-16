@@ -1,0 +1,100 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import Giscus from '../components/Giscus.astro';
+import CodeCopy from '../components/CodeCopy.astro';
+import ReadingProgress from '../components/ReadingProgress.astro';
+
+// Standalone layout for the personal `writeups` collection. Intentionally lean
+// and self-contained: no companion callouts, no references list, no tag-page
+// links, no related-posts rail. These are personal notes, kept apart from the
+// AI-theory blog post layout so the two never bleed into one another.
+interface Props {
+  title: string;
+  description?: string;
+  draft?: boolean;
+  pubDate: Date;
+  updatedDate?: Date;
+  tags?: string[];
+  keywords?: string[];
+  heroImage?: string;
+  readingTimeText?: string;
+  wordCount?: number;
+}
+const {
+  title,
+  description,
+  draft,
+  pubDate,
+  updatedDate,
+  tags = [],
+  keywords,
+  heroImage,
+  readingTimeText,
+  wordCount,
+} = Astro.props;
+const dateFmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+<BaseLayout
+  title={title}
+  description={description}
+  image={heroImage}
+  type="article"
+  pubDate={pubDate}
+  updatedDate={updatedDate}
+  tags={tags}
+  keywords={keywords}
+  wordCount={wordCount}
+>
+  <ReadingProgress />
+  <article data-blog-post>
+    <header class="post-header">
+      <p class="kicker"><a href={`${base}/writeups/`}>writeups</a></p>
+      {draft && <p class="draft-banner">Draft — visible locally, excluded from the published site</p>}
+      <h1>{title}</h1>
+      <p class="meta">
+        <time datetime={pubDate.toISOString()}>{dateFmt.format(pubDate)}</time>
+        {updatedDate && <> · updated <time datetime={updatedDate.toISOString()}>{dateFmt.format(updatedDate)}</time></>}
+        {readingTimeText && <> · {readingTimeText}</>}
+      </p>
+      {tags.length > 0 && (
+        <p class="tag-row">
+          {tags.map((t) => <span class="tag">#{t}</span>)}
+        </p>
+      )}
+    </header>
+    <slot />
+    <p class="back-link"><a href={`${base}/writeups/`}>← all writeups</a></p>
+  </article>
+  <Giscus />
+  <CodeCopy />
+</BaseLayout>
+
+<style>
+  .kicker {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    margin: 0 0 0.5rem;
+  }
+  .kicker a { color: var(--fg-faint); text-decoration: none; }
+  .kicker a:hover { color: var(--accent); }
+  .tag-row { margin-top: 0.65rem; }
+  .tag-row .tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--fg-muted);
+    margin-right: 0.6rem;
+  }
+  .back-link {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 0.82rem;
+  }
+  .back-link a { color: var(--fg-faint); text-decoration: none; }
+  .back-link a:hover { color: var(--accent); }
+</style>
