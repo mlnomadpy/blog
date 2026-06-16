@@ -1,0 +1,260 @@
+---
+title: "Self-Attention as Kernel Regression in JAX/Flax NNX"
+description: "A runnable companion to Attention is Explainable Because it is a Kernel: build scaled dot-product attention from scratch in Flax NNX, prove in code that it is exactly a Nadaraya–Watson kernel smoother, watch the separate q/k projections break positive-definiteness numerically, swap the exp-dot-product kernel for Gaussian, Yat, and linear kernels to see which keep the weights a convex partition of unity, read the temperature as a kernel bandwidth, and train a single head end-to-end to route to a marked token."
+seoDescription: "Self-attention as Nadaraya–Watson kernel regression in JAX/Flax NNX: build attention from scratch, assert the equivalence in code, then swap the kernel."
+pubDate: 2026-06-15T10:00:00-07:00
+draft: false
+tags: [ml, attention, kernels, interpretability, transformers, rkhs, jax, flax, nnx, implementation, nadaraya-watson, self-attention]
+references:
+  - authors: "Nadaraya, E. A."
+    year: 1964
+    title: "On Estimating Regression"
+    venue: "Theory of Probability & Its Applications 9(1), 141–142"
+  - authors: "Watson, G. S."
+    year: 1964
+    title: "Smooth Regression Analysis"
+    venue: "Sankhyā: The Indian Journal of Statistics, Series A 26(4), 359–372"
+  - authors: "Tsai, Y.-H. H., et al."
+    year: 2019
+    title: "Transformer Dissection: An Unified Understanding for Transformer's Attention via the Lens of Kernel"
+    venue: "EMNLP-IJCNLP 2019"
+    url: "https://aclanthology.org/D19-1443/"
+  - authors: "Katharopoulos, A., Vyas, A., Pappas, N., Fleuret, F."
+    year: 2020
+    title: "Transformers are RNNs: Fast Autoregressive Transformers with Linear Attention"
+    venue: "ICML 2020"
+    arxiv: "2006.16236"
+  - authors: "Choromanski, K., et al."
+    year: 2021
+    title: "Rethinking Attention with Performers"
+    venue: "ICLR 2021"
+    arxiv: "2009.14794"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+keywords:
+  - self-attention JAX
+  - Nadaraya-Watson attention
+  - kernel attention Flax NNX
+  - scaled dot-product attention from scratch
+  - attention kernel positive definite
+  - softmax attention kernel
+  - attention temperature bandwidth
+  - linear attention JAX
+  - Yat kernel attention
+  - kernel smoother transformer
+---
+import CiteAs from '../../components/CiteAs.astro';
+
+*The [explainer](/blog/attention-is-a-kernel/) argued that self-attention is a Nadaraya–Watson kernel smoother that has learned its kernel and its targets end-to-end, and that this single fact — not "the matrix is plottable" — is what makes attention heads readable. This is the implementation companion: build attention from scratch in [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html), turn each prose claim into an `assert`, and watch the one caveat (the kernel is not symmetric, so not Mercer in the strict sense) fall out of the numbers. The dimensions are tiny so every array is legible.*
+
+## Scaled dot-product attention, by hand
+
+A single attention head is three learned projections and a softmax. In `nnx.Linear` the kernel maps the last axis, so the module reads the same whether `x` is one token or a sequence.
+
+```python
+import jax
+import jax.numpy as jnp
+from flax import nnx
+
+
+class Head(nnx.Module):
+    def __init__(self, d_model, d_head, *, rngs: nnx.Rngs):
+        self.wq = nnx.Linear(d_model, d_head, use_bias=False, rngs=rngs)
+        self.wk = nnx.Linear(d_model, d_head, use_bias=False, rngs=rngs)
+        self.wv = nnx.Linear(d_model, d_head, use_bias=False, rngs=rngs)
+
+    def __call__(self, x):                       # x: [L, d_model]
+        q, k, v = self.wq(x), self.wk(x), self.wv(x)
+        d = q.shape[-1]
+        scores = q @ k.T / jnp.sqrt(d)           # [L, L]
+        alpha = jax.nn.softmax(scores, axis=-1)  # rows are probability vectors
+        return alpha @ v, alpha
+
+
+head = Head(d_model=16, d_head=16, rngs=nnx.Rngs(0))
+x = jax.random.normal(jax.random.key(1), (6, 16))
+y, alpha = head(x)
+```
+
+That is the whole object. `alpha` is a row-stochastic matrix — each row a distribution over tokens — and `y` is the row-weighted average of the value vectors. Everything the explainer says follows from those two sentences.
+
+## It is Nadaraya–Watson, and you can assert it
+
+The classical Nadaraya–Watson estimator predicts at a query by normalizing a kernel over observations and using it to weight the targets: $\hat f(x)=\sum_i \frac{K(x,x_i)}{\sum_j K(x,x_j)}\,y_i$. Write that estimator with no reference to attention — just a kernel, a normalizer, and a weighted sum of targets — and feed it the exp-dot-product kernel:
+
+```python
+def nadaraya_watson(q, k, v, kernel):
+    K = kernel(q, k)                             # [Lq, Lk] nonnegative similarities
+    w = K / K.sum(axis=-1, keepdims=True)        # normalize: rows sum to one
+    return w @ v, w
+
+
+q, kk, v = head.wq(x), head.wk(x), head.wv(x)
+exp_dot = lambda q, k: jnp.exp(q @ k.T / jnp.sqrt(q.shape[-1]))
+
+y_nw, w_nw = nadaraya_watson(q, kk, v, exp_dot)
+
+assert jnp.allclose(y_nw, y, atol=1e-5)          # same output
+assert jnp.allclose(w_nw, alpha, atol=1e-5)      # same weights
+```
+
+The two are not analogous; they are the same array up to relabeling. The dictionary is exact:
+
+| Kernel regression | Self-attention | In the code |
+|---|---|---|
+| query point $x$ | query projection $q_i$ | `head.wq(x)` |
+| observation $x_i$ | key projection $k_j$ | `head.wk(x)` |
+| kernel $K(x,x_i)$ | $\exp(q_i\!\cdot\! k_j/\sqrt d)$ | `exp_dot` |
+| target $y_i$ | value projection $v_j$ | `head.wv(x)` |
+| normalizer $\sum_j K$ | softmax denominator | `K.sum(-1)` |
+
+Softmax is not a special activation that happens to live inside transformers. It is the Nadaraya–Watson normalizer applied to one specific kernel.
+
+## The kernel is not symmetric — that is the whole RKHS caveat
+
+The explainer flags one wrinkle: queries and keys use *different* projections $W_Q$ and $W_K$, so the score is a bilinear form $q_i\!\cdot\! k_j = x_i^\top (W_Q W_K^\top) x_j$ whose operator $M = W_Q W_K^\top$ has no reason to be symmetric. A genuine (Mercer) kernel must be symmetric and positive semi-definite. This one is neither, and you can watch it fail:
+
+```python
+wq, wk = head.wq.kernel.value, head.wk.kernel.value   # [d_model, d_head]
+M = wq @ wk.T                                          # score_ij = x_i^T M x_j
+print("operator symmetric? ", bool(jnp.allclose(M, M.T)))   # False
+
+S = x @ M @ x.T                                        # raw scores q_i · k_j
+sym_eigs = jnp.linalg.eigvalsh(0.5 * (S + S.T))       # symmetric part
+print("score symmetric?   ", bool(jnp.allclose(S, S.T)))    # False
+print("eig span of sym part:", float(sym_eigs.min()), float(sym_eigs.max()))
+# min < 0 < max  -> indefinite, so NOT positive semi-definite, so not Mercer
+```
+
+Contrast with the *symmetric* exp-inner-product kernel $\exp(z\!\cdot\! z'/\sqrt d)$ on a single set of vectors, which **is** positive definite (it is a Hadamard exponential of a Gram matrix — a Schur product of PSD matrices):
+
+```python
+z = jax.random.normal(jax.random.key(2), (6, 16))
+G = jnp.exp(z @ z.T / jnp.sqrt(16))
+print("symmetric exp-dot min eig:", float(jnp.linalg.eigvalsh(G).min()))  # >= 0
+```
+
+So the non-Mercer-ness comes entirely from $W_Q \neq W_K$, not from the exponential. Here is the subtle part the explainer leans on: **softmax rescues the readout but not the kernel.** Normalizing the rows makes `alpha` a stochastic matrix — nonnegative weights summing to one — so the *output* is still an honest convex combination of values (the attribution story survives). Positive-definiteness of the *kernel* is a different property, and it stays broken. The [convex-readout companion](/blog/convex-readout-jax-flax-nnx/) makes the same nonnegative-is-not-positive-definite distinction from the readout side.
+
+## Swapping the kernel
+
+If attention is Nadaraya–Watson, the exp-dot-product is just one entry in the kernel slot. Drop in others through the *same* normalizer and ask the only question that decides whether the weights are an attribution: are they nonnegative?
+
+```python
+def sqdist(a, b):
+    return jnp.sum((a[:, None, :] - b[None, :, :]) ** 2, axis=-1)
+
+d = q.shape[-1]
+kernels = {
+    "exp-dot (softmax)": lambda q, k: jnp.exp(q @ k.T / jnp.sqrt(d)),
+    "gaussian":          lambda q, k: jnp.exp(-sqdist(q, k) / (2.0 * d)),
+    "yat":               lambda q, k: (q @ k.T) ** 2 / (sqdist(q, k) + 1e-3),
+    "linear (signed)":   lambda q, k: q @ k.T,
+}
+
+for name, kf in kernels.items():
+    _, w = nadaraya_watson(q, kk, v, kf)
+    nonneg = bool((w >= -1e-8).all())
+    sums_to_one = bool(jnp.allclose(w.sum(-1), 1.0, atol=1e-5))
+    print(f"{name:18s} nonneg={nonneg!s:5}  rows_sum_to_1={sums_to_one}")
+# exp-dot, gaussian, yat -> nonneg=True   (valid mixtures; "30% from token j" means something)
+# linear (signed)        -> nonneg=False  (weights can be negative, denominator can cross zero)
+```
+
+The exp-dot-product, the Gaussian, and the [Yat kernel](/blog/attention-is-a-kernel/) all keep the row a probability vector, so the output stays inside the convex hull of the values and "this token contributed $\alpha_{ij}$" is a real statement. The linear kernel divides by a sum that can pass through zero and hands back signed "weights" — a smoother in algebra only. Nonnegativity, not positive-definiteness, is what buys the interpretation.
+
+## The √d is a bandwidth
+
+In a kernel smoother the bandwidth sets how far the averaging reaches. In attention the same dial is the temperature $1/\sqrt d$ on the scores. Sweep it and read the mean entropy of the rows:
+
+```python
+def weights_at(scale):
+    return jax.nn.softmax((q @ kk.T) * scale, axis=-1)
+
+def mean_entropy(w):
+    return float(-jnp.sum(w * jnp.log(w + 1e-12), axis=-1).mean())
+
+for scale in [0.0, 1.0 / jnp.sqrt(d), 1.0, 6.0]:
+    print(f"scale={float(scale):.3f}  mean row entropy={mean_entropy(weights_at(scale)):.3f}")
+# scale 0   -> uniform averaging, entropy ~ log(L)  (a wide kernel: every token counts equally)
+# large     -> entropy -> 0, a near one-hot row     (a narrow kernel: nearest-neighbor copy)
+```
+
+A wide bandwidth makes the head a blur over all tokens; a narrow one makes it a hard copy from the single most similar token. The "copy" and induction heads the interpretability literature names are kernel smoothers run at the sharp end of this dial — the temperature is not a training nuisance, it is the bandwidth of the regression.
+
+## A head that routes to a marked token
+
+To see the kernel *learn*, give one head a job: in each sequence one token is flagged (a large value in its first coordinate), and every position must output that token's vector. The head can only succeed by learning $W_Q, W_K$ that route attention onto the flag and a $W_V$ that copies. One detail earns its keep here — the projections need a **bias**. Every query has to point at the same token regardless of its own content, and a bias-free linear map of mean-zero inputs cannot produce a content-independent pull in a fixed direction; the constant term is exactly what lets the query lean on the flag. Written batched with `einsum`, the module is otherwise unchanged in spirit:
+
+```python
+import optax
+
+
+class BatchHead(nnx.Module):
+    def __init__(self, d_model, d_head, *, rngs: nnx.Rngs):
+        self.wq = nnx.Linear(d_model, d_head, use_bias=True, rngs=rngs)
+        self.wk = nnx.Linear(d_model, d_head, use_bias=True, rngs=rngs)
+        self.wv = nnx.Linear(d_model, d_head, use_bias=True, rngs=rngs)
+
+    def __call__(self, x):                                   # x: [..., L, d_model]
+        q, k, v = self.wq(x), self.wk(x), self.wv(x)
+        scores = jnp.einsum('...id,...jd->...ij', q, k) / jnp.sqrt(q.shape[-1])
+        a = jax.nn.softmax(scores, axis=-1)
+        return jnp.einsum('...ij,...jd->...id', a, v), a
+
+
+def make_example(key):
+    k1, k2 = jax.random.split(key)
+    x = jax.random.normal(k1, (6, 16))
+    t = jax.random.randint(k2, (), 0, 6)                     # the marked position
+    x = x.at[t, 0].set(6.0)                                  # the flag
+    target = jnp.broadcast_to(x[t], (6, 16))                # every row should become token t
+    return x, target
+
+
+xs, targets = jax.vmap(make_example)(jax.random.split(jax.random.key(3), 512))
+
+model = BatchHead(d_model=16, d_head=16, rngs=nnx.Rngs(0))
+optimizer = nnx.Optimizer(model, optax.adam(1e-2), wrt=nnx.Param)
+
+
+@nnx.jit
+def train_step(model, optimizer, xs, targets):
+    def loss_fn(model):
+        ys, _ = model(xs)
+        return jnp.mean((ys - targets) ** 2)
+
+    loss, grads = nnx.value_and_grad(loss_fn)(model)
+    optimizer.update(model, grads)
+    return loss
+
+
+for step in range(600):
+    loss = train_step(model, optimizer, xs, targets)
+print("final loss:", float(loss))      # ~0.0 — the target is exactly reconstructable
+```
+
+The head drives the loss to zero, and the learned kernel does exactly what the task demands — it concentrates all of its weight on the flagged token:
+
+```python
+_, a = model(xs)
+routed = a[:, 0, :].argmax(-1)          # where position 0 sends its weight, per sequence
+marker = xs[:, :, 0].argmax(-1)         # the flagged token, per sequence
+print("routes to the marker:", float((routed == marker).mean()))   # 1.0
+```
+
+No supervision named the marker; the head discovered that the way to minimize the loss is to put a sharp kernel on it. That discovered kernel *is* the explanation of what the head does — which is the explainer's whole point, now a printed number.
+
+## What this leaves out
+
+A real attention layer stacks many heads, carries a causal mask (a `jnp.tril` that sets the upper triangle to `-jnp.inf` before the softmax), and caches keys and values at inference. None of that touches the kernel reading: each head is its own Nadaraya–Watson smoother with its own learned kernel, and the mask just restricts which observations a query is allowed to see.
+
+The non-positive-definiteness is also not only a curiosity. It is exactly what the [linear-attention companion](/blog/linear-attention-jax-flax-nnx/) has to confront: to make attention cheap you replace the exp-dot-product kernel with an explicit feature map $\phi(q)^\top\phi(k)$, and the honesty of that approximation (Performer; Katharopoulos et al.) is a statement about how well a *positive-definite* surrogate stands in for a kernel that never was one. The smoother view is what makes that question askable.
+
+---
+
+*References: Flax NNX [Module API](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html); the kernel lens on attention from [Tsai et al. (2019)](https://aclanthology.org/D19-1443/); Nadaraya–Watson regression from Nadaraya (1964) and Watson (1964); linear-attention feature maps from [Katharopoulos et al. (2020)](https://arxiv.org/abs/2006.16236) and [Choromanski et al. (2021)](https://arxiv.org/abs/2009.14794).*
+
+<CiteAs slug="attention-is-kernel-jax-flax-nnx" title="Self-Attention as Kernel Regression in JAX/Flax NNX" pubDate="2026-06-15T10:00:00-07:00" />
