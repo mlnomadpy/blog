@@ -138,6 +138,11 @@ print("symmetric exp-dot min eig:", float(jnp.linalg.eigvalsh(G).min()))  # >= 0
 
 So the non-Mercer-ness comes entirely from $W_Q \neq W_K$, not from the exponential. Here is the subtle part the explainer leans on: **softmax rescues the readout but not the kernel.** Normalizing the rows makes `alpha` a stochastic matrix — nonnegative weights summing to one — so the *output* is still an honest convex combination of values (the attribution story survives). Positive-definiteness of the *kernel* is a different property, and it stays broken. The [convex-readout companion](/blog/convex-readout-jax-flax-nnx/) makes the same nonnegative-is-not-positive-definite distinction from the readout side.
 
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/attention-kernel-psd.gif" alt="A score matrix going from symmetric to asymmetric while an eigenvalue bar chart grows negative bars, labelled indefinite — not a kernel" loading="lazy" width="1100" height="520" />
+  <figcaption>The moment the kernel breaks, computed in JAX. Start with $W_K = W_Q$: the score matrix $x_i^\top M x_j$ is symmetric and its eigenvalues are all nonnegative — a genuine Mercer kernel (a Gram matrix). Slide $W_K$ off $W_Q$ and the matrix loses symmetry; the eigenvalues of its symmetric part cross zero (red bars). Real attention lives at the right-hand end. Softmax will still make each row nonnegative, but the kernel underneath is no longer positive definite. From <code>scripts/render_attention_psd_gif.py</code>.</figcaption>
+</figure>
+
 ## Swapping the kernel
 
 If attention is Nadaraya–Watson, the exp-dot-product is just one entry in the kernel slot. Drop in others through the *same* normalizer and ask the only question that decides whether the weights are an attribution: are they nonnegative?
@@ -165,6 +170,11 @@ for name, kf in kernels.items():
 
 The exp-dot-product, the Gaussian, and the [Yat kernel](/blog/attention-is-a-kernel/) all keep the row a probability vector, so the output stays inside the convex hull of the values and "this token contributed $\alpha_{ij}$" is a real statement. The linear kernel divides by a sum that can pass through zero and hands back signed "weights" — a smoother in algebra only. Nonnegativity, not positive-definiteness, is what buys the interpretation.
 
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/attention-kernels-hull.gif" alt="A query sweeping a loop on the left; on the right four coloured output points, three staying inside the value hull and one escaping it" loading="lazy" width="1100" height="560" />
+  <figcaption>The same values, four kernels, one normalizer. As the query sweeps a loop (left), each kernel turns it into a different weighting of the same value vectors, and the output $y=\sum_j w_j v_j$ traces a path (right). The exp-dot-product, Gaussian, and Yat kernels keep $w$ a convex partition of unity, so $y$ never leaves the convex hull of the values. The signed linear kernel produces negative weights and a normalizer that crosses zero (✗), flinging $y$ outside the hull — a mixture only in algebra. From <code>scripts/render_attention_kernels_gif.py</code>.</figcaption>
+</figure>
+
 ## The √d is a bandwidth
 
 In a kernel smoother the bandwidth sets how far the averaging reaches. In attention the same dial is the temperature $1/\sqrt d$ on the scores. Sweep it and read the mean entropy of the rows:
@@ -183,6 +193,11 @@ for scale in [0.0, 1.0 / jnp.sqrt(d), 1.0, 6.0]:
 ```
 
 A wide bandwidth makes the head a blur over all tokens; a narrow one makes it a hard copy from the single most similar token. The "copy" and induction heads the interpretability literature names are kernel smoothers run at the sharp end of this dial — the temperature is not a training nuisance, it is the bandwidth of the regression.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/attention-bandwidth.gif" alt="An attention row morphing from a flat uniform bar chart to a single spike as the scale increases, while the output point slides from the centroid of the values toward one vertex" loading="lazy" width="1100" height="540" />
+  <figcaption>Temperature as bandwidth, swept in JAX. At a wide bandwidth (small scale) the row is near-uniform — maximum entropy, every value averaged — and the output sits at the centroid. As the bandwidth narrows the row collapses to a spike (entropy → 0) and the output slides out to a single value vertex: a hard copy. The operating point $1/\sqrt d$ is one stop along this dial. From <code>scripts/render_attention_bandwidth_gif.py</code>.</figcaption>
+</figure>
 
 ## A head that routes to a marked token
 
@@ -257,6 +272,11 @@ No supervision named the marker; the head discovered that the way to minimize th
 A real attention layer stacks many heads, carries a causal mask (a `jnp.tril` that sets the upper triangle to `-jnp.inf` before the softmax), and caches keys and values at inference. None of that touches the kernel reading: each head is its own Nadaraya–Watson smoother with its own learned kernel, and the mask just restricts which observations a query is allowed to see.
 
 The non-positive-definiteness is also not only a curiosity. It is exactly what the [linear-attention companion](/blog/linear-attention-jax-flax-nnx/) has to confront: to make attention cheap you replace the exp-dot-product kernel with an explicit feature map $\phi(q)^\top\phi(k)$, and the honesty of that approximation (Performer; Katharopoulos et al.) is a statement about how well a *positive-definite* surrogate stands in for a kernel that never was one. The smoother view is what makes that question askable.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/attention-random-features.gif" alt="A true kernel heatmap beside its rank-m random-feature approximation, with a relative-error curve falling like one over root m as m grows" loading="lazy" width="1100" height="540" />
+  <figcaption>The payoff, in JAX. The full kernel $\exp(q\!\cdot\! k)$ (left) is approximated by $\phi(q)^\top\phi(k)$ with $m$ positive random features (middle), the Performer/FAVOR+ map $\phi(x)_i=\exp(w_i\!\cdot\! x-\lVert x\rVert^2/2)/\sqrt m$. As $m$ grows the approximation tightens and the relative Frobenius error falls like $1/\sqrt m$ (right). The kernel that was never positive definite gets stood in for by one that is — and that surrogate is what buys linear-time attention. From <code>scripts/render_attention_features_gif.py</code>.</figcaption>
+</figure>
 
 ---
 
