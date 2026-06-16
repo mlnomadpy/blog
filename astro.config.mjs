@@ -10,6 +10,14 @@ export default defineConfig({
   site: 'https://tahabouhsine.com',
   base: '/blog',
   trailingSlash: 'ignore',
+  // Posts moved from the blog root into the writeups section keep their old
+  // URLs alive via redirects, so inbound links and search rankings survive.
+  // Destinations need the /blog base spelled out: Astro applies `base` to the
+  // redirect source path but not the destination string.
+  redirects: {
+    '/ai-illiteracy-pt1': '/blog/writeups/ai-illiteracy-pt1',
+    '/poem-0-1': '/blog/writeups/poem-0-1',
+  },
   integrations: [mdx(), sitemap()],
   markdown: {
     remarkPlugins: [remarkMath],
