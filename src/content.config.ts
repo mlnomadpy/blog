@@ -41,4 +41,24 @@ const blog = defineCollection({
   }),
 });
 
-export const collections = { blog };
+// Personal writeups — opinions, notes, and reflections that are deliberately
+// kept separate from the AI-theory `blog` collection. They live at
+// /blog/writeups/, have their own listing + RSS feed, and do NOT share the
+// blog's tag pages, related-posts, or companion machinery. Schema is a lean
+// subset of `blog`: just enough for a dated essay with optional tags.
+const writeups = defineCollection({
+  loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/writeups' }),
+  schema: z.object({
+    title: z.string(),
+    description: z.string().optional(),
+    seoDescription: z.string().optional(),
+    pubDate: z.coerce.date(),
+    updatedDate: z.coerce.date().optional(),
+    tags: z.array(z.string()).default([]),
+    keywords: z.array(z.string()).optional(),
+    draft: z.boolean().default(false),
+    heroImage: z.string().optional(),
+  }),
+});
+
+export const collections = { blog, writeups };

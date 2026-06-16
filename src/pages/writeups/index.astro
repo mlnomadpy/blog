@@ -1,0 +1,131 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+import { SITE_TITLE } from '../../consts';
+import { postFilter } from '../../utils/posts';
+
+const writeups = (await getCollection('writeups', postFilter))
+  .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+
+const byYear = writeups.reduce<Record<number, typeof writeups>>((acc, p) => {
+  const y = p.data.pubDate.getFullYear();
+  (acc[y] ??= []).push(p);
+  return acc;
+}, {});
+const years = Object.keys(byYear).map(Number).sort((a, b) => b - a);
+const fmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: '2-digit' });
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+<BaseLayout
+  title={`Writeups · ${SITE_TITLE}`}
+  description="Personal writeups — opinions, notes, and reflections that aren't AI theory. The unpolished, off-the-cuff side."
+>
+  <section class="intro">
+    <h1>Writeups</h1>
+    <p class="intro-blurb">
+      My own thoughts — opinions, notes from the road, half-formed ideas.
+      Not theory, not peer-reviewed, not always right. The
+      <a href={`${base}/`}>blog</a> is for the ML; this is for everything else.
+    </p>
+  </section>
+
+  {writeups.length === 0 ? (
+    <p class="empty">Nothing here yet.</p>
+  ) : (
+    <section class="archive">
+      {years.map((year) => (
+        <div class="archive-year">
+          <h2>{year}</h2>
+          <ul>
+            {byYear[year].map((post) => (
+              <li>
+                <a class="row" href={`${base}/writeups/${post.id}/`}>
+                  <time class="row-date" datetime={post.data.pubDate.toISOString()}>
+                    {fmt.format(post.data.pubDate)}
+                  </time>
+                  <span class="row-title">
+                    {post.data.draft && <span class="draft-badge">draft</span>}
+                    {post.data.title}
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </section>
+  )}
+</BaseLayout>
+
+<style>
+  .intro-blurb {
+    margin: 0.85rem 0 0.5rem;
+    font-size: 0.96rem;
+    line-height: 1.6;
+    color: var(--fg-muted);
+    max-width: 56ch;
+  }
+  .intro-blurb a { color: var(--accent); }
+  .empty { color: var(--fg-faint); font-style: italic; margin-top: 1.5rem; }
+  .archive { margin-top: 1.5rem; }
+  .archive-year { margin-bottom: 1.75rem; }
+  .archive-year h2 {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--fg-faint);
+    font-weight: 500;
+    margin: 0 0 0.4rem;
+    padding-bottom: 0.45rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .archive-year ul { list-style: none; padding: 0; margin: 0; }
+  .archive-year li { border-bottom: 1px dashed var(--border); }
+  .archive-year li:last-child { border-bottom: 0; }
+  .row {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 1rem;
+    align-items: baseline;
+    padding: 0.6rem 0;
+    text-decoration: none;
+    color: inherit;
+  }
+  .row-date {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--fg-faint);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .row-title {
+    font-family: var(--serif);
+    font-size: 1.02rem;
+    line-height: 1.4;
+    color: var(--fg);
+    transition: color var(--transition-fast);
+  }
+  .row:hover .row-title { color: var(--accent); }
+  .draft-badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 0.05rem 0.35rem;
+    margin-right: 0.5rem;
+    vertical-align: 0.12em;
+  }
+  @media (max-width: 720px) {
+    .row {
+      grid-template-columns: 56px 1fr;
+      gap: 0.75rem;
+      padding: 0.7rem 0;
+    }
+  }
+</style>

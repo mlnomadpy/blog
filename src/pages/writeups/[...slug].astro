@@ -1,0 +1,32 @@
+---
+import { getCollection, render } from 'astro:content';
+import readingTime from 'reading-time';
+import WriteupLayout from '../../layouts/WriteupLayout.astro';
+import { postFilter } from '../../utils/posts';
+
+export async function getStaticPaths() {
+  const writeups = await getCollection('writeups', postFilter);
+  return writeups.map((post) => ({
+    params: { slug: post.id },
+    props: { post },
+  }));
+}
+
+const { post } = Astro.props;
+const { Content } = await render(post);
+const stats = readingTime(post.body ?? '');
+---
+<WriteupLayout
+  title={post.data.title}
+  description={post.data.seoDescription ?? post.data.description}
+  draft={post.data.draft}
+  pubDate={post.data.pubDate}
+  updatedDate={post.data.updatedDate}
+  tags={post.data.tags}
+  keywords={post.data.keywords}
+  heroImage={post.data.heroImage}
+  readingTimeText={stats.text}
+  wordCount={stats.words}
+>
+  <Content />
+</WriteupLayout>
