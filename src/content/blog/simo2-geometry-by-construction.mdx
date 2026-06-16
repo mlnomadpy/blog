@@ -1,0 +1,330 @@
+---
+title: 'SimO₂: Repulsion and Geometry by Construction'
+description: 'Every contrastive loss bolts a patch onto cosine similarity to stop it collapsing — sampled negatives, a variance hinge, a predictor and stop-gradient. SimO₂ needs none of them: built on the biased ⵟ-kernel, the similarity is repulsive by construction and lands on a closed-form equilibrium you can steer with a single scalar. The honest pitch is mechanism and provable, designable geometry — not a benchmark number. With live in-browser simulations.'
+seoDescription: "SimO₂: a ⵟ-kernel contrastive objective that is repulsive by construction and reaches a closed-form, steerable equilibrium. No sampled negatives, no collapse."
+pubDate: 2026-05-31
+draft: true
+tags: [ml, contrastive-learning, representation-learning, yat-kernel, simo2, afcl, orthogonality, neural-collapse, kernel-methods]
+references:
+  - authors: "Mercer, J."
+    year: 1909
+    title: "Functions of Positive and Negative Type, and their Connection with the Theory of Integral Equations"
+    venue: "Philosophical Transactions of the Royal Society A 209, 415–446"
+  - authors: "Welch, L. R."
+    year: 1974
+    title: "Lower Bounds on the Maximum Cross Correlation of Signals"
+    venue: "IEEE Transactions on Information Theory 20(3), 397–399"
+    doi: "10.1109/TIT.1974.1055219"
+  - authors: "Hadsell, R., Chopra, S., LeCun, Y."
+    year: 2006
+    title: "Dimensionality Reduction by Learning an Invariant Mapping"
+    venue: "CVPR 2006"
+  - authors: "Schroff, F., Kalenichenko, D., Philbin, J."
+    year: 2015
+    title: "FaceNet: A Unified Embedding for Face Recognition and Clustering"
+    venue: "CVPR 2015"
+    arxiv: "1503.03832"
+  - authors: "van den Oord, A., Li, Y., Vinyals, O."
+    year: 2018
+    title: "Representation Learning with Contrastive Predictive Coding"
+    arxiv: "1807.03748"
+  - authors: "Wu, Z., Xiong, Y., Yu, S. X., Lin, D."
+    year: 2018
+    title: "Unsupervised Feature Learning via Non-Parametric Instance Discrimination"
+    venue: "CVPR 2018"
+    arxiv: "1805.01978"
+  - authors: "He, K., et al."
+    year: 2020
+    title: "Momentum Contrast for Unsupervised Visual Representation Learning (MoCo)"
+    venue: "CVPR 2020"
+    arxiv: "1911.05722"
+  - authors: "Chen, T., Kornblith, S., Norouzi, M., Hinton, G."
+    year: 2020
+    title: "A Simple Framework for Contrastive Learning of Visual Representations (SimCLR)"
+    venue: "ICML 2020"
+    arxiv: "2002.05709"
+  - authors: "Khosla, P., et al."
+    year: 2020
+    title: "Supervised Contrastive Learning"
+    venue: "NeurIPS 2020"
+    arxiv: "2004.11362"
+  - authors: "Grill, J.-B., et al."
+    year: 2020
+    title: "Bootstrap Your Own Latent: A New Approach to Self-Supervised Learning (BYOL)"
+    venue: "NeurIPS 2020"
+    arxiv: "2006.07733"
+  - authors: "Papyan, V., Han, X. Y., Donoho, D. L."
+    year: 2020
+    title: "Prevalence of Neural Collapse During the Terminal Phase of Deep Learning Training"
+    venue: "Proceedings of the National Academy of Sciences 117(40)"
+    arxiv: "2008.08186"
+  - authors: "Chen, X., He, K."
+    year: 2021
+    title: "Exploring Simple Siamese Representation Learning (SimSiam)"
+    venue: "CVPR 2021"
+    arxiv: "2011.10566"
+  - authors: "Zbontar, J., et al."
+    year: 2021
+    title: "Barlow Twins: Self-Supervised Learning via Redundancy Reduction"
+    venue: "ICML 2021"
+    arxiv: "2103.03230"
+  - authors: "Radford, A., et al."
+    year: 2021
+    title: "Learning Transferable Visual Models From Natural Language Supervision (CLIP)"
+    venue: "ICML 2021"
+    arxiv: "2103.00020"
+  - authors: "Bardes, A., Ponce, J., LeCun, Y."
+    year: 2022
+    title: "VICReg: Variance-Invariance-Covariance Regularization for Self-Supervised Learning"
+    venue: "ICLR 2022"
+    arxiv: "2105.04906"
+  - authors: "Zhai, X., Mustafa, B., Kolesnikov, A., Beyer, L."
+    year: 2023
+    title: "Sigmoid Loss for Language Image Pre-Training (SigLIP)"
+    venue: "ICCV 2023"
+    arxiv: "2303.15343"
+keywords:
+  - SimO2
+  - AFCL
+  - anchor-free contrastive learning
+  - yat kernel
+  - biased kernel
+  - collapse prevention
+  - neural collapse
+  - simplex ETF
+  - certified radius
+  - frame potential
+  - designable geometry
+  - RKHS
+  - contrastive loss
+---
+import ConeEffect from '../../components/viz/ConeEffect.astro';
+import YatKernelCurve from '../../components/viz/YatKernelCurve.astro';
+import CollapseRoutes from '../../components/viz/CollapseRoutes.astro';
+import SimoEquilibrium from '../../components/viz/SimoEquilibrium.astro';
+import ContrastiveLab from '../../components/viz/ContrastiveLab.astro';
+import SimoExplorer from '../../components/viz/SimoExplorer.astro';
+import CiteAs from '../../components/CiteAs.astro';
+
+*Most contrastive losses are a cosine similarity plus a patch that stops it from collapsing. SimO₂ removes the patch by changing the similarity. This is the loss on its own terms — what it brings that the others don't, and, just as plainly, where the "so what" is weaker. Two figures run live in your browser.*
+
+Line up the contrastive zoo and you notice every member is carrying a crutch.
+InfoNCE and SimCLR keep the representation from collapsing to a point with
+**sampled negatives**; MoCo swaps those for a **momentum queue**; BYOL and SimSiam
+drop negatives but bolt on a **predictor head and a stop-gradient** to manufacture
+asymmetry; VICReg adds a **variance hinge**; Barlow Twins a **cross-correlation
+penalty**. Different machinery, same job: cosine similarity, left alone, has a
+trivial minimiser — send every embedding to the same vector — and each method
+adds a mechanism whose whole purpose is to forbid that.
+
+What if the similarity simply didn't have the failure mode? Then you would not
+need the patch. That is the entire idea behind **SimO₂**.
+
+## A short history of not collapsing
+
+Contrastive learning has one recurring enemy, and most of its history is the
+story of beating it: **collapse**, the trivial solution where the encoder sends
+everything to one vector. Pull positives together with nothing pushing back and
+that constant map *is* the global optimum. And uniformity is not a default you can
+lean on — push Gaussian inputs through a *random, untrained* deep network and the
+outputs already bunch into a narrow cone instead of spreading over the sphere.
+Add layers and the cone tightens:
+
+<ConeEffect caption="Outputs of a random, untrained ReLU network, L2-normalized to the circle. Even with no training, depth squeezes the outputs into a narrow angular cone (the 'cone effect') — drag the depth slider and watch the half-width shrink. 'Uniform on the sphere' is something a contrastive objective has to manufacture, not a starting point. Re-roll for a fresh random network." />
+
+So every era of contrastive learning is, at heart, a different way to manufacture
+that spread. The genealogy:
+
+- **Metric learning (2006–2015).** The contrastive loss of Hadsell, Chopra &
+  LeCun and FaceNet's triplet loss pull matched pairs together and push mismatched
+  pairs apart *past a margin* — explicit negatives, explicit margin.
+- **InfoNCE (2018).** Instance-discrimination and CPC make every sample its own
+  class and turn the push-apart into a softmax over negatives, scaled by a
+  **temperature**.
+- **The 2020 scale-up.** SimCLR makes it work with strong augmentations and *large
+  batches of in-batch negatives*; MoCo replaces the batch with a *momentum queue*.
+- **Negative-free (2020–2021).** BYOL drops negatives entirely and blocks collapse
+  with an *asymmetric predictor + EMA target*; SimSiam shows the *stop-gradient* is
+  the load-bearing part.
+- **Redundancy reduction (2021–2022).** Barlow Twins and VICReg avoid both
+  negatives and asymmetry by penalising *correlation between feature dimensions* —
+  a variance/decorrelation term.
+- **Supervised & multimodal.** SupCon uses all same-class positives; CLIP and
+  SigLIP align two modalities with the same machinery.
+
+Squint and the pattern is unmistakable. The underlying similarity is almost
+always **cosine**, cosine alone collapses, so each family bolts on a different
+mechanism to forbid it. There are essentially **four routes**:
+
+| route | the mechanism it adds | examples |
+|---|---|---|
+| sampled negatives | push against other samples (+ temperature) | SimCLR, MoCo, InfoNCE |
+| architectural asymmetry | predictor head + stop-gradient | BYOL, SimSiam |
+| decorrelation / variance | penalise correlated features | Barlow Twins, VICReg |
+| **repulsive similarity** | the kernel repels *by construction* | **SimO₂** (this post) |
+
+The first three each add a hyperparameter and a moving part to compensate for
+something cosine lacks. The fourth asks the different question: what if the
+*similarity itself* couldn't collapse? Then there is nothing to patch — which is
+where the ⵟ-kernel comes in.
+
+## The ⵟ-kernel
+
+SimO₂ is built on the biased **ⵟ-kernel** (from the
+[ⵟ-kernel work](/blog/attention-is-a-kernel/) of Bouhsine, 2026):
+
+$$
+k_{b,\varepsilon}(\mathbf{x},\mathbf{y}) = \frac{(\langle\mathbf{x},\mathbf{y}\rangle + b)^2}{\varepsilon + \lVert\mathbf{x}-\mathbf{y}\rVert^2}, \qquad b > 0,\ \varepsilon > 0,
+$$
+
+a rational similarity: a polynomial **alignment** numerator over an
+inverse-multiquadric **distance** denominator. On the unit sphere
+$\lVert\mathbf{x}-\mathbf{y}\rVert^2 = 2 - 2S$ with $S = \langle\mathbf{x},\mathbf{y}\rangle$, so it reduces to a
+single function of the cosine,
+
+$$
+k^{\circ}_{b,\varepsilon}(S) = \frac{(S + b)^2}{\varepsilon + 2 - 2S},
+$$
+
+computed in one broadcast over the Gram matrix, at the cost of a cosine. For
+$b > 0$ this kernel is Mercer, strictly positive-definite, characteristic and
+universal, with a closed-form RKHS norm — but the property that matters here is
+visible just from the shape of the curve.
+
+<YatKernelCurve caption="The ⵟ-kernel on the sphere as a function of cosine similarity S. The numerator rewards alignment (it shoots up as S → 1), and the distance denominator makes the whole thing repulsive away from the target: the curve has a zero at S = −b (green), where the inter-class loss 1 + ⵟ is minimised. That target is strictly above cosine's degenerate −1 (grey). Drag b to move the separation target between orthogonal (b → 0) and antipodal (b → 1); drag ε to reshape the kernel — it changes the underlying RKHS, not just a scale." />
+
+## The loss
+
+Proposition: same-class pairs want $k$ large (push $S \to 1$); different-class
+pairs want $k$ small (push $S$ to the kernel's minimum). SimO₂ inverts that into
+two per-pair terms, gated by class masks,
+
+$$
+\mathcal{L}_{\mathrm{same}}(i,j) = \frac{1}{1 + k_{ij}}, \qquad
+\mathcal{L}_{\mathrm{diff}}(i,j) = 1 + k_{ij},
+$$
+
+averaged within and across classes into a single objective trained by the
+**AFCL** algorithm (anchor-free contrastive learning):
+
+$$
+\mathcal{L}_{\mathrm{AFCL}} = \lambda_+\,\mathcal{L}_{\mathrm{intra}} + \lambda_-\,\mathcal{L}_{\mathrm{inter}}.
+$$
+
+No temperature. No sampled negatives, no memory queue. No predictor, no
+stop-gradient, no momentum encoder. No variance, covariance, or whitening
+penalty. Every cross-class pair enters through a symmetric mask; the kernel does
+the work the patches used to do. Here is what that buys, in order of how
+defensible the claim is.
+
+## 1. Collapse prevention is intrinsic to the similarity
+
+This is the real differentiator. There are, roughly, four ways to stop a
+representation from collapsing: sampled negatives (SimCLR), a variance/decorrelation
+penalty (VICReg, Barlow Twins), an architectural asymmetry (BYOL's
+predictor + EMA), and — the fourth route — **a similarity that is repulsive by
+construction.** SimO₂ is that fourth route. The $\lVert\mathbf{x}-\mathbf{y}\rVert^2$ in
+the denominator means two embeddings that march toward the same point drive
+$k \to$ large, and the inter-class term $1 + k$ punishes exactly that. Repulsion
+is not added; it is the kernel. No negatives to mine, no asymmetry to engineer,
+no auxiliary loss to weight.
+
+Watch it happen, self-supervised, on a shared encoder. Left: alignment only —
+pull each sample's two augmented views together, with nothing pushing back. The
+encoder takes the shortcut every alignment-only objective takes and **collapses**,
+mapping every sample onto one direction. Right: the same encoder, same data, but
+the ⵟ-kernel's inter term supplies repulsion — **no sampled negatives, no
+predictor, no variance penalty** — and the embeddings spread across the circle.
+
+<CollapseRoutes caption="Self-supervised training of a shared ReLU encoder, live. Left (alignment only): no repulsion, so the encoder collapses — every sample's embedding piles onto one point (mean pairwise cosine → 1). Right (ⵟ-kernel): the inter term repels by construction — same data, no negatives — and the embeddings spread (pairwise cosine → 0). Repulsion is a property of the similarity, not a bolt-on." />
+
+## 2. A closed-form equilibrium you can steer with one scalar
+
+The inter-class loss is, to leading order, the **biased frame potential**
+$\sum_{i\neq j}(\langle\mathbf{e}_i,\mathbf{e}_j\rangle + b)^2$ — minimised not at the rank-collapsing
+antipode but at $\langle\mathbf{e}_i,\mathbf{e}_j\rangle = -b$. And the equilibrium it settles into
+is not an emergent accident; it is closed-form and **steerable by the single
+scalar $b$.** For $C$ classes in $d$ dimensions ($C \le d+1$):
+
+- below the bifurcation $b_c = \dfrac{1}{2(C-1)}$ → an **orthogonal frame**;
+- above the simplex threshold $\dfrac{1}{C-1}$ → the **regular simplex**, the
+  max-margin configuration with angle $\arccos\!\left(-\tfrac{1}{C-1}\right) > 90°$;
+- in between → an interior equiangular frame at $-b$.
+
+(For $C > d$ the analogous minimiser is a unit-norm tight frame at the Welch
+bound.) That gives a parameter-free certified radius
+$r = \sqrt{C/(2(C-1))}$ for nearest-centroid classification at the simplex —
+strictly larger than the $\sqrt{2}/2$ an orthogonal-margin loss could reach.
+
+The point is not the specific numbers; it is that **embedding geometry becomes a
+control problem.** No standard contrastive loss hands you an equilibrium you can
+dial. Drag $b$ below:
+
+<SimoEquilibrium caption="C class centroids settling under the biased frame potential, live. The single scalar b steers the equilibrium: below b_c = 1/[2(C−1)] the vectors fan into an orthogonal frame; above 1/(C−1) they snap to the regular simplex (the max-margin, >90° configuration). Watch the regime label and the bifurcation flip as you cross b_c. This designability — geometry by a scalar — is what no sampled-negative or variance-penalty loss can expose." />
+
+## 3. A benign landscape *outside* the convex-Gram regime
+
+There is a methodological first hiding here. Every prior proof that a contrastive
+or neural-collapse objective has no bad local minima relaxes the problem to a
+**convex program in the Gram matrix**. The ⵟ-kernel's rational denominator makes
+that relaxation structurally unavailable — and SimO₂'s landscape is proven benign
+anyway, directly on the product of spheres: every non-simplex critical orbit is a
+strict saddle, so gradient descent from almost any initialisation reaches the
+simplex. A non-convex-Gram loss with a clean global-convergence guarantee is not
+something the cosine families offer.
+
+## 4. ε moves the function class, not just the scale
+
+A softmax temperature rescales logits — it sharpens, nothing more. The kernel
+regulariser $\varepsilon$ is different in kind: it changes the **RKHS** the kernel
+induces, so turning it moves the *function class* you are learning in, not just
+the operating point. It is a principled kernel parameter with Mercer meaning, not
+a free knob.
+
+## The experiment
+
+Theory aside, here is a small lab: a shared encoder, four contrastive losses
+trained side by side on the same dataset and initialisation, **all in your
+browser**. It runs on a tiny reverse-mode autodiff engine
+([`nanograd`](https://github.com/mlnomadpy/blog/tree/master/src/components/viz/engine))
+written for this blog — which matters, because it means each loss is just its
+*forward* formula and the gradients come for free. That is how **SupCon's softmax
+contrastive loss** is in the race at all: no hand-derived gradient, just autodiff
+(checked against finite differences before it shipped).
+
+Watch the geometry diverge. Alignment-only pulls each class tight but, with
+nothing pushing back, leaves the classes **crowded** — no margin. SupCon and
+SigLIP separate them, paying for it with a temperature and in-batch negatives.
+SimO₂/AFCL reaches the **same max-margin simplex** with **neither** — the
+repulsion is the kernel. Switch the dataset (two-moons, rings, spirals, four
+classes), change `n` or the seed, **Step** through it, or just let it race.
+
+<ContrastiveLab caption="Four contrastive losses on one encoder, trained live via the in-browser nanograd autodiff engine. align-only crowds the classes; SupCon and SigLIP separate them with their usual machinery; SimO₂/AFCL reaches the same separated simplex with no temperature, no negatives, no predictor. Each panel shows live accuracy and loss; pick a dataset, set n / seed, Step or Play. Colour = class." />
+
+And because SimO₂ has only one real knob, you can *explore* it the way you'd
+explore any single loss — sweep the bias, pick a regime, change the data, and
+watch the loss and accuracy curves while the embedding forms. Drag **b** toward 0
+for an orthogonal frame, to ~0.5 for the max-margin simplex, toward 1 for the
+rank-collapsing antipodal regime; try the failure-shaped datasets (rings,
+spirals). The annotation tracks which regime you're in relative to the closed-form
+bifurcation $b_c$.
+
+<SimoExplorer caption="A single-loss deep dive on SimO₂/AFCL, live on the autodiff engine. Left: the embedding. Right: loss and nearest-centroid accuracy over training. Top controls: regime presets, dataset, and the bias-b slider — the one scalar that steers the equilibrium. Everything updates live; the line under the widget names the regime (orthogonal frame / interior / simplex) against the bifurcation b_c = 1/[2(C−1)]." />
+
+## The honest "so what"
+
+None of the above says **SimO₂ beats InfoNCE, VICReg, or BYOL on accuracy.** It
+doesn't — not because it loses, but because that is a different claim with a
+different burden of proof, and the downstream-win experiments are not yet done.
+If a reviewer asks "why should I switch losses," the truthful answer is
+**controllability and the proof** — repulsion and a designable, certified
+equilibrium *by construction* — not a leaderboard. Pitch it as a benchmark result
+and it is unfinished; pitch it as mechanism and provable geometry and it is a
+genuinely distinct fourth route. I'd rather state that plainly than oversell it.
+
+The one-line version: **SimO₂ gives you collapse prevention as an intrinsic,
+kernel-geometric property, with a closed-form equilibrium you steer by a scalar
+bias — repulsion and geometry by construction, not by sampling, regularisation, or
+asymmetry.** Pick the bias, get the frame; no patch required.
+
+<CiteAs slug="simo2-geometry-by-construction" title="SimO₂: Repulsion and Geometry by Construction" pubDate="2026-05-31" />
