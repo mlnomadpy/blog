@@ -74,8 +74,8 @@ import CiteAs from '../../components/CiteAs.astro';
 ---
 
 In [*Untangling the Moons*](/blog/untangling-the-moons/) I argued that the
-whole contrastive-learning lineage disagrees about one geometric question —
-*how far apart should different-class points be?* — and let you watch eight
+whole contrastive-learning lineage disagrees about one geometric question,
+*how far apart should different-class points be?*, and let you watch eight
 losses answer it in an interactive playground. This post is the other half:
 the actual JAX code that moves the points, and the same chaos-to-order
 trajectory rendered as a real GIF you can regenerate yourself.
@@ -84,13 +84,13 @@ The setup is the same trick that made the visualisations legible. Skip the
 encoder entirely. Take 60 points in 2D, assign them **random labels**, and
 treat the positions themselves as the embeddings. Then run gradient descent on
 a contrastive loss and watch the points organize. Random labels on random
-positions means there is no spatial signal at the start — the loss has to
+positions means there is no spatial signal at the start, the loss has to
 impose every bit of geometry itself. That is the cleanest possible test of
 what a loss actually *wants*.
 
 Every loss below is about fifteen lines of `jax.numpy`. The complete, runnable
-generator — data, losses, training loop, and the matplotlib renderer that made
-these GIFs — lives in
+generator, data, losses, training loop, and the matplotlib renderer that made
+these GIFs, lives in
 [`scripts/jax-contrastive/`](https://github.com/mlnomadpy/blog/tree/master/scripts/jax-contrastive)
 in the repo.
 
@@ -116,7 +116,7 @@ def make_random(n=60, k=2, seed=7):
     return pts, labels
 ```
 
-Half the losses live on the unit circle — they compare directions, not
+Half the losses live on the unit circle, they compare directions, not
 positions, so cosine similarity is the natural metric. That means one helper,
 applied after every step:
 
@@ -152,7 +152,7 @@ def make_step(loss_fn, lr, on_sphere, masks):
 
 Two details worth flagging. The pairwise label masks (`same`, `eye`, `triu`)
 depend only on the labels, never on the positions, so they are built once on
-the host and closed over — that keeps the loss bodies loop-free and lets
+the host and closed over, that keeps the loss bodies loop-free and lets
 `jax.jit` compile a single fused kernel:
 
 ```python
@@ -164,7 +164,7 @@ def make_masks(labels):
             "triu": jnp.asarray(triu)}
 ```
 
-And the `key` is threaded through every step with `jax.random.split` — only the
+And the `key` is threaded through every step with `jax.random.split`, only the
 two samplers (triplet and InfoNCE) actually use it, but passing it uniformly
 keeps the step signature identical for all losses. To measure progress we use
 the same nearest-centroid accuracy as the visualisations: assign each point to
@@ -173,9 +173,9 @@ linear-separability proxy, computed in NumPy on a host snapshot every few steps
 along with a frame for the GIF.
 
 Now the six losses. Each is a pure function of `(z, labels, key, param)`
-returning one scalar — the quantity whose gradient organizes the points.
+returning one scalar, the quantity whose gradient organizes the points.
 
-## 1. Pair contrastive — Hadsell, Chopra & LeCun, 2006
+## 1. Pair contrastive, Hadsell, Chopra & LeCun, 2006
 
 The original. Pull same-class pairs together quadratically; push different-class
 pairs apart until they hit a margin, then go silent.
@@ -203,16 +203,16 @@ def loss_pair(z, labels, key, margin, *, m):
 
 <figure class="jax-fig">
   <img src="/blog/jax-contrastive/pair.gif" alt="Pair contrastive loss organizing random 2D points into two tight clusters a margin apart" loading="lazy" width="480" height="480" />
-  <figcaption>Pair contrastive (margin 1.2). Each class collapses to a point; the two points sit a margin apart, and then the gradient vanishes. The margin knows when to stop — its virtue and its limitation.</figcaption>
+  <figcaption>Pair contrastive (margin 1.2). Each class collapses to a point; the two points sit a margin apart, and then the gradient vanishes. The margin knows when to stop, its virtue and its limitation.</figcaption>
 </figure>
 
-This is Euclidean — no sphere. The whole thing is one masked sum over the
+This is Euclidean, no sphere. The whole thing is one masked sum over the
 pairwise distance matrix. Note the `/ n` normalization: it matches the update
 scale the interactive visualisations used, and dividing by the point count
 rather than the pair count keeps the gradient strong enough to actually move 60
 points in a couple hundred steps.
 
-## 2. Triplet — FaceNet, 2015
+## 2. Triplet, FaceNet, 2015
 
 Make the comparison relative. For each anchor, sample one positive and one
 negative; require the negative to sit at least a margin farther than the
@@ -238,16 +238,16 @@ def loss_triplet(z, labels, key, margin, *, m):
 
 <figure class="jax-fig">
   <img src="/blog/jax-contrastive/triplet.gif" alt="Triplet loss organizing random 2D points, with a wobbly trajectory from stochastic sampling" loading="lazy" width="480" height="480" />
-  <figcaption>Triplet loss. The trajectory wobbles because each step samples a fresh anchor / positive / negative — the gradient is stochastic. Same destination as pair contrastive, noisier path.</figcaption>
+  <figcaption>Triplet loss. The trajectory wobbles because each step samples a fresh anchor / positive / negative, the gradient is stochastic. Same destination as pair contrastive, noisier path.</figcaption>
 </figure>
 
 The sampling is the interesting part of the JAX. There are no Python loops:
 `jax.random.categorical` over a masked logit row picks one positive and one
 negative per anchor in a single vectorized call, fully inside `jit`. Setting
 disallowed entries to `-1e9` makes them unreachable. This is the idiom for
-"sample from a per-row set" in JAX — no gather loops, no host round-trips.
+"sample from a per-row set" in JAX, no gather loops, no host round-trips.
 
-## 3. InfoNCE / NT-Xent — van den Oord 2018, SimCLR 2020
+## 3. InfoNCE / NT-Xent, van den Oord 2018, SimCLR 2020
 
 Replace the hard margin with a softmax over cosine similarities. Every other
 point is a negative; the gradient never fully vanishes.
@@ -269,20 +269,20 @@ def loss_infonce(z, labels, key, tau, *, m):
 
 <figure class="jax-fig">
   <img src="/blog/jax-contrastive/infonce.gif" alt="InfoNCE organizing random 2D points into two arcs on the unit circle" loading="lazy" width="480" height="480" />
-  <figcaption>InfoNCE on the unit circle. The two classes settle into opposing arcs and keep micro-adjusting — the softmax always has a little more gradient to give.</figcaption>
+  <figcaption>InfoNCE on the unit circle. The two classes settle into opposing arcs and keep micro-adjusting, the softmax always has a little more gradient to give.</figcaption>
 </figure>
 
 Because `z` is normalized, `z @ z.T` is the cosine matrix directly. The whole
 loss is `jax.nn.logsumexp` doing the numerically stable denominator and one
 sampled positive in the numerator. That softmax-over-similarities is exactly
 the Nadaraya–Watson kernel operator I unpacked in
-[*Attention is Explainable Because it is a Kernel*](/blog/attention-is-a-kernel/) —
+[*Attention is Explainable Because it is a Kernel*](/blog/attention-is-a-kernel/),
 InfoNCE is that operator pointed at a different objective.
 
-## 4. SupCon — Khosla et al., 2020
+## 4. SupCon, Khosla et al., 2020
 
 When you have labels, every same-class point is a positive. Average the InfoNCE
-term over *all* of them — no sampling at all.
+term over *all* of them, no sampling at all.
 
 $$
 \mathcal{L}_{\text{SupCon}}(a) = \frac{-1}{|P(a)|}\sum_{p \in P(a)} \log \frac{\exp(\text{sim}(z_a, z_p)/\tau)}{\sum_{k \neq a} \exp(\text{sim}(z_a, z_k)/\tau)}
@@ -301,7 +301,7 @@ def loss_supcon(z, labels, key, tau, *, m):
 
 <figure class="jax-fig">
   <img src="/blog/jax-contrastive/supcon.gif" alt="SupCon organizing four classes of random 2D points into four tight clusters on the unit circle" loading="lazy" width="480" height="480" />
-  <figcaption>SupCon on four classes. Averaging over every positive pulls each point toward its class centroid — the classes condense to near-Dirac clusters. The harshest collapser of the six.</figcaption>
+  <figcaption>SupCon on four classes. Averaging over every positive pulls each point toward its class centroid, the classes condense to near-Dirac clusters. The harshest collapser of the six.</figcaption>
 </figure>
 
 The shape from the visualisations is visible immediately: SupCon is the
@@ -309,10 +309,10 @@ tightest of all the losses. Averaging over many positives is, in effect,
 pulling each point toward its class centroid every step. Great for downstream
 classification; brutal to any within-class variation you might have cared about.
 
-## 5. SigLIP — Zhai et al., 2023
+## 5. SigLIP, Zhai et al., 2023
 
-Drop the softmax entirely. Score each pair independently with a sigmoid, and —
-crucially — put a *bias* on it so you choose where different-class pairs stop
+Drop the softmax entirely. Score each pair independently with a sigmoid, and,
+crucially, put a *bias* on it so you choose where different-class pairs stop
 being pushed apart.
 
 $$
@@ -335,16 +335,16 @@ def loss_siglip(z, labels, key, target, *, m):
 </figure>
 
 `jax.nn.softplus(x)` is the stable `log(1 + e^x)`, and `target` sets the bias
-`b = -t·target` — the cosine at which the loss for a negative pair goes flat.
+`b = -t·target`, the cosine at which the loss for a negative pair goes flat.
 Set it near zero and negatives equilibrate at orthogonality, not at the
 diametric opposition every softmax loss implicitly chases. That is the geometric
 fix I argued for in
 [*Opposite Is Not Different*](/blog/opposite-is-not-different/).
 
-## 6. Cosine→0 — the orthogonality objective
+## 6. Cosine→0, the orthogonality objective
 
 The simplest objective consistent with that argument. Pull same-class pairs to
-cosine 1; push different-class pairs to cosine 0 — orthogonality, not opposition.
+cosine 1; push different-class pairs to cosine 0, orthogonality, not opposition.
 
 $$
 \mathcal{L}_{\text{cos→0}}(i,j) =
@@ -364,30 +364,30 @@ def loss_orthog(z, labels, key, _unused, *, m):
 
 <figure class="jax-fig">
   <img src="/blog/jax-contrastive/orthog.gif" alt="Cosine-to-zero loss organizing two classes of random points onto perpendicular axes" loading="lazy" width="480" height="480" />
-  <figcaption>Cosine→0 on two classes. Same-class collapses to a point, different-class settles at a right angle — orthogonality, the dimension-independent stop this loss always targets. (The strict max-margin arrangement for two classes is actually antipodal; cos→0 stops at orthogonality on purpose, since that is the target that generalizes to many classes.)</figcaption>
+  <figcaption>Cosine→0 on two classes. Same-class collapses to a point, different-class settles at a right angle, orthogonality, the dimension-independent stop this loss always targets. (The strict max-margin arrangement for two classes is actually antipodal; cos→0 stops at orthogonality on purpose, since that is the target that generalizes to many classes.)</figcaption>
 </figure>
 
 Three lines of math, and the cleanest geometry of the six: two classes land on
 perpendicular directions and stop, because the loss is genuinely minimized there
 rather than fighting the spherical geometry forever. The target is a
-dimension-independent *approximation* to the simplex optimum $-1/(k-1)$ — nearly
+dimension-independent *approximation* to the simplex optimum $-1/(k-1)$, nearly
 exact when classes are many, deliberately conservative when they are few. The
 [companion post](/blog/untangling-the-moons/) works through why that is the right
 trade, and why it only holds when the class count doesn't exceed the dimension.
 
 One honest caveat the code made me confront. From a *perfectly* balanced random
-start, this loss can stall at a symmetric configuration — each class smeared
+start, this loss can stall at a symmetric configuration, each class smeared
 uniformly around the circle, where same-class attraction and different-class
 repulsion cancel. The softmax losses break that symmetry through their sampled
 positive or their normalization; bare orthogonality has nothing to break it
-with. The fix in the generator is mundane — a slightly smaller point count and
-a seed that isn't perfectly symmetric — but it is a real lesson: an objective
+with. The fix in the generator is mundane, a slightly smaller point count and
+a seed that isn't perfectly symmetric, but it is a real lesson: an objective
 can be *correct at its minimum* and still need help escaping a saddle.
 
 ## The two we skipped
 
 For brevity this guide builds six of the eight losses from the prior post.
-**CLIP** is symmetrized InfoNCE — run `loss_infonce` in both directions
+**CLIP** is symmetrized InfoNCE, run `loss_infonce` in both directions
 (anchor→positive and positive→anchor) and average; the geometry is identical.
 **Alignment + Uniformity** (Wang & Isola, 2020) splits InfoNCE into an explicit
 pull-positives-together term and a spread-everyone-out term; both are a few more
@@ -396,7 +396,7 @@ lines in the same style. Both are explored in
 
 ## The race
 
-Same losses, same random initialization, same step counter — the six panels
+Same losses, same random initialization, same step counter, the six panels
 side by side, which is where the disagreements become obvious.
 
 <figure class="jax-fig jax-fig-wide">
@@ -412,7 +412,7 @@ actually wants them to.**
 ## Run it yourself
 
 Everything here is deterministic given the seed. The generator is six small
-files — `data.py`, `losses.py`, `train.py`, `render.py`, `generate.py` — in
+files, `data.py`, `losses.py`, `train.py`, `render.py`, `generate.py`, in
 [`scripts/jax-contrastive/`](https://github.com/mlnomadpy/blog/tree/master/scripts/jax-contrastive):
 
 ```bash
@@ -426,8 +426,8 @@ different trajectory. The optimization is reproducible to the seed; the rendered
 pixels may shift slightly across matplotlib versions, so the guarantee is on the
 trajectory, not the bytes.
 
-If you want the *why* behind these six geometries — twenty years of why
-different-class points kept getting pushed too far apart — that is
+If you want the *why* behind these six geometries, twenty years of why
+different-class points kept getting pushed too far apart, that is
 [*Untangling the Moons*](/blog/untangling-the-moons/). This was the how.
 
 <CiteAs slug="organizing-randomness-jax" title="Organizing Randomness: Contrastive Learning in JAX" pubDate="2026-05-29" />

@@ -293,7 +293,7 @@ The code has to respect the same bargain.
 
 ## 5. Reachability: Is The Geometry Even Findable?
 
-Every audit above assumes the optimizer can *reach* the target. It can — and not
+Every audit above assumes the optimizer can *reach* the target. It can, and not
 by luck. The frame potential $\sum_{i,j}\langle e_i, e_j\rangle^2$ has no bad
 local minima (Benedetto & Fickus, 2003), so every random start lands on the same
 floor $C^2/d - C$. The cleanest way to see that in JAX is to descend from many
@@ -301,7 +301,7 @@ starts *at once*: a single `vmap` over a `lax.scan` descent.
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/jax-welch/benign-landscape.gif" alt="Six frame-potential curves from six random starts all diving to the same floor C squared over d minus C" loading="lazy" width="1140" height="600" />
-  <figcaption>Metric 5: reachability. Six independent random starts, one vmapped scan. Wherever they begin, every seed reaches the same floor C²/d − C and the spread between them goes to zero — the landscape is benign.</figcaption>
+  <figcaption>Metric 5: reachability. Six independent random starts, one vmapped scan. Wherever they begin, every seed reaches the same floor C²/d − C and the spread between them goes to zero, the landscape is benign.</figcaption>
 </figure>
 
 Write the descent once as a pure `lax.scan` so it compiles into one fused loop
@@ -334,7 +334,7 @@ The outer `vmap` runs six independent optimizations in parallel; the inner one
 audits every snapshot of every trajectory. (The `- c` drops the constant
 diagonal so the floor reads as the classic $C^2/d - C$.) They all converge to
 the same value, which is the practical payoff: you don't have to be clever about
-initialization — the landscape does the work.
+initialization, the landscape does the work.
 
 ## The Report Function
 
