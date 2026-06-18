@@ -1,6 +1,6 @@
 ---
 title: Attention is Explainable Because it is a Kernel
-description: Self-attention in transformers is a Nadaraya–Watson kernel smoother. That fact — and not "we visualize the matrix" — is why attention heads are readable while MLPs are not.
+description: Self-attention in transformers is a Nadaraya–Watson kernel smoother. That fact, and not "we visualize the matrix", is why attention heads are readable while MLPs are not.
 seoDescription: "Self-attention is a Nadaraya-Watson kernel smoother. That fact, not the plottable matrix, is why attention heads are readable while MLPs are not."
 pubDate: 2026-05-14
 companion: attention-is-kernel-jax-flax-nnx
@@ -152,7 +152,7 @@ These are what you are actually using whenever you "read" an attention pattern.
 
 A standard linear layer, where some output coordinate is a linear combination of input coordinates with weights that can be positive, negative, or large in magnitude, does not admit this reading at all. The weights are not a partition of unity, do not compose across layers in any attribution-respecting way, and need not even be of consistent sign for nearby inputs. The fact that attention does admit it is again a direct consequence of its being a kernel smoother. In the Nadaraya–Watson form the weights normalize for the same reason and serve the same role.
 
-<AttentionPatterns caption="Three causal attention matrices over a 12-token sequence, each induced by a different kernel structure. Row i shows what token i attends to; brighter cells are higher α_ij. Left: a positional kernel that decays with distance. Center: an induction-like pattern where each token looks back to positions following earlier occurrences of the previous token. Right: a previous-token kernel. These are not three different layers — they are three different heads. The kernel is what tells you which one you are reading." size={12} />
+<AttentionPatterns caption="Three causal attention matrices over a 12-token sequence, each induced by a different kernel structure. Row i shows what token i attends to; brighter cells are higher α_ij. Left: a positional kernel that decays with distance. Center: an induction-like pattern where each token looks back to positions following earlier occurrences of the previous token. Right: a previous-token kernel. These are not three different layers, they are three different heads. The kernel is what tells you which one you are reading." size={12} />
 
 **3. Kernels carry locality.** Kernel smoothers, by construction, weight nearby points more heavily than distant ones, and the notion of "nearby" is whatever the kernel says it is. In attention, "nearby" is high $q_i \cdot k_j$, which the model is free to shape during training. The upshot is that attention behaves, by default, like a content-addressable nearest-neighbor retrieval over the sequence: $j^{*}_i = \operatorname*{arg\,max}_j q_i \cdot k_j$ in the sharp limit. This is exactly how it gets used in many of the algorithms that mechanistic interpretability has uncovered. Induction heads retrieve previous occurrences of a token. Name-mover heads retrieve antecedents. Positional heads retrieve fixed offsets. None of these descriptions requires anything beyond the kernel-smoother view; they are different specializations of "look up the most similar previous token under this kernel."
 

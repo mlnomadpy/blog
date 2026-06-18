@@ -47,7 +47,7 @@ keywords:
 ---
 import CiteAs from '../../components/CiteAs.astro';
 
-*The [explainer](/blog/attention-is-a-kernel/) argued that self-attention is a Nadaraya–Watson kernel smoother that has learned its kernel and its targets end-to-end, and that this single fact — not "the matrix is plottable" — is what makes attention heads readable. This is the implementation companion: build attention from scratch in [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html), turn each prose claim into an `assert`, and watch the one caveat (the kernel is not symmetric, so not Mercer in the strict sense) fall out of the numbers. The dimensions are tiny so every array is legible.*
+*The [explainer](/blog/attention-is-a-kernel/) argued that self-attention is a Nadaraya–Watson kernel smoother that has learned its kernel and its targets end-to-end, and that this single fact, not "the matrix is plottable", is what makes attention heads readable. This is the implementation companion: build attention from scratch in [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html), turn each prose claim into an `assert`, and watch the one caveat (the kernel is not symmetric, so not Mercer in the strict sense) fall out of the numbers. The dimensions are tiny so every array is legible.*
 
 ## Scaled dot-product attention, by hand
 
@@ -78,11 +78,11 @@ x = jax.random.normal(jax.random.key(1), (6, 16))
 y, alpha = head(x)
 ```
 
-That is the whole object. `alpha` is a row-stochastic matrix — each row a distribution over tokens — and `y` is the row-weighted average of the value vectors. Everything the explainer says follows from those two sentences.
+That is the whole object. `alpha` is a row-stochastic matrix, each row a distribution over tokens, and `y` is the row-weighted average of the value vectors. Everything the explainer says follows from those two sentences.
 
 ## It is Nadaraya–Watson, and you can assert it
 
-The classical Nadaraya–Watson estimator predicts at a query by normalizing a kernel over observations and using it to weight the targets: $\hat f(x)=\sum_i \frac{K(x,x_i)}{\sum_j K(x,x_j)}\,y_i$. Write that estimator with no reference to attention — just a kernel, a normalizer, and a weighted sum of targets — and feed it the exp-dot-product kernel:
+The classical Nadaraya–Watson estimator predicts at a query by normalizing a kernel over observations and using it to weight the targets: $\hat f(x)=\sum_i \frac{K(x,x_i)}{\sum_j K(x,x_j)}\,y_i$. Write that estimator with no reference to attention, just a kernel, a normalizer, and a weighted sum of targets, and feed it the exp-dot-product kernel:
 
 ```python
 def nadaraya_watson(q, k, v, kernel):
@@ -112,7 +112,7 @@ The two are not analogous; they are the same array up to relabeling. The diction
 
 Softmax is not a special activation that happens to live inside transformers. It is the Nadaraya–Watson normalizer applied to one specific kernel.
 
-## The kernel is not symmetric — that is the whole RKHS caveat
+## The kernel is not symmetric, that is the whole RKHS caveat
 
 The explainer flags one wrinkle: queries and keys use *different* projections $W_Q$ and $W_K$, so the score is a bilinear form $q_i\!\cdot\! k_j = x_i^\top (W_Q W_K^\top) x_j$ whose operator $M = W_Q W_K^\top$ has no reason to be symmetric. A genuine (Mercer) kernel must be symmetric and positive semi-definite. This one is neither, and you can watch it fail:
 
@@ -128,7 +128,7 @@ print("eig span of sym part:", float(sym_eigs.min()), float(sym_eigs.max()))
 # min < 0 < max  -> indefinite, so NOT positive semi-definite, so not Mercer
 ```
 
-Contrast with the *symmetric* exp-inner-product kernel $\exp(z\!\cdot\! z'/\sqrt d)$ on a single set of vectors, which **is** positive definite (it is a Hadamard exponential of a Gram matrix — a Schur product of PSD matrices):
+Contrast with the *symmetric* exp-inner-product kernel $\exp(z\!\cdot\! z'/\sqrt d)$ on a single set of vectors, which **is** positive definite (it is a Hadamard exponential of a Gram matrix, a Schur product of PSD matrices):
 
 ```python
 z = jax.random.normal(jax.random.key(2), (6, 16))
@@ -136,11 +136,11 @@ G = jnp.exp(z @ z.T / jnp.sqrt(16))
 print("symmetric exp-dot min eig:", float(jnp.linalg.eigvalsh(G).min()))  # >= 0
 ```
 
-So the non-Mercer-ness comes entirely from $W_Q \neq W_K$, not from the exponential. Here is the subtle part the explainer leans on: **softmax rescues the readout but not the kernel.** Normalizing the rows makes `alpha` a stochastic matrix — nonnegative weights summing to one — so the *output* is still an honest convex combination of values (the attribution story survives). Positive-definiteness of the *kernel* is a different property, and it stays broken. The [convex-readout companion](/blog/convex-readout-jax-flax-nnx/) makes the same nonnegative-is-not-positive-definite distinction from the readout side.
+So the non-Mercer-ness comes entirely from $W_Q \neq W_K$, not from the exponential. Here is the subtle part the explainer leans on: **softmax rescues the readout but not the kernel.** Normalizing the rows makes `alpha` a stochastic matrix, nonnegative weights summing to one, so the *output* is still an honest convex combination of values (the attribution story survives). Positive-definiteness of the *kernel* is a different property, and it stays broken. The [convex-readout companion](/blog/convex-readout-jax-flax-nnx/) makes the same nonnegative-is-not-positive-definite distinction from the readout side.
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/blog/attention-kernel-psd.gif" alt="A score matrix going from symmetric to asymmetric while an eigenvalue bar chart grows negative bars, labelled indefinite — not a kernel" loading="lazy" width="1100" height="520" />
-  <figcaption>The moment the kernel breaks, computed in JAX. Start with $W_K = W_Q$: the score matrix $x_i^\top M x_j$ is symmetric and its eigenvalues are all nonnegative — a genuine Mercer kernel (a Gram matrix). Slide $W_K$ off $W_Q$ and the matrix loses symmetry; the eigenvalues of its symmetric part cross zero (red bars). Real attention lives at the right-hand end. Softmax will still make each row nonnegative, but the kernel underneath is no longer positive definite. From <code>scripts/render_attention_psd_gif.py</code>.</figcaption>
+  <img src="/blog/attention-kernel-psd.gif" alt="A score matrix going from symmetric to asymmetric while an eigenvalue bar chart grows negative bars, labelled indefinite, not a kernel" loading="lazy" width="1100" height="520" />
+  <figcaption>The moment the kernel breaks, computed in JAX. Start with $W_K = W_Q$: the score matrix $x_i^\top M x_j$ is symmetric and its eigenvalues are all nonnegative, a genuine Mercer kernel (a Gram matrix). Slide $W_K$ off $W_Q$ and the matrix loses symmetry; the eigenvalues of its symmetric part cross zero (red bars). Real attention lives at the right-hand end. Softmax will still make each row nonnegative, but the kernel underneath is no longer positive definite. From <code>scripts/render_attention_psd_gif.py</code>.</figcaption>
 </figure>
 
 ## Swapping the kernel
@@ -168,11 +168,11 @@ for name, kf in kernels.items():
 # linear (signed)        -> nonneg=False  (weights can be negative, denominator can cross zero)
 ```
 
-The exp-dot-product, the Gaussian, and the [Yat kernel](/blog/attention-is-a-kernel/) all keep the row a probability vector, so the output stays inside the convex hull of the values and "this token contributed $\alpha_{ij}$" is a real statement. The linear kernel divides by a sum that can pass through zero and hands back signed "weights" — a smoother in algebra only. Nonnegativity, not positive-definiteness, is what buys the interpretation.
+The exp-dot-product, the Gaussian, and the [Yat kernel](/blog/attention-is-a-kernel/) all keep the row a probability vector, so the output stays inside the convex hull of the values and "this token contributed $\alpha_{ij}$" is a real statement. The linear kernel divides by a sum that can pass through zero and hands back signed "weights", a smoother in algebra only. Nonnegativity, not positive-definiteness, is what buys the interpretation.
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/attention-kernels-hull.gif" alt="A query sweeping a loop on the left; on the right four coloured output points, three staying inside the value hull and one escaping it" loading="lazy" width="1100" height="560" />
-  <figcaption>The same values, four kernels, one normalizer. As the query sweeps a loop (left), each kernel turns it into a different weighting of the same value vectors, and the output $y=\sum_j w_j v_j$ traces a path (right). The exp-dot-product, Gaussian, and Yat kernels keep $w$ a convex partition of unity, so $y$ never leaves the convex hull of the values. The signed linear kernel produces negative weights and a normalizer that crosses zero (✗), flinging $y$ outside the hull — a mixture only in algebra. From <code>scripts/render_attention_kernels_gif.py</code>.</figcaption>
+  <figcaption>The same values, four kernels, one normalizer. As the query sweeps a loop (left), each kernel turns it into a different weighting of the same value vectors, and the output $y=\sum_j w_j v_j$ traces a path (right). The exp-dot-product, Gaussian, and Yat kernels keep $w$ a convex partition of unity, so $y$ never leaves the convex hull of the values. The signed linear kernel produces negative weights and a normalizer that crosses zero (✗), flinging $y$ outside the hull, a mixture only in algebra. From <code>scripts/render_attention_kernels_gif.py</code>.</figcaption>
 </figure>
 
 ## The √d is a bandwidth
@@ -192,16 +192,16 @@ for scale in [0.0, 1.0 / jnp.sqrt(d), 1.0, 6.0]:
 # large     -> entropy -> 0, a near one-hot row     (a narrow kernel: nearest-neighbor copy)
 ```
 
-A wide bandwidth makes the head a blur over all tokens; a narrow one makes it a hard copy from the single most similar token. The "copy" and induction heads the interpretability literature names are kernel smoothers run at the sharp end of this dial — the temperature is not a training nuisance, it is the bandwidth of the regression.
+A wide bandwidth makes the head a blur over all tokens; a narrow one makes it a hard copy from the single most similar token. The "copy" and induction heads the interpretability literature names are kernel smoothers run at the sharp end of this dial, the temperature is not a training nuisance, it is the bandwidth of the regression.
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/attention-bandwidth.gif" alt="An attention row morphing from a flat uniform bar chart to a single spike as the scale increases, while the output point slides from the centroid of the values toward one vertex" loading="lazy" width="1100" height="540" />
-  <figcaption>Temperature as bandwidth, swept in JAX. At a wide bandwidth (small scale) the row is near-uniform — maximum entropy, every value averaged — and the output sits at the centroid. As the bandwidth narrows the row collapses to a spike (entropy → 0) and the output slides out to a single value vertex: a hard copy. The operating point $1/\sqrt d$ is one stop along this dial. From <code>scripts/render_attention_bandwidth_gif.py</code>.</figcaption>
+  <figcaption>Temperature as bandwidth, swept in JAX. At a wide bandwidth (small scale) the row is near-uniform, maximum entropy, every value averaged, and the output sits at the centroid. As the bandwidth narrows the row collapses to a spike (entropy → 0) and the output slides out to a single value vertex: a hard copy. The operating point $1/\sqrt d$ is one stop along this dial. From <code>scripts/render_attention_bandwidth_gif.py</code>.</figcaption>
 </figure>
 
 ## A head that routes to a marked token
 
-To see the kernel *learn*, give one head a job: in each sequence one token is flagged (a large value in its first coordinate), and every position must output that token's vector. The head can only succeed by learning $W_Q, W_K$ that route attention onto the flag and a $W_V$ that copies. One detail earns its keep here — the projections need a **bias**. Every query has to point at the same token regardless of its own content, and a bias-free linear map of mean-zero inputs cannot produce a content-independent pull in a fixed direction; the constant term is exactly what lets the query lean on the flag. Written batched with `einsum`, the module is otherwise unchanged in spirit:
+To see the kernel *learn*, give one head a job: in each sequence one token is flagged (a large value in its first coordinate), and every position must output that token's vector. The head can only succeed by learning $W_Q, W_K$ that route attention onto the flag and a $W_V$ that copies. One detail earns its keep here, the projections need a **bias**. Every query has to point at the same token regardless of its own content, and a bias-free linear map of mean-zero inputs cannot produce a content-independent pull in a fixed direction; the constant term is exactly what lets the query lean on the flag. Written batched with `einsum`, the module is otherwise unchanged in spirit:
 
 ```python
 import optax
@@ -248,10 +248,10 @@ def train_step(model, optimizer, xs, targets):
 
 for step in range(600):
     loss = train_step(model, optimizer, xs, targets)
-print("final loss:", float(loss))      # ~0.0 — the target is exactly reconstructable
+print("final loss:", float(loss))      # ~0.0, the target is exactly reconstructable
 ```
 
-The head drives the loss to zero, and the learned kernel does exactly what the task demands — it concentrates all of its weight on the flagged token:
+The head drives the loss to zero, and the learned kernel does exactly what the task demands, it concentrates all of its weight on the flagged token:
 
 ```python
 _, a = model(xs)
@@ -260,11 +260,11 @@ marker = xs[:, :, 0].argmax(-1)         # the flagged token, per sequence
 print("routes to the marker:", float((routed == marker).mean()))   # 1.0
 ```
 
-No supervision named the marker; the head discovered that the way to minimize the loss is to put a sharp kernel on it. That discovered kernel *is* the explanation of what the head does — which is the explainer's whole point, now a printed number.
+No supervision named the marker; the head discovered that the way to minimize the loss is to put a sharp kernel on it. That discovered kernel *is* the explanation of what the head does, which is the explainer's whole point, now a printed number.
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/attention-kernel-learning.gif" alt="An attention matrix sharpening from a near-uniform blur to a single bright column over the flagged token, beside a loss curve falling from ~5 to 2e-5" loading="lazy" width="1100" height="520" />
-  <figcaption>The same head, trained in JAX. Left: the attention matrix for one fixed example, snapshotted every twelve steps. It begins as a wide, near-uniform kernel (every token averaged) and collapses onto the single column of the flagged token — a learned nearest-neighbour copy, not a rule anyone wrote in. Right: the mean-squared error it is driven by, falling to ~$2\times10^{-5}$. The figure is generated by <code>scripts/render_attention_kernel_gif.py</code>, which runs the exact training loop above and draws the kernel each frame.</figcaption>
+  <figcaption>The same head, trained in JAX. Left: the attention matrix for one fixed example, snapshotted every twelve steps. It begins as a wide, near-uniform kernel (every token averaged) and collapses onto the single column of the flagged token, a learned nearest-neighbour copy, not a rule anyone wrote in. Right: the mean-squared error it is driven by, falling to ~$2\times10^{-5}$. The figure is generated by <code>scripts/render_attention_kernel_gif.py</code>, which runs the exact training loop above and draws the kernel each frame.</figcaption>
 </figure>
 
 ## What this leaves out
@@ -275,7 +275,7 @@ The non-positive-definiteness is also not only a curiosity. It is exactly what t
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/attention-random-features.gif" alt="A true kernel heatmap beside its rank-m random-feature approximation, with a relative-error curve falling like one over root m as m grows" loading="lazy" width="1100" height="540" />
-  <figcaption>The payoff, in JAX. The full kernel $\exp(q\!\cdot\! k)$ (left) is approximated by $\phi(q)^\top\phi(k)$ with $m$ positive random features (middle), the Performer/FAVOR+ map $\phi(x)_i=\exp(w_i\!\cdot\! x-\lVert x\rVert^2/2)/\sqrt m$. As $m$ grows the approximation tightens and the relative Frobenius error falls like $1/\sqrt m$ (right). The kernel that was never positive definite gets stood in for by one that is — and that surrogate is what buys linear-time attention. From <code>scripts/render_attention_features_gif.py</code>.</figcaption>
+  <figcaption>The payoff, in JAX. The full kernel $\exp(q\!\cdot\! k)$ (left) is approximated by $\phi(q)^\top\phi(k)$ with $m$ positive random features (middle), the Performer/FAVOR+ map $\phi(x)_i=\exp(w_i\!\cdot\! x-\lVert x\rVert^2/2)/\sqrt m$. As $m$ grows the approximation tightens and the relative Frobenius error falls like $1/\sqrt m$ (right). The kernel that was never positive definite gets stood in for by one that is, and that surrogate is what buys linear-time attention. From <code>scripts/render_attention_features_gif.py</code>.</figcaption>
 </figure>
 
 ---
