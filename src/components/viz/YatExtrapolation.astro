@@ -1,0 +1,135 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 360 } = Astro.props;
+---
+<figure class="viz yatextrap" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Off-distribution behaviour, computed live on jax-js. One ReLU unit and one Yat
+// unit over a 1-D input. Inside the data band both are fine. Leave the band and
+// the ReLU pre-activation climbs without bound — a large, confident answer for an
+// input it has never seen — while the Yat unit stays bounded, its response a
+// fraction of its in-data peak. Unbounded extrapolation versus a bounded,
+// "nothing near here" response: the difference between a half-plane and a kernel.
+import { defineViz } from './engine/vizkit.js';
+import { np, withJax, drawJaxLoading } from './engine/jax.js';
+
+const XMIN = -6, XMAX = 6, M = 260;
+const W = 1.0, BIAS = 0.6, C = 0.0;       // weight, bias b, prototype centre
+const BAND = 2.0;                          // in-distribution band |x| ≤ BAND
+const PADL = 40, PADR = 14, PADT = 16, PADB = 40;
+
+defineViz('yatextrap', {
+  title: 'Off-distribution: unbounded ReLU vs bounded Yat',
+  height: 360,
+  controls: [
+    { type: 'range', name: 'eps', label: 'ε bandwidth', min: -1.2, max: 0.8, step: 0.05, value: -0.2, reset: false, fmt: (v) => Math.pow(10, v).toFixed(2) },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    api.state = { qx: 3.2 };
+    if (!api.canvas.dataset.exDrag) {
+      api.canvas.dataset.exDrag = '1';
+      const onP = (e) => {
+        const r = api.canvas.getBoundingClientRect();
+        const plotW = api.size.W - PADL - PADR;
+        const t = (e.clientX - r.left - PADL) / plotW;
+        api.state.qx = Math.max(XMIN, Math.min(XMAX, XMIN + t * (XMAX - XMIN)));
+        api.render();
+      };
+      let drag = false;
+      api.canvas.addEventListener('pointerdown', (e) => { drag = true; api.canvas.setPointerCapture(e.pointerId); onP(e); });
+      api.canvas.addEventListener('pointermove', (e) => { if (drag) onP(e); });
+      api.canvas.addEventListener('pointerup', (e) => { drag = false; try { api.canvas.releasePointerCapture(e.pointerId); } catch {} });
+    }
+    withJax(api);
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state } = api;
+    const Wd = size.W, Hd = size.H;
+    if (Wd === 0) return;
+    if (!state.jaxReady) return drawJaxLoading(api);
+
+    const eps = Math.pow(10, api.get('eps'));
+    // compute curves on jax-js
+    const xg = new Float64Array(M);
+    for (let i = 0; i < M; i++) xg[i] = XMIN + (i / (M - 1)) * (XMAX - XMIN);
+    const X = np.array(xg);
+    const lin = X.ref.mul(W).add(BIAS);
+    const linJs = lin.ref.js();
+    const cen = X.add(-C);                         // x − c  (scalar form)
+    const dist2 = cen.ref.mul(cen);
+    const num = lin.ref.mul(lin);                 // (w·x+b)²   (lin consumed here)
+    const yat = num.div(dist2.add(eps)).js();
+    const relu = Float64Array.from(linJs, (v) => Math.max(v, 0));
+
+    const plotW = Wd - PADL - PADR, plotH = Hd - PADT - PADB;
+    const yMax = 5.0;                             // fixed cap so ReLU visibly exits the top
+    const sx = (x) => PADL + ((x - XMIN) / (XMAX - XMIN)) * plotW;
+    const sy = (y) => PADT + (1 - Math.min(y, yMax) / yMax) * plotH;
+
+    // in-distribution band
+    ctx.fillStyle = colors.faint; ctx.globalAlpha = 0.12;
+    ctx.fillRect(sx(-BAND), PADT, sx(BAND) - sx(-BAND), plotH);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = colors.faint; ctx.font = '10px ui-monospace, monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText('data band', sx(0), PADT + 2);
+
+    // axes
+    ctx.strokeStyle = colors.border; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(PADL, sy(0)); ctx.lineTo(Wd - PADR, sy(0)); ctx.stroke();
+    ctx.fillStyle = colors.faint; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (let gx = XMIN; gx <= XMAX; gx += 2) ctx.fillText(String(gx), sx(gx), Hd - PADB + 8);
+    ctx.save(); ctx.translate(12, PADT + plotH / 2); ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('response', 0, 0); ctx.restore();
+
+    const plot = (arr, color, lw) => {
+      ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.beginPath();
+      let started = false;
+      for (let i = 0; i < M; i++) {
+        const px = sx(xg[i]), py = sy(arr[i]);
+        if (arr[i] > yMax * 1.02) { started = false; continue; }   // break where it exits top
+        started ? ctx.lineTo(px, py) : ctx.moveTo(px, py); started = true;
+      }
+      ctx.stroke();
+    };
+    plot(relu, colors.blue, 2);
+    plot(yat, colors.accent, 2);
+
+    // ReLU "→ ∞" marker where it leaves the top
+    let exitX = null;
+    for (let i = 0; i < M; i++) if (relu[i] > yMax) { exitX = xg[i]; break; }
+    if (exitX !== null) {
+      ctx.fillStyle = colors.blue; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+      ctx.font = '11px ui-sans-serif, system-ui';
+      ctx.fillText('ReLU → ∞ (unbounded)', sx(exitX) + 4, PADT + 14);
+    }
+
+    // legend
+    ctx.font = '11px ui-sans-serif, system-ui'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+    ctx.fillStyle = colors.blue; ctx.fillRect(Wd - PADR - 150, PADT + 6, 14, 3);
+    ctx.fillStyle = colors.fg; ctx.fillText('ReLU  σ(w·x+b)', Wd - PADR - 132, PADT + 8);
+    ctx.fillStyle = colors.accent; ctx.fillRect(Wd - PADR - 150, PADT + 22, 14, 3);
+    ctx.fillStyle = colors.fg; ctx.fillText('Yat unit', Wd - PADR - 132, PADT + 24);
+
+    // query
+    const qx = state.qx, qi = Math.round(((qx - XMIN) / (XMAX - XMIN)) * (M - 1));
+    const rq = relu[qi], yq = yat[qi];
+    ctx.strokeStyle = colors.fg; ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
+    ctx.beginPath(); ctx.moveTo(sx(qx), PADT); ctx.lineTo(sx(qx), PADT + plotH); ctx.stroke(); ctx.setLineDash([]);
+    if (yq <= yMax) { ctx.fillStyle = colors.accent; ctx.beginPath(); ctx.arc(sx(qx), sy(yq), 4, 0, Math.PI * 2); ctx.fill(); }
+    if (rq <= yMax) { ctx.fillStyle = colors.blue; ctx.beginPath(); ctx.arc(sx(qx), sy(rq), 4, 0, Math.PI * 2); ctx.fill(); }
+
+    const inband = Math.abs(qx) <= BAND;
+    api.readout('rd', `x ${qx.toFixed(2)} ${inband ? '(in data)' : '(off-distribution)'} · ReLU ${rq.toFixed(2)} · Yat ${yq.toFixed(2)} · jax-js`);
+  },
+});
+</script>
