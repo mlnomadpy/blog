@@ -31,8 +31,8 @@ OUT_GIF = ROOT / "public" / "yat-mlp-training.gif"
 OUT_PREVIEW = ROOT / "public" / "yat-mlp-training-preview.png"
 
 W, H = 1100, 520
-FPS = 12
-END_HOLD = 12
+FPS = 10
+END_HOLD = 16
 
 BG = "#fbfaf6"
 PANEL = "#ffffff"
@@ -114,6 +114,13 @@ def train_snapshots():
         field = glog[:, 1] - glog[:, 0]
         return acc, field
 
+    # Dense-early schedule: the boundary forms in the first ~25 steps, so snapshot
+    # every step there, then log-space out to the end. Otherwise most frames sit on
+    # an already-converged model and the learning flashes by.
+    snap_steps = set(range(0, 28)) | {
+        int(round(v)) for v in np.geomspace(28, STEPS, 16) if v <= STEPS
+    }
+
     snaps = []
     loss_hist = []
     cur_loss = float("nan")
@@ -121,7 +128,7 @@ def train_snapshots():
         if s > 0:
             cur_loss = float(step(model, opt, X, y))
             loss_hist.append((s, cur_loss))
-        if s % SNAP_EVERY == 0:
+        if s in snap_steps:
             acc, field = evaluate(model, X, y, grid)
             field = np.asarray(field).reshape(GRID_N, GRID_N)
             protos = np.asarray(model.yat.W.value)

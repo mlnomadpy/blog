@@ -42,6 +42,11 @@ import CiteAs from '../../components/CiteAs.astro';
 
 *The [explainer](/blog/what-a-finite-kernel-buys-an-mlp/) argued that if you put a finite, positive-definite kernel where the activation function used to be, an MLP stops being a stack of linear maps glued by a nonlinearity and becomes a kernel machine — with locality, attribution, geometry, capacity control, and a feature map you can write down. This is the implementation companion: build that layer in [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html), turn each claim into an `assert`, and train the thing end to end. Every number and figure below is from a real run. The dimensions are tiny so the objects are legible.*
 
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/yat-vs-relu-mlp.gif" alt="Two MLPs learning the same two-moons data side by side: a ReLU MLP with a piecewise-linear boundary, and a Yat-kernel MLP with a smooth boundary and visible prototype rings" loading="eager" width="1100" height="540" />
+  <figcaption>The whole point in one picture, trained live in JAX. Same two-moons data, two units. Left: a standard Linear→ReLU→Linear MLP — a bank of directions whose boundary is piecewise-linear and runs off to infinity. Right: the Yat-kernel MLP — a bank of prototypes (the rings, readable as centres in input space), whose boundary wraps the data, with no activation function anywhere. Both reach 100%; the difference is the geometry.</figcaption>
+</figure>
+
 ## The unit
 
 A Yat unit measures the input against a learned prototype $W_u$ with the kernel $k_{b,\varepsilon}(W_u, x) = (W_u^\top x + b)^2 / (\lVert x - W_u\rVert^2 + \varepsilon)$. A whole layer is a bank of these — and there is no activation function anywhere in it. In NNX the prototypes are the parameters; $b$ and $\varepsilon$ are learned through a softplus so they stay admissible ($b\ge 0$, $\varepsilon>0$).
