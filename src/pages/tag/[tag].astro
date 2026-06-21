@@ -47,7 +47,7 @@ const collectionLd = {
   },
 };
 ---
-<BaseLayout title={meta.title} description={meta.description}>
+<BaseLayout title={meta.title} description={meta.description} noindex={posts.length < 3}>
   <p class="meta"><a href={`${base}/tags`}>← all tags</a></p>
   <h1>{meta.name}</h1>
   <p class="lead">{meta.description}</p>

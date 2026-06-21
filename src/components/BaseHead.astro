@@ -28,6 +28,7 @@ interface BlogPostRef { url: string; title: string; description?: string; pubDat
 
 interface Props {
   title: string;
+  seoTitle?: string;
   description?: string;
   image?: string;
   type?: 'website' | 'article' | 'profile';
@@ -47,6 +48,7 @@ interface Props {
 
 const {
   title,
+  seoTitle,
   description = SITE_DESCRIPTION,
   image,
   type = 'website',
@@ -77,9 +79,13 @@ const baseUrl = `${SITE}${BASE}/`; // 'https://tahabouhsine.com/blog/'
 // For posts, use just the post title in <title>/og:title so SERP and social
 // cards get all ~60 chars for the headline. The site name still appears via
 // og:site_name and the JSON-LD publisher block.
-const fullTitle = type === 'article' || title === SITE_TITLE
-  ? title
-  : `${title} — ${SITE_TITLE}`;
+// `seoTitle` (when set) drives only the <title>/og/twitter headline so long
+// creative titles do not truncate in SERP; JSON-LD headline keeps full `title`.
+const fullTitle = seoTitle
+  ? seoTitle
+  : type === 'article' || title === SITE_TITLE
+    ? title
+    : `${title} — ${SITE_TITLE}`;
 
 // ─── Reading time → ISO 8601 duration ───────────────────────────────────
 // Used in BlogPosting.timeRequired. ~200 wpm reading-time default.
