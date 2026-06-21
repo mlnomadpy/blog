@@ -1,0 +1,127 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 440 } = Astro.props;
+---
+<figure class="viz notrainclf" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Solve it without training. Each neuron is a labeled picture and the readout is
+// hard-wired so every prototype votes for its own class. There are no gradient
+// steps anywhere. Slide to add prototypes per class (k-means centroids of the
+// training images) and the test accuracy climbs on its own, because the
+// architecture is already a kernel classifier: it reasons by resemblance from the
+// start. Training, when it comes, only sharpens this.
+import { defineViz } from './engine/vizkit.js';
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+const CLASSES = ['T-shirt', 'Trouser', 'Pullover', 'Dress', 'Coat', 'Sandal', 'Shirt', 'Sneaker', 'Bag', 'Boot'];
+const CLASS_COL = ['#b3661b', '#4a7fb3', '#3a8f5e', '#9a4f9c', '#c2553a', '#5a7d3a', '#2f8f8f', '#a06a2a', '#7a5fc0', '#c0892a'];
+const loadImg = (src) => new Promise((res) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
+
+defineViz('notrainclf', {
+  title: 'Solve it without training',
+  height: 440,
+  controls: [
+    { type: 'range', name: 'nper', label: 'prototypes per class', min: 1, max: 20, step: 1, value: 5, int: true, reset: false, fmt: (v) => v },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    api.state = { ready: false };
+    Promise.all([
+      loadImg(`${BASE}/yat-fmnist/centroids.png`),
+      loadImg(`${BASE}/yat-fmnist/notrain-samples.png`),
+      fetch(`${BASE}/yat-fmnist/notrain.json`).then((r) => r.json()),
+    ]).then(([cent, samp, nt]) => {
+      if (!api.state) return;
+      Object.assign(api.state, { ready: true, cent, samp, nt });
+      api.render();
+    });
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    ctx.clearRect(0, 0, W, H);
+    if (!st.ready) {
+      ctx.fillStyle = colors.muted; ctx.font = '12px ui-monospace, monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('loading…', W / 2, H / 2); return;
+    }
+    const nt = st.nt, n = api.get('nper'), i = n - 1, pad = 10;
+    const accSum = nt.accSum[i], accMax = nt.accMax[i];
+    const cCols = nt.centroidCols;   // 20 (class-major sprite)
+
+    // ── sample strip: the classifier in action ──
+    ctx.imageSmoothingEnabled = true;
+    const ns = nt.sampleLabels.length, ss = 28;
+    const stripW = ns * (ss + 6) - 6, sx0 = pad;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillStyle = colors.muted; ctx.font = '11px ui-sans-serif, system-ui';
+    ctx.fillText('the classifier in action (no training):', pad, pad);
+    for (let s = 0; s < ns; s++) {
+      const x = sx0 + s * (ss + 6), y = pad + 16;
+      ctx.drawImage(st.samp, s * 28, 0, 28, 28, x, y, ss, ss);
+      const pred = nt.samplePredByN[s][i], ok = pred === nt.sampleLabels[s];
+      ctx.lineWidth = 2; ctx.strokeStyle = ok ? colors.green : colors.accent;
+      ctx.strokeRect(x - 0.5, y - 0.5, ss + 1, ss + 1);
+      ctx.fillStyle = CLASS_COL[pred % 10]; ctx.fillRect(x, y + ss + 2, ss, 3);
+    }
+
+    // ── left: the prototypes you have added (10 class rows × n cols) ──
+    const topY = pad + 16 + ss + 14;
+    const leftW = Math.floor(W * 0.56);
+    ctx.fillStyle = colors.muted; ctx.font = '11px ui-sans-serif, system-ui';
+    ctx.fillText(`${n} prototype${n > 1 ? 's' : ''} per class, ${n * 10} labeled pictures total`, pad, topY);
+    const gy = topY + 16, rows = 10;
+    const cell = Math.min(20, (leftW - pad - 52 - (n - 1) * 2) / n, (H - gy - 8 - (rows - 1) * 2) / rows);
+    for (let c = 0; c < 10; c++) {
+      const ry = gy + c * (cell + 2);
+      ctx.fillStyle = CLASS_COL[c]; ctx.font = '9px ui-sans-serif, system-ui';
+      ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      ctx.fillText(CLASSES[c], pad + 48, ry + cell / 2);
+      for (let j = 0; j < n; j++) {
+        const x = pad + 52 + j * (cell + 2);
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(st.cent, j * 28, c * 28, 28, 28, x, ry, cell, cell);
+        ctx.lineWidth = 1; ctx.strokeStyle = CLASS_COL[c] + '88'; ctx.strokeRect(x - 0.5, ry - 0.5, cell + 1, cell + 1);
+      }
+    }
+
+    // ── right: the headline accuracy + curve ──
+    const rx = leftW + 14, rw = W - rx - pad;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillStyle = colors.muted; ctx.font = '11px ui-sans-serif, system-ui';
+    ctx.fillText('0 training steps. test accuracy:', rx, topY);
+    ctx.fillStyle = colors.accent; ctx.font = 'bold 40px ui-sans-serif, system-ui';
+    ctx.fillText(`${accSum.toFixed(1)}%`, rx, topY + 16);
+    ctx.fillStyle = colors.muted; ctx.font = '11px ui-monospace, monospace';
+    ctx.fillText(`nearest-prototype: ${accMax.toFixed(1)}%`, rx, topY + 64);
+
+    // accuracy-vs-count curve
+    const cyTop = topY + 92, ch = H - cyTop - 26, cw = rw;
+    const cx0 = rx, cyb = cyTop + ch;
+    ctx.strokeStyle = colors.border; ctx.lineWidth = 1;
+    ctx.strokeRect(cx0 + 0.5, cyTop + 0.5, cw - 1, ch - 1);
+    const X = (k) => cx0 + (k / 19) * (cw - 1);
+    const Yv = (v) => cyb - ((v - 40) / 50) * (ch - 8) - 4;   // 40..90 range
+    const curve = (arr, col) => {
+      ctx.strokeStyle = col; ctx.lineWidth = 1.8; ctx.beginPath();
+      for (let k = 0; k < 20; k++) { const px = X(k), py = Yv(arr[k]); k ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
+      ctx.stroke();
+      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(X(i), Yv(arr[i]), 4, 0, Math.PI * 2); ctx.fill();
+    };
+    curve(nt.accMax, colors.muted);
+    curve(nt.accSum, colors.accent);
+    ctx.fillStyle = colors.faint; ctx.font = '9px ui-sans-serif, system-ui'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillText('accuracy vs prototypes / class', cx0 + 3, cyb - 3);
+
+    api.readout('rd', `no gradient steps: ${n * 10} labeled prototype pictures, a one-hot readout, ${accSum.toFixed(0)}% test accuracy`);
+  },
+});
+</script>

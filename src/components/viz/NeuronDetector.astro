@@ -1,0 +1,127 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 420 } = Astro.props;
+---
+<figure class="viz neurondetector" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// What does each neuron see? The inverse of reading a prediction: click a Yat
+// prototype and you get the test images it fires hardest on, plus the class it
+// has come to detect and how pure that set is. A neuron's meaning is not inferred,
+// it is shown: here is the picture it is, and here is what it lights up for.
+import { defineViz } from './engine/vizkit.js';
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+const CLASS_COL = ['#b3661b', '#4a7fb3', '#3a8f5e', '#9a4f9c', '#c2553a', '#5a7d3a', '#2f8f8f', '#a06a2a', '#7a5fc0', '#c0892a'];
+const loadImg = (src) => new Promise((res) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
+
+defineViz('neurondetector', {
+  title: 'What does each neuron detect?',
+  height: 420,
+  controls: [{ type: 'readout', name: 'rd' }],
+
+  setup(api) {
+    api.state = { ready: false, sel: 0, hover: -1 };
+    Promise.all([
+      loadImg(`${BASE}/yat-fmnist/protos.png`),
+      loadImg(`${BASE}/yat-fmnist/test.png`),
+      fetch(`${BASE}/yat-fmnist/meta.json`).then((r) => r.json()),
+      fetch(`${BASE}/yat-fmnist/detect.json`).then((r) => r.json()),
+      fetch(`${BASE}/yat-fmnist/test.json`).then((r) => r.json()),
+    ]).then(([protos, test, meta, det, tj]) => {
+      if (!api.state) return;
+      Object.assign(api.state, { ready: true, protos, test, meta, det, tj });
+      api.render();
+    });
+
+    const hit = (e) => {
+      const st = api.state; if (!st || !st.tiles) return null;
+      const r = api.canvas.getBoundingClientRect();
+      const mx = e.clientX - r.left, my = e.clientY - r.top;
+      for (const t of st.tiles) if (mx >= t.x && mx <= t.x + t.s && my >= t.y && my <= t.y + t.s) return t.k;
+      return null;
+    };
+    if (!api.canvas.dataset.ndBind) {
+      api.canvas.dataset.ndBind = '1';
+      api.canvas.addEventListener('pointermove', (e) => {
+        const k = hit(e); const st = api.state; if (!st) return;
+        api.canvas.style.cursor = k === null ? 'default' : 'pointer';
+        if (k !== st.hover) { st.hover = k === null ? -1 : k; api.render(); }
+      });
+      api.canvas.addEventListener('pointerdown', (e) => { const k = hit(e); if (k !== null) { api.state.sel = k; api.render(); } });
+      api.canvas.addEventListener('pointerleave', () => { if (api.state) { api.state.hover = -1; api.canvas.style.cursor = 'default'; api.render(); } });
+    }
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    ctx.clearRect(0, 0, W, H);
+    if (!st.ready) {
+      ctx.fillStyle = colors.muted; ctx.font = '12px ui-monospace, monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('loading…', W / 2, H / 2); return;
+    }
+    const { protos, test, meta, det, tj } = st;
+    const classes = meta.classes, K = meta.K, pcols = meta.protoCols, tcols = tj.cols;
+    const pad = 8;
+
+    // ── left: grid of all neurons (click to inspect) ──
+    const gridW = Math.floor(W * 0.46);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillStyle = colors.muted; ctx.font = '11px ui-sans-serif, system-ui';
+    ctx.fillText('the 50 neurons — hover and click one', pad, pad);
+    const gc = 8, cell = Math.min(30, (gridW - pad * 2 - (gc - 1) * 4) / gc), gap = 4;
+    st.tiles = [];
+    ctx.imageSmoothingEnabled = true;
+    for (let k = 0; k < K; k++) {
+      const c = k % gc, r = Math.floor(k / gc);
+      const x = pad + c * (cell + gap), y = pad + 18 + r * (cell + gap);
+      ctx.globalAlpha = (st.hover === k || st.sel === k) ? 1 : 0.82;
+      ctx.drawImage(protos, (k % pcols) * 28, Math.floor(k / pcols) * 28, 28, 28, x, y, cell, cell);
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = st.sel === k ? 2.5 : (st.hover === k ? 2 : 1);
+      ctx.strokeStyle = st.sel === k ? colors.accent : (st.hover === k ? colors.fg : CLASS_COL[det.vote[k] % 10] + '99');
+      ctx.strokeRect(x - 0.5, y - 0.5, cell + 1, cell + 1);
+      st.tiles.push({ x, y, s: cell, k });
+    }
+
+    // ── right: the selected neuron and what it fires on ──
+    const u = st.sel, rx = gridW + 16;
+    const big = 78;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(protos, (u % pcols) * 28, Math.floor(u / pcols) * 28, 28, 28, rx, pad + 18, big, big);
+    ctx.lineWidth = 2.5; ctx.strokeStyle = CLASS_COL[det.vote[u] % 10]; ctx.strokeRect(rx - 0.5, pad + 18 - 0.5, big + 1, big + 1);
+
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillStyle = colors.muted; ctx.font = '11px ui-sans-serif, system-ui';
+    ctx.fillText(`neuron #${u}`, rx, pad + 2);
+    ctx.fillStyle = colors.fg; ctx.font = 'bold 15px ui-sans-serif, system-ui';
+    ctx.fillText('detects:', rx + big + 12, pad + 22);
+    ctx.fillStyle = CLASS_COL[det.domClass[u] % 10];
+    ctx.fillText(classes[det.domClass[u]], rx + big + 12, pad + 42);
+    ctx.fillStyle = colors.muted; ctx.font = '11px ui-monospace, monospace';
+    ctx.fillText(`purity ${(det.purity[u] * 100).toFixed(0)}%`, rx + big + 12, pad + 64);
+
+    // its top test matches
+    const matchY = pad + 18 + big + 16;
+    ctx.fillStyle = colors.muted; ctx.font = '11px ui-sans-serif, system-ui';
+    ctx.fillText('fires hardest on these inputs:', rx, matchY);
+    const mtop = det.top[u], mc = 5, ms = Math.min(40, (W - rx - pad - (mc - 1) * 5) / mc), mgap = 5;
+    for (let j = 0; j < mtop.length; j++) {
+      const i = mtop[j], c = j % mc, r = Math.floor(j / mc);
+      const x = rx + c * (ms + mgap), y = matchY + 16 + r * (ms + mgap);
+      if (y + ms > H - pad) break;
+      ctx.drawImage(test, (i % tcols) * 28, Math.floor(i / tcols) * 28, 28, 28, x, y, ms, ms);
+      ctx.lineWidth = 1; ctx.strokeStyle = colors.border; ctx.strokeRect(x - 0.5, y - 0.5, ms + 1, ms + 1);
+    }
+
+    api.readout('rd', `neuron #${u} is a ${classes[det.domClass[u]]} detector — its prototype is a picture, and so is everything it responds to`);
+  },
+});
+</script>

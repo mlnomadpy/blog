@@ -1,0 +1,114 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 300 } = Astro.props;
+---
+<figure class="viz classrecipe" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Class to neurons, the reverse of the detector. The linear readout turns the
+// kernel votes into a class, so every class is a committee of prototypes. Pick a
+// class and you see the pictures the network has decided that class is made of,
+// weighted by how much each one counts. No class vector to decode: the class is
+// a handful of examples.
+import { defineViz } from './engine/vizkit.js';
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+const CLASS_COL = ['#b3661b', '#4a7fb3', '#3a8f5e', '#9a4f9c', '#c2553a', '#5a7d3a', '#2f8f8f', '#a06a2a', '#7a5fc0', '#c0892a'];
+const loadImg = (src) => new Promise((res) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
+
+defineViz('classrecipe', {
+  title: 'What the network thinks each class is',
+  height: 300,
+  controls: [{ type: 'readout', name: 'rd' }],
+
+  setup(api) {
+    api.state = { ready: false, sel: 7, hover: -1 };
+    Promise.all([
+      loadImg(`${BASE}/yat-fmnist/protos.png`),
+      fetch(`${BASE}/yat-fmnist/meta.json`).then((r) => r.json()),
+    ]).then(([protos, meta]) => {
+      if (!api.state) return;
+      Object.assign(api.state, { ready: true, protos, meta });
+      api.render();
+    });
+
+    const hit = (e) => {
+      const st = api.state; if (!st || !st.chips) return null;
+      const r = api.canvas.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+      for (const c of st.chips) if (mx >= c.x && mx <= c.x + c.w && my >= c.y && my <= c.y + c.h) return c.c;
+      return null;
+    };
+    if (!api.canvas.dataset.crBind) {
+      api.canvas.dataset.crBind = '1';
+      api.canvas.addEventListener('pointermove', (e) => {
+        const c = hit(e); const st = api.state; if (!st) return;
+        api.canvas.style.cursor = c === null ? 'default' : 'pointer';
+        if (c !== st.hover) { st.hover = c === null ? -1 : c; api.render(); }
+      });
+      api.canvas.addEventListener('pointerdown', (e) => { const c = hit(e); if (c !== null) { api.state.sel = c; api.render(); } });
+      api.canvas.addEventListener('pointerleave', () => { if (api.state) { api.state.hover = -1; api.canvas.style.cursor = 'default'; api.render(); } });
+    }
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    ctx.clearRect(0, 0, W, H);
+    if (!st.ready) {
+      ctx.fillStyle = colors.muted; ctx.font = '12px ui-monospace, monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('loading…', W / 2, H / 2); return;
+    }
+    const { protos, meta } = st, classes = meta.classes, pcols = meta.protoCols, pad = 10;
+
+    // ── class chips ──
+    ctx.font = '12px ui-sans-serif, system-ui'; ctx.textBaseline = 'middle';
+    st.chips = []; let cx = pad, cy = pad, rowH = 24;
+    for (let c = 0; c < 10; c++) {
+      const tw = ctx.measureText(classes[c]).width, cw = tw + 26;
+      if (cx + cw > W - pad) { cx = pad; cy += rowH + 4; }
+      const on = c === st.sel, hv = c === st.hover;
+      ctx.fillStyle = on ? CLASS_COL[c] : colors.cellBg;
+      ctx.strokeStyle = hv && !on ? colors.fg : CLASS_COL[c];
+      ctx.lineWidth = on ? 0 : 1; ctx.beginPath();
+      const rr = 5, x = cx, y = cy, w = cw, h = rowH;
+      ctx.moveTo(x + rr, y); ctx.arcTo(x + w, y, x + w, y + h, rr); ctx.arcTo(x + w, y + h, x, y + h, rr); ctx.arcTo(x, y + h, x, y, rr); ctx.arcTo(x, y, x + w, y, rr); ctx.closePath();
+      ctx.fill(); if (!on) ctx.stroke();
+      ctx.fillStyle = on ? '#fff' : colors.fg; ctx.textAlign = 'center';
+      ctx.fillText(classes[c], cx + cw / 2, cy + rowH / 2 + 0.5);
+      st.chips.push({ x: cx, y: cy, w: cw, h: rowH, c });
+      cx += cw + 6;
+    }
+
+    // ── committee for selected class ──
+    const c = st.sel, top = meta.classTop[c], headY = cy + rowH + 14;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.font = '13px ui-sans-serif, system-ui';
+    ctx.fillStyle = colors.fg; ctx.fillText('the network thinks a ', pad, headY);
+    const w1 = ctx.measureText('the network thinks a ').width;
+    ctx.fillStyle = CLASS_COL[c]; ctx.font = 'bold 13px ui-sans-serif, system-ui';
+    ctx.fillText(classes[c], pad + w1, headY);
+    ctx.fillStyle = colors.fg; ctx.font = '13px ui-sans-serif, system-ui';
+    ctx.fillText(' is a committee of these prototypes:', pad + w1 + ctx.measureText(classes[c]).width, headY);
+
+    const n = top.length, gy = headY + 24, availH = H - gy - 28;
+    const cell = Math.min(72, availH, (W - pad * 2 - (n - 1) * 12) / n), gap = (W - pad * 2 - n * cell) / (n - 1);
+    for (let j = 0; j < n; j++) {
+      const u = top[j][0], wgt = top[j][1], x = pad + j * (cell + gap);
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(protos, (u % pcols) * 28, Math.floor(u / pcols) * 28, 28, 28, x, gy, cell, cell);
+      ctx.lineWidth = 2; ctx.strokeStyle = CLASS_COL[meta.vote[u] % 10]; ctx.strokeRect(x - 0.5, gy - 0.5, cell + 1, cell + 1);
+      // weight bar
+      const by = gy + cell + 5, bw = cell;
+      ctx.fillStyle = colors.cellBg; ctx.fillRect(x, by, bw, 6);
+      ctx.fillStyle = CLASS_COL[c]; ctx.fillRect(x, by, bw * wgt, 6);
+    }
+
+    api.readout('rd', `every class is a weighted vote over prototype pictures — pick another class to see its committee`);
+  },
+});
+</script>

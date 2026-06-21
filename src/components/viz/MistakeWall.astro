@@ -1,0 +1,131 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 400 } = Astro.props;
+---
+<figure class="viz mistakewall" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Read the mistakes. Every misclassified Fashion-MNIST image comes with its
+// reason for free: the prototype it matched most. Click a mistake and you see the
+// input it confused with a look-alike prototype of the wrong class. The
+// explanation is not a saliency heatmap or a post-hoc method; it is the
+// prototype the kernel actually fired on.
+import { defineViz } from './engine/vizkit.js';
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+const CLASS_COL = ['#b3661b', '#4a7fb3', '#3a8f5e', '#9a4f9c', '#c2553a', '#5a7d3a', '#2f8f8f', '#a06a2a', '#7a5fc0', '#c0892a'];
+const loadImg = (src) => new Promise((res) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
+
+defineViz('mistakewall', {
+  title: 'Read the mistakes',
+  height: 400,
+  controls: [{ type: 'readout', name: 'rd' }],
+
+  setup(api) {
+    api.state = { ready: false, sel: 0 };
+    Promise.all([
+      loadImg(`${BASE}/yat-fmnist/protos.png`),
+      loadImg(`${BASE}/yat-fmnist/test.png`),
+      fetch(`${BASE}/yat-fmnist/meta.json`).then((r) => r.json()),
+      fetch(`${BASE}/yat-fmnist/test.json`).then((r) => r.json()),
+    ]).then(([protos, test, meta, testj]) => {
+      if (!api.state) return;
+      const mis = [];
+      for (let i = 0; i < testj.n; i++) if (testj.preds[i] !== testj.labels[i]) mis.push(i);
+      Object.assign(api.state, { ready: true, protos, test, meta, testj, mis });
+      api.render();
+    });
+
+    if (!api.canvas.dataset.mwPick) {
+      api.canvas.dataset.mwPick = '1';
+      api.canvas.addEventListener('pointerdown', (e) => {
+        const st = api.state; if (!st || !st.ready || !st.tiles) return;
+        const r = api.canvas.getBoundingClientRect();
+        const mx = e.clientX - r.left, my = e.clientY - r.top;
+        for (const t of st.tiles) if (mx >= t.x && mx <= t.x + t.s && my >= t.y && my <= t.y + t.s) { st.sel = t.k; api.render(); break; }
+      });
+    }
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    ctx.clearRect(0, 0, W, H);
+    if (!st.ready) {
+      ctx.fillStyle = colors.muted; ctx.font = '12px ui-monospace, monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('loading…', W / 2, H / 2); return;
+    }
+    const { protos, test, meta, testj, mis } = st;
+    const classes = meta.classes, cols = testj.cols, pcols = meta.protoCols;
+    const pad = 8;
+
+    // ── left: grid of mistakes ──
+    const gridW = Math.floor(W * 0.52);
+    ctx.fillStyle = colors.muted; ctx.font = '11px ui-sans-serif, system-ui';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText(`${mis.length} mistakes — click one`, pad, pad);
+    const gcols = 7, gcell = Math.min(34, (gridW - pad * 2 - (gcols - 1) * 4) / gcols), ggap = 4;
+    st.tiles = [];
+    ctx.imageSmoothingEnabled = true;
+    for (let k = 0; k < mis.length; k++) {
+      const i = mis[k], c = k % gcols, r = Math.floor(k / gcols);
+      const x = pad + c * (gcell + ggap), y = pad + 18 + r * (gcell + ggap);
+      if (y + gcell > H - pad) break;
+      ctx.drawImage(test, (i % cols) * 28, Math.floor(i / cols) * 28, 28, 28, x, y, gcell, gcell);
+      ctx.lineWidth = k === st.sel ? 2.5 : 1; ctx.strokeStyle = k === st.sel ? colors.accent : colors.border;
+      ctx.strokeRect(x - 0.5, y - 0.5, gcell + 1, gcell + 1);
+      st.tiles.push({ x, y, s: gcell, k });
+    }
+
+    // ── right: the selected mistake explained ──
+    if (mis.length === 0) return;
+    const i = mis[st.sel];
+    const truth = testj.labels[i], pred = testj.preds[i];
+    const protoU = testj.top[i][0][0];      // most-activated prototype
+    const voteC = meta.vote[protoU];
+    const px = gridW + 16, big = Math.min(110, (W - px - pad - 40) / 2);
+    const cy = pad + 28;
+
+    ctx.imageSmoothingEnabled = true;
+    // input
+    ctx.drawImage(test, (i % cols) * 28, Math.floor(i / cols) * 28, 28, 28, px, cy, big, big);
+    ctx.lineWidth = 2; ctx.strokeStyle = CLASS_COL[truth % 10]; ctx.strokeRect(px - 0.5, cy - 0.5, big + 1, big + 1);
+    // arrow
+    const ax = px + big + 8, midY = cy + big / 2;
+    ctx.strokeStyle = colors.muted; ctx.lineWidth = 2; ctx.beginPath();
+    ctx.moveTo(ax, midY); ctx.lineTo(ax + 24, midY);
+    ctx.lineTo(ax + 18, midY - 5); ctx.moveTo(ax + 24, midY); ctx.lineTo(ax + 18, midY + 5); ctx.stroke();
+    // matched prototype
+    const ppx = ax + 32;
+    ctx.drawImage(protos, (protoU % pcols) * 28, Math.floor(protoU / pcols) * 28, 28, 28, ppx, cy, big, big);
+    ctx.lineWidth = 2; ctx.strokeStyle = CLASS_COL[voteC % 10]; ctx.strokeRect(ppx - 0.5, cy - 0.5, big + 1, big + 1);
+
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.font = '11px ui-sans-serif, system-ui'; ctx.fillStyle = colors.muted;
+    ctx.fillText('this input', px, cy - 16);
+    ctx.fillText('matched this prototype', ppx, cy - 16);
+    ctx.font = '13px ui-sans-serif, system-ui'; ctx.fillStyle = colors.fg;
+    const ty = cy + big + 14;
+    ctx.fillText(`It is a `, px, ty);
+    const w1 = ctx.measureText('It is a ').width;
+    ctx.fillStyle = CLASS_COL[truth % 10]; ctx.font = 'bold 13px ui-sans-serif, system-ui';
+    ctx.fillText(classes[truth], px + w1, ty);
+    ctx.fillStyle = colors.fg; ctx.font = '13px ui-sans-serif, system-ui';
+    ctx.fillText(`, but it looked like a`, px + w1 + ctx.measureText(classes[truth]).width, ty);
+    ctx.fillStyle = colors.fg; ctx.font = '13px ui-sans-serif, system-ui';
+    ctx.fillText(`prototype, so the model said `, px, ty + 20);
+    const w2 = ctx.measureText('prototype, so the model said ').width;
+    ctx.fillStyle = CLASS_COL[pred % 10]; ctx.font = 'bold 13px ui-sans-serif, system-ui';
+    ctx.fillText(classes[pred] + '.', px + w2, ty + 20);
+
+    api.readout('rd', 'the explanation is the prototype the kernel fired on, not a post-hoc saliency map');
+  },
+});
+</script>
