@@ -15,6 +15,7 @@ interface Pair { role: 'explainer' | 'companion'; slug: string; title: string }
 interface Reference { key?: string; authors: string; year: number | string; title: string; venue?: string; url?: string; arxiv?: string; doi?: string }
 interface Props {
   title: string;
+  seoTitle?: string;
   description?: string;
   draft?: boolean;
   pair?: Pair;
@@ -32,6 +33,7 @@ interface Props {
 }
 const {
   title,
+  seoTitle,
   description,
   draft,
   pair,
@@ -56,6 +58,7 @@ const postSlug = base && postPath.startsWith(`${base}/`)
 ---
 <BaseLayout
   title={title}
+  seoTitle={seoTitle}
   description={description}
   image={heroImage}
   type="article"

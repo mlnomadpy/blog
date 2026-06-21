@@ -5,6 +5,10 @@ const blog = defineCollection({
   loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/blog' }),
   schema: z.object({
     title: z.string(),
+    // Short (<=60 char) title for the <title> tag / OG / Twitter only, so SERP
+    // and social headlines do not truncate. The on-page <h1> and JSON-LD
+    // headline keep the full creative `title`. Falls back to `title` when omitted.
+    seoTitle: z.string().optional(),
     description: z.string().optional(),
     // Short (<=160 char) meta description for SERP / OG / Twitter / JSON-LD. The
     // long `description` stays the on-page excerpt (cards, RSS, OG image); this is
