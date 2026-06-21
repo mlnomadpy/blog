@@ -13,6 +13,7 @@ import {
   SITE_AUTHOR,
   SITE_AUTHOR_URL,
   SITE_AUTHOR_JOB_TITLE,
+  SITE_TWITTER,
   SITE_SAMEAS,
   SITE_OG_IMAGE,
   GA4_MEASUREMENT_ID,
@@ -296,6 +297,8 @@ const jsonLdNodes = [blogPosting, breadcrumb, website, blogIndex, profilePage].f
 
 {/* Twitter Card — always large image since we have a default fallback */}
 <meta name="twitter:card" content="summary_large_image" />
+{SITE_TWITTER && <meta name="twitter:site" content={`@${SITE_TWITTER}`} />}
+{SITE_TWITTER && <meta name="twitter:creator" content={`@${SITE_TWITTER}`} />}
 <meta name="twitter:title" content={fullTitle} />
 <meta name="twitter:description" content={description} />
 <meta name="twitter:image" content={ogImage} />
