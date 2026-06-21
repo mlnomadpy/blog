@@ -1,0 +1,150 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 380 } = Astro.props;
+---
+<figure class="viz boundarymorph" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Cross the boundary. Blend one item into another, pixel by pixel, and watch the
+// Yat-MLP's verdict change: which prototype it matches, and where the predicted
+// class flips. Because the readout is a kernel vote over pictures, the boundary
+// is not a mystery surface, it is the place where the nearest prototype changes
+// from one picture to another. Computed live from the trained weights.
+import { defineViz } from './engine/vizkit.js';
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+const CLASS_COL = ['#b3661b', '#4a7fb3', '#3a8f5e', '#9a4f9c', '#c2553a', '#5a7d3a', '#2f8f8f', '#a06a2a', '#7a5fc0', '#c0892a'];
+const loadImg = (src) => new Promise((res) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
+function offscreen(img) { const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d').drawImage(img, 0, 0); return c.getContext('2d'); }
+function decode(ctx, idx, cols) {
+  const c = idx % cols, r = Math.floor(idx / cols), d = ctx.getImageData(c * 28, r * 28, 28, 28).data, x = new Float64Array(784);
+  for (let i = 0; i < 784; i++) x[i] = d[i * 4] / 255;
+  return x;
+}
+
+defineViz('boundarymorph', {
+  title: 'Morph one item into another, watch the verdict cross',
+  height: 380,
+  controls: [
+    { type: 'range', name: 'mix', label: 'blend', min: 0, max: 1, step: 0.02, value: 0.5, reset: false, fmt: (v) => v.toFixed(2) },
+    { type: 'button', name: 'newpair', label: 'new pair', reset: false },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    api.state = { ready: false };
+    Promise.all([
+      loadImg(`${BASE}/yat-fmnist/protos.png`),
+      loadImg(`${BASE}/yat-fmnist/test.png`),
+      fetch(`${BASE}/yat-fmnist/model.json`).then((r) => r.json()),
+      fetch(`${BASE}/yat-fmnist/meta.json`).then((r) => r.json()),
+      fetch(`${BASE}/yat-fmnist/test.json`).then((r) => r.json()),
+    ]).then(([protos, test, model, meta, tj]) => {
+      if (!api.state) return;
+      const K = meta.K, W = new Float64Array(K * 784);
+      for (let u = 0; u < K; u++) for (let i = 0; i < 784; i++) W[u * 784 + i] = model.W[u][i];
+      Object.assign(api.state, {
+        ready: true, protos, test, meta, tj, K, W, Wn2: model.Wn2, Wout: model.Wout, bout: model.bout, vote: model.vote,
+        b: model.b, eps: model.eps, testCtx: offscreen(test), seed: 3,
+      });
+      pickPair(api);
+      api.render();
+    });
+  },
+
+  onAction(name, api) { if (name === 'newpair' && api.state) { api.state.seed = (api.state.seed * 7 + 5) % 9973; pickPair(api); api.setControl && api.setControl('mix', 0.5); api.render(); } },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    ctx.clearRect(0, 0, W, H);
+    if (!st.ready) {
+      ctx.fillStyle = colors.muted; ctx.font = '12px ui-monospace, monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('loading…', W / 2, H / 2); return;
+    }
+    const t = api.get('mix'), classes = st.meta.classes, pcols = st.meta.protoCols, tcols = st.tj.cols;
+    const x = new Float64Array(784);
+    for (let i = 0; i < 784; i++) x[i] = (1 - t) * st.xA[i] + t * st.xB[i];
+
+    // forward
+    let xn = 0; for (let i = 0; i < 784; i++) xn += x[i] * x[i];
+    const K = st.K, act = new Float64Array(K); let best = 0, bestv = -1;
+    for (let u = 0; u < K; u++) {
+      let dot = 0; const off = u * 784; for (let i = 0; i < 784; i++) dot += x[i] * st.W[off + i];
+      const a = (dot + st.b) * (dot + st.b) / (xn + st.Wn2[u] - 2 * dot + st.eps); act[u] = a; if (a > bestv) { bestv = a; best = u; }
+    }
+    const logits = new Float64Array(10); let mx = -1e9;
+    for (let c = 0; c < 10; c++) { let s = st.bout[c]; for (let u = 0; u < K; u++) s += act[u] * st.Wout[u * 10 + c]; logits[c] = s; if (s > mx) mx = s; }
+    let Z = 0; const p = new Float64Array(10);
+    for (let c = 0; c < 10; c++) { p[c] = Math.exp(logits[c] - mx); Z += p[c]; }
+    for (let c = 0; c < 10; c++) p[c] /= Z;
+    let pred = 0; for (let c = 1; c < 10; c++) if (p[c] > p[pred]) pred = c;
+
+    const pad = 10, thumb = 66;
+    // endpoints + morph row
+    const drawTile = (img, idx, cols, dx, dy, s, ring) => {
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(img, (idx % cols) * 28, Math.floor(idx / cols) * 28, 28, 28, dx, dy, s, s);
+      ctx.lineWidth = 2; ctx.strokeStyle = ring; ctx.strokeRect(dx - 0.5, dy - 0.5, s + 1, s + 1);
+    };
+    const rowY = pad + 16;
+    drawTile(st.test, st.iA, tcols, pad, rowY, thumb, CLASS_COL[st.cA % 10]);
+    drawTile(st.test, st.iB, tcols, W - pad - thumb, rowY, thumb, CLASS_COL[st.cB % 10]);
+
+    // morphed image (drawn from pixels, center)
+    const big = 92, mx0 = (W - big) / 2, my0 = rowY;
+    const tmp = document.createElement('canvas'); tmp.width = 28; tmp.height = 28;
+    const tctx = tmp.getContext('2d'), id = tctx.createImageData(28, 28);
+    for (let i = 0; i < 784; i++) { const v = Math.max(0, Math.min(255, x[i] * 255)); id.data[i * 4] = id.data[i * 4 + 1] = id.data[i * 4 + 2] = v; id.data[i * 4 + 3] = 255; }
+    tctx.putImageData(id, 0, 0);
+    ctx.imageSmoothingEnabled = true; ctx.drawImage(tmp, mx0, my0, big, big);
+    ctx.lineWidth = 2.5; ctx.strokeStyle = colors.fg; ctx.strokeRect(mx0 - 0.5, my0 - 0.5, big + 1, big + 1);
+
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillStyle = colors.muted; ctx.font = '10px ui-sans-serif, system-ui';
+    ctx.fillText(classes[st.cA], pad + thumb / 2, rowY + thumb + 4);
+    ctx.fillText(classes[st.cB], W - pad - thumb / 2, rowY + thumb + 4);
+    ctx.fillStyle = colors.fg; ctx.font = 'bold 13px ui-sans-serif, system-ui';
+    ctx.fillText('the model sees', W / 2, my0 + big + 4);
+    ctx.fillStyle = CLASS_COL[pred % 10]; ctx.font = 'bold 16px ui-sans-serif, system-ui';
+    ctx.fillText(classes[pred], W / 2, my0 + big + 20);
+
+    // matched prototype (its picture)
+    const protoY = my0 + big + 44, ps = 34;
+    ctx.textAlign = 'center'; ctx.fillStyle = colors.muted; ctx.font = '10px ui-sans-serif, system-ui';
+    ctx.fillText('nearest prototype', W / 2, protoY);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(st.protos, (best % pcols) * 28, Math.floor(best / pcols) * 28, 28, 28, W / 2 - ps / 2, protoY + 14, ps, ps);
+    ctx.lineWidth = 2; ctx.strokeStyle = CLASS_COL[st.vote[best] % 10]; ctx.strokeRect(W / 2 - ps / 2 - 0.5, protoY + 14 - 0.5, ps + 1, ps + 1);
+
+    // probability bars across the bottom
+    const barsY = H - 40, bw = (W - pad * 2) / 10;
+    ctx.textBaseline = 'bottom';
+    for (let c = 0; c < 10; c++) {
+      const bx = pad + c * bw, h = p[c] * 28;
+      ctx.fillStyle = colors.cellBg; ctx.fillRect(bx + 1, barsY - 28, bw - 2, 28);
+      ctx.fillStyle = CLASS_COL[c]; ctx.globalAlpha = c === pred ? 1 : 0.6; ctx.fillRect(bx + 1, barsY - h, bw - 2, h); ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = colors.faint; ctx.font = '9px ui-sans-serif, system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText('class probabilities', W / 2, barsY + 2);
+
+    api.readout('rd', `blend ${(t * 100) | 0}% · nearest prototype is a ${classes[st.vote[best]]} · slide to find where the verdict flips`);
+  },
+});
+
+function pickPair(api) {
+  const st = api.state, labels = st.tj.labels, n = st.tj.n;
+  let s = st.seed;
+  const rnd = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+  const iA = Math.floor(rnd() * n);
+  let iB = Math.floor(rnd() * n), guard = 0;
+  while (labels[iB] === labels[iA] && guard++ < 200) iB = Math.floor(rnd() * n);
+  st.iA = iA; st.iB = iB; st.cA = labels[iA]; st.cB = labels[iB];
+  st.xA = decode(st.testCtx, iA, st.tj.cols); st.xB = decode(st.testCtx, iB, st.tj.cols);
+}
+</script>

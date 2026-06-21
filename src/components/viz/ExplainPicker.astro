@@ -1,0 +1,196 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 440 } = Astro.props;
+---
+<figure class="viz explainpicker" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Read any prediction. Pick a Fashion-MNIST image and the Yat-MLP's output is an
+// honest decomposition: "this looks X% like prototype A, Y% like prototype B…"
+// where every prototype is a picture. The kernel activations are computed live in
+// your browser from the trained weights. Switch to MNIST digits (out of
+// distribution) and every prototype goes dark: the model says "I don't recognize
+// this" instead of guessing confidently.
+import { defineViz } from './engine/vizkit.js';
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+const CLASS_COL = ['#b3661b', '#4a7fb3', '#3a8f5e', '#9a4f9c', '#c2553a', '#5a7d3a', '#2f8f8f', '#a06a2a', '#7a5fc0', '#c0892a'];
+
+const loadImg = (src) => new Promise((res) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
+function offscreen(img) { const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d').drawImage(img, 0, 0); return c.getContext('2d'); }
+function decode(ctx, idx, cols) {
+  const c = idx % cols, r = Math.floor(idx / cols);
+  const d = ctx.getImageData(c * 28, r * 28, 28, 28).data;
+  const x = new Float64Array(784);
+  for (let i = 0; i < 784; i++) x[i] = d[i * 4] / 255;
+  return x;
+}
+
+defineViz('explainpicker', {
+  title: 'This looks like that: read any prediction',
+  height: 440,
+  controls: [
+    { type: 'select', name: 'src', label: 'input', value: 'test', reset: false,
+      options: [{ value: 'test', label: 'Fashion-MNIST (in-distribution)' }, { value: 'ood', label: 'MNIST digits (out-of-distribution)' }] },
+    { type: 'button', name: 'rand', label: 'random', reset: false },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    api.state = { ready: false, sel: 0 };
+    Promise.all([
+      loadImg(`${BASE}/yat-fmnist/protos.png`),
+      loadImg(`${BASE}/yat-fmnist/test.png`),
+      loadImg(`${BASE}/yat-fmnist/ood.png`),
+      fetch(`${BASE}/yat-fmnist/model.json`).then((r) => r.json()),
+      fetch(`${BASE}/yat-fmnist/meta.json`).then((r) => r.json()),
+      fetch(`${BASE}/yat-fmnist/test.json`).then((r) => r.json()),
+    ]).then(([protos, test, ood, model, meta, testj]) => {
+      if (!api.state) return;
+      const K = meta.K;
+      const W = new Float64Array(K * 784);
+      for (let u = 0; u < K; u++) for (let i = 0; i < 784; i++) W[u * 784 + i] = model.W[u][i];
+      const Wn2 = model.Wn2, Wout = model.Wout, bout = model.bout, vote = model.vote;
+      Object.assign(api.state, {
+        ready: true, protos, test, ood, meta, testj, K, W, Wn2, Wout, bout, vote,
+        b: model.b, eps: model.eps,
+        testCtx: offscreen(test), oodCtx: offscreen(ood),
+      });
+      api.render();
+    });
+
+    if (!api.canvas.dataset.epPick) {
+      api.canvas.dataset.epPick = '1';
+      api.canvas.addEventListener('pointerdown', (e) => {
+        const st = api.state; if (!st || !st.ready || !st.strip) return;
+        const r = api.canvas.getBoundingClientRect();
+        const mx = e.clientX - r.left, my = e.clientY - r.top;
+        for (const t of st.strip) if (mx >= t.x && mx <= t.x + t.s && my >= t.y && my <= t.y + t.s) { st.sel = t.i; api.render(); break; }
+      });
+    }
+  },
+
+  onAction(name, api) {
+    const st = api.state; if (!st || !st.ready) return;
+    if (name === 'rand') {
+      const n = api.get('src') === 'ood' ? 40 : st.testj.n;
+      st.sel = (st.sel * 7 + 13) % n;   // deterministic shuffle
+      api.render();
+    }
+  },
+
+  onControl(name, value, api) { if (name === 'src' && api.state) { api.state.sel = 0; api.render(); } },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    ctx.clearRect(0, 0, W, H);
+    if (!st.ready) {
+      ctx.fillStyle = colors.muted; ctx.font = '12px ui-monospace, monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('loading model…', W / 2, H / 2); return;
+    }
+
+    const src = api.get('src');
+    const isOod = src === 'ood';
+    const srcImg = isOod ? st.ood : st.test;
+    const srcCtx = isOod ? st.oodCtx : st.testCtx;
+    const srcCols = isOod ? st.meta.oodCols : st.testj.cols;
+    const nItems = isOod ? 40 : st.testj.n;
+    const classes = st.meta.classes;
+
+    // ── selectable strip of inputs ──
+    const pad = 8, ss = 30, sgap = 4;
+    const nStrip = Math.min(nItems, Math.floor((W - pad * 2 + sgap) / (ss + sgap)));
+    st.strip = [];
+    ctx.textBaseline = 'top';
+    for (let k = 0; k < nStrip; k++) {
+      const i = (k * 1) % nItems;
+      const x = pad + k * (ss + sgap), y = pad + 14;
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(srcImg, (i % srcCols) * 28, Math.floor(i / srcCols) * 28, 28, 28, x, y, ss, ss);
+      ctx.lineWidth = i === st.sel ? 2.5 : 1;
+      ctx.strokeStyle = i === st.sel ? colors.accent : colors.border;
+      ctx.strokeRect(x - 0.5, y - 0.5, ss + 1, ss + 1);
+      st.strip.push({ x, y, s: ss, i });
+    }
+    ctx.fillStyle = colors.muted; ctx.font = '11px ui-sans-serif, system-ui'; ctx.textAlign = 'left';
+    ctx.fillText(isOod ? 'pick a digit (the model has never seen one):' : 'pick an item (or hit random):', pad, pad);
+
+    // ── compute forward pass live ──
+    const x = decode(srcCtx, st.sel, srcCols);
+    let xn = 0; for (let i = 0; i < 784; i++) xn += x[i] * x[i];
+    const K = st.K, act = new Float64Array(K);
+    let amax = 0, asum = 0;
+    for (let u = 0; u < K; u++) {
+      let dot = 0; const off = u * 784;
+      for (let i = 0; i < 784; i++) dot += x[i] * st.W[off + i];
+      const d2 = xn + st.Wn2[u] - 2 * dot;
+      const a = (dot + st.b) * (dot + st.b) / (d2 + st.eps);
+      act[u] = a; asum += a; if (a > amax) amax = a;
+    }
+    const logits = new Float64Array(10);
+    for (let c = 0; c < 10; c++) { let s = st.bout[c]; for (let u = 0; u < K; u++) s += act[u] * st.Wout[u * 10 + c]; logits[c] = s; }
+    let pred = 0; for (let c = 1; c < 10; c++) if (logits[c] > logits[pred]) pred = c;
+    const isOodFlag = amax < st.meta.oodThreshold;
+    const order = Array.from({ length: K }, (_, u) => u).sort((p, q) => act[q] - act[p]);
+
+    // ── selected image (left) ──
+    const topY = pad + 14 + ss + 18;
+    const big = Math.min(120, (H - topY - 16));
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(srcImg, (st.sel % srcCols) * 28, Math.floor(st.sel / srcCols) * 28, 28, 28, pad, topY, big, big);
+    ctx.lineWidth = 1; ctx.strokeStyle = colors.border; ctx.strokeRect(pad - 0.5, topY - 0.5, big + 1, big + 1);
+
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    if (isOodFlag) {
+      ctx.fillStyle = colors.accent; ctx.font = 'bold 13px ui-sans-serif, system-ui';
+      ctx.fillText('“I don’t recognize this”', pad, topY + big + 8);
+      ctx.fillStyle = colors.muted; ctx.font = '11px ui-monospace, monospace';
+      ctx.fillText(`max match ${amax.toFixed(0)} < ${st.meta.oodThreshold.toFixed(0)}`, pad, topY + big + 26);
+    } else {
+      const truth = isOod ? null : st.testj.labels[st.sel];
+      const ok = truth === null ? null : pred === truth;
+      ctx.font = 'bold 14px ui-sans-serif, system-ui';
+      ctx.fillStyle = ok === false ? colors.accent : colors.fg;
+      ctx.fillText(`${classes[pred]}`, pad, topY + big + 8);
+      ctx.font = '11px ui-monospace, monospace'; ctx.fillStyle = colors.muted;
+      if (truth !== null) ctx.fillText(ok ? '✓ correct' : `✗ it is a ${classes[truth]}`, pad, topY + big + 28);
+    }
+
+    // ── attribution: top prototypes (right) ──
+    const rx = pad + big + 26, rw = W - rx - pad;
+    ctx.fillStyle = colors.fg; ctx.font = '12px ui-sans-serif, system-ui'; ctx.textBaseline = 'top';
+    ctx.fillText(isOodFlag ? 'closest prototypes (all weak):' : 'it looks like these prototypes:', rx, topY - 2);
+    const rows = 5, th = 34, rgap = 6, ry0 = topY + 18;
+    for (let r = 0; r < rows; r++) {
+      const u = order[r], frac = act[u] / (asum || 1);
+      const ry = ry0 + r * (th + rgap);
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(st.protos, (u % st.meta.protoCols) * 28, Math.floor(u / st.meta.protoCols) * 28, 28, 28, rx, ry, th, th);
+      ctx.lineWidth = 2; ctx.strokeStyle = CLASS_COL[st.vote[u] % 10]; ctx.strokeRect(rx - 0.5, ry - 0.5, th + 1, th + 1);
+      // bar
+      const bx = rx + th + 10, bw = rw - th - 70;
+      ctx.fillStyle = colors.cellBg; ctx.fillRect(bx, ry + 6, bw, th - 12);
+      ctx.fillStyle = CLASS_COL[st.vote[u] % 10]; ctx.globalAlpha = 0.85;
+      ctx.fillRect(bx, ry + 6, bw * Math.min(1, frac / (act[order[0]] / (asum || 1) + 1e-9)), th - 12);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = colors.muted; ctx.font = '11px ui-sans-serif, system-ui'; ctx.textBaseline = 'middle';
+      ctx.fillText(`${classes[st.vote[u]]}`, bx + 4, ry + th / 2 - 1);
+      ctx.textAlign = 'right'; ctx.fillStyle = colors.faint; ctx.font = '10px ui-monospace, monospace';
+      ctx.fillText(`${(frac * 100).toFixed(0)}%`, W - pad, ry + th / 2);
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    }
+
+    api.readout('rd', isOod
+      ? 'a digit is nothing like any clothing prototype, so the model abstains, computed live'
+      : 'every bar is this input’s similarity to a prototype you can see, computed live in your browser');
+  },
+});
+</script>

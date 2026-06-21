@@ -1,0 +1,160 @@
+---
+title: "Your Neuron Is a Direction. It Should Be a Picture."
+description: "Why should a neuron store a direction when it could store a thing? A direction is not a referent you can point at, which is why MLPs are opaque. Put the Yat kernel where the activation was, train on Fashion-MNIST, and every neuron becomes a prototype that lives in pixel space, literally a picture, so the network reads its own predictions: this looks like that, no saliency method required."
+seoDescription: "A direction tells you which way; a prototype tells you which thing. A Yat-kernel MLP on Fashion-MNIST where each neuron is a picture, so every prediction explains itself."
+pubDate: 2026-06-21
+draft: false
+companion: yat-mlp-fmnist-jax-flax-nnx
+tags: [ml, kernels, interpretability, mlp, rkhs, yat, prototypes, deep-learning]
+references:
+  - authors: "Chen, C., Li, O., Tao, D., Barnett, A., Su, J., Rudin, C."
+    year: 2019
+    title: "This Looks Like That: Deep Learning for Interpretable Image Recognition"
+    venue: "NeurIPS 2019"
+    arxiv: "1806.10574"
+  - authors: "Rudin, C."
+    year: 2019
+    title: "Stop Explaining Black Box Machine Learning Models for High Stakes Decisions and Use Interpretable Models Instead"
+    venue: "Nature Machine Intelligence 1, 206–215"
+    arxiv: "1811.10154"
+  - authors: "Xiao, H., Rasul, K., Vollgraf, R."
+    year: 2017
+    title: "Fashion-MNIST: a Novel Image Dataset for Benchmarking Machine Learning Algorithms"
+    arxiv: "1708.07747"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+keywords:
+  - prototype neural network
+  - interpretable image classification
+  - this looks like that
+  - Yat kernel
+  - Fashion-MNIST prototypes
+  - case-based reasoning neural network
+  - interpretable by design
+  - kernel MLP
+---
+import ProtoGallery from '../../components/viz/ProtoGallery.astro';
+import ExplainPicker from '../../components/viz/ExplainPicker.astro';
+import NeuronDetector from '../../components/viz/NeuronDetector.astro';
+import ClassRecipe from '../../components/viz/ClassRecipe.astro';
+import ProtoAtlas from '../../components/viz/ProtoAtlas.astro';
+import BoundaryMorph from '../../components/viz/BoundaryMorph.astro';
+import MistakeWall from '../../components/viz/MistakeWall.astro';
+import InitMatters from '../../components/viz/InitMatters.astro';
+import NoTrainClassifier from '../../components/viz/NoTrainClassifier.astro';
+
+A neuron is one number it computes about its input. For most of the history of the field that number has been
+
+$$
+h_u(x) \;=\; \sigma\!\left(w_u^{\top} x\right),
+$$
+
+a projection of the input $x$ onto a weight vector $w_u$, then a squash. The weight is a **direction**, and that is the quiet problem we have stopped noticing: a direction is not a thing.
+
+Ask what $h_u$ detects and there is no input to point at. The value depends on $x$ only through the scalar $w_u^{\top}x$, so the unit responds identically to every input on the hyperplane $w_u^{\top}x = \text{const}$ and grows without bound as you push along $w_u$. Its most-exciting input under a norm budget is just the weight itself, $\arg\max_{\lVert x\rVert=1} w_u^{\top}x = w_u/\lVert w_u\rVert$, which has no reason to look like anything. That is why reading a neuron needs an apparatus: feature visualization, probing datasets, saliency, sparse autoencoders, machinery built to manufacture a referent the unit never carried.
+
+Change one thing. Replace the projection with a **kernel against a point**:
+
+$$
+\phi_u(x) \;=\; \frac{\left(w_u^{\top}x + b\right)^2}{\lVert x - w_u\rVert^2 + \varepsilon}.
+$$
+
+This is the Yat unit from the [last post](/blog/what-a-finite-kernel-buys-an-mlp/): large when $x$ is both aligned with $w_u$ and *near* it, with a single peak at $x = w_u$. So $w_u$ stops being a direction and becomes a **prototype**, a location in the same space as the data. Its most-exciting input is no longer a faceless direction; it is the prototype itself. A direction tells you which way. A prototype tells you which thing.
+
+The gap between those two formulas is the entire post, and it has three consequences, each of which you can play with below.
+
+1. **The neuron becomes a picture.** If $w_u \in \mathbb{R}^{784}$ lives where $28\times28$ images live, then reshaping it *is* an image. You read the unit by looking at it.
+2. **The network classifies before you train it.** A bank of labeled prototypes with a hard-wired readout is already a working classifier, with zero gradient steps.
+3. **Every decision is legible.** Prediction, neuron, class, mistake, boundary: all of it is "this looks like that," and each is readable on its own.
+
+For something to point at, I trained a one-hidden-layer Yat-MLP on Fashion-MNIST, $784 \to 50 \to 10$, prototypes seeded from training images, no convolutions. It reaches **82.6%**; a same-shaped ReLU MLP reaches **85.9%**. Three points is the price. Here is what it buys.
+
+## Every neuron is a picture
+
+This is the entire thesis in one image. On the left, the 50 Yat prototypes, each reshaped to 28x28 and bordered by the class it votes for: shirts, trousers, sneakers, bags, boots, a wall of readable templates the network compares every input against. On the right, the ReLU MLP's first-layer weights, the nearest thing it has to a "unit": noise. Same architecture, same data, comparable accuracy, and one side is legible while the other is static.
+
+<ProtoGallery caption="Left: the 50 hidden units of a Yat-kernel MLP, each a prototype that lives in pixel space, so each is a picture, bordered by the class it votes for. Right: the 50 first-layer filters of a same-sized ReLU MLP, weight vectors with no reason to look like anything, and they don't. Same data, comparable accuracy, shown side by side." />
+
+There is a precise reason the left side is legible, and it is the representer theorem. The Yat unit is a positive-definite kernel, $\phi_u(x) = k(w_u, x)$, so it carries a reproducing-kernel Hilbert space $\mathcal{H}$: a feature map $\Phi : \mathbb{R}^{784} \to \mathcal{H}$ with
+
+$$
+k(w_u, x) \;=\; \langle\, \Phi(w_u),\, \Phi(x) \,\rangle_{\mathcal{H}},
+$$
+
+and the network's function lives in $\mathcal{H}$, which is large and possibly infinite-dimensional (Bouhsine, 2026, proves this kernel universal). The decisive fact is what the *parameters* are. By the representer theorem you never store anything in $\mathcal{H}$; the function is indexed entirely by its centers $w_u$, and those live in the input space $\mathbb{R}^{784}$, the very space the data lives in. The computation happens in the Hilbert space; the things you keep and look at stay in image space. $x$ and $w_u$ are the same kind of object, so a prototype is just another image.
+
+A linear neuron's weight is in $\mathbb{R}^{784}$ too, numerically, but it is used as a *functional*, $x \mapsto \langle w, x\rangle$: an element of the dual space, blind to everything orthogonal to $w$. It points along a direction; it does not sit at a location. The kernel is exactly the step that turns the weight from a co-vector into a point, $\langle w, \cdot\rangle \rightsquigarrow k(w, \cdot)$, and a point in image space is an image. That one substitution is the difference between the two galleries.
+
+That is the claim made visible. And it points at something stronger, which is the real reason any of this works.
+
+## You can build it by hand, with no training
+
+If a neuron is a labeled picture, you do not need gradient descent to get a classifier. Take a handful of training images per class as your prototypes and wire the readout to one-hot, $A_{uc} = \mathbb{1}[\text{class}(u) = c]$, so each prototype votes for its own class. The prediction is then just a tally of resemblances,
+
+$$
+\hat y(x) \;=\; \arg\max_c \sum_{u:\,\text{class}(u) = c} \phi_u(x),
+$$
+
+a working Yat-MLP that has seen exactly zero gradient steps. It labels an input by which prototype-pictures it most resembles. This looks like that, with nothing trained.
+
+Slide the prototypes up below and watch the test accuracy climb on its own. With twenty hand-picked pictures per class and a one-hot readout, it reaches **68%** on Fashion-MNIST, and the nearest-prototype version **79%**, none of it trained.
+
+<NoTrainClassifier caption="A Yat-MLP assembled by hand, with no training. The prototypes are k-means centroids of the training images (an engineered selection); the readout is hard-wired so each prototype votes for its class. Slide to add prototypes per class and the test accuracy rises by itself. The architecture is already a kernel classifier, so it reasons by resemblance from the start. Sum-vote is the actual linear readout; nearest-prototype is the ceiling a max would reach." />
+
+This reframes the whole thing. The network is not a black box that training fills with meaning. It is case-based reasoning, and it already classifies the moment its prototypes are real examples. Training does not *create* the ability; it *sharpens* it, nudging the prototypes and learning a smarter-than-one-hot readout, carrying that 68% up to the 82.6% the trained model reached above. The [JAX companion](/blog/yat-mlp-fmnist-jax-flax-nnx/) builds and trains exactly this.
+
+That hand-built model is not just a curiosity; it is a *warm start*, and it pays off exactly where black boxes struggle. With only 40 images per class, the engineered prototypes already score 65.5% before a single gradient step, and fine-tuning from there reaches 75.3%, against 72.0% for the same network started from random weights. Because you choose the prototypes, you can also choose to over-represent the classes you care about: on a split where two classes are starved to 30 examples each, warming up with one centroid-vote per class lifts rare-class recall from 48% to 59% (mean over five runs) while nudging overall accuracy up too. Gradient descent does not have to discover that the rare classes exist; the readout already tells it, and it only has to refine the boundary. White-box construction is not only an explanation after the fact, it is a way to put your prior knowledge into the weights before training starts.
+
+And because the network reasons by resemblance, every part of it is readable by looking. The rest of the post is that: its predictions, its neurons, its classes, its mistakes, and the boundaries between the things it knows.
+
+## The network explains itself
+
+Because the output is a kernel-weighted vote over pictures, every prediction carries its own explanation, in the model's own parts. Normalize the activations into weights $a_u(x) = \phi_u(x) / \sum_v \phi_v(x)$, with $\sum_u a_u(x) = 1$, and the output is a convex combination of the prototypes' votes: the input is *40% that shirt, 25% that pullover*, and the class is whoever the matched pictures vote for. There is no separate explainer; the bars *are* the forward pass.
+
+Switch the input to MNIST digits, which this model has never seen, and the explanation collapses: every $\phi_u(x)$ is small, $\max_u \phi_u(x) < \tau$, and the network says "I don't recognize this" rather than confidently calling a 7 a sandal. A ReLU MLP has no such floor; off its training distribution it extrapolates a confident answer for anything. Knowing when it does not know is just the kernel being local.
+
+<ExplainPicker caption="Pick a Fashion-MNIST item and the Yat-MLP's prediction is decomposed live into its similarity to each prototype, every one a picture you can see. The output class is the prototypes' vote. Switch the input to MNIST digits (out of distribution): the matches collapse and the model abstains. All kernel activations are computed in your browser from the trained weights." />
+
+The same picture reads the other way. Instead of "what is this input," ask "what is this neuron": click a prototype and you get the inputs it fires hardest on, plus the class it has become a detector for. In a ReLU network this needs a feature-visualization optimization or a probe dataset; here the answer is two pictures side by side, the prototype and the things that look like it.
+
+<NeuronDetector caption="Click a neuron to see what it detects. Each Yat unit's prototype is shown beside the test images that activate it most, and the class it has specialized in. Most units are clean single-class detectors (high purity). The meaning of a neuron is not inferred from a saliency method, it is read off the pictures it is and the pictures it responds to." />
+
+And once more, in reverse: a class. The readout is linear, so a class is a weighted committee of prototypes, $\arg\max_c \sum_u A_{uc}\,\phi_u(x)$, and "what is a Sneaker" is answered by the few sneaker pictures with the largest readout weight for it. There is no class vector to decode; the class is a short list of examples.
+
+<ClassRecipe caption="Pick a class to see the prototypes that define it, the units with the largest readout weight for that class, each a picture and weighted by how much it counts. Every class is a committee of exemplars rather than an opaque output vector." />
+
+## Its geometry is a map you can walk
+
+The prototypes are points in pixel space, so they have a geometry, and you can see it. Lay all fifty out by similarity and you get the network's concept map: sneakers beside ankle boots, shirts beside pullovers and coats, trousers and bags in their own corners. The internal organization of "kinds of clothing" is not buried in a weight tensor; it is a chart you read with your eyes.
+
+<ProtoAtlas caption="The 50 prototypes projected to 2-D by visual similarity (PCA), each rendered as its picture and coloured by the class it votes for. Hover to enlarge one. Similar prototypes sit together and classes form neighbourhoods: this is the network's concept map, legible because its concepts are images." />
+
+And the decision boundary, usually an abstraction, becomes a place you can stand. Blend one item into another and the prediction flips exactly when the nearest prototype changes from one picture to the next. The boundary is not a mysterious surface in 784 dimensions; it is the handover from one exemplar to another, and you can slide right through it.
+
+<BoundaryMorph caption="Blend one Fashion-MNIST item into another with the slider; the Yat-MLP reclassifies the blend live and shows the nearest prototype at each step. The predicted class flips where the closest prototype changes. Hit 'new pair' for a different pair of items. A decision boundary you can see as a swap of pictures." />
+
+## Reading the mistakes
+
+The payoff of all this is that debugging stops being guesswork. Every misclassified image carries its reason: the prototype the kernel fired on hardest. Click any mistake and you see the input beside the look-alike prototype of the wrong class. *It is a coat, but it matched a pullover prototype, so the model said pullover.* That is not a heatmap hinting at "important pixels"; it is the actual evidence the decision rested on, which means you can act on it, by adding prototypes where the classes collide or relabelling the confusable ones.
+
+<MistakeWall caption="Every mistake, explained by the prototype that caused it. Click a misclassified image to see it next to the wrong-class prototype it most resembled. The explanation is the kernel's actual top match, not a post-hoc saliency method, so it tells you what the model confused and lets you fix it." />
+
+## Where the pictures come from
+
+None of this is a method bolted onto the network. It follows from one design choice: the Yat unit measures the input against a *center* in input space rather than projecting it onto a direction. A center is a point in the same space as the data, so on images it is an image, on audio it would be a sound, on tabular data a named exemplar. The interpretability lives wherever the data is interpretable.
+
+But the kernel only makes a picture *possible*; it does not hand you one. Train the same network with the prototypes initialized from noise instead of examples and it classifies just as well, while the prototypes stay noise. Legibility comes from the prototypes living where the data lives, which a cheap data initialization seeds and the kernel's locality preserves. The kernel buys you a unit that *can* be a picture; anchoring it to the data is what makes it one.
+
+<InitMatters caption="Two Yat-MLPs, identical except for how the prototypes were initialized: from training examples (left) or from noise (right). They reach the same accuracy, and only the left one is legible. The kernel makes a picture possible; living on the data manifold makes the picture actual." />
+
+This is the "this looks like that" idea from prototype networks (Chen et al., 2019), and the broader case for models interpretable by construction rather than explained after the fact (Rudin, 2019). What the kernel adds is that you do not need a special architecture to get there: an ordinary MLP, with the activation replaced by a kernel and the prototypes seeded from data, reads itself.
+
+## Where it goes
+
+Strip it down and the picture is simple. A neuron that stores a thing instead of a direction turns the network into a kernel of examples: it classifies by resemblance, so it works before you train it; it shows its reasoning in pictures when it is right and when it is wrong; and it goes quiet when it is looking at nothing it has seen. This one is a teaching setup, a single Yat layer on raw pixels, and it scales the obvious ways, the kernel on learned features (the ProtoPNet recipe), a clustering term to sharpen the prototypes, more width to close the last points to ReLU, each of which strengthens the same object rather than patching it. The last post said the opacity of an MLP was the price of giving up the kernel. This is what you get back when you keep it: a network you can build by hand, read by looking, and that answers which *thing*, not just which way.
+
+---
+
+*The prototype-network idea ("this looks like that") is from [Chen et al. (2019)](https://arxiv.org/abs/1806.10574); the case for interpretable-by-design models from [Rudin (2019)](https://arxiv.org/abs/1811.10154); [Fashion-MNIST](https://arxiv.org/abs/1708.07747) from Xiao et al. (2017); the Yat kernel from [Bouhsine (2026)](https://arxiv.org/abs/2605.03262). The conceptual setup is [What a Finite Kernel Buys an MLP](/blog/what-a-finite-kernel-buys-an-mlp/).*

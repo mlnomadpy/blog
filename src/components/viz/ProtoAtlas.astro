@@ -1,0 +1,124 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 440 } = Astro.props;
+---
+<figure class="viz protoatlas" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The atlas of what the network knows. Every Yat prototype is a point in pixel
+// space; project the 50 of them to 2-D by similarity (PCA) and you get a map you
+// can read: sneakers sit by boots, shirts by pullovers, trousers off on their
+// own. Because each point is a picture, the map is browsable by eye. Hover to
+// enlarge a prototype.
+import { defineViz } from './engine/vizkit.js';
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+const CLASS_COL = ['#b3661b', '#4a7fb3', '#3a8f5e', '#9a4f9c', '#c2553a', '#5a7d3a', '#2f8f8f', '#a06a2a', '#7a5fc0', '#c0892a'];
+const loadImg = (src) => new Promise((res) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
+
+defineViz('protoatlas', {
+  title: 'The atlas of what the network knows',
+  height: 440,
+  controls: [{ type: 'readout', name: 'rd' }],
+
+  setup(api) {
+    api.state = { ready: false, hover: -1 };
+    Promise.all([
+      loadImg(`${BASE}/yat-fmnist/protos.png`),
+      fetch(`${BASE}/yat-fmnist/meta.json`).then((r) => r.json()),
+      fetch(`${BASE}/yat-fmnist/detect.json`).then((r) => r.json()),
+    ]).then(([protos, meta, det]) => {
+      if (!api.state) return;
+      Object.assign(api.state, { ready: true, protos, meta, det });
+      api.render();
+    });
+
+    if (!api.canvas.dataset.paBind) {
+      api.canvas.dataset.paBind = '1';
+      api.canvas.addEventListener('pointermove', (e) => {
+        const st = api.state; if (!st || !st.pos) return;
+        const r = api.canvas.getBoundingClientRect();
+        const mx = e.clientX - r.left, my = e.clientY - r.top;
+        let best = -1, bd = 1e9;
+        for (let k = 0; k < st.pos.length; k++) { const d = (mx - st.pos[k][0]) ** 2 + (my - st.pos[k][1]) ** 2; if (d < bd) { bd = d; best = k; } }
+        const within = bd < (st.tile * 0.8) ** 2;
+        api.canvas.style.cursor = within ? 'pointer' : 'default';
+        const h = within ? best : -1;
+        if (h !== st.hover) { st.hover = h; api.render(); }
+      });
+      api.canvas.addEventListener('pointerleave', () => { if (api.state) { api.state.hover = -1; api.canvas.style.cursor = 'default'; api.render(); } });
+    }
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    ctx.clearRect(0, 0, W, H);
+    if (!st.ready) {
+      ctx.fillStyle = colors.muted; ctx.font = '12px ui-monospace, monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('loading…', W / 2, H / 2); return;
+    }
+    const { protos, meta, det } = st;
+    const classes = meta.classes, K = meta.K, pcols = meta.protoCols, coords = det.coords;
+    const pad = 18, legendH = 40;
+    const mapW = W - pad * 2, mapH = H - pad * 2 - legendH;
+    const R = Math.min(mapW, mapH) / 2 - 16;
+    const cx = pad + mapW / 2, cy = pad + mapH / 2;
+    const tile = Math.max(18, Math.min(28, R / 6));
+    st.tile = tile;
+
+    // positions
+    st.pos = coords.map(([x, y]) => [cx + x * R, cy - y * R]);
+
+    // frame
+    ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.strokeRect(pad + 0.5, pad + 0.5, mapW - 1, mapH - 1);
+
+    ctx.imageSmoothingEnabled = true;
+    // small thumbnails (skip the hovered one, drawn last on top)
+    for (let k = 0; k < K; k++) {
+      if (k === st.hover) continue;
+      const [px, py] = st.pos[k];
+      const dim = st.hover >= 0 ? 0.5 : 0.95;
+      ctx.globalAlpha = dim;
+      ctx.drawImage(protos, (k % pcols) * 28, Math.floor(k / pcols) * 28, 28, 28, px - tile / 2, py - tile / 2, tile, tile);
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 1.5; ctx.strokeStyle = CLASS_COL[det.vote[k] % 10];
+      ctx.strokeRect(px - tile / 2 - 0.5, py - tile / 2 - 0.5, tile + 1, tile + 1);
+    }
+    // hovered: enlarged on top + label
+    if (st.hover >= 0) {
+      const k = st.hover, [px, py] = st.pos[k], big = tile * 2.6;
+      let bx = px - big / 2, by = py - big / 2;
+      bx = Math.max(pad + 2, Math.min(W - pad - big - 2, bx)); by = Math.max(pad + 2, Math.min(pad + mapH - big - 2, by));
+      ctx.drawImage(protos, (k % pcols) * 28, Math.floor(k / pcols) * 28, 28, 28, bx, by, big, big);
+      ctx.lineWidth = 3; ctx.strokeStyle = CLASS_COL[det.vote[k] % 10]; ctx.strokeRect(bx - 0.5, by - 0.5, big + 1, big + 1);
+      const lbl = `${classes[det.domClass[k]]}`;
+      ctx.font = 'bold 12px ui-sans-serif, system-ui'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      const tw = ctx.measureText(lbl).width;
+      ctx.fillStyle = colors.bg; ctx.fillRect(bx, by + big + 3, tw + 10, 18);
+      ctx.fillStyle = CLASS_COL[det.domClass[k] % 10]; ctx.fillText(lbl, bx + 5, by + big + 6);
+    }
+
+    // legend
+    const ly = H - legendH + 4; let lx = pad;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.font = '10px ui-sans-serif, system-ui';
+    for (let c = 0; c < 10; c++) {
+      ctx.fillStyle = CLASS_COL[c]; ctx.fillRect(lx, ly + 10, 9, 9);
+      ctx.fillStyle = colors.muted; const t = classes[c];
+      ctx.fillText(t, lx + 12, ly + 15);
+      lx += 12 + ctx.measureText(t).width + 12;
+      if (lx > W - 80 && c < 9) { lx = pad; }
+    }
+
+    api.readout('rd', st.hover >= 0
+      ? `neuron #${st.hover}: a ${classes[det.domClass[st.hover]]} prototype`
+      : 'prototypes arranged by visual similarity — hover one. nearby prototypes look alike; classes form neighbourhoods');
+  },
+});
+</script>

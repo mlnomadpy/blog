@@ -1,0 +1,92 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 460 } = Astro.props;
+---
+<figure class="viz protogallery" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The whole thesis, side by side. A Yat-MLP and a ReLU MLP, same architecture,
+// trained on Fashion-MNIST. Each Yat unit's prototype lives in input space, so it
+// is literally a picture: a wall of readable clothing templates. The ReLU layer's
+// first-weight rows, the closest thing it has to a "unit", are noise. Same data,
+// comparable accuracy, and only one of them is legible.
+import { defineViz } from './engine/vizkit.js';
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+const CLASS_COL = ['#b3661b', '#4a7fb3', '#3a8f5e', '#9a4f9c', '#c2553a', '#5a7d3a', '#2f8f8f', '#a06a2a', '#7a5fc0', '#c0892a'];
+const loadImg = (src) => new Promise((res) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
+
+defineViz('protogallery', {
+  title: 'Every Yat neuron is a picture; every ReLU neuron is noise',
+  height: 460,
+  controls: [{ type: 'readout', name: 'rd' }],
+
+  setup(api) {
+    api.state = { ready: false };
+    Promise.all([
+      loadImg(`${BASE}/yat-fmnist/protos.png`),
+      loadImg(`${BASE}/yat-fmnist/relu.png`),
+      fetch(`${BASE}/yat-fmnist/meta.json`).then((r) => r.json()),
+    ]).then(([protos, relu, meta]) => {
+      if (!api.state) return;
+      Object.assign(api.state, { ready: true, protos, relu, meta });
+      api.render();
+    });
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    ctx.clearRect(0, 0, W, H);
+    if (!st.ready) {
+      ctx.fillStyle = colors.muted; ctx.font = '12px ui-monospace, monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('loading prototypes…', W / 2, H / 2); return;
+    }
+    const meta = st.meta, K = meta.K, cols = 10, rows = Math.ceil(K / cols);
+    const pad = 10, panelGap = 22, header = 22, footer = 22;
+    const panelW = (W - pad * 2 - panelGap) / 2;
+    const availH = H - pad - header - footer;
+    const cellGap = 3;
+    const cell = Math.min((panelW - (cols - 1) * cellGap) / cols, (availH - (rows - 1) * cellGap) / rows);
+    const gridW = cols * cell + (cols - 1) * cellGap, gridH = rows * cell + (rows - 1) * cellGap;
+    const gy = pad + header + (availH - gridH) / 2;
+
+    const panel = (img, x0, title, yat) => {
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillStyle = colors.fg; ctx.font = 'bold 12px ui-sans-serif, system-ui';
+      ctx.fillText(title, x0 + gridW / 2, pad);
+      ctx.imageSmoothingEnabled = true;
+      for (let k = 0; k < K; k++) {
+        const c = k % cols, r = Math.floor(k / cols);
+        const dx = x0 + c * (cell + cellGap), dy = gy + r * (cell + cellGap);
+        ctx.drawImage(img, (k % 10) * 28, Math.floor(k / 10) * 28, 28, 28, dx, dy, cell, cell);
+        ctx.lineWidth = yat ? 1.6 : 1;
+        ctx.strokeStyle = yat ? CLASS_COL[meta.vote[k] % 10] : colors.border;
+        ctx.strokeRect(dx - 0.5, dy - 0.5, cell + 1, cell + 1);
+      }
+    };
+
+    const lx = pad + (panelW - gridW) / 2;
+    const rx = pad + panelW + panelGap + (panelW - gridW) / 2;
+    panel(st.protos, lx, 'Yat prototypes — each a learned picture', true);
+    panel(st.relu, rx, 'ReLU filters — the same network, unreadable', false);
+
+    // divider
+    ctx.strokeStyle = colors.border; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(W / 2, pad + header); ctx.lineTo(W / 2, H - footer); ctx.stroke();
+
+    // footer
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillStyle = colors.muted; ctx.font = '11px ui-monospace, monospace';
+    ctx.fillText(`same architecture, comparable accuracy — Yat ${meta.yatAcc}%  ·  ReLU ${meta.reluAcc}% test`, W / 2, H - 5);
+
+    api.readout('rd', 'left: prototypes that live in pixel space (bordered by the class they vote for). right: weight vectors with no reason to look like anything');
+  },
+});
+</script>
