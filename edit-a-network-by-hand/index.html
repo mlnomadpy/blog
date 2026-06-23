@@ -1,0 +1,489 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="generator" content="Astro v5.18.1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#fbfaf6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)"><title>Editing a Neural Network Without Training</title><meta name="description" content="A Yat-kernel network is a list of prototype pictures you can edit. Add a class with no training (95% recall), or delete one to unlearn it exactly."><meta name="keywords" content="editable neural network, class-incremental learning no training, machine unlearning, prototype network, Yat kernel, catastrophic forgetting, ml, kernels, interpretability, prototypes, continual-learning, machine-unlearning, yat, deep-learning"><meta name="author" content="Taha Bouhsine"><link rel="canonical" href="https://tahabouhsine.com/blog/edit-a-network-by-hand/"><link rel="icon" href="/blog/favicon.svg" type="image/svg+xml"><link rel="alternate" type="application/rss+xml" title="Records of the !mmortal Data Scientist" href="/blog/rss.xml"><link rel="sitemap" href="/blog/sitemap-index.xml"><link rel="me" href="https://github.com/mlnomadpy"><link rel="me" href="https://x.com/mlnomadpy"><link rel="me" href="https://www.linkedin.com/in/tahabsn/"><link rel="me" href="https://scholar.google.com/citations?user=IsBjb3EAAAAJ"><link rel="me" href="https://g.dev/tahabsn"><link rel="author" href="https://github.com/mlnomadpy"><meta property="og:type" content="article"><meta property="og:site_name" content="Records of the !mmortal Data Scientist"><meta property="og:title" content="Editing a Neural Network Without Training"><meta property="og:description" content="A Yat-kernel network is a list of prototype pictures you can edit. Add a class with no training (95% recall), or delete one to unlearn it exactly."><meta property="og:url" content="https://tahabouhsine.com/blog/edit-a-network-by-hand/"><meta property="og:locale" content="en_US"><meta property="og:image" content="https://tahabouhsine.com/blog/og/edit-a-network-by-hand.png"><meta property="og:image:alt" content="Your Network Is a List of Pictures. You Can Edit It. — Records of the !mmortal Data Scientist"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:type" content="image/png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@mlnomadpy"><meta name="twitter:creator" content="@mlnomadpy"><meta name="twitter:title" content="Editing a Neural Network Without Training"><meta name="twitter:description" content="A Yat-kernel network is a list of prototype pictures you can edit. Add a class with no training (95% recall), or delete one to unlearn it exactly."><meta name="twitter:image" content="https://tahabouhsine.com/blog/og/edit-a-network-by-hand.png"><meta name="twitter:image:alt" content="Your Network Is a List of Pictures. You Can Edit It. — Records of the !mmortal Data Scientist"><meta property="article:published_time" content="2026-06-22T00:00:00.000Z"><meta property="article:author" content="Taha Bouhsine"><meta property="article:section" content="Machine Learning"><meta property="article:tag" content="ml"><meta property="article:tag" content="kernels"><meta property="article:tag" content="interpretability"><meta property="article:tag" content="prototypes"><meta property="article:tag" content="continual-learning"><meta property="article:tag" content="machine-unlearning"><meta property="article:tag" content="yat"><meta property="article:tag" content="deep-learning"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","@id":"https://tahabouhsine.com/blog/edit-a-network-by-hand/#article","headline":"Your Network Is a List of Pictures. You Can Edit It.","name":"Your Network Is a List of Pictures. You Can Edit It.","description":"A Yat-kernel network is a list of prototype pictures you can edit. Add a class with no training (95% recall), or delete one to unlearn it exactly.","image":["https://tahabouhsine.com/blog/og/edit-a-network-by-hand.png"],"datePublished":"2026-06-22T00:00:00.000Z","dateModified":"2026-06-22T00:00:00.000Z","author":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#author","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","jobTitle":"Machine Learning Researcher","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"publisher":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#publisher","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"mainEntityOfPage":{"@type":"WebPage","@id":"https://tahabouhsine.com/blog/edit-a-network-by-hand/"},"keywords":"editable neural network, class-incremental learning no training, machine unlearning, prototype network, Yat kernel, catastrophic forgetting, ml, kernels, interpretability, prototypes, continual-learning, machine-unlearning, yat, deep-learning","url":"https://tahabouhsine.com/blog/edit-a-network-by-hand/","inLanguage":"en-US","wordCount":2168,"timeRequired":"PT11M","articleSection":"Machine Learning","isPartOf":{"@type":"Blog","@id":"https://tahabouhsine.com/blog/","name":"Records of the !mmortal Data Scientist","url":"https://tahabouhsine.com/blog/"}}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Blog","item":"https://tahabouhsine.com/blog/"},{"@type":"ListItem","position":2,"name":"Machine Learning","item":"https://tahabouhsine.com/blog/tag/ml/"},{"@type":"ListItem","position":3,"name":"Your Network Is a List of Pictures. You Can Edit It.","item":"https://tahabouhsine.com/blog/edit-a-network-by-hand/"}]}</script><script>
+    (function () {
+      if (window.__gaSetup) return;
+      window.__gaSetup = true;
+      var GA_ID = 'G-373438VHJB';
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ dataLayer.push(arguments); }
+      window.gtag = window.gtag || gtag;
+      window.__gaEventQueue = window.__gaEventQueue || [];
+      window.__trackGA = function (eventName, params) {
+        if (!eventName) return;
+        var item = { name: eventName, params: params || {} };
+        if (window.__gaLoaded) {
+          gtag('event', item.name, item.params);
+        } else {
+          window.__gaEventQueue.push(item);
+        }
+      };
+
+      // Track whether the first astro:page-load has fired, so a mid-session
+      // Accept can still record the current page.
+      window.__gaFirstLoadDone = window.__gaFirstLoadDone || false;
+      document.addEventListener('astro:page-load', function () { window.__gaFirstLoadDone = true; });
+
+      window.__loadGA = function () {
+        if (window.__gaLoaded) return;
+        window.__gaLoaded = true;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+        document.head.appendChild(s);
+        gtag('js', new Date());
+        gtag('config', GA_ID, { send_page_view: false });
+        (window.__gaEventQueue || []).splice(0).forEach(function (item) {
+          gtag('event', item.name, item.params);
+        });
+        function sendPV() {
+          gtag('event', 'page_view', {
+            page_title: document.title,
+            page_location: location.href,
+            page_path: location.pathname + location.search,
+          });
+        }
+        document.addEventListener('astro:page-load', sendPV);
+        // If the initial page-load already happened (accept mid-session),
+        // record this page now; otherwise the listener catches the first one.
+        if (window.__gaFirstLoadDone) sendPV();
+      };
+
+      try {
+        if (localStorage.getItem('analytics-consent') === 'granted') window.__loadGA();
+      } catch (e) {}
+    })();
+  </script><script>
+  (() => {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'light' || stored === 'dark') {
+      document.documentElement.setAttribute('data-theme', stored);
+    }
+  })();
+</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.DstInXr_.css">
+<link rel="stylesheet" href="/blog/_astro/_slug_.1UYF8z3a.css"><style>.cite-as[data-astro-cid-p234urri]{margin:3.5rem 0 0;padding-top:1.5rem;border-top:1px solid var(--border)}.cite-as[data-astro-cid-p234urri] h2[data-astro-cid-p234urri]{font-family:var(--mono);font-size:.82rem;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-faint);font-weight:500;margin:0 0 .75rem}.cite-as[data-astro-cid-p234urri] h3[data-astro-cid-p234urri]{font-family:var(--mono);font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-faint);font-weight:500;margin:1.5rem 0 .6rem}.cite-line[data-astro-cid-p234urri]{font-family:var(--serif);font-size:.98rem;line-height:1.55;color:var(--fg-muted);margin:0 0 .5rem}.cite-line[data-astro-cid-p234urri] em[data-astro-cid-p234urri]{color:var(--fg)}.cite-bib[data-astro-cid-p234urri]{margin:.4rem 0 0;position:relative}.cite-bib[data-astro-cid-p234urri] summary[data-astro-cid-p234urri]{cursor:pointer;font-family:var(--mono);font-size:.78rem;color:var(--fg-muted);padding:.25rem 0;user-select:none}.cite-bib[data-astro-cid-p234urri] summary[data-astro-cid-p234urri]:hover{color:var(--accent)}.cite-bib[data-astro-cid-p234urri] pre[data-astro-cid-p234urri]{margin:.4rem 0 0;padding:.85rem 1rem;background:var(--bg-elev);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;font-size:.82rem;line-height:1.55}.cite-bib[data-astro-cid-p234urri] pre[data-astro-cid-p234urri] code[data-astro-cid-p234urri]{background:transparent;border:0;padding:0}.cite-copy[data-astro-cid-p234urri]{position:absolute;top:2.1rem;right:.55rem;background:var(--bg);border:1px solid var(--border);color:var(--fg-muted);font-family:var(--mono);font-size:.72rem;padding:.25rem .55rem;border-radius:var(--radius-sm);cursor:pointer;transition:color var(--transition-fast),border-color var(--transition-fast)}.cite-copy[data-astro-cid-p234urri]:hover,.cite-copy[data-astro-cid-p234urri].copied{color:var(--accent);border-color:var(--accent)}
+</style></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/writeups">writeups</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>
+  (() => {
+    const apply = (theme) => {
+      document.documentElement.setAttribute('data-theme', theme);
+      const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+      if (meta) meta.setAttribute('content', theme === 'dark' ? '#0e1116' : '#fbfaf6');
+      // Sync giscus iframe if present
+      const giscus = document.querySelector('iframe.giscus-frame');
+      if (giscus && giscus.contentWindow) {
+        giscus.contentWindow.postMessage(
+          { giscus: { setConfig: { theme: theme === 'dark' ? 'dark' : 'light' } } },
+          'https://giscus.app'
+        );
+      }
+    };
+
+    const init = () => {
+      const btns = document.querySelectorAll('[data-theme-toggle]');
+      btns.forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', () => {
+          const current = document.documentElement.getAttribute('data-theme')
+            || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          const next = current === 'dark' ? 'light' : 'dark';
+          localStorage.setItem('theme', next);
+          apply(next);
+        });
+      });
+    };
+
+    init();
+    document.addEventListener('astro:after-swap', init);
+    document.addEventListener('astro:page-load', init);
+  })();
+</script> </nav> </div> </header> <main id="main">  <div class="reading-progress" data-reading-progress aria-hidden="true"></div> <script>
+  (() => {
+    const init = () => {
+      const bar = document.querySelector('[data-reading-progress]');
+      if (!bar) return;
+      const update = () => {
+        const h = document.documentElement;
+        const scrolled = h.scrollTop;
+        const max = h.scrollHeight - h.clientHeight;
+        const pct = max > 0 ? Math.min(100, (scrolled / max) * 100) : 0;
+        bar.style.width = pct + '%';
+      };
+      // Coalesce scroll events into one paint per frame so fast/touch
+      // scrolling stays smooth.
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => { update(); ticking = false; });
+      };
+      update();
+      window.removeEventListener('scroll', window.__rp_onScroll || (() => {}));
+      window.removeEventListener('resize', window.__rp_onScroll || (() => {}));
+      window.__rp_onScroll = onScroll;
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+    };
+    init();
+    document.addEventListener('astro:page-load', init);
+    document.addEventListener('astro:after-swap', init);
+  })();
+</script> <article data-blog-post data-pagefind-body data-pagefind-meta="date:2026-06-22"> <header class="post-header">  <h1 data-pagefind-meta="title">Your Network Is a List of Pictures. You Can Edit It.</h1> <p class="meta"> <time datetime="2026-06-22T00:00:00.000Z">June 22, 2026</time>   · 11 min read </p> <p style="margin-top:0.65rem" data-pagefind-meta="tags:ml,kernels,interpretability,prototypes,continual-learning,machine-unlearning,yat,deep-learning"> <a class="tag" href="/blog/tag/ml/">#ml</a><a class="tag" href="/blog/tag/kernels/">#kernels</a><a class="tag" href="/blog/tag/interpretability/">#interpretability</a><a class="tag" href="/blog/tag/prototypes/">#prototypes</a><a class="tag" href="/blog/tag/continual-learning/">#continual-learning</a><a class="tag" href="/blog/tag/machine-unlearning/">#machine-unlearning</a><a class="tag" href="/blog/tag/yat/">#yat</a><a class="tag" href="/blog/tag/deep-learning/">#deep-learning</a> </p> </header> <a class="companion-callout explainer" href="/blog/edit-a-network-jax-flax-nnx/" data-astro-cid-x4o4rwnl><span class="cc-icon" aria-hidden="true" data-astro-cid-x4o4rwnl>⌨</span><span class="cc-body" data-astro-cid-x4o4rwnl><span class="cc-eyebrow" data-astro-cid-x4o4rwnl>Runnable JAX companion</span><span class="cc-title" data-astro-cid-x4o4rwnl>Editing a Network by Hand, in JAX/Flax NNX</span><span class="cc-lead" data-astro-cid-x4o4rwnl>Prefer to read the code? This post has a hands-on JAX / Flax NNX implementation.</span></span><span class="cc-cta" data-astro-cid-x4o4rwnl>Open the JAX companion<span aria-hidden="true" data-astro-cid-x4o4rwnl>→</span></span></a>  <p><em>A <a href="/blog/your-neuron-is-a-picture/">previous post</a> showed that if you put the Yat kernel where a neuron’s activation was, the neuron stops being a direction and becomes a prototype: a point in input space, which on images is literally a picture. One consequence got a paragraph there and deserves a whole post here. If a neuron is a picture, then a network is a list of pictures, and a list is something you can edit. You can hand it a new class without training it, and you can make it forget a class without training it. Both turn out to be things the rest of deep learning struggles to do at all. Every number below is from a real run; the script is <code>scripts/yat_editable_fmnist.py</code>.</em></p>
+<h2 id="a-network-you-edit-instead-of-train">A network you edit instead of train<a class="heading-anchor-link" aria-label="Link to heading" href="#a-network-you-edit-instead-of-train"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Here is the move the whole post rests on. A standard neuron stores a direction <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>w</mi></mrow><annotation encoding="application/x-tex">w</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em"></span><span class="mord mathnormal" style="margin-right:0.0269em">w</span></span></span></span>, and a direction is not a thing you can point at. You cannot hand-write a useful direction, you cannot read one off, and you certainly cannot edit a network by editing its directions. Training is the only way in, because the weights mean nothing until gradient descent fills them with meaning.</p>
+<p>A Yat unit stores a prototype <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>W</mi><mi>u</mi></msub></mrow><annotation encoding="application/x-tex">W_u</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">u</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span></span></span></span> and scores an input by a kernel against it, <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>ϕ</mi><mi>u</mi></msub><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mo>=</mo><mo stretchy="false">(</mo><msubsup><mi>W</mi><mi>u</mi><mi mathvariant="normal">⊤</mi></msubsup><mi>x</mi><mo>+</mo><mi>b</mi><msup><mo stretchy="false">)</mo><mn>2</mn></msup><mi mathvariant="normal">/</mi><mo stretchy="false">(</mo><mo stretchy="false">∥</mo><mi>x</mi><mo>−</mo><msub><mi>W</mi><mi>u</mi></msub><msup><mo stretchy="false">∥</mo><mn>2</mn></msup><mo>+</mo><mi>ε</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\phi_u(x) = (W_u^\top x + b)^2 / (\lVert x - W_u\rVert^2 + \varepsilon)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathnormal">ϕ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">u</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1.0991em;vertical-align:-0.25em"></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8491em"><span style="top:-2.453em;margin-left:-0.1389em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">u</span></span></span><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">⊤</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em"><span></span></span></span></span></span></span><span class="mord mathnormal">x</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:1.0641em;vertical-align:-0.25em"></span><span class="mord mathnormal">b</span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mord">/</span><span class="mopen">(∥</span><span class="mord mathnormal">x</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:1.0641em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">u</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mclose"><span class="mclose">∥</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord mathnormal">ε</span><span class="mclose">)</span></span></span></span>. The prototype lives in the same space as the data, so it is a referent you can point at: on Fashion-MNIST it is a 28x28 picture of a piece of clothing. A classifier is then a bank of these prototypes plus a readout that lets each one vote for its class. The earlier post built exactly this by hand, k-means centroids as the prototypes and a one-hot readout, and reached <strong>79%</strong> on Fashion-MNIST with zero gradient steps.</p>
+<p>Before we edit it, look at how it decides, because the editing only makes sense once you see the vote. Pick an image below and the kernel against all 200 prototypes is computed live in your browser: every atom is a prototype, it brightens by how much the image resembles it, the readout lines carry that resemblance to the class outputs, and the loudest output wins. There is no hidden machinery; the prediction <em>is</em> this vote over pictures.</p>
+<figure class="viz kernelvote" data-caption="A prediction as a vote over prototype pictures, computed live. Each atom is one of the 200 prototypes (20 per class); pick an image and its Yat-kernel activation against every prototype is evaluated in the browser. Atoms brighten with resemblance, the readout lines carry the vote to the ten class outputs, and the strongest output wins. This is the whole forward pass: similarity to stored pictures, summed by class." data-height="480" tabindex="0"> <div class="viz-cell"></div> </figure> <script type="module" src="/blog/_astro/KernelVote.astro_astro_type_script_index_0_lang.0p8PAevT.js"></script>
+<h2 id="the-network-is-a-landscape-of-wells">The network is a landscape of wells<a class="heading-anchor-link" aria-label="Link to heading" href="#the-network-is-a-landscape-of-wells"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>There is a physical picture hiding in the kernel, and once you see it the rest of the post stops being a list of tricks and becomes one idea. Look at the denominator: <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mi mathvariant="normal">/</mi><mo stretchy="false">(</mo><mo stretchy="false">∥</mo><mi>x</mi><mo>−</mo><msub><mi>W</mi><mi>u</mi></msub><msup><mo stretchy="false">∥</mo><mn>2</mn></msup><mo>+</mo><mi>ε</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">1 / (\lVert x - W_u\rVert^2 + \varepsilon)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord">1/</span><span class="mopen">(∥</span><span class="mord mathnormal">x</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:1.0641em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">u</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mclose"><span class="mclose">∥</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord mathnormal">ε</span><span class="mclose">)</span></span></span></span>. That is a softened inverse-square law, the same shape as gravity and electrostatics. The <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ε</mi></mrow><annotation encoding="application/x-tex">\varepsilon</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em"></span><span class="mord mathnormal">ε</span></span></span></span> is not a hack either; it is exactly the <em>softening length</em> that N-body simulations add to keep the force finite when two bodies coincide. So each prototype is a little mass, and it digs a well into the input space whose pull falls off with the square of the distance.</p>
+<p>A bank of prototypes is therefore a landscape of wells, one cluster of wells per class. Classifying a point is letting it fall into the deepest basin it can feel. The decision boundary is the watershed between basins, the ridge where two wells pull equally. Drag the marker below across that ridge and you can watch its allegiance flip.</p>
+<figure class="viz attractorfield" data-caption="The kernel as a field of attractors, in 2D where you can see it. Each prototype is a well with a 1/(r²+ε) pull, a softened inverse-square law (ε is the gravitational softening length). The plane is coloured by which basin wins, darkening to a watershed at the boundaries. Press “drop test particles” and they fall into the basins, coloured by the class they land in, which is the whole act of classification. Drag the white marker to feel the pull flip as it crosses a ridge. Click a well to delete it: its basin collapses and the neighbours flood in to reclaim the ground, while the rest of the landscape does not move. A 2D physics illustration of the same kernel the rest of the post runs on Fashion-MNIST." data-height="520" tabindex="0"> <div class="viz-cell"></div> </figure> <script type="module" src="/blog/_astro/AttractorField.astro_astro_type_script_index_0_lang.DPdB5LKR.js"></script>
+<p>This picture pays for itself immediately, because the two edits the rest of the post is about become physical moves on the landscape. Teaching a class is dropping a new mass: it opens a fresh basin where there was none. Forgetting a class is removing a mass: its basin collapses and the neighbours reclaim exactly the territory it held, and nowhere else, which is <em>why</em> the forgetting is exact. And because fields superpose, the total landscape is just the sum of the wells, independent of the order you placed them, which is why teaching incrementally lands in the same place as building all at once. One inverse-square law, and the vote, the teaching, the forgetting, and the order-independence are all the same fact.</p>
+<p>Now watch those two moves on the real network.</p>
+<h2 id="teach-it-a-class-no-training">Teach it a class, no training<a class="heading-anchor-link" aria-label="Link to heading" href="#teach-it-a-class-no-training"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Start with a deliberately incomplete model: a hand-built classifier that has only ever seen eight of the ten classes. It places twenty prototypes for each of classes 0 through 7 and knows nothing about Bag or Boot. On the test images of the classes it does know, it scores <strong>77.8%</strong>.</p>
+<p>Now teach it the two missing classes the only way an editable network needs: take twenty example images of Bag and twenty of Boot, drop them in as new prototypes, and add a readout row for each so they can vote. Forty pictures placed. No optimizer, no backward pass, no epochs.</p>
+<p>The model now recognizes <strong>Bag at 95%</strong> and <strong>Boot at 94%</strong>, classes it had never encountered a moment ago. And the classes it already knew barely flinch: accuracy on classes 0 through 7 moves from 77.8% to 75.6%, a two-point dip that comes only from the new prototypes occasionally sitting closer to an old test image, not from anything being overwritten. Overall, across all ten classes, it scores <strong>79.4%</strong>.</p>
+<p>Here is the part worth sitting with. A model built on all ten classes from the very start, the normal way, also scores <strong>79.4%</strong>. Adding the two classes incrementally, after the fact, by hand, cost nothing. The incremental network and the all-at-once network land on the same number, because there is no “after the fact” for a list. A prototype you place last works exactly like a prototype you placed first.</p>
+<figure class="viz teachbyex" data-caption="Teaching, made concrete. Left is the network's memory: ten labelled bins, empty to start, so it knows nothing and guesses every held-out test image (right) wrong. Click a class to teach it: you drop in that class's example pictures, no training, and every test image of that class flips from a red wrong guess to a green correct one at once. Knowledge here is just labelled example pictures, and teaching is adding some. Teach all ten and it recognizes 81% of a held-out sample, where a from-scratch build also lands (the text quotes 79.4% on the full test set)." data-height="500" tabindex="0"> <div class="viz-cell"></div> </figure> <script type="module" src="/blog/_astro/TeachByExample.astro_astro_type_script_index_0_lang.CWPnMaBV.js"></script>
+<p>Try it above: start with an empty memory that gets everything wrong, then teach one class and watch its test images turn green the instant its pictures are placed, the others untouched.</p>
+<h2 id="make-it-forget-exactly">Make it forget, exactly<a class="heading-anchor-link" aria-label="Link to heading" href="#make-it-forget-exactly"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Now run it backwards. Take the full ten-class model and ask it to forget Sandals: not to score them worse, but to lose the capability, as if those examples had never been part of it.</p>
+<p>The edit is the obvious one. Find the twenty prototypes that vote for Sandal, delete them, delete their readout rows. That is the entire procedure.</p>
+<p>Sandal recall goes from <strong>64% to 0%</strong>. The class is gone; nothing in the network resembles a sandal anymore, so nothing can be classified as one. And the other nine classes go from <strong>81.1% to 81.3%</strong>, untouched, in fact a hair better, because the deleted prototypes are no longer around to occasionally steal a test image that belonged to someone else. The forgetting is exact and surgical. You removed precisely one capability and left the rest of the network bit-for-bit identical.</p>
+<figure class="viz forgetmatch" data-caption="Why forgetting is exact, made visible. The network recognizes each test image (left) by the single prototype it most resembles (right): that match is the decision, and its class is the label. Click a class in the memory strip to delete it. The images that were recognized by that class lose their match and re-point to a surviving prototype, usually wrong now (shown in red, “re-routed”); every other image keeps the exact same match and label, untouched. Delete Sandal and only the sandals break, which is the whole claim: removing a class disturbs only what relied on it. Matches are computed live on jax-js." data-height="520" tabindex="0"> <div class="viz-cell"></div> </figure> <script type="module" src="/blog/_astro/ForgetMatch.astro_astro_type_script_index_0_lang.uv_3mmZu.js"></script>
+<p>Delete any class above and only its line drops; the other nine hold flat, which is the whole claim made visible.</p>
+<h2 id="why-this-is-supposed-to-be-hard">Why this is supposed to be hard<a class="heading-anchor-link" aria-label="Link to heading" href="#why-this-is-supposed-to-be-hard"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>If you have trained neural networks, both of those results should feel slightly illegal, because in an ordinary network they are famously, expensively hard.</p>
+<p>Teaching a trained network a new class usually means fine-tuning, and fine-tuning on the new class degrades the old ones. The phenomenon has a name, <a href="https://arxiv.org/abs/1612.00796">catastrophic forgetting</a>, and it is old enough to have been described in 1989. An entire subfield, continual learning, exists to fight it with rehearsal buffers, regularizers that pin important weights in place, and dynamically grown sub-networks. The reason the fight is necessary is structural: in a network of directions, knowledge is smeared across shared weights, so every new gradient step writes over a little of everything that came before. There is no row you can point to that <em>is</em> the old class, so there is no way to protect it except indirectly.</p>
+<p>Unlearning is worse. “Make the model forget these training examples” is a live research problem, <a href="https://arxiv.org/abs/1912.03817">machine unlearning</a>, driven by privacy law and the right to be forgotten, and the honest baseline for doing it correctly is to throw the model away and retrain from scratch on the data minus the part you want gone. Everything cheaper is an approximation that you then have to audit, because the forgotten data left its fingerprints distributed across all the weights and you can never quite prove you wiped them.</p>
+<p>The Yat network sidesteps both, not by being cleverer, but by storing knowledge in a form you can address. A class is not smeared across the weights; it <em>is</em> a contiguous set of prototypes. So protecting it during an edit is trivial (do not touch those rows) and erasing it is exact (delete exactly those rows, and provably nothing else carries the class). Continual learning and unlearning stop being algorithms you run and become slices you take.</p>
+<h2 id="the-boundary-and-where-this-goes">The boundary, and where this goes<a class="heading-anchor-link" aria-label="Link to heading" href="#the-boundary-and-where-this-goes"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>I want to be precise about the edge of the claim, because the precise version is more interesting than the hype. None of this is free in general; it is free <em>here</em>, on raw pixels, because the input space is the feature space. A prototype can be a legible, placeable, deletable picture only because the thing the kernel compares against lives where the data lives. The moment you put the Yat kernel on top of learned features, a prototype becomes an exemplar in feature space, and those features still cost a training run. “No training” narrows to “no training of the head, given features.”</p>
+<p>That narrowing is not a retreat. It is the actual question this whole line of work circles: how much of a network can you <em>construct</em> rather than <em>optimize</em>, and how deep can the construction go before you are forced to learn? On pixels, the answer is the entire classifier. With features, the answer is the entire classifier on top of a learned backbone, which is already the regime where editing, adding, and forgetting matter most in practice. That boundary, construction versus optimization, is the subject of the next post. For now the smaller claim stands on its own and is worth saying plainly: a network whose neurons are pictures is not a black box you fill by training. It is a document you write, and revise, by hand.</p>
+<hr/>
+<p><em>The prototype-network idea (“this looks like that”) is from <a href="https://arxiv.org/abs/1806.10574">Chen et al. (2019)</a>; <a href="https://arxiv.org/abs/1708.07747">Fashion-MNIST</a> from Xiao et al. (2017); the Yat kernel from <a href="https://arxiv.org/abs/2605.03262">Bouhsine (2026)</a>. This is a follow-up to <a href="/blog/your-neuron-is-a-picture/">Your Neuron Is a Direction. It Should Be a Picture.</a></em></p>
+<section class="cite-as" aria-labelledby="cite-edit-a-network-by-hand" data-astro-cid-p234urri> <h2 id="cite-edit-a-network-by-hand" data-astro-cid-p234urri>Cite as</h2> <p class="cite-line" data-astro-cid-p234urri>
+Bouhsine, T. (<time datetime="2026-06-22T00:00:00.000Z" data-astro-cid-p234urri>2026, June 22</time>).
+<em data-astro-cid-p234urri>Your Network Is a List of Pictures. You Can Edit It.</em>. Records of the !mmortal Data Scientist.
+<a href="https://tahabouhsine.com/blog/edit-a-network-by-hand/" data-astro-cid-p234urri>https://tahabouhsine.com/blog/edit-a-network-by-hand/</a> </p> <details class="cite-bib" data-astro-cid-p234urri> <summary data-astro-cid-p234urri>BibTeX</summary> <pre data-astro-cid-p234urri><code class="bibtex" data-astro-cid-p234urri>@misc{bouhsine2026editanetworkbyhand,
+  author       = {Bouhsine, Taha},
+  title        = {Your Network Is a List of Pictures. You Can Edit It.},
+  year         = {2026},
+  month        = {jun},
+  howpublished = {\url{https://tahabouhsine.com/blog/edit-a-network-by-hand/}},
+  note         = {Blog post, Records of the !mmortal Data Scientist}
+}</code></pre> <button type="button" class="cite-copy" data-copy="@misc{bouhsine2026editanetworkbyhand,
+  author       = {Bouhsine, Taha},
+  title        = {Your Network Is a List of Pictures. You Can Edit It.},
+  year         = {2026},
+  month        = {jun},
+  howpublished = {\url{https://tahabouhsine.com/blog/edit-a-network-by-hand/}},
+  note         = {Blog post, Records of the !mmortal Data Scientist}
+}" aria-label="Copy BibTeX" data-astro-cid-p234urri>copy</button> </details>  </section>  <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('.cite-copy').forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(btn.dataset.copy || '');
+            const original = btn.textContent;
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = original;
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>  <section class="references" aria-labelledby="references-heading" data-astro-cid-rn7nvbl4><h2 id="references-heading" data-astro-cid-rn7nvbl4>References</h2><ol data-astro-cid-rn7nvbl4><li id="ref-1" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Chen, C., Li, O., Tao, D., Barnett, A., Su, J., Rudin, C.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2019)</span>. <a class="ref-title" href="https://arxiv.org/abs/1806.10574" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>This Looks Like That: Deep Learning for Interpretable Image Recognition</a>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>NeurIPS 2019</span>.<a class="ref-ext" href="https://arxiv.org/abs/1806.10574" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:1806.10574</a></li><li id="ref-2" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>McCloskey, M., Cohen, N. J.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(1989)</span>. <span class="ref-title" data-astro-cid-rn7nvbl4>Catastrophic Interference in Connectionist Networks: The Sequential Learning Problem</span>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>Psychology of Learning and Motivation 24</span>.</li><li id="ref-3" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Bourtoule, L., Chandrasekaran, V., Choquette-Choo, C. A., Jia, H., Travers, A., Zhang, B., Lie, D., Papernot, N.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2021)</span>. <a class="ref-title" href="https://arxiv.org/abs/1912.03817" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>Machine Unlearning</a>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>IEEE S&amp;P 2021</span>.<a class="ref-ext" href="https://arxiv.org/abs/1912.03817" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:1912.03817</a></li><li id="ref-4" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Xiao, H., Rasul, K., Vollgraf, R.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2017)</span>. <a class="ref-title" href="https://arxiv.org/abs/1708.07747" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>Fashion-MNIST: a Novel Image Dataset for Benchmarking Machine Learning Algorithms</a>.
+<a class="ref-ext" href="https://arxiv.org/abs/1708.07747" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:1708.07747</a></li><li id="ref-5" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Bouhsine, T.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2026)</span>. <a class="ref-title" href="https://arxiv.org/abs/2605.03262" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance</a>.
+<a class="ref-ext" href="https://arxiv.org/abs/2605.03262" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:2605.03262</a></li></ol></section> </article> <script>(function(){const payload = {"post_title":"Your Network Is a List of Pictures. You Can Edit It.","post_slug":"edit-a-network-by-hand","post_path":"/blog/edit-a-network-by-hand/","post_tags":"ml,kernels,interpretability,prototypes,continual-learning,machine-unlearning,yat,deep-learning","word_count":2168,"reading_time_minutes":11,"is_draft":false};
+
+  (() => {
+    const thresholds = [25, 50, 75, 90, 100];
+    const state = { viewed: false, sent: new Set() };
+
+    const track = (name, params = {}) => {
+      if (typeof window.__trackGA === 'function') {
+        window.__trackGA(name, {
+          ...payload,
+          ...params,
+          non_interaction: name === 'blog_post_view',
+        });
+      }
+    };
+
+    const init = () => {
+      const article = document.querySelector('[data-blog-post]');
+      if (!article) return;
+
+      if (!state.viewed) {
+        state.viewed = true;
+        track('blog_post_view');
+      }
+
+      const progress = () => {
+        const rect = article.getBoundingClientRect();
+        const articleTop = window.scrollY + rect.top;
+        const articleHeight = Math.max(1, article.offsetHeight);
+        const viewportBottom = window.scrollY + window.innerHeight;
+        return Math.max(0, Math.min(100, ((viewportBottom - articleTop) / articleHeight) * 100));
+      };
+
+      const update = () => {
+        const pct = progress();
+        thresholds.forEach((threshold) => {
+          if (pct >= threshold && !state.sent.has(threshold)) {
+            state.sent.add(threshold);
+            track('blog_post_read_depth', { read_percent: threshold });
+            if (threshold === 90) {
+              track('blog_post_read', { read_percent: threshold });
+            }
+          }
+        });
+      };
+
+      if (window.__postAnalyticsCleanup) window.__postAnalyticsCleanup();
+
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => {
+          update();
+          ticking = false;
+        });
+      };
+
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+      window.__postAnalyticsCleanup = () => {
+        window.removeEventListener('scroll', onScroll);
+        window.removeEventListener('resize', onScroll);
+      };
+      update();
+    };
+
+    init();
+    document.addEventListener('astro:page-load', init, { once: true });
+  })();
+})();</script> <aside class="related" aria-labelledby="related-heading" data-astro-cid-dpgbfi7r><h2 id="related-heading" data-astro-cid-dpgbfi7r>Related posts</h2><ul data-astro-cid-dpgbfi7r><li data-astro-cid-dpgbfi7r><a href="/blog/edit-a-network-jax-flax-nnx/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>Editing a Network by Hand, in JAX/Flax NNX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion: build the prototype Yat-MLP in Flax NNX, then add a class by concatenating a few prototype rows and forget a class by masking them out, with no gradient steps. Class-incremental learning that matches a from-scratch build, and exact machine unlearning, both as array edits you can read. Every number is from a real run on Fashion-MNIST.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-06-22T18:00:00.000Z" data-astro-cid-dpgbfi7r>Jun 22, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/yat-mlp-fmnist-jax-flax-nnx/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>Your Neuron Is a Picture, in JAX/Flax NNX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion: build the prototype MLP from the post in Flax NNX, train it on Fashion-MNIST, and watch the neurons. Pull the prototypes out as images, read a prediction as a vote over pictures, see the model abstain on out-of-distribution digits, check that random-init prototypes classify but stay noise, and track the prototypes migrating through a UMAP fit on the dataset as they train.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-06-21T17:00:00.000Z" data-astro-cid-dpgbfi7r>Jun 21, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/your-neuron-is-a-picture/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>Your Neuron Is a Direction. It Should Be a Picture.</span><span class="related-desc" data-astro-cid-dpgbfi7r>Why should a neuron store a direction when it could store a thing? A direction is not a referent you can point at, which is why MLPs are opaque. Put the Yat kernel where the activation was, train on Fashion-MNIST, and every neuron becomes a prototype that lives in pixel space, literally a picture, so the network reads its own predictions: this looks like that, no saliency method required.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-06-21T00:00:00.000Z" data-astro-cid-dpgbfi7r>Jun 21, 2026</time></span></a></li></ul></aside> <nav class="post-nav" aria-label="Adjacent posts"><a href="/blog/yat-mlp-fmnist-jax-flax-nnx/" class="prev" rel="prev"><div class="label">← Previous</div><div class="title">Your Neuron Is a Picture, in JAX/Flax NNX</div></a><a href="/blog/edit-a-network-jax-flax-nnx/" class="next" rel="next"><div class="label">Next →</div><div class="title">Editing a Network by Hand, in JAX/Flax NNX</div></a></nav> <section aria-label="Comments" id="giscus-mount" style="margin-top:3rem" data-giscus="{&#34;repo&#34;:&#34;mlnomadpy/blog&#34;,&#34;repoId&#34;:&#34;MDEwOlJlcG9zaXRvcnk0MDQ4MzY2NDU=&#34;,&#34;category&#34;:&#34;Announcements&#34;,&#34;categoryId&#34;:&#34;DIC_kwDOGCFRJc4C9EiR&#34;,&#34;mapping&#34;:&#34;pathname&#34;,&#34;reactionsEnabled&#34;:&#34;1&#34;,&#34;emitMetadata&#34;:&#34;0&#34;,&#34;inputPosition&#34;:&#34;top&#34;,&#34;theme&#34;:&#34;preferred_color_scheme&#34;,&#34;lang&#34;:&#34;en&#34;}"></section><script>
+    (() => {
+      const load = () => {
+        const mount = document.getElementById('giscus-mount');
+        if (!mount || mount.dataset.loaded === '1') return;
+        const cfg = JSON.parse(mount.dataset.giscus);
+        const theme = document.documentElement.getAttribute('data-theme')
+          || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        const s = document.createElement('script');
+        s.src = 'https://giscus.app/client.js';
+        s.async = true;
+        s.crossOrigin = 'anonymous';
+        const attrs = {
+          'data-repo': cfg.repo,
+          'data-repo-id': cfg.repoId,
+          'data-category': cfg.category,
+          'data-category-id': cfg.categoryId,
+          'data-mapping': cfg.mapping,
+          'data-strict': '0',
+          'data-reactions-enabled': cfg.reactionsEnabled,
+          'data-emit-metadata': cfg.emitMetadata,
+          'data-input-position': cfg.inputPosition,
+          'data-theme': theme,
+          'data-lang': cfg.lang,
+          'data-loading': 'lazy',
+        };
+        for (const k in attrs) s.setAttribute(k, attrs[k]);
+        mount.appendChild(s);
+        mount.dataset.loaded = '1';
+      };
+      load();
+      document.addEventListener('astro:page-load', load);
+      document.addEventListener('astro:after-swap', load);
+    })();
+  </script> <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('pre').forEach((pre) => {
+        if (pre.dataset.copyEnhanced) return;
+        pre.dataset.copyEnhanced = '1';
+        const btn = document.createElement('button');
+        btn.className = 'code-copy';
+        btn.type = 'button';
+        btn.textContent = 'copy';
+        btn.setAttribute('aria-label', 'Copy code');
+        btn.addEventListener('click', async () => {
+          const code = pre.querySelector('code');
+          const text = (code ? code.innerText : pre.innerText) || '';
+          try {
+            await navigator.clipboard.writeText(text);
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = 'copy';
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+        pre.appendChild(btn);
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>  </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span class="site-footer__links"> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> <a class="site-footer__support" href="https://buymeacoffee.com/mlnomadpy" target="_blank" rel="noopener noreferrer" aria-label="Support this blog on Buy Me a Coffee">
+buy me a coffee
+</a> </span> </footer> <div id="consent-banner" class="consent-banner" role="dialog" aria-live="polite" aria-label="Analytics consent" hidden><p class="consent-text">
+I use Google Analytics to see which posts get read. It sets cookies only
+      if you accept. No ads, no selling data.
+</p><div class="consent-actions"><button type="button" id="consent-decline" class="consent-btn consent-decline">Decline</button><button type="button" id="consent-accept" class="consent-btn consent-accept">Accept</button></div></div>
+
+  <script>
+    (() => {
+      const KEY = 'analytics-consent';
+      const setup = () => {
+        const banner = document.getElementById('consent-banner');
+        if (!banner) return;
+        let choice = null;
+        try { choice = localStorage.getItem(KEY); } catch (e) {}
+        // Already decided → keep hidden.
+        if (choice === 'granted' || choice === 'denied') { banner.hidden = true; return; }
+        banner.hidden = false;
+
+        const decide = (value) => {
+          try { localStorage.setItem(KEY, value); } catch (e) {}
+          banner.hidden = true;
+          if (value === 'granted' && typeof window.__loadGA === 'function') window.__loadGA();
+        };
+        const accept = document.getElementById('consent-accept');
+        const decline = document.getElementById('consent-decline');
+        if (accept && !accept.dataset.bound) {
+          accept.dataset.bound = '1';
+          accept.addEventListener('click', () => decide('granted'));
+        }
+        if (decline && !decline.dataset.bound) {
+          decline.dataset.bound = '1';
+          decline.addEventListener('click', () => decide('denied'));
+        }
+      };
+      setup();
+      document.addEventListener('astro:page-load', setup);
+    })();
+  </script>
+
+  <style>
+    /* Author `display:flex` below would otherwise override the UA [hidden]
+       rule, leaving the banner visible after a choice. This wins on specificity. */
+    .consent-banner[hidden] { display: none !important; }
+    .consent-banner {
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      right: 1rem;
+      max-width: 30rem;
+      margin-left: auto;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+      padding: 0.95rem 1.1rem;
+      background: var(--bg-elev, #fff);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      font-family: var(--sans);
+    }
+    .consent-text {
+      margin: 0;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: var(--fg-muted);
+    }
+    .consent-actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+    }
+    .consent-btn {
+      font-family: var(--sans);
+      font-size: 0.82rem;
+      padding: 0.4rem 0.95rem;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    }
+    .consent-decline {
+      background: transparent;
+      color: var(--fg-muted);
+    }
+    .consent-decline:hover { color: var(--fg); border-color: var(--fg-faint); }
+    .consent-accept {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg);
+      font-weight: 600;
+    }
+    .consent-accept:hover { filter: brightness(1.05); }
+    @media (max-width: 520px) {
+      .consent-banner { left: 0.6rem; right: 0.6rem; bottom: 0.6rem; }
+    }
+  </style> <script>
+      // Inject a fullscreen toggle button onto every .viz figure on the page.
+      (() => {
+        const ENTER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10V4h6"/><path d="M20 10V4h-6"/><path d="M4 14v6h6"/><path d="M20 14v6h-6"/></svg>';
+        const EXIT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H4v6"/><path d="M14 4h6v6"/><path d="M10 20H4v-6"/><path d="M14 20h6v-6"/></svg>';
+        const inFs = () => document.fullscreenElement || document.webkitFullscreenElement;
+        const enhance = () => {
+          document.querySelectorAll('.viz').forEach((fig) => {
+            if (fig.dataset.fsReady) return;
+            fig.dataset.fsReady = '1';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'viz-fs-btn';
+            btn.setAttribute('aria-label', 'Toggle fullscreen');
+            btn.innerHTML = ENTER_SVG + '<span>fullscreen</span>';
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              try {
+                if (inFs() === fig) {
+                  await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen?.());
+                } else if (fig.requestFullscreen) {
+                  await fig.requestFullscreen();
+                } else if (fig.webkitRequestFullscreen) {
+                  await fig.webkitRequestFullscreen();
+                }
+              } catch (_) {}
+            });
+            fig.appendChild(btn);
+          });
+          const sync = () => {
+            document.querySelectorAll('.viz-fs-btn').forEach((b) => {
+              const fig = b.parentElement;
+              const open = inFs() === fig;
+              b.innerHTML = (open ? EXIT_SVG : ENTER_SVG) + '<span>' + (open ? 'exit' : 'fullscreen') + '</span>';
+            });
+          };
+          document.addEventListener('fullscreenchange', sync);
+          document.addEventListener('webkitfullscreenchange', sync);
+        };
+        enhance();
+        document.addEventListener('astro:page-load', enhance);
+        document.addEventListener('astro:after-swap', enhance);
+      })();
+    </script> </body> </html>
