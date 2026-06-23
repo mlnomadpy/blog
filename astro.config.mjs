@@ -42,6 +42,9 @@ export default defineConfig({
     '/ai-illiteracy-pt1': '/blog/writeups/ai-illiteracy-pt1',
     '/poem-0-1': '/blog/writeups/poem-0-1',
   },
+  // Web Workers (the off-thread Yat-kernel compute in the viz) import jax-js,
+  // which code-splits; ES module workers are required for that.
+  vite: { worker: { format: 'es' } },
   integrations: [
     mdx(),
     sitemap({

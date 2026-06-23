@@ -1,0 +1,159 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 480 } = Astro.props;
+---
+<figure class="viz kernelvote" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// A prediction is a vote over pictures, routed by the readout. Pick an image and
+// the kernel against all 200 prototypes is computed live in your browser: each
+// atom is a prototype, it brightens by how strongly the image resembles it, the
+// readout lines carry that vote to the class outputs, and one output wins. One
+// concept, one picture: how the network decides.
+import { defineViz } from './engine/vizkit.js';
+import { loadEditData, ensureJax, yatKernel, whenVisible, rowOf } from './yatedit.js';
+
+const CLASS_COL = ['#b3661b', '#4a7fb3', '#3a8f5e', '#9a4f9c', '#c2553a', '#5a7d3a', '#2f8f8f', '#a06a2a', '#7a5fc0', '#c0892a'];
+const PER = 20, NPICK = 20;
+
+defineViz('kernelvote', {
+  title: 'A prediction is a vote over pictures',
+  height: 480,
+  autoplay: false, stepsPerFrame: 1,
+  controls: [{ type: 'play', label: 'animate' }, { type: 'button', name: 'next', label: '▶ next image' }, { type: 'readout', name: 'rd' }],
+
+  setup(api) {
+    api.state = { ready: false, computing: false, t: 0, sel: 0, computedFor: -1, act: null };
+    let s = 7; const rnd = () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    api.state.off = Array.from({ length: 200 }, () => { const a = rnd() * 6.283, r = Math.sqrt(rnd()); return { ox: Math.cos(a) * r, oy: Math.sin(a) * r, ph: rnd() * 6.283, sp: 0.5 + rnd() }; });
+    bind(api);
+    const start = () => {
+      if (!api.state || api.state.computing || api.state.ready) return;
+      api.state.computing = true; api.render();
+      requestAnimationFrame(() => setTimeout(async () => {
+        await ensureJax();
+        const data = await loadEditData(); if (!api.state) return;
+        const pickPx = Array.from({ length: NPICK }, (_, i) => rowOf(data.bankFlat, i));
+        Object.assign(api.state, { ready: true, protos: data.protos, bank: data.bank, d: data.d, protoPx: data.protoRows, pickPx, vote: data.vote, classes: data.d.classes });
+        api.render();
+      }, 0));
+    };
+    api.state.start = start;
+    whenVisible(api.canvas, start);
+  },
+
+  step(api) { const st = api.state; if (st && st.ready) st.t += 1 / 60; },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    ctx.clearRect(0, 0, W, H);
+    if (!st.ready) { ctx.fillStyle = st.computing ? colors.muted : colors.accent; ctx.font = st.computing ? '12px ui-monospace, monospace' : '13px ui-sans-serif, system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(st.computing ? 'computing in your browser…' : '▶ click to run (computes live in your browser)', W / 2, H / 2); return; }
+
+    if (st.computedFor !== st.sel) {                              // live kernel of the picked image
+      st.act = yatKernel([st.pickPx[st.sel]], st.protoPx, st.d.b, st.d.eps)[0];
+      st.computedFor = st.sel;
+    }
+    const act = st.act;
+    let aMax = 0; for (const v of act) if (v > aMax) aMax = v;
+    const cls = new Float64Array(10).fill(-1e9);
+    for (let u = 0; u < 200; u++) { const c = st.vote[u]; if (act[u] > cls[c]) cls[c] = act[u]; }
+    let pred = 0; for (let c = 1; c < 10; c++) if (cls[c] > cls[pred]) pred = c;
+
+    const pad = 12;
+    const imgSz = 84, leftW = imgSz + 24;
+    const outX = W - pad - 96;
+    const cloudX0 = pad + leftW + 20, cloudX1 = outX - 60;
+    const cy = H / 2 + 6, cloudCx = (cloudX0 + cloudX1) / 2;
+    const Rx = (cloudX1 - cloudX0) / 2 * 0.92, Ry = (H - 120) / 2 * 0.86;
+    const outY = (c) => 40 + (c + 0.5) * (H - 70) / 10;
+    const clusterC = (c) => { const a = -1.5708 + c / 10 * 6.283; return { x: cloudCx + Math.cos(a) * Rx, y: cy + Math.sin(a) * Ry }; };
+    const discR = Math.min(30, Ry * 0.46);
+
+    // picked image
+    ctx.fillStyle = colors.muted; ctx.font = '11px ui-sans-serif, system-ui'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('input', pad, 26);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(st.bank, (st.sel % st.d.bankCols) * 28, Math.floor(st.sel / st.d.bankCols) * 28, 28, 28, pad, 34, imgSz, imgSz);
+    ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.strokeRect(pad - 0.5, 33.5, imgSz + 1, imgSz + 1);
+    ctx.fillStyle = colors.muted; ctx.font = '11px ui-sans-serif, system-ui';
+    ctx.fillText('true: ' + st.classes[st.d.bankLabels[st.sel]], pad, 34 + imgSz + 16);
+    ctx.fillStyle = CLASS_COL[pred]; ctx.font = 'bold 15px ui-sans-serif, system-ui';
+    ctx.fillText('vote: ' + st.classes[pred], pad, 34 + imgSz + 36);
+
+    // readout lines, brightness by activation
+    for (let c = 0; c < 10; c++) {
+      const cc = clusterC(c), oy = outY(c); ctx.strokeStyle = CLASS_COL[c];
+      for (let j = 0; j < PER; j++) {
+        const u = c * PER + j, o = st.off[u], w = act[u] / aMax;
+        const ax = cc.x + o.ox * discR + Math.sin(st.t * o.sp + o.ph) * 2;
+        const ay = cc.y + o.oy * discR + Math.cos(st.t * o.sp + o.ph) * 2;
+        ctx.globalAlpha = 0.03 + 0.6 * w * w; ctx.lineWidth = 0.4 + 1.8 * w * w;
+        ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(outX, oy); ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // atoms, lit by activation
+    for (let c = 0; c < 10; c++) {
+      const cc = clusterC(c);
+      for (let j = 0; j < PER; j++) {
+        const u = c * PER + j, o = st.off[u], w = act[u] / aMax;
+        const ax = cc.x + o.ox * discR + Math.sin(st.t * o.sp + o.ph) * 2;
+        const ay = cc.y + o.oy * discR + Math.cos(st.t * o.sp + o.ph) * 2;
+        const sz = 8 + 9 * w * w;
+        if (w > 0.4) { ctx.globalAlpha = (w - 0.4) * 1.4; ctx.fillStyle = CLASS_COL[c]; ctx.beginPath(); ctx.arc(ax, ay, sz * 0.95, 0, 6.283); ctx.fill(); }
+        ctx.globalAlpha = 0.5 + 0.5 * w; ctx.drawImage(st.protos, j * 28, c * 28, 28, 28, ax - sz / 2, ay - sz / 2, sz, sz);
+        ctx.globalAlpha = 0.45; ctx.lineWidth = 1; ctx.strokeStyle = CLASS_COL[c]; ctx.strokeRect(ax - sz / 2, ay - sz / 2, sz, sz);
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // class outputs + vote bars
+    let cmax = 0; for (let c = 0; c < 10; c++) if (cls[c] > cmax) cmax = cls[c];
+    for (let c = 0; c < 10; c++) {
+      const oy = outY(c), win = c === pred, r = 7 + (win ? 3 : 0);
+      ctx.beginPath(); ctx.arc(outX, oy, r, 0, 6.283); ctx.fillStyle = CLASS_COL[c]; ctx.fill();
+      if (win) { ctx.globalAlpha = 0.25; ctx.beginPath(); ctx.arc(outX, oy, r + 7, 0, 6.283); ctx.fillStyle = CLASS_COL[c]; ctx.fill(); ctx.globalAlpha = 1; }
+      ctx.lineWidth = win ? 2.5 : 1.2; ctx.strokeStyle = CLASS_COL[c]; ctx.stroke();
+      const bw = 60 * (cls[c] / cmax);
+      ctx.fillStyle = CLASS_COL[c] + (win ? 'ff' : '66'); ctx.fillRect(outX + 12, oy - 4, bw, 8);
+      ctx.fillStyle = win ? colors.fg : colors.muted; ctx.font = (win ? 'bold ' : '') + '10px ui-sans-serif, system-ui';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(st.classes[c], outX + 12, oy - 12);
+    }
+
+    // pick strip
+    const gs = 24, gap = 4, n = NPICK, totW = n * (gs + gap) - gap, sx0 = pad + Math.max(0, (W - pad * 2 - totW) / 2), sy = H - 30;
+    st._rects = [];
+    for (let k = 0; k < n; k++) {
+      const x = sx0 + k * (gs + gap);
+      ctx.globalAlpha = 1; ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(st.bank, (k % st.d.bankCols) * 28, Math.floor(k / st.d.bankCols) * 28, 28, 28, x, sy, gs, gs);
+      ctx.lineWidth = k === st.sel ? 2.5 : 1; ctx.strokeStyle = k === st.sel ? colors.accent : colors.border;
+      ctx.strokeRect(x - 0.5, sy - 0.5, gs + 1, gs + 1);
+      st._rects.push({ x, y: sy, w: gs, h: gs, k });
+    }
+
+    api.readout('rd', `live forward pass · resembles ${st.classes[pred]} most · vote ${(cls[pred]).toFixed(0)} vs runner-up`);
+  },
+
+  onAction(name, api) { const st = api.state; if (st && st.ready && name === 'next') { st.sel = (st.sel + 1) % NPICK; } },
+});
+
+function bind(api) {
+  if (api.canvas.dataset.kvBound) return; api.canvas.dataset.kvBound = '1'; api.canvas.style.cursor = 'pointer';
+  api.canvas.addEventListener('pointerdown', (e) => {
+    const st = api.state; if (!st) return;
+    if (!st.ready) { st.start && st.start(); return; }                       // first click runs the compute
+    if (!st._rects) return;
+    const rc = api.canvas.getBoundingClientRect(), px = (e.clientX - rc.left) * api.size.W / rc.width, py = (e.clientY - rc.top) * api.size.H / rc.height;
+    for (const r of st._rects) if (px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h) { st.sel = r.k; api.render(); break; }
+  });
+}
+</script>

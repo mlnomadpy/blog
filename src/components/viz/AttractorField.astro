@@ -1,0 +1,166 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 520 } = Astro.props;
+---
+<figure class="viz attractorfield" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The kernel as a field of attractors. Each prototype's denominator, 1/(r²+ε), is
+// a softened inverse-square well, exactly a gravitational potential (ε is the
+// softening length N-body sims use). So the input space is a landscape of wells,
+// and classifying a point is letting it fall into the deepest basin. Press "drop
+// test particles" and watch them settle into wells, coloured by the class they
+// land in. Click a well to delete it (forget): its basin collapses and neighbours
+// flood in to reclaim the territory, while the rest of the landscape is untouched.
+import { defineViz } from './engine/vizkit.js';
+
+const CLASS_COL = ['#b3661b', '#4a7fb3', '#3a8f5e', '#9a4f9c', '#2f8f8f'];
+const DOM = 2.0, EPS = 0.03, HM = 120, NP = 150;
+const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+const mix = (a, b, t) => `rgb(${(a[0] + (b[0] - a[0]) * t) | 0},${(a[1] + (b[1] - a[1]) * t) | 0},${(a[2] + (b[2] - a[2]) * t) | 0})`;
+
+function field(wells, x, y) {                          // top-2 activations + winning class
+  let a1 = -1, a2 = -1, c1 = -1;
+  for (const w of wells) { if (!w.on) continue;
+    const dx = x - w.x, dy = y - w.y, a = 1 / (dx * dx + dy * dy + EPS);
+    if (a > a1) { a2 = a1; a1 = a; c1 = w.c; } else if (a > a2) a2 = a; }
+  return { a1, a2, c1 };
+}
+
+function bakeHeatmap(st, colors) {                     // basins -> offscreen canvas (recomputed on edit only)
+  const bg = hex(colors.bg), img = st.hmCtx.createImageData(HM, HM);
+  for (let py = 0; py < HM; py++) {
+    const wy = DOM - (py / (HM - 1)) * 2 * DOM;
+    for (let px = 0; px < HM; px++) {
+      const wx = -DOM + (px / (HM - 1)) * 2 * DOM, f = field(st.wells, wx, wy);
+      const o = (py * HM + px) * 4;
+      if (f.c1 < 0) { img.data[o] = bg[0]; img.data[o + 1] = bg[1]; img.data[o + 2] = bg[2]; img.data[o + 3] = 255; continue; }
+      const margin = (f.a1 - f.a2) / (f.a1 + f.a2), t = 0.12 + 0.68 * Math.min(1, margin * 1.5), col = hex(CLASS_COL[f.c1]);
+      img.data[o] = bg[0] + (col[0] - bg[0]) * t; img.data[o + 1] = bg[1] + (col[1] - bg[1]) * t; img.data[o + 2] = bg[2] + (col[2] - bg[2]) * t; img.data[o + 3] = 255;
+    }
+  }
+  st.hmCtx.putImageData(img, 0, 0);
+}
+
+defineViz('attractorfield', {
+  title: 'A landscape of wells: classifying is falling into a basin',
+  height: 520,
+  autoplay: false, stepsPerFrame: 1, maxStep: 220,
+  controls: [
+    { type: 'play', label: 'drop test particles' },
+    { type: 'reset', label: 'reset' },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    let s = 1234567; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+    const randn = () => Math.sqrt(-2 * Math.log(rnd() || 1e-9)) * Math.cos(6.283 * rnd());
+    const NC = 5, wells = [], data = [];
+    for (let c = 0; c < NC; c++) {
+      const a = -1.5708 + c / NC * 6.283, cx = Math.cos(a) * 1.25, cy = Math.sin(a) * 1.25;
+      for (let p = 0; p < 3; p++) wells.push({ x: cx + randn() * 0.28, y: cy + randn() * 0.28, c, on: true });
+      for (let d = 0; d < 16; d++) data.push({ x: cx + randn() * 0.34, y: cy + randn() * 0.34, c });
+    }
+    const parts = [];
+    for (let i = 0; i < NP; i++) parts.push({ x: (rnd() * 2 - 1) * DOM, y: (rnd() * 2 - 1) * DOM, vx: 0, vy: 0, c: -1, settled: false });
+    const hm = document.createElement('canvas'); hm.width = HM; hm.height = HM;
+    api.state = { wells, data, parts, marker: { x: 0.0, y: -0.0 }, hm, hmCtx: hm.getContext('2d'), baked: false, dragging: false };
+    bind(api);
+  },
+
+  step(api) {                                          // particles fall into the deepest well they feel
+    const st = api.state; if (!st) return;
+    for (const p of st.parts) {
+      if (p.settled) continue;
+      let a1 = -1, wx = 0, wy = 0, wc = -1;
+      for (const w of st.wells) { if (!w.on) continue; const dx = p.x - w.x, dy = p.y - w.y, a = 1 / (dx * dx + dy * dy + EPS); if (a > a1) { a1 = a; wx = w.x; wy = w.y; wc = w.c; } }
+      if (wc < 0) continue;
+      p.vx = (p.vx + (wx - p.x) * 0.03) * 0.86; p.vy = (p.vy + (wy - p.y) * 0.03) * 0.86;
+      p.x += p.vx; p.y += p.vy; p.c = wc;
+      if ((wx - p.x) ** 2 + (wy - p.y) ** 2 < 0.004 && p.vx * p.vx + p.vy * p.vy < 1e-4) p.settled = true;
+    }
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    ctx.clearRect(0, 0, W, H);
+    if (!st.baked) { bakeHeatmap(st, colors); st.baked = true; }
+
+    const pad = 12, topH = 44, side = Math.min(W - pad * 2, H - pad - topH - 16);
+    const x0 = (W - side) / 2, y0 = pad + topH;
+    const sx = (wx) => x0 + (wx + DOM) / (2 * DOM) * side, sy = (wy) => y0 + (DOM - wy) / (2 * DOM) * side;
+    const wxOf = (px) => (px - x0) / side * 2 * DOM - DOM, wyOf = (py) => DOM - (py - y0) / side * 2 * DOM;
+    st._geom = { x0, y0, side, sx, sy, wxOf, wyOf };
+
+    // header
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = colors.fg; ctx.font = 'bold 13px ui-sans-serif, system-ui';
+    const live = st.wells.filter((w) => w.on).length;
+    ctx.fillText('each prototype is a well with a 1/(r²+ε) pull; a point is classified by the basin it falls into', pad, pad + 12);
+    ctx.fillStyle = colors.muted; ctx.font = '11px ui-sans-serif, system-ui';
+    ctx.fillText('press “drop test particles” to watch them settle · click a well to delete it and watch its basin get reclaimed', pad, pad + 30);
+
+    // basins
+    ctx.imageSmoothingEnabled = true; ctx.globalAlpha = 1; ctx.drawImage(st.hm, x0, y0, side, side);
+    ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.strokeRect(x0 + 0.5, y0 + 0.5, side - 1, side - 1);
+
+    // data points (faint context)
+    for (const d of st.data) { ctx.globalAlpha = 0.35; ctx.fillStyle = CLASS_COL[d.c]; ctx.beginPath(); ctx.arc(sx(d.x), sy(d.y), 2, 0, 6.283); ctx.fill(); }
+    ctx.globalAlpha = 1;
+
+    // particles
+    for (const p of st.parts) { if (p.c < 0) continue; ctx.globalAlpha = p.settled ? 0.95 : 0.7; ctx.fillStyle = CLASS_COL[p.c]; ctx.beginPath(); ctx.arc(sx(p.x), sy(p.y), p.settled ? 2 : 2.6, 0, 6.283); ctx.fill(); }
+    ctx.globalAlpha = 1;
+
+    // wells
+    for (const w of st.wells) {
+      const X = sx(w.x), Y = sy(w.y);
+      if (w.on) {
+        const g = ctx.createRadialGradient(X, Y, 0, X, Y, 16); g.addColorStop(0, CLASS_COL[w.c]); g.addColorStop(1, 'transparent');
+        ctx.globalAlpha = 0.5; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(X, Y, 16, 0, 6.283); ctx.fill(); ctx.globalAlpha = 1;
+        ctx.fillStyle = CLASS_COL[w.c]; ctx.beginPath(); ctx.arc(X, Y, 5, 0, 6.283); ctx.fill();
+        ctx.lineWidth = 1.5; ctx.strokeStyle = colors.bg; ctx.stroke();
+      } else {
+        ctx.strokeStyle = colors.faint; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(X, Y, 5, 0, 6.283); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(X - 4, Y - 4); ctx.lineTo(X + 4, Y + 4); ctx.moveTo(X + 4, Y - 4); ctx.lineTo(X - 4, Y + 4); ctx.stroke();
+      }
+    }
+
+    // draggable test marker + its pull line to the winning well
+    const m = st.marker, f = field(st.wells, m.x, m.y);
+    if (f.c1 >= 0) {
+      let a1 = -1, wx = 0, wy = 0;
+      for (const w of st.wells) { if (!w.on) continue; const dx = m.x - w.x, dy = m.y - w.y, a = 1 / (dx * dx + dy * dy + EPS); if (a > a1) { a1 = a; wx = w.x; wy = w.y; } }
+      ctx.strokeStyle = CLASS_COL[f.c1]; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(sx(m.x), sy(m.y)); ctx.lineTo(sx(wx), sy(wy)); ctx.stroke(); ctx.setLineDash([]);
+    }
+    ctx.fillStyle = colors.fg; ctx.beginPath(); ctx.arc(sx(m.x), sy(m.y), 6, 0, 6.283); ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = f.c1 >= 0 ? CLASS_COL[f.c1] : colors.muted; ctx.stroke();
+    ctx.fillStyle = colors.muted; ctx.font = '10px ui-sans-serif, system-ui'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText('drag me', sx(m.x) + 9, sy(m.y));
+
+    const settled = st.parts.filter((p) => p.settled).length;
+    api.readout('rd', `${live} wells active · ${settled}/${NP} particles settled · drag the marker, or click a well to delete it`);
+  },
+});
+
+function bind(api) {
+  if (api.canvas.dataset.afBound) return; api.canvas.dataset.afBound = '1'; api.canvas.style.cursor = 'crosshair';
+  const at = (e) => { const rc = api.canvas.getBoundingClientRect(); return { px: (e.clientX - rc.left) * api.size.W / rc.width, py: (e.clientY - rc.top) * api.size.H / rc.height }; };
+  api.canvas.addEventListener('pointerdown', (e) => {
+    const st = api.state, g = st && st._geom; if (!g) return;
+    const { px, py } = at(e);
+    for (const w of st.wells) { if (Math.hypot(px - g.sx(w.x), py - g.sy(w.y)) < 9) { w.on = !w.on; st.baked = false; api.render(); return; } }   // toggle a well
+    const wx = g.wxOf(px), wy = g.wyOf(py);
+    if (wx > -DOM && wx < DOM && wy > -DOM && wy < DOM) { st.marker.x = wx; st.marker.y = wy; st.dragging = true; api.render(); }
+  });
+  api.canvas.addEventListener('pointermove', (e) => { const st = api.state, g = st && st._geom; if (!g || !st.dragging) return; const { px, py } = at(e); st.marker.x = Math.max(-DOM, Math.min(DOM, g.wxOf(px))); st.marker.y = Math.max(-DOM, Math.min(DOM, g.wyOf(py))); if (!api.playing) api.render(); });
+  api.canvas.addEventListener('pointerup', () => { if (api.state) api.state.dragging = false; });
+}
+</script>

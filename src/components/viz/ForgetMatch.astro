@@ -1,0 +1,148 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 520 } = Astro.props;
+---
+<figure class="viz forgetmatch" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Why forgetting is exact, made visible. The network recognizes each test image
+// (left) by the single prototype it most resembles (right): that match IS the
+// decision. Click a class in the memory strip to delete it. The images that were
+// recognized by that class lose their match and re-point to a surviving
+// prototype, usually getting it wrong now. Every other image keeps the exact same
+// match and the exact same label, untouched. That is the whole idea of unlearning
+// here: deleting a class only disturbs what relied on it, nothing else.
+import { defineViz } from './engine/vizkit.js';
+import { loadEditData, ensureJax, yatKernel, whenVisible, rowOf } from './yatedit.js';
+
+const CLASS_COL = ['#b3661b', '#4a7fb3', '#3a8f5e', '#9a4f9c', '#c2553a', '#5a7d3a', '#2f8f8f', '#a06a2a', '#7a5fc0', '#c0892a'];
+const PER = 20, SHOWN = 8, DEL = 5;   // DEL = Sandal, the class the caption suggests deleting
+
+function matched(act, enabled, vote) {           // nearest surviving prototype
+  let best = -1e9, arg = -1;
+  for (let u = 0; u < act.length; u++) { if (!enabled[vote[u]]) continue; if (act[u] > best) { best = act[u]; arg = u; } }
+  return arg;
+}
+function recompute(st) {
+  st.match = st.act.map((a) => matched(a, st.enabled, st.vote));
+  st.changed = st.match.reduce((n, m, i) => n + (m !== st.base[i] ? 1 : 0), 0);
+}
+
+defineViz('forgetmatch', {
+  title: 'Forget a class: only what relied on it changes',
+  height: 520,
+  controls: [{ type: 'button', name: 'restore', label: '↺ restore all' }, { type: 'readout', name: 'rd' }],
+
+  setup(api) {
+    api.state = { ready: false, computing: false, enabled: Array(10).fill(true) };
+    const start = () => {
+      if (!api.state || api.state.computing || api.state.ready) return;
+      api.state.computing = true; api.render();
+      requestAnimationFrame(() => setTimeout(async () => {
+        await ensureJax();
+        const s = await loadEditData(); if (!api.state) return;
+        // pick the shown images: 3 of the suggested-delete class, then one each of others
+        const lab = s.d.bankLabels, show = [];
+        for (let i = 0; i < lab.length && show.filter((j) => lab[j] === DEL).length < 3; i++) if (lab[i] === DEL) show.push(i);
+        const seen = new Set([DEL]);
+        for (let i = 0; i < lab.length && show.length < SHOWN; i++) if (!seen.has(lab[i])) { seen.add(lab[i]); show.push(i); }
+        const rows = show.map((i) => rowOf(s.bankFlat, i));
+        const act = yatKernel(rows, s.protoRows, s.d.b, s.d.eps);          // [SHOWN][200] live
+        Object.assign(api.state, { ready: true, protos: s.protos, bank: s.bank, d: s.d, classes: s.d.classes, vote: s.vote, show, showLab: show.map((i) => lab[i]), act });
+        api.state.base = act.map((a) => matched(a, Array(10).fill(true), s.vote));
+        recompute(api.state); api.render();
+      }, 0));
+    };
+    api.state.start = start;
+    whenVisible(api.canvas, start);
+    bind(api);
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    ctx.clearRect(0, 0, W, H);
+    if (!st.ready) { ctx.fillStyle = st.computing ? colors.muted : colors.accent; ctx.font = st.computing ? '12px ui-monospace, monospace' : '13px ui-sans-serif, system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(st.computing ? 'computing in your browser…' : '▶ click to run (computes live in your browser)', W / 2, H / 2); return; }
+
+    const pad = 12, topH = 48, green = colors.green || '#3a8f5e', red = colors.accent;
+    const deleted = st.enabled.map((e, c) => !e ? c : -1).filter((c) => c >= 0);
+
+    // headline
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = colors.fg; ctx.font = 'bold 13px ui-sans-serif, system-ui';
+    ctx.fillText(deleted.length ? `forgotten: ${deleted.map((c) => st.classes[c]).join(', ')} · ${st.changed}/${SHOWN} decisions changed, the rest untouched`
+      : 'every test image is recognized by the prototype it most resembles', pad, pad + 13);
+    ctx.fillStyle = colors.muted; ctx.font = '11px ui-sans-serif, system-ui';
+    ctx.fillText('click a class in the memory strip below to delete it. only the images that pointed at it re-route; the others keep the exact same match.', pad, pad + 31);
+
+    const y0 = pad + topH, memH = 66, bodyH = H - y0 - memH;
+    const imgX = pad + 6, protoX = W - pad - 64, sz = Math.min(bodyH / SHOWN - 8, 40);
+    const rowY = (i) => y0 + i * (bodyH / SHOWN) + (bodyH / SHOWN) / 2;
+
+    // column captions
+    ctx.fillStyle = colors.muted; ctx.font = '10px ui-sans-serif, system-ui'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('TEST IMAGE → its label', imgX, y0 - 4);
+    ctx.textAlign = 'right'; ctx.fillText('recognized by this prototype', protoX + 52, y0 - 4);
+
+    for (let i = 0; i < SHOWN; i++) {
+      const cy = rowY(i), m = st.match[i], pc = st.vote[m], correct = pc === st.showLab[i], moved = m !== st.base[i];
+      // connecting line (matched prototype = the reason for the decision)
+      ctx.strokeStyle = moved ? red : colors.border; ctx.lineWidth = moved ? 2 : 1; ctx.globalAlpha = moved ? 0.9 : 0.55;
+      ctx.beginPath(); ctx.moveTo(imgX + sz, cy); ctx.lineTo(protoX, cy); ctx.stroke(); ctx.globalAlpha = 1;
+      // test image
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(st.bank, (st.show[i] % st.d.bankCols) * 28, Math.floor(st.show[i] / st.d.bankCols) * 28, 28, 28, imgX, cy - sz / 2, sz, sz);
+      ctx.lineWidth = 1; ctx.strokeStyle = CLASS_COL[st.showLab[i]]; ctx.strokeRect(imgX - 0.5, cy - sz / 2 - 0.5, sz + 1, sz + 1);
+      // predicted label between
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = correct ? green : red; ctx.font = 'bold 11px ui-sans-serif, system-ui';
+      ctx.fillText(`${st.classes[pc]} ${correct ? '✓' : '✗'}`, imgX + sz + 8, cy - 7);
+      ctx.fillStyle = colors.faint; ctx.font = '9px ui-sans-serif, system-ui';
+      ctx.fillText(moved ? '(re-routed)' : 'unchanged', imgX + sz + 8, cy + 7);
+      // matched prototype
+      ctx.drawImage(st.protos, (m % PER) * 28, Math.floor(m / PER) * 28, 28, 28, protoX, cy - sz / 2, sz, sz);
+      ctx.lineWidth = 1.5; ctx.strokeStyle = CLASS_COL[pc]; ctx.strokeRect(protoX - 0.5, cy - sz / 2 - 0.5, sz + 1, sz + 1);
+    }
+
+    // ── memory strip: click a class to delete ──
+    const my = H - memH + 6;
+    ctx.fillStyle = colors.muted; ctx.font = '10px ui-sans-serif, system-ui'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('THE NETWORK’S MEMORY (click to delete a class):', pad, my);
+    const cw = (W - pad * 2) / 10, chip = Math.min(cw - 8, 30);
+    st._chips = [];
+    for (let c = 0; c < 10; c++) {
+      const x = pad + c * cw + (cw - chip) / 2, yy = my + 8, on = st.enabled[c];
+      ctx.globalAlpha = on ? 1 : 0.3; ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(st.protos, 0, c * 28, 28, 28, x, yy, chip, chip);
+      ctx.lineWidth = 1.5; ctx.strokeStyle = CLASS_COL[c]; ctx.strokeRect(x - 0.5, yy - 0.5, chip + 1, chip + 1);
+      ctx.globalAlpha = 1;
+      if (!on) { ctx.strokeStyle = red; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, yy); ctx.lineTo(x + chip, yy + chip); ctx.moveTo(x + chip, yy); ctx.lineTo(x, yy + chip); ctx.stroke(); }
+      ctx.fillStyle = on ? colors.muted : colors.faint; ctx.font = '8px ui-sans-serif, system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText(st.classes[c], x + chip / 2, yy + chip + 2);
+      st._chips.push({ x, y: yy, w: chip, h: chip + 10, c });
+    }
+
+    api.readout('rd', deleted.length ? `${deleted.map((c) => st.classes[c]).join(', ')} forgotten · ${st.changed} of ${SHOWN} shown images re-routed, the rest identical`
+      : 'click a class chip to delete it and watch only its images change');
+  },
+
+  onAction(name, api) { const st = api.state; if (st && st.ready && name === 'restore') { st.enabled = Array(10).fill(true); recompute(st); } },
+});
+
+function bind(api) {
+  if (api.canvas.dataset.fmBound) return; api.canvas.dataset.fmBound = '1'; api.canvas.style.cursor = 'pointer';
+  api.canvas.addEventListener('pointerdown', (e) => {
+    const st = api.state; if (!st) return;
+    if (!st.ready) { st.start && st.start(); return; }
+    if (!st._chips) return;
+    const rc = api.canvas.getBoundingClientRect(), px = (e.clientX - rc.left) * api.size.W / rc.width, py = (e.clientY - rc.top) * api.size.H / rc.height;
+    for (const r of st._chips) if (px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h) { st.enabled[r.c] = !st.enabled[r.c]; recompute(st); api.render(); break; }
+  });
+}
+</script>

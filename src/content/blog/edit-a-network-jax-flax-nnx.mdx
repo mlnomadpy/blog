@@ -1,0 +1,185 @@
+---
+title: "Editing a Network by Hand, in JAX/Flax NNX"
+seoTitle: "Edit a Neural Network Without Training, in JAX"
+description: "A runnable companion: build the prototype Yat-MLP in Flax NNX, then add a class by concatenating a few prototype rows and forget a class by masking them out, with no gradient steps. Class-incremental learning that matches a from-scratch build, and exact machine unlearning, both as array edits you can read. Every number is from a real run on Fashion-MNIST."
+seoDescription: "Build a Yat-kernel MLP in Flax NNX, then add a class with jnp.concatenate and forget one with a boolean mask, all with no training."
+pubDate: 2026-06-22T11:00:00-07:00
+draft: false
+tags: [ml, kernels, interpretability, prototypes, continual-learning, machine-unlearning, yat, jax, flax, nnx, implementation, deep-learning]
+references:
+  - authors: "Chen, C., Li, O., Tao, D., Barnett, A., Su, J., Rudin, C."
+    year: 2019
+    title: "This Looks Like That: Deep Learning for Interpretable Image Recognition"
+    venue: "NeurIPS 2019"
+    arxiv: "1806.10574"
+  - authors: "Bourtoule, L., Chandrasekaran, V., Choquette-Choo, C. A., Jia, H., Travers, A., Zhang, B., Lie, D., Papernot, N."
+    year: 2021
+    title: "Machine Unlearning"
+    venue: "IEEE S&P 2021"
+    arxiv: "1912.03817"
+  - authors: "Xiao, H., Rasul, K., Vollgraf, R."
+    year: 2017
+    title: "Fashion-MNIST: a Novel Image Dataset for Benchmarking Machine Learning Algorithms"
+    arxiv: "1708.07747"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+keywords:
+  - editable neural network JAX
+  - class-incremental learning no training
+  - machine unlearning JAX
+  - Yat kernel Flax NNX
+  - prototype network implementation
+---
+import CiteAs from '../../components/CiteAs.astro';
+
+*The [explainer](/blog/edit-a-network-by-hand/) argued that a Yat-kernel network is a list of prototype pictures, so you can teach it a class by adding pictures and make it forget one by deleting them, with no training. This is the implementation: build the network in [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html), then watch teaching reduce to a `jnp.concatenate` and forgetting to a boolean mask. Every figure and number below is from a real run; the script is `scripts/yat_editable_fmnist.py`.*
+
+## The layer, and what its rows are
+
+A Yat unit scores an input against a prototype $W_u$ with the kernel $(W_u^\top x + b)^2 / (\lVert x - W_u\rVert^2 + \varepsilon)$. A layer is a bank of them, and the readout lets each prototype vote for a class. The thing to notice for this post is the shape: the prototypes are the rows of `W`, and each row's vote is a row of the readout. Editing the network is editing those rows.
+
+```python
+import jax, jax.numpy as jnp
+from flax import nnx
+
+
+class YatEdit(nnx.Module):
+    """A bank of prototype rows W and their class votes A. No activation function."""
+    def __init__(self, W, A, *, b=0.5, eps=0.05):
+        self.W = nnx.Param(jnp.asarray(W))            # [K, 784]  prototype pictures
+        self.A = nnx.Param(jnp.asarray(A))            # [K, 10]   each row votes for a class
+        self.b, self.eps = b, eps
+
+    def kernel(self, x):                              # [n, K] resemblance of each input to each prototype
+        dot = x @ self.W.value.T
+        d2 = (x ** 2).sum(-1, keepdims=True) + (self.W.value ** 2).sum(-1) - 2 * dot
+        return (dot + self.b) ** 2 / (d2 + self.eps)
+
+    def __call__(self, x):
+        return self.kernel(x) @ self.A.value          # kernel votes -> class scores
+```
+
+There is no `nnx.Linear`, no nonlinearity, and crucially no entanglement: prototype $u$ lives entirely in row $u$ of `W` and row $u$ of `A`. That separation is the whole reason the edits below are clean.
+
+## Build it by hand
+
+Take a few k-means centroids per class as the prototypes and wire each one's readout row to one-hot. No optimizer touches this.
+
+```python
+import numpy as np, torchvision
+from sklearn.cluster import KMeans
+
+tr = torchvision.datasets.FashionMNIST("/tmp/fmnist", train=True, download=True)
+te = torchvision.datasets.FashionMNIST("/tmp/fmnist", train=False, download=True)
+X = tr.data.numpy().reshape(-1, 784).astype("float32") / 255.0; y = tr.targets.numpy()
+Xte = te.data.numpy().reshape(-1, 784).astype("float32") / 255.0; yte = te.targets.numpy()
+
+def prototypes(classes, per=20):
+    W, lab = [], []
+    for c in classes:
+        W += list(KMeans(per, n_init=3, random_state=0).fit(X[y == c][:2500]).cluster_centers_)
+        lab += [c] * per
+    return np.array(W, "float32"), np.array(lab)
+
+def build(classes, per=20):
+    W, lab = prototypes(classes, per)
+    A = np.eye(10)[lab].astype("float32")             # row u votes one-hot for class lab[u]
+    return YatEdit(W, A)
+
+model = build(range(10))
+acc = float((jnp.argmax(model(jnp.asarray(Xte)), -1) == yte).mean())
+print("zero-training accuracy:", round(acc * 100, 1))  # ~79% with a nearest-prototype readout
+```
+
+The network classifies before any training, because it is a kernel machine from the first step. Geometrically, as the [explainer](/blog/edit-a-network-by-hand/) frames it, the kernel's $1/(\lVert x - W_u\rVert^2 + \varepsilon)$ is a softened inverse-square pull, so each prototype is a mass and classifying a point is letting it fall into the deepest basin it feels.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/edit-settle.gif" alt="Test points released as particles in a 2D map of Fashion-MNIST, falling into the basins of the classes the network assigns them" loading="lazy" width="440" height="422" />
+  <figcaption>Classification as settling, on real Fashion-MNIST laid out by UMAP. Each particle is a test image released into the prototype field; it falls into the basin of the class the network (in full 784 dimensions) assigns it, and the ten basins fill with colour. The forward pass is this descent into the nearest well. Rendered by <code>scripts/render_yat_edit_gifs.py</code>.</figcaption>
+</figure>
+
+Everything from here is editing that field.
+
+## Teaching a class is a concatenate
+
+To teach a class the network has never seen, build its prototypes and the matching one-hot rows, and stack them on. That is the entire operation.
+
+```python
+def add_class(model, c, per=20):
+    Wc, _ = prototypes([c], per)
+    Ac = np.eye(10)[[c] * per].astype("float32")
+    model.W = nnx.Param(jnp.concatenate([model.W.value, jnp.asarray(Wc)], 0))
+    model.A = nnx.Param(jnp.concatenate([model.A.value, jnp.asarray(Ac)], 0))
+    return model
+
+eight = build(range(8))                                # a network that has never seen Bag or Boot
+mask8 = np.isin(yte, range(8))
+print("8 classes:", round(float((jnp.argmax(eight(jnp.asarray(Xte[mask8])), -1) == yte[mask8]).mean()) * 100, 1))  # 77.8%
+
+for c in (8, 9):                                       # teach Bag, then Boot, no gradient steps
+    add_class(eight, c)
+
+def recall(m, c):
+    sel = yte == c
+    return round(float((jnp.argmax(m(jnp.asarray(Xte[sel])), -1) == c).mean()) * 100)
+
+print("Bag, Boot recall:", recall(eight, 8), recall(eight, 9))                                  # 95, 94
+print("all 10:", round(float((jnp.argmax(eight(jnp.asarray(Xte)), -1) == yte).mean()) * 100, 1))  # 79.4
+print("from scratch:", round(float((jnp.argmax(build(range(10))(jnp.asarray(Xte)), -1) == yte).mean()) * 100, 1))  # 79.4
+```
+
+The two classes it had never encountered are recognized at **95%** and **94%** the moment their rows are appended, and the classes it already knew barely move. The headline is the last two lines: the network taught incrementally and the network built on all ten at once reach the **same 79.4%**, because a row appended last is identical to a row placed first. There is no penalty for incrementality, and no rehearsal buffer in sight.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/edit-teach.gif" alt="A 2D map of Fashion-MNIST where basins of attraction grow in one class at a time as their prototype masses fade into the landscape, with no training" loading="lazy" width="440" height="422" />
+  <figcaption>Teaching as basins forming, on real Fashion-MNIST laid out by UMAP, with zero gradient steps. Each class you teach fades in its prototype masses and a new basin grows into the landscape, claiming its territory; the accuracy in the title is the real 784-dimensional number. Because the fields superpose, the basins already present do not shift when a new one appears. Rendered by <code>scripts/render_yat_edit_gifs.py</code>.</figcaption>
+</figure>
+
+## Forgetting a class is a mask
+
+Unlearning is the same move in reverse. Find the rows that vote for the class, drop them. Because class $c$ lives only in the rows whose readout is one-hot at $c$, the deletion is exact.
+
+```python
+def forget_class(model, c):
+    keep = np.asarray(model.A.value.argmax(-1)) != c   # rows NOT voting for class c
+    model.W = nnx.Param(model.W.value[keep])
+    model.A = nnx.Param(model.A.value[keep])
+    return model
+
+m = build(range(10))
+others = [c for c in range(10) if c != 5]
+before = np.mean([recall(m, c) for c in others])
+forget_class(m, 5)                                     # forget Sandal
+print("Sandal recall:", recall(m, 5))                  # 0
+print("other 9 recall:", round(before, 1), "->", round(np.mean([recall(m, c) for c in others]), 1))  # 81.1 -> 81.3
+```
+
+Sandal recall goes to **0**: nothing in the network resembles a sandal anymore, so nothing can be labelled one. The other nine classes go from **81.1%** to **81.3%**, untouched, a hair better because the deleted rows are no longer around to occasionally steal a neighbour's test image. The forgetting is exact and you can prove it: every surviving row of `W` and `A` is bit-for-bit identical to before.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/edit-forget.gif" alt="A 2D map of Fashion-MNIST where the Sandal basin collapses as its prototype masses fade to zero and neighbouring basins flood in to reclaim the territory, the rest unchanged" loading="lazy" width="440" height="422" />
+  <figcaption>Forgetting as a basin collapsing, in JAX, by fading the Sandal prototype masses to zero. Its well vanishes and the neighbouring basins flood in to reclaim exactly the territory it held, while the rest of the landscape does not move, the other nine classes' recall shifting by tenths of a point. Exact unlearning, as a boolean mask in the code and a removed mass in the field. Rendered by <code>scripts/render_yat_edit_gifs.py</code>.</figcaption>
+</figure>
+
+## Why the edits are exact, in one sentence
+
+In an ordinary network the knowledge of a class is smeared across shared weights, so adding a class with gradient descent overwrites a little of every other class (catastrophic forgetting) and deleting one is a research problem (machine unlearning) whose honest baseline is to retrain from scratch. Here a class is a contiguous block of rows, so protecting it during an edit is *do not index those rows* and erasing it is *index them out*. `jnp.concatenate` and a boolean mask are the entire continual-learning and unlearning stack, because the architecture stores knowledge in a form you can address.
+
+## What this leaves out
+
+These rows are prototype pictures because the input space is pixel space; that is what makes the edits legible and is also the limit. Put the Yat kernel on top of learned features and a prototype becomes a feature-space exemplar, the ProtoPNet recipe ([Chen et al., 2019](https://arxiv.org/abs/1806.10574)), and those features still cost a training run, so the no-training claim narrows to no-training-of-the-head. That boundary, how much of a network you can construct rather than optimize, is the subject the [explainer](/blog/edit-a-network-by-hand/) leaves open. What does not change is the object: a layer whose unit stores a row you can read, append, and delete, so that on images the row is a picture and editing the network is editing a list.
+
+---
+
+*The prototype-network idea ("this looks like that") is from [Chen et al. (2019)](https://arxiv.org/abs/1806.10574); machine unlearning from [Bourtoule et al. (2021)](https://arxiv.org/abs/1912.03817); [Fashion-MNIST](https://arxiv.org/abs/1708.07747) from Xiao et al. (2017); the Yat kernel from [Bouhsine (2026)](https://arxiv.org/abs/2605.03262). The conceptual companion is [Your Network Is a List of Pictures. You Can Edit It.](/blog/edit-a-network-by-hand/).*
+
+<CiteAs slug="edit-a-network-jax-flax-nnx" title="Editing a Network by Hand, in JAX/Flax NNX" pubDate="2026-06-22T11:00:00-07:00" />
+
+<style>{`
+.jax-fig { margin: 1.8rem auto; text-align: center; }
+.jax-fig img { max-width: 520px; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; background: #fbf8f1; }
+.jax-fig-wide img { max-width: 600px; }
+.jax-fig figcaption { margin-top: 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--fg-muted); max-width: 64ch; margin-left: auto; margin-right: auto; }
+`}</style>

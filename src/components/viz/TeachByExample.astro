@@ -1,0 +1,161 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 500 } = Astro.props;
+---
+<figure class="viz teachbyex" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Teaching, made concrete. The left is the network's MEMORY: ten labelled bins,
+// empty to start. The right is a handful of real test images, each showing the
+// network's guess. With an empty memory it guesses wrong (a bag called a shirt).
+// Click a class to teach it: you drop in that class's example pictures, no
+// training, and every test image of that class flips from a red wrong guess to a
+// green correct one on the spot. That is the whole idea: knowledge here is just
+// labelled example pictures, and teaching is adding some.
+import { defineViz } from './engine/vizkit.js';
+import { loadKernel, whenVisible } from './yatedit.js';
+
+const CLASS_COL = ['#b3661b', '#4a7fb3', '#3a8f5e', '#9a4f9c', '#c2553a', '#5a7d3a', '#2f8f8f', '#a06a2a', '#7a5fc0', '#c0892a'];
+
+function recompute(st) {
+  const taught = st.taught, pm = st.pm, lab = st.lab, anyTaught = taught.some(Boolean);
+  // predictions for the test bank -> headline accuracy
+  let correct = 0;
+  for (let i = 0; i < lab.length; i++) {
+    if (!anyTaught) continue;
+    let best = -1e9, arg = -1;
+    for (let c = 0; c < 10; c++) if (taught[c] && pm[i][c] > best) { best = pm[i][c]; arg = c; }
+    if (arg === lab[i]) correct++;
+  }
+  st.acc = anyTaught ? 100 * correct / lab.length : 0;
+  st.known = taught.filter(Boolean).length;
+  // predictions for the few shown images
+  st.showPred = st.showIdx.map((gi) => {
+    if (!anyTaught) return -1;
+    let best = -1e9, arg = -1;
+    for (let c = 0; c < 10; c++) if (taught[c] && pm[gi][c] > best) { best = pm[gi][c]; arg = c; }
+    return arg;
+  });
+}
+
+defineViz('teachbyex', {
+  title: 'Teach a class by showing it pictures',
+  height: 500,
+  controls: [
+    { type: 'button', name: 'next', label: '＋ teach next class' },
+    { type: 'button', name: 'all', label: 'teach all' },
+    { type: 'button', name: 'reset', label: 'empty the memory' },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    api.state = { ready: false, computing: false, taught: Array(10).fill(false) };
+    const start = () => {
+      if (!api.state || api.state.computing || api.state.ready) return;
+      api.state.computing = true; api.render();
+      requestAnimationFrame(() => setTimeout(async () => {
+        const s = await loadKernel(); if (!api.state) return;
+        // pick a varied set of real test images to show: 2 of each class, first found
+        const byClass = {}; const show = [];
+        for (let i = 0; i < s.d.bankLabels.length && show.length < 12; i++) {
+          const c = s.d.bankLabels[i]; byClass[c] = (byClass[c] || 0) + 1;
+          if (byClass[c] <= 2) show.push(i);
+        }
+        Object.assign(api.state, { ready: true, protos: s.protos, bank: s.bank, d: s.d,
+          classes: s.d.classes, lab: s.d.bankLabels, pm: s.pm, showIdx: show });
+        recompute(api.state); api.render();
+      }, 0));
+    };
+    api.state.start = start;
+    whenVisible(api.canvas, start);
+    bind(api);
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    ctx.clearRect(0, 0, W, H);
+    if (!st.ready) { ctx.fillStyle = st.computing ? colors.muted : colors.accent; ctx.font = st.computing ? '12px ui-monospace, monospace' : '13px ui-sans-serif, system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(st.computing ? 'computing in your browser…' : '▶ click to run (computes live in your browser)', W / 2, H / 2); return; }
+
+    const pad = 12, topH = 50;
+    const green = colors.green || '#3a8f5e', red = colors.accent;
+    // headline
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = colors.fg; ctx.font = 'bold 13px ui-sans-serif, system-ui';
+    ctx.fillText(st.known === 0 ? 'the memory is empty: the network knows nothing yet'
+      : `${st.known}/10 classes taught · ${st.acc.toFixed(0)}% of held-out images now recognized`, pad, pad + 12);
+    ctx.fillStyle = colors.muted; ctx.font = '11px ui-sans-serif, system-ui';
+    ctx.fillText('click a class on the left to teach it: you hand it example pictures, no training. watch the test images flip from red to green.', pad, pad + 30);
+
+    const y0 = pad + topH, bodyH = H - y0 - pad;
+    const memW = Math.floor(W * 0.46);
+
+    // ── left: the network's memory (10 class bins) ──
+    ctx.font = '10px ui-sans-serif, system-ui'; ctx.fillStyle = colors.muted; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('THE NETWORK’S MEMORY', pad, y0 - 4);
+    const rowH = bodyH / 10, nameW = 70, slotN = 6;
+    st._rows = [];
+    for (let c = 0; c < 10; c++) {
+      const ry = y0 + c * rowH, cy = ry + rowH / 2, on = st.taught[c];
+      st._rows.push({ x: pad, y: ry, w: memW - pad, h: rowH, c });
+      ctx.fillStyle = CLASS_COL[c]; ctx.beginPath(); ctx.arc(pad + 4, cy, 4, 0, 6.283); ctx.fill();
+      ctx.fillStyle = on ? colors.fg : colors.muted; ctx.font = (on ? '' : 'italic ') + '11px ui-sans-serif, system-ui';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(st.classes[c], pad + 12, cy);
+      const slot = Math.min(rowH - 6, 22), sx0 = pad + nameW;
+      for (let j = 0; j < slotN; j++) {
+        const x = sx0 + j * (slot + 3);
+        if (on) { ctx.imageSmoothingEnabled = true; ctx.drawImage(st.protos, j * 28, c * 28, 28, 28, x, cy - slot / 2, slot, slot);
+          ctx.strokeStyle = CLASS_COL[c]; ctx.lineWidth = 1; ctx.strokeRect(x - 0.5, cy - slot / 2 - 0.5, slot + 1, slot + 1); }
+        else { ctx.strokeStyle = colors.faint; ctx.setLineDash([2, 2]); ctx.lineWidth = 1; ctx.strokeRect(x, cy - slot / 2, slot, slot); ctx.setLineDash([]); }
+      }
+      if (!on) { ctx.fillStyle = colors.faint; ctx.font = 'italic 9px ui-sans-serif, system-ui'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText('click to teach', sx0 + slotN * (slot + 3) + 4, cy); }
+    }
+
+    // ── right: real test images and the network's guess ──
+    const tx0 = memW + 10, tw = W - pad - tx0;
+    ctx.fillStyle = colors.muted; ctx.font = '10px ui-sans-serif, system-ui'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('HELD-OUT TEST IMAGES (the network’s guess)', tx0, y0 - 4);
+    const cols = 4, rows = 3, cw = tw / cols, chh = bodyH / rows, pic = Math.min(cw - 8, chh - 26, 46);
+    for (let k = 0; k < st.showIdx.length; k++) {
+      const r = Math.floor(k / cols), cc = k % cols, gi = st.showIdx[k];
+      const cx = tx0 + cc * cw + (cw - pic) / 2, cyy = y0 + r * chh + 6;
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(st.bank, (gi % st.d.bankCols) * 28, Math.floor(gi / st.d.bankCols) * 28, 28, 28, cx, cyy, pic, pic);
+      const pred = st.showPred[k], truth = st.lab[gi], correct = pred === truth;
+      ctx.lineWidth = 2; ctx.strokeStyle = pred < 0 ? colors.faint : correct ? green : red;
+      ctx.strokeRect(cx - 0.5, cyy - 0.5, pic + 1, pic + 1);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillStyle = pred < 0 ? colors.faint : correct ? green : red; ctx.font = '10px ui-sans-serif, system-ui';
+      ctx.fillText(pred < 0 ? '?' : `${st.classes[pred]} ${correct ? '✓' : '✗'}`, cx + pic / 2, cyy + pic + 3);
+    }
+
+    api.readout('rd', st.known === 0 ? 'memory empty: nothing can be recognized yet, teach a class'
+      : `${st.known}/10 taught · ${st.acc.toFixed(0)}% recognized · teaching placed pictures, it never retrained`);
+  },
+
+  onAction(name, api) {
+    const st = api.state; if (!st || !st.ready) return;
+    if (name === 'all') st.taught = Array(10).fill(true);
+    else if (name === 'reset') st.taught = Array(10).fill(false);
+    else if (name === 'next') { const c = st.taught.indexOf(false); if (c >= 0) st.taught[c] = true; }
+    recompute(st);
+  },
+});
+
+function bind(api) {
+  if (api.canvas.dataset.tbeBound) return; api.canvas.dataset.tbeBound = '1'; api.canvas.style.cursor = 'pointer';
+  api.canvas.addEventListener('pointerdown', (e) => {
+    const st = api.state; if (!st) return;
+    if (!st.ready) { st.start && st.start(); return; }
+    if (!st._rows) return;
+    const rc = api.canvas.getBoundingClientRect(), px = (e.clientX - rc.left) * api.size.W / rc.width, py = (e.clientY - rc.top) * api.size.H / rc.height;
+    for (const r of st._rows) if (px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h) { st.taught[r.c] = !st.taught[r.c]; recompute(st); api.render(); break; }
+  });
+}
+</script>
