@@ -1,0 +1,117 @@
+---
+title: "Your Network Is a List of Pictures. You Can Edit It."
+seoTitle: "Editing a Neural Network Without Training"
+description: "If a neuron is a labelled picture, a classifier is a list of them, and a list is something you edit. Add a class to a trained-free Yat-kernel network by placing twenty pictures, and it recognizes that class at 95% with zero gradient steps. Delete a class by removing its pictures, and it is forgotten exactly, the other classes untouched. Class-incremental learning with no penalty and machine unlearning that is instant and exact, both falling out of the architecture rather than bolted on."
+seoDescription: "A Yat-kernel network is a list of prototype pictures you can edit. Add a class with no training (95% recall), or delete one to unlearn it exactly."
+pubDate: 2026-06-22
+draft: false
+companion: edit-a-network-jax-flax-nnx
+tags: [ml, kernels, interpretability, prototypes, continual-learning, machine-unlearning, yat, deep-learning]
+references:
+  - authors: "Chen, C., Li, O., Tao, D., Barnett, A., Su, J., Rudin, C."
+    year: 2019
+    title: "This Looks Like That: Deep Learning for Interpretable Image Recognition"
+    venue: "NeurIPS 2019"
+    arxiv: "1806.10574"
+  - authors: "McCloskey, M., Cohen, N. J."
+    year: 1989
+    title: "Catastrophic Interference in Connectionist Networks: The Sequential Learning Problem"
+    venue: "Psychology of Learning and Motivation 24"
+  - authors: "Bourtoule, L., Chandrasekaran, V., Choquette-Choo, C. A., Jia, H., Travers, A., Zhang, B., Lie, D., Papernot, N."
+    year: 2021
+    title: "Machine Unlearning"
+    venue: "IEEE S&P 2021"
+    arxiv: "1912.03817"
+  - authors: "Xiao, H., Rasul, K., Vollgraf, R."
+    year: 2017
+    title: "Fashion-MNIST: a Novel Image Dataset for Benchmarking Machine Learning Algorithms"
+    arxiv: "1708.07747"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+keywords:
+  - editable neural network
+  - class-incremental learning no training
+  - machine unlearning
+  - prototype network
+  - Yat kernel
+  - catastrophic forgetting
+---
+import CiteAs from '../../components/CiteAs.astro';
+import KernelVote from '../../components/viz/KernelVote.astro';
+import AttractorField from '../../components/viz/AttractorField.astro';
+import TeachByExample from '../../components/viz/TeachByExample.astro';
+import ForgetMatch from '../../components/viz/ForgetMatch.astro';
+
+*A [previous post](/blog/your-neuron-is-a-picture/) showed that if you put the Yat kernel where a neuron's activation was, the neuron stops being a direction and becomes a prototype: a point in input space, which on images is literally a picture. One consequence got a paragraph there and deserves a whole post here. If a neuron is a picture, then a network is a list of pictures, and a list is something you can edit. You can hand it a new class without training it, and you can make it forget a class without training it. Both turn out to be things the rest of deep learning struggles to do at all. Every number below is from a real run; the script is `scripts/yat_editable_fmnist.py`.*
+
+## A network you edit instead of train
+
+Here is the move the whole post rests on. A standard neuron stores a direction $w$, and a direction is not a thing you can point at. You cannot hand-write a useful direction, you cannot read one off, and you certainly cannot edit a network by editing its directions. Training is the only way in, because the weights mean nothing until gradient descent fills them with meaning.
+
+A Yat unit stores a prototype $W_u$ and scores an input by a kernel against it, $\phi_u(x) = (W_u^\top x + b)^2 / (\lVert x - W_u\rVert^2 + \varepsilon)$. The prototype lives in the same space as the data, so it is a referent you can point at: on Fashion-MNIST it is a 28x28 picture of a piece of clothing. A classifier is then a bank of these prototypes plus a readout that lets each one vote for its class. The earlier post built exactly this by hand, k-means centroids as the prototypes and a one-hot readout, and reached **79%** on Fashion-MNIST with zero gradient steps.
+
+Before we edit it, look at how it decides, because the editing only makes sense once you see the vote. Pick an image below and the kernel against all 200 prototypes is computed live in your browser: every atom is a prototype, it brightens by how much the image resembles it, the readout lines carry that resemblance to the class outputs, and the loudest output wins. There is no hidden machinery; the prediction *is* this vote over pictures.
+
+<KernelVote caption="A prediction as a vote over prototype pictures, computed live. Each atom is one of the 200 prototypes (20 per class); pick an image and its Yat-kernel activation against every prototype is evaluated in the browser. Atoms brighten with resemblance, the readout lines carry the vote to the ten class outputs, and the strongest output wins. This is the whole forward pass: similarity to stored pictures, summed by class." />
+
+## The network is a landscape of wells
+
+There is a physical picture hiding in the kernel, and once you see it the rest of the post stops being a list of tricks and becomes one idea. Look at the denominator: $1 / (\lVert x - W_u\rVert^2 + \varepsilon)$. That is a softened inverse-square law, the same shape as gravity and electrostatics. The $\varepsilon$ is not a hack either; it is exactly the *softening length* that N-body simulations add to keep the force finite when two bodies coincide. So each prototype is a little mass, and it digs a well into the input space whose pull falls off with the square of the distance.
+
+A bank of prototypes is therefore a landscape of wells, one cluster of wells per class. Classifying a point is letting it fall into the deepest basin it can feel. The decision boundary is the watershed between basins, the ridge where two wells pull equally. Drag the marker below across that ridge and you can watch its allegiance flip.
+
+<AttractorField caption="The kernel as a field of attractors, in 2D where you can see it. Each prototype is a well with a 1/(r²+ε) pull, a softened inverse-square law (ε is the gravitational softening length). The plane is coloured by which basin wins, darkening to a watershed at the boundaries. Press “drop test particles” and they fall into the basins, coloured by the class they land in, which is the whole act of classification. Drag the white marker to feel the pull flip as it crosses a ridge. Click a well to delete it: its basin collapses and the neighbours flood in to reclaim the ground, while the rest of the landscape does not move. A 2D physics illustration of the same kernel the rest of the post runs on Fashion-MNIST." />
+
+This picture pays for itself immediately, because the two edits the rest of the post is about become physical moves on the landscape. Teaching a class is dropping a new mass: it opens a fresh basin where there was none. Forgetting a class is removing a mass: its basin collapses and the neighbours reclaim exactly the territory it held, and nowhere else, which is *why* the forgetting is exact. And because fields superpose, the total landscape is just the sum of the wells, independent of the order you placed them, which is why teaching incrementally lands in the same place as building all at once. One inverse-square law, and the vote, the teaching, the forgetting, and the order-independence are all the same fact.
+
+Now watch those two moves on the real network.
+
+## Teach it a class, no training
+
+Start with a deliberately incomplete model: a hand-built classifier that has only ever seen eight of the ten classes. It places twenty prototypes for each of classes 0 through 7 and knows nothing about Bag or Boot. On the test images of the classes it does know, it scores **77.8%**.
+
+Now teach it the two missing classes the only way an editable network needs: take twenty example images of Bag and twenty of Boot, drop them in as new prototypes, and add a readout row for each so they can vote. Forty pictures placed. No optimizer, no backward pass, no epochs.
+
+The model now recognizes **Bag at 95%** and **Boot at 94%**, classes it had never encountered a moment ago. And the classes it already knew barely flinch: accuracy on classes 0 through 7 moves from 77.8% to 75.6%, a two-point dip that comes only from the new prototypes occasionally sitting closer to an old test image, not from anything being overwritten. Overall, across all ten classes, it scores **79.4%**.
+
+Here is the part worth sitting with. A model built on all ten classes from the very start, the normal way, also scores **79.4%**. Adding the two classes incrementally, after the fact, by hand, cost nothing. The incremental network and the all-at-once network land on the same number, because there is no "after the fact" for a list. A prototype you place last works exactly like a prototype you placed first.
+
+<TeachByExample caption="Teaching, made concrete. Left is the network's memory: ten labelled bins, empty to start, so it knows nothing and guesses every held-out test image (right) wrong. Click a class to teach it: you drop in that class's example pictures, no training, and every test image of that class flips from a red wrong guess to a green correct one at once. Knowledge here is just labelled example pictures, and teaching is adding some. Teach all ten and it recognizes 81% of a held-out sample, where a from-scratch build also lands (the text quotes 79.4% on the full test set)." />
+
+Try it above: start with an empty memory that gets everything wrong, then teach one class and watch its test images turn green the instant its pictures are placed, the others untouched.
+
+## Make it forget, exactly
+
+Now run it backwards. Take the full ten-class model and ask it to forget Sandals: not to score them worse, but to lose the capability, as if those examples had never been part of it.
+
+The edit is the obvious one. Find the twenty prototypes that vote for Sandal, delete them, delete their readout rows. That is the entire procedure.
+
+Sandal recall goes from **64% to 0%**. The class is gone; nothing in the network resembles a sandal anymore, so nothing can be classified as one. And the other nine classes go from **81.1% to 81.3%**, untouched, in fact a hair better, because the deleted prototypes are no longer around to occasionally steal a test image that belonged to someone else. The forgetting is exact and surgical. You removed precisely one capability and left the rest of the network bit-for-bit identical.
+
+<ForgetMatch caption="Why forgetting is exact, made visible. The network recognizes each test image (left) by the single prototype it most resembles (right): that match is the decision, and its class is the label. Click a class in the memory strip to delete it. The images that were recognized by that class lose their match and re-point to a surviving prototype, usually wrong now (shown in red, “re-routed”); every other image keeps the exact same match and label, untouched. Delete Sandal and only the sandals break, which is the whole claim: removing a class disturbs only what relied on it. Matches are computed live on jax-js." />
+
+Delete any class above and only its line drops; the other nine hold flat, which is the whole claim made visible.
+
+## Why this is supposed to be hard
+
+If you have trained neural networks, both of those results should feel slightly illegal, because in an ordinary network they are famously, expensively hard.
+
+Teaching a trained network a new class usually means fine-tuning, and fine-tuning on the new class degrades the old ones. The phenomenon has a name, [catastrophic forgetting](https://arxiv.org/abs/1612.00796), and it is old enough to have been described in 1989. An entire subfield, continual learning, exists to fight it with rehearsal buffers, regularizers that pin important weights in place, and dynamically grown sub-networks. The reason the fight is necessary is structural: in a network of directions, knowledge is smeared across shared weights, so every new gradient step writes over a little of everything that came before. There is no row you can point to that *is* the old class, so there is no way to protect it except indirectly.
+
+Unlearning is worse. "Make the model forget these training examples" is a live research problem, [machine unlearning](https://arxiv.org/abs/1912.03817), driven by privacy law and the right to be forgotten, and the honest baseline for doing it correctly is to throw the model away and retrain from scratch on the data minus the part you want gone. Everything cheaper is an approximation that you then have to audit, because the forgotten data left its fingerprints distributed across all the weights and you can never quite prove you wiped them.
+
+The Yat network sidesteps both, not by being cleverer, but by storing knowledge in a form you can address. A class is not smeared across the weights; it *is* a contiguous set of prototypes. So protecting it during an edit is trivial (do not touch those rows) and erasing it is exact (delete exactly those rows, and provably nothing else carries the class). Continual learning and unlearning stop being algorithms you run and become slices you take.
+
+## The boundary, and where this goes
+
+I want to be precise about the edge of the claim, because the precise version is more interesting than the hype. None of this is free in general; it is free *here*, on raw pixels, because the input space is the feature space. A prototype can be a legible, placeable, deletable picture only because the thing the kernel compares against lives where the data lives. The moment you put the Yat kernel on top of learned features, a prototype becomes an exemplar in feature space, and those features still cost a training run. "No training" narrows to "no training of the head, given features."
+
+That narrowing is not a retreat. It is the actual question this whole line of work circles: how much of a network can you *construct* rather than *optimize*, and how deep can the construction go before you are forced to learn? On pixels, the answer is the entire classifier. With features, the answer is the entire classifier on top of a learned backbone, which is already the regime where editing, adding, and forgetting matter most in practice. That boundary, construction versus optimization, is the subject of the next post. For now the smaller claim stands on its own and is worth saying plainly: a network whose neurons are pictures is not a black box you fill by training. It is a document you write, and revise, by hand.
+
+---
+
+*The prototype-network idea ("this looks like that") is from [Chen et al. (2019)](https://arxiv.org/abs/1806.10574); [Fashion-MNIST](https://arxiv.org/abs/1708.07747) from Xiao et al. (2017); the Yat kernel from [Bouhsine (2026)](https://arxiv.org/abs/2605.03262). This is a follow-up to [Your Neuron Is a Direction. It Should Be a Picture.](/blog/your-neuron-is-a-picture/)*
+
+<CiteAs slug="edit-a-network-by-hand" title="Your Network Is a List of Pictures. You Can Edit It." pubDate="2026-06-22" />
