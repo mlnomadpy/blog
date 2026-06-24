@@ -99,15 +99,17 @@ const id = `ab-${Math.random().toString(36).slice(2, 9)}`;
     // Initial q = p
     let q = [...p];
     const state = { dpr: 1, w: 0, h: 0 };
+    const baseH = +c.getAttribute('height') || 300;   // intended display height
+    c.style.height = baseH + 'px';                     // pin it: CSS width:100% with no CSS height collapses the canvas
 
     const fit = () => {
       const rect = c.getBoundingClientRect();
       const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
       state.dpr = dpr;
       state.w = rect.width;
-      state.h = rect.height;
+      state.h = baseH;
       c.width = Math.round(rect.width * dpr);
-      c.height = Math.round(rect.height * dpr);
+      c.height = Math.round(baseH * dpr);
     };
 
     const themeObs = new MutationObserver(() => { colors = readColors(); requestRedraw(); });
@@ -136,7 +138,7 @@ const id = `ab-${Math.random().toString(36).slice(2, 9)}`;
       q[i] = v;
     };
 
-    // Layout helpers — bars share x axis layout
+    // Layout helpers, bars share x axis layout
     const layoutBars = () => {
       const W = state.w, H = state.h;
       const padL = 30, padR = 20, padT = 16, padB = 38;
@@ -265,9 +267,9 @@ const id = `ab-${Math.random().toString(36).slice(2, 9)}`;
       rv.s.textContent = violating.toFixed(3);
 
       if (!Number.isFinite(Hpq)) rv['pq-tag'].textContent = '↑ model missing truth at some coord';
-      else rv['pq-tag'].textContent = 'finite — model covers all of p';
+      else rv['pq-tag'].textContent = 'finite, model covers all of p';
       if (!Number.isFinite(Hqp)) rv['qp-tag'].textContent = '↑ model claims mass where p has none';
-      else rv['qp-tag'].textContent = 'finite — q matches p’s support';
+      else rv['qp-tag'].textContent = 'finite, q matches p’s support';
     };
 
     // Drag handling on q bar tops

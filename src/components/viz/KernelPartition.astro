@@ -48,7 +48,7 @@ const scoreField = (Xg, keys, nk, P, mode, m, seed) => {
     const kw = new Float64Array(nk); for (let j = 0; j < nk; j++) kw[j] = Math.exp(-(keys[2 * j] ** 2 + keys[2 * j + 1] ** 2) / 2);
     return S.mul(np.reshape(np.array(kw), [1, nk])).js();
   }
-  // elu — linear attention with the elu+1 feature map (Katharopoulos et al.)
+  // elu, linear attention with the elu+1 feature map (Katharopoulos et al.)
   const elu = (z) => (z > 0 ? z + 1 : Math.exp(z));
   const PX = new Float64Array(P * 2); for (let i = 0; i < P * 2; i++) PX[i] = elu(Xg[i]);
   const PK = new Float64Array(nk * 2); for (let i = 0; i < nk * 2; i++) PK[i] = elu(keys[i]);

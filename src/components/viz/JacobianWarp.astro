@@ -303,7 +303,7 @@ const kinds = [
         segs.push({ a, b, color, width, fade, z: (a.depth + b.depth) * 0.5 });
       };
 
-      // Axis frame at origin (input only — output coord origin shifts with activation)
+      // Axis frame at origin (input only, output coord origin shifts with activation)
       if (!isOut) {
         const axis = (ax, ay, az) => {
           const o = proj(0, 0, 0);

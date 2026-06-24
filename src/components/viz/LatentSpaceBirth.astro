@@ -18,7 +18,7 @@ import * as ng from './engine/nanograd.js';
 // input space, pushed through a shared MLP encoder onto the circle and trained
 // with a supervised contrastive loss (ⵟ-kernel). Toggle 'repulsion' off and the
 // classes collapse onto one point; on, they separate into tight, maximally-spread
-// clusters — the simplex. The canvas shows both the raw encoder plane and the
+// clusters, the simplex. The canvas shows both the raw encoder plane and the
 // L2-normalized sphere view, since normalization can hide the path the model took.
 // Trained in your browser on the nanograd autodiff engine.
 const D = 8, HID = 24, DE = 2, M = 16; // input dims, hidden, embed dims, pts/class
@@ -157,7 +157,7 @@ defineViz('latentbirth', {
     for (let c = 0; c < C; c++) { const [px, py] = ms.map(cen[c]); ctx.beginPath(); ctx.arc(px, py, 6, 0, 2 * Math.PI); ctx.fillStyle = PALETTE[c % PALETTE.length]; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = colors.bg; ctx.stroke(); }
     let minCos = 1; for (let a = 0; a < C; a++) for (let b = a + 1; b < C; b++) minCos = Math.min(minCos, cen[a][0] * cen[b][0] + cen[a][1] * cen[b][1]);
     const rep = api.get('rep');
-    const title = rep ? 'supervised contrastive — repulsion on' : 'alignment only — no repulsion';
+    const title = rep ? 'supervised contrastive, repulsion on' : 'alignment only, no repulsion';
     text(ctx, title, 8, size.H - 26, colors, { size: 12, color: colors.fg });
     const status = rep
       ? (C === 3 ? `sphere: simplex angle, min pair cos ${minCos.toFixed(2)} (target -0.5)` : `sphere: classes spread evenly, min pair cos ${minCos.toFixed(2)}`)

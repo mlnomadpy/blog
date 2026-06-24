@@ -15,7 +15,7 @@ import { panel, text, PALETTE } from './engine/draw.js';
 
 // Benedetto & Fickus (2003): the frame potential has no bad local minima. Here
 // six independent random starts descend it at once. Their energy curves all dive
-// to the same floor (C²/d − C) — whoever you start as, you reach the optimum.
+// to the same floor (C²/d − C), whoever you start as, you reach the optimum.
 const K = 6, D = 3;
 function randUnit() { let x, y, z, n; do { x = 2 * Math.random() - 1; y = 2 * Math.random() - 1; z = 2 * Math.random() - 1; n = x * x + y * y + z * z; } while (n > 1 || n < 1e-6); n = Math.sqrt(n); return [x / n, y / n, z / n]; }
 function fp(P) { let s = 0; for (let i = 0; i < P.length; i++) for (let j = 0; j < P.length; j++) { if (i === j) continue; const c = P[i][0] * P[j][0] + P[i][1] * P[j][1] + P[i][2] * P[j][2]; s += c * c; } return s; }

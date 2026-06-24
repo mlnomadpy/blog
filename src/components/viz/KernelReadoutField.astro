@@ -19,7 +19,7 @@ import { np, withJax, drawJaxLoading } from './engine/jax.js';
 // residual stream). The coefficients are a kernel similarity of the query x to
 // the input prototypes, normalised: a_u(x) = κ(x,p_u) / Σ_v κ(x,p_v). For any
 // positive-definite κ the a_u are nonnegative and sum to one, so the readout
-// y = Σ a_u r_u is literally a convex combination — a point that can never leave
+// y = Σ a_u r_u is literally a convex combination, a point that can never leave
 // the output-prototype hull. Drag x; the kernel weights, the normalisation, and
 // the readout matmul are all computed live by jax-js.
 const NAMES = ['u₁', 'u₂', 'u₃', 'u₄', 'u₅'];
@@ -114,7 +114,7 @@ defineViz('kernelreadoutfield', {
     const rightBox = { x: box.x + pad * 2 + colW, y: innerY, w: colW, h: innerH };
 
     // ── left: input space ──
-    text(ctx, 'input space — drag the query x', leftBox.x, box.y + 9, colors, { size: 12, weight: '600' });
+    text(ctx, 'input space, drag the query x', leftBox.x, box.y + 9, colors, { size: 12, weight: '600' });
     const lm = panel(ctx, leftBox, colors, {});
     state.inMap = { cx: lm.cx, cy: lm.cy, R: lm.R };
     ctx.strokeStyle = colors.border; ctx.lineWidth = 1;
@@ -143,7 +143,7 @@ defineViz('kernelreadoutfield', {
     text(ctx, 'x', xpx + 9, xpy - 11, colors, { size: 12, weight: '700', mono: true });
 
     // ── right: output space (residual stream) ──
-    text(ctx, 'residual stream — y stays inside the hull', rightBox.x, box.y + 9, colors, { size: 12, weight: '600' });
+    text(ctx, 'residual stream, y stays inside the hull', rightBox.x, box.y + 9, colors, { size: 12, weight: '600' });
     const rm = panel(ctx, rightBox, colors, {});
     ctx.strokeStyle = colors.border; ctx.lineWidth = 1;
     ctx.beginPath();

@@ -71,6 +71,7 @@ const id = `vvp-${Math.random().toString(36).slice(2, 9)}`;
     let o = 0; // overlap fraction in [0, 1]
     const state = { dpr: 1 };
 
+    [cV, cP].forEach((c) => { c.style.height = (+c.getAttribute('height') || 320) + 'px'; });   // pin height so width:100% can't collapse the canvas to 0
     const fit = () => {
       const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
       state.dpr = dpr;

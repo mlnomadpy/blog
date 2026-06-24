@@ -1,4 +1,4 @@
-// nanograd — tiny reverse-mode autodiff over dense 2-D Float64 tensors.
+// nanograd, tiny reverse-mode autodiff over dense 2-D Float64 tensors.
 // Just enough for small in-browser ML viz: matmul, broadcasted elementwise,
 // reductions, the nonlinearities and the ⵟ-kernel. ~150 lines, finite-diff clean.
 export class V {

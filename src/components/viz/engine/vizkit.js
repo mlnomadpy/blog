@@ -1,4 +1,4 @@
-// vizkit.js — the harness. Give it a control spec + setup/step/draw and it
+// vizkit.js, the harness. Give it a control spec + setup/step/draw and it
 // renders the control bar and canvas, runs the play/step/reset/speed loop, and
 // wires dpr, theme, resize, and visibility (autoplay/pause). Multi-instance and
 // Astro-view-transition safe. A new viz is just a short spec object.
@@ -14,6 +14,7 @@
 //     setup(api){}, step(api){}, draw(api){},
 //   })
 // api: { get(name), set(name,v), state, colors, ctx, size:{W,H}, iter, readout(name,txt) }
+import { readColors } from './theme.js';
 
 const CSS = `
 .vk-cell{position:relative;}
@@ -52,9 +53,6 @@ const CSS = `
 @media (max-width:680px){.vk-range{grid-template-columns:1fr minmax(96px,1.4fr) minmax(34px,auto);width:100%;}.vk-readout{width:100%;margin-left:0;}.vk-tools{margin-left:auto;}}
 `;
 function injectCSS() { if (document.getElementById('vizkit-css')) return; const s = document.createElement('style'); s.id = 'vizkit-css'; s.textContent = CSS; document.head.appendChild(s); }
-
-const readColors = () => { const s = getComputedStyle(document.documentElement); const v = (n, f) => (s.getPropertyValue(n).trim() || f);
-  return { accent: v('--accent', '#b3661b'), blue: '#4a7fb3', green: '#3a8f5e', muted: v('--fg-muted', '#5a5f66'), faint: v('--fg-faint', '#8d8d8d'), border: v('--border', '#e4e1d6'), fg: v('--fg', '#1a1a1a'), bg: v('--bg', '#fbf8f1'), cellBg: v('--bg-elev', '#fff') }; };
 
 function readNumber(v) {
   if (v == null || v === '') return undefined;
@@ -122,7 +120,8 @@ function mountOne(root, specOrFactory) {
   const ctx = canvas.getContext('2d');
 
   const vals = {}, readouts = {}, controlEls = {}; let speedMul = 1;
-  const hasLoop = !!spec.step;
+  let hasLoop = !!spec.step;       // true for physics viz (spec.step) or a timeline range (range.play)
+  let timeline = null, lastTs = 0; // timeline: a range that a Play button auto-advances
   let playing = false, raf = 0, iter = 0, acc = 0, colors = readColors();
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -155,10 +154,25 @@ function mountOne(root, specOrFactory) {
   const doSetup = () => { api.state = {}; iter = 0; api.iter = 0; acc = 0; spec.setup && spec.setup(api); };
   const stepN = (k) => { for (let i = 0; i < k; i++) { spec.step(api); iter++; } api.iter = iter; };
   const stop = () => { playing = false; if (playBtn) playBtn.textContent = '▶ Play'; cancelAnimationFrame(raf); };
-  const loop = () => { if (!playing) return; acc += (spec.stepsPerFrame || 1) * speedMul;
+  // advance a timeline range by real elapsed time, snapping the slider to its value
+  const advanceTimeline = (ts) => {
+    if (!lastTs) lastTs = ts;
+    const dt = Math.min(ts - lastTs, 100); lastTs = ts;     // clamp dt so a backgrounded tab does not jump
+    const tl = timeline, span = tl.max - tl.min || 1;
+    tl.pos += span * (dt / tl.period) * speedMul * tl.dir;
+    if (tl.pos >= tl.max) { if (tl.loop === 'pingpong') { tl.pos = tl.max; tl.dir = -1; } else if (tl.loop) { tl.pos = tl.min + ((tl.pos - tl.min) % span); } else { tl.pos = tl.max; api.setControl(tl.name, tl.int ? Math.round(tl.pos) : tl.pos); render(); stop(); return; } }
+    else if (tl.pos <= tl.min && tl.dir < 0) { tl.pos = tl.min; tl.dir = 1; }
+    api.setControl(tl.name, tl.int ? Math.round(tl.pos) : tl.pos);
+  };
+  const loop = (ts) => { if (!playing) return;
+    if (timeline && !spec.step) { advanceTimeline(ts); if (!playing) return; render(); raf = requestAnimationFrame(loop); return; }
+    acc += (spec.stepsPerFrame || 1) * speedMul;
     while (acc >= 1) { spec.step(api); iter++; acc -= 1; if (spec.maxStep && iter >= spec.maxStep) { acc = 0; break; } }
     render(); if (spec.maxStep && iter >= spec.maxStep) { stop(); return; } raf = requestAnimationFrame(loop); };
-  const play = () => { if (!hasLoop) return; if (spec.maxStep && iter >= spec.maxStep) doReset(); playing = true; if (playBtn) playBtn.textContent = '❚❚ Pause'; raf = requestAnimationFrame(loop); };
+  const play = () => { if (!hasLoop) return;
+    if (timeline && !spec.step) { if (timeline.pos >= timeline.max && timeline.loop !== 'pingpong') timeline.pos = timeline.min; timeline.dir = 1; }
+    else if (spec.maxStep && iter >= spec.maxStep) doReset();
+    lastTs = 0; playing = true; if (playBtn) playBtn.textContent = '❚❚ Pause'; raf = requestAnimationFrame(loop); };
   const doReset = () => { stop(); doSetup(); render(); };
 
   let playBtn = null;
@@ -170,14 +184,18 @@ function mountOne(root, specOrFactory) {
       (c.presets || [0.5, 1, 2, 4]).forEach(m => { const b = document.createElement('button'); b.className = 'vk-s' + (m === 1 ? ' active' : ''); b.textContent = m + '×';
         b.onclick = () => { speedMul = m; wrap.querySelectorAll('.vk-s').forEach(x => x.classList.remove('active')); b.classList.add('active'); }; wrap.appendChild(b); }); row.appendChild(wrap); }
     else if (c.type === 'newrow') { newRow(); }
-    else if (c.type === 'range') { const lab = document.createElement('label'); lab.className = 'vk-range';
+    else if (c.type === 'range') {
+      // a range with `play` gets a Play button that auto-advances it (a timeline)
+      if (c.play) { hasLoop = true; timeline = { name: c.name, min: +c.min, max: +c.max, step: +c.step, int: !!c.int, period: c.play.period || 4000, loop: c.play.loop ?? false, pos: c.int ? Math.round(+c.value) : +c.value, dir: 1 };
+        playBtn = document.createElement('button'); playBtn.className = 'vk-play'; playBtn.textContent = '▶ Play'; playBtn.onclick = () => playing ? stop() : play(); row.appendChild(playBtn); }
+      const lab = document.createElement('label'); lab.className = 'vk-range';
       const name = document.createElement('span'); name.className = 'vk-range-name'; name.textContent = c.label || c.name;
       const inp = document.createElement('input'); inp.type = 'range'; inp.min = c.min; inp.max = c.max; inp.step = c.step; inp.value = c.value;
       const span = document.createElement('span'); span.className = 'vk-val'; const fmt = c.fmt || (v => v);
       vals[c.name] = c.int ? Math.round(+c.value) : +c.value; span.textContent = fmt(vals[c.name]);
       controlEls[c.name] = { input: inp, span, fmt, cast: c.int ? (v => Math.round(+v)) : (v => +v) };
       inp.setAttribute('aria-label', c.label || c.name);
-      inp.oninput = () => { vals[c.name] = c.int ? Math.round(+inp.value) : +inp.value; span.textContent = fmt(vals[c.name]); spec.onControl && spec.onControl(c.name, vals[c.name], api); if (c.reset) doReset(); else if (!playing) render(); };
+      inp.oninput = () => { vals[c.name] = c.int ? Math.round(+inp.value) : +inp.value; span.textContent = fmt(vals[c.name]); if (c.play) { if (playing) stop(); timeline.pos = vals[c.name]; timeline.dir = 1; } spec.onControl && spec.onControl(c.name, vals[c.name], api); if (c.reset) doReset(); else if (!playing) render(); };
       lab.appendChild(name); lab.appendChild(inp); lab.appendChild(span); row.appendChild(lab); }
     else if (c.type === 'select') { const lab = document.createElement('label'); lab.append((c.label || c.name) + ' ');
       const sel = document.createElement('select'); (c.options || []).forEach(o => { const op = document.createElement('option'); op.value = o.value; op.textContent = o.label; sel.appendChild(op); });
@@ -192,7 +210,7 @@ function mountOne(root, specOrFactory) {
       inp.onchange = () => { vals[c.name] = inp.checked; if (!playing) render(); }; lab.appendChild(inp); lab.append(' ' + (c.label || c.name)); row.appendChild(lab); }
     else if (c.type === 'button') { const b = document.createElement('button'); b.className = 'vk-btn'; b.textContent = c.label || c.name;
       b.onclick = () => { if (c.reset) doReset(); else { spec.onAction && spec.onAction(c.name, api); if (!playing) render(); } }; row.appendChild(b); }
-    else if (c.type === 'readout') { const span = document.createElement('span'); span.className = 'vk-readout'; readouts[c.name] = span; row.appendChild(span); }
+    else if (c.type === 'readout') { const span = document.createElement('span'); span.className = 'vk-readout'; span.setAttribute('aria-live', 'polite'); readouts[c.name] = span; row.appendChild(span); }
   }
 
   if (spec.tools !== false) {
@@ -219,7 +237,7 @@ function mountOne(root, specOrFactory) {
   if (spec.help !== false) {
     const help = document.createElement('div');
     help.className = 'vk-help';
-    help.textContent = hasLoop ? 'Shortcuts: Space play/pause, S step, R reset.' : 'Interactive controls update the plot live.';
+    help.textContent = spec.step ? 'Shortcuts: Space play/pause, S step, R reset.' : (hasLoop ? 'Shortcut: Space play/pause.' : 'Interactive controls update the plot live.');
     bar.appendChild(help);
   }
 
@@ -227,8 +245,8 @@ function mountOne(root, specOrFactory) {
   // keyboard shortcuts on the focusable figure root: space=play/pause, s=step, r=reset
   root.addEventListener('keydown', (e) => {
     if (e.key === ' ' && hasLoop) { e.preventDefault(); playing ? stop() : play(); }
-    else if ((e.key === 's' || e.key === 'S') && hasLoop) { stop(); stepN(1); render(); }
-    else if (e.key === 'r' || e.key === 'R') { doReset(); }
+    else if ((e.key === 's' || e.key === 'S') && spec.step) { stop(); stepN(1); render(); }
+    else if ((e.key === 'r' || e.key === 'R') && spec.step) { doReset(); }
   });
   new MutationObserver(() => { colors = readColors(); render(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   new ResizeObserver(() => { fit(); render(); }).observe(canvas);
@@ -239,7 +257,7 @@ function mountOne(root, specOrFactory) {
   new IntersectionObserver((e) => {
     if (e[0].isIntersecting) {
       fit(); render();
-      if (hasLoop && spec.autoplay !== false && !reduceMotion && !kicked) { kicked = true; play(); }
+      if (spec.step && spec.autoplay !== false && !reduceMotion && !kicked) { kicked = true; play(); }
     } else stop();
   }, { rootMargin: '0px' }).observe(canvas);
 }

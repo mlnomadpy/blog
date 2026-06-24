@@ -13,7 +13,7 @@ const { caption, height = 380 } = Astro.props;
 import { defineViz } from './engine/vizkit.js';
 import { panel, unitCircle, dot, text, PALETTE } from './engine/draw.js';
 
-// Wang & Isola (2020): every contrastive loss is two forces — alignment (pull
+// Wang & Isola (2020): every contrastive loss is two forces, alignment (pull
 // same-class points together) and uniformity (spread everything over the sphere).
 // Two knobs. Uniformity 0 → the classes collapse. Alignment 0 → uniform but
 // classes intermixed. Both on → tight, evenly-spread clusters: a good space.
@@ -63,7 +63,7 @@ defineViz('alignunif', {
     if (lu < 0.05) regime = 'uniformity off → classes collapse together';
     else if (la < 0.05) regime = 'alignment off → spread, but classes intermixed';
     else regime = 'both forces → tight, evenly-spread clusters';
-    text(ctx, 'embeddings on the circle — colour = class', box.x + 8, box.y + 3, colors, { size: 11.5, color: colors.fg });
+    text(ctx, 'embeddings on the circle, colour = class', box.x + 8, box.y + 3, colors, { size: 11.5, color: colors.fg });
     text(ctx, regime, box.x + 8, box.y + box.h - 15, colors, { size: 10.5, mono: true, color: colors.muted });
     api.readout('rd', `align ${la.toFixed(2)} · uniform ${lu.toFixed(2)}`);
   },

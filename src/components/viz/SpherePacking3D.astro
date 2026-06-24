@@ -14,7 +14,7 @@ import { defineViz } from './engine/vizkit.js';
 import { text, PALETTE } from './engine/draw.js';
 
 // C unit vectors on the 3-sphere settling, by gradient descent on the frame
-// potential Σ⟨pᵢ,pⱼ⟩², into the optimal packing — the configuration that spreads
+// potential Σ⟨pᵢ,pⱼ⟩², into the optimal packing, the configuration that spreads
 // them as far apart as geometry allows. The whole cloud slowly rotates so you can
 // read the 3-D shape. C ≤ 3 → orthogonal axes; C = 4 → regular tetrahedron (the
 // simplex); C > 3 → forced together at the Welch bound (an equiangular frame).
@@ -97,7 +97,7 @@ defineViz('spherepack', {
     let mu = 0; for (let i = 0; i < C; i++) for (let j = i + 1; j < C; j++) { const s = Math.abs(P[i][0] * P[j][0] + P[i][1] * P[j][1] + P[i][2] * P[j][2]); mu = Math.max(mu, s); }
     const wb = welch(C);
     let label;
-    if (C === 4) label = 'regular tetrahedron — the simplex';
+    if (C === 4) label = 'regular tetrahedron, the simplex';
     else if (C <= 3) label = 'orthogonal axes (room to spare)';
     else label = 'tight frame near the Welch bound';
     text(ctx, label, cx, 16, colors, { align: 'center', size: 12.5, color: colors.fg });

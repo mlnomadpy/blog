@@ -104,39 +104,42 @@ const id = `yk-${Math.random().toString(36).slice(2, 9)}`;
       const alpha = 1;
       epsReadout.textContent = eps.toFixed(eps < 0.01 ? 4 : eps < 0.1 ? 3 : 2);
 
-      // Render heatmap into a small offscreen ImageData, then upscale via drawImage
+      // Heatmap field, cached. It depends only on the prototype (Wx,Wy), eps and
+      // the theme, not on the hover cursor, so moving the cursor reuses the bitmap
+      // and only a prototype drag or an eps change recomputes. Pixel-identical.
       const HM_RES = 72;
-      const img = ctx.createImageData(HM_RES, HM_RES);
-      // First pass: compute values + find max for normalisation
-      const vals = new Float32Array(HM_RES * HM_RES);
-      let maxV = 0;
-      for (let py = 0; py < HM_RES; py++) {
-        const yw = yWorld(pad + (py / HM_RES) * plotH);
-        for (let px = 0; px < HM_RES; px++) {
-          const xw = xWorld(pad + (px / HM_RES) * plotW);
-          const v = yat(xw, yw, eps, alpha);
-          vals[py * HM_RES + px] = v;
-          if (v > maxV) maxV = v;
+      const fieldKey = Wx + ',' + Wy + '|' + eps + '|' + colors.bg + '|' + colors.accent;
+      if (state._fieldKey !== fieldKey) {
+        const img = ctx.createImageData(HM_RES, HM_RES);
+        const vals = new Float32Array(HM_RES * HM_RES);
+        let maxV = 0;
+        for (let py = 0; py < HM_RES; py++) {
+          const yw = yWorld(pad + (py / HM_RES) * plotH);
+          for (let px = 0; px < HM_RES; px++) {
+            const xw = xWorld(pad + (px / HM_RES) * plotW);
+            const v = yat(xw, yw, eps, alpha);
+            vals[py * HM_RES + px] = v;
+            if (v > maxV) maxV = v;
+          }
         }
+        const bg = parseColor(colors.bg);
+        const accent = parseColor(colors.accent);
+        const cap = maxV > 0 ? maxV : 1;
+        for (let i = 0; i < HM_RES * HM_RES; i++) {
+          const t = Math.min(1, Math.pow(Math.max(0, vals[i]) / cap, 0.55));
+          const o = i * 4;
+          img.data[o] = Math.round(bg[0] + (accent[0] - bg[0]) * t);
+          img.data[o + 1] = Math.round(bg[1] + (accent[1] - bg[1]) * t);
+          img.data[o + 2] = Math.round(bg[2] + (accent[2] - bg[2]) * t);
+          img.data[o + 3] = 255;
+        }
+        const tmp = state._fieldCanvas || (state._fieldCanvas = document.createElement('canvas'));
+        tmp.width = HM_RES; tmp.height = HM_RES;
+        tmp.getContext('2d').putImageData(img, 0, 0);
+        state._fieldKey = fieldKey;
       }
-      const bg = parseColor(colors.bg);
-      const accent = parseColor(colors.accent);
-      const cap = maxV > 0 ? maxV : 1;
-      for (let i = 0; i < HM_RES * HM_RES; i++) {
-        const t = Math.min(1, Math.pow(Math.max(0, vals[i]) / cap, 0.55));
-        const r = Math.round(bg[0] + (accent[0] - bg[0]) * t);
-        const g = Math.round(bg[1] + (accent[1] - bg[1]) * t);
-        const b = Math.round(bg[2] + (accent[2] - bg[2]) * t);
-        const o = i * 4;
-        img.data[o] = r; img.data[o + 1] = g; img.data[o + 2] = b; img.data[o + 3] = 255;
-      }
-      // Draw the heatmap via createImageBitmap-free path: putImageData to a temp canvas then drawImage
-      const tmp = document.createElement('canvas');
-      tmp.width = HM_RES;
-      tmp.height = HM_RES;
-      tmp.getContext('2d').putImageData(img, 0, 0);
       ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(tmp, pad, pad, plotW, plotH);
+      ctx.drawImage(state._fieldCanvas, pad, pad, plotW, plotH);
 
       // Frame
       ctx.strokeStyle = colors.border;

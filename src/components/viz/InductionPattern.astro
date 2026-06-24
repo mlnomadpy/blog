@@ -16,8 +16,8 @@ import { np, nn, withJax, drawJaxLoading } from './engine/jax.js';
 
 // A directed relation a bilinear B can encode: the induction head. The query reads
 // the CURRENT token's identity; the key reads each position's PREVIOUS token. So
-// position i attends to positions j whose predecessor equals tokenᵢ — i.e. the token
-// that followed an earlier occurrence of the current token — and copies it as the
+// position i attends to positions j whose predecessor equals tokenᵢ, i.e. the token
+// that followed an earlier occurrence of the current token, and copies it as the
 // prediction of tokenᵢ₊₁. The score Q Kᵀ, the causal mask, and the softmax all run
 // in jax-js. This is the asymmetry of B made concrete: "ask for my own identity,
 // answer with my predecessor's" is not a symmetric similarity.
@@ -103,7 +103,7 @@ defineViz('inductionpattern', {
     }
     text(ctx, `predicts “${VOCAB[pred[qi]]}”`, rp.x + rp.w / 2, rp.y + rp.h - 12, colors, { align: 'center', size: 11, weight: '700', color: colors.accent });
 
-    text(ctx, 'query “b” matches positions whose previous token is “b”, then copies what came next — the induction stripe one step below the diagonal',
+    text(ctx, 'query “b” matches positions whose previous token is “b”, then copies what came next, the induction stripe one step below the diagonal',
       box.x + 14, box.y + box.h - 14, colors, { size: 10, mono: true, color: colors.muted });
     api.readout('rd', `position ${qi} “${SEQ[qi]}” → predict “${VOCAB[pred[qi]]}” · jax-js`);
   },

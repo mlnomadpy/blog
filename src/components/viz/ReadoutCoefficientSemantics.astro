@@ -153,7 +153,7 @@ defineViz('readoutcoeffsemantics', {
     ctx.lineTo(cx, cy + R * 1.05);
     ctx.stroke();
 
-    // convex hull of the output prototypes — the region a convex readout cannot leave
+    // convex hull of the output prototypes, the region a convex readout cannot leave
     const hullColor = mode === 'simplex' ? colors.accent : mode === 'conic' ? colors.blue : '#c2553a';
     ctx.beginPath();
     HULL.forEach((p, k) => { const [hx, hy] = map([p.x, p.y]); k ? ctx.lineTo(hx, hy) : ctx.moveTo(hx, hy); });

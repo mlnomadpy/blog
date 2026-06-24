@@ -13,12 +13,12 @@ const { caption, height = 460 } = Astro.props;
 // The finite feature map, made spatial. The Yat numerator (w·x+b)² is a degree-2
 // polynomial kernel, and a degree-2 kernel has an EXACT, finite feature map
 // φ(x) = [x₁, x₂, x₁², x₂², x₁x₂, 1]. So a *flat* hyperplane in that 6-D space is
-// a curved boundary in input space — the kernel trick. We fit that flat separator
+// a curved boundary in input space, the kernel trick. We fit that flat separator
 // live on jax-js (np.linalg.solve in feature space), then lift the 2-D data into
 // 3-D by its quadratic score and let the plane slice it. Raise "lift": the data
 // rises off the floor and the single flat plane separates the classes. Look at
 // the floor: the same flat plane is a conic (a circle for rings, a hyperbola for
-// XOR). No infinite expansion, no activation — a finite kernel doing the work.
+// XOR). No infinite expansion, no activation, a finite kernel doing the work.
 import { defineViz } from './engine/vizkit.js';
 import { np, withJax, drawJaxLoading } from './engine/jax.js';
 import { rng32 } from './engine/datasets.js';
@@ -148,7 +148,7 @@ defineViz('kerntrick', {
     // labels
     ctx.fillStyle = colors.muted; ctx.font = '11px ui-sans-serif, system-ui';
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    ctx.fillText(t < 0.06 ? 'flat: one straight line cannot separate these classes' : 'lifted by the degree-2 feature map — a flat plane separates them', 10, 8);
+    ctx.fillText(t < 0.06 ? 'flat: one straight line cannot separate these classes' : 'lifted by the degree-2 feature map, a flat plane separates them', 10, 8);
     ctx.textBaseline = 'bottom';
     ctx.fillStyle = colors.faint; ctx.font = '10px ui-monospace, monospace';
     ctx.fillText('floor: the flat plane is a conic boundary', 10, Hd - 6);

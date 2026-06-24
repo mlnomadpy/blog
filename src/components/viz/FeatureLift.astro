@@ -18,7 +18,7 @@ import { np, withJax, drawJaxLoading } from './engine/jax.js';
 // dot product φ(x)·φ(y). Drag the point y: its feature vector (lower bars) shifts
 // against the fixed anchor φ(0) (upper bars). When y≈0 the two vectors line up
 // sign-for-sign and the dot product is large; pull y away and the signs scramble
-// and the dot product decays — exactly tracing the bell below. Features on jax-js.
+// and the dot product decays, exactly tracing the bell below. Features on jax-js.
 const PADL = 40, PADR = 14, DOM = 3;
 
 const lcg = (s) => () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };

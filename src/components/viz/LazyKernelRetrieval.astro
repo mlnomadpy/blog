@@ -15,7 +15,7 @@ const { caption, height = 420 } = Astro.props;
 // prototypes NEAR it light up; the rest stay dormant. The activations are sparse
 // by the geometry of the kernel, so a layer can fetch just the active prototypes
 // (nearest-neighbour retrieval) instead of evaluating all of them. A ReLU layer
-// cannot — every ReLU unit is active on half of all inputs. All kernel values are
+// cannot, every ReLU unit is active on half of all inputs. All kernel values are
 // computed on the jax-js engine.
 import { defineViz } from './engine/vizkit.js';
 import { np, withJax, drawJaxLoading } from './engine/jax.js';
@@ -28,7 +28,7 @@ const HM = 44;            // background field resolution
 const DOM = 2.4;          // domain half-width
 const ACTIVE_FRAC = 0.18; // active if activation ≥ this × max activation
 
-// kernel field of ONE prototype over a flat (M,2) grid — vectorised on jax-js
+// kernel field of ONE prototype over a flat (M,2) grid, vectorised on jax-js
 const protoField = (gridFlat, wx, wy, eps) => {
   const M = gridFlat.length / 2;
   const Gv = np.reshape(np.array(gridFlat), [M, 2]);
@@ -41,7 +41,7 @@ const protoField = (gridFlat, wx, wy, eps) => {
   return num.div(dist2.add(eps)).js();
 };
 
-// activations of every prototype against one query — on jax-js
+// activations of every prototype against one query, on jax-js
 const queryAct = (protos, K, qx, qy, eps) => {
   const Pv = np.reshape(np.array(protos), [K, 2]);
   const qv = np.reshape(np.array([qx, qy]), [1, 2]);
@@ -116,30 +116,37 @@ defineViz('lazykernel', {
     const sx = (x) => x0 + ((x + DOM) / (2 * DOM)) * plotW;
     const sy = (y) => y0 + ((DOM - y) / (2 * DOM)) * plotH;
 
-    // ── background: max-kernel field, computed on jax-js (cached by eps) ──
-    if (!st.field || st.fieldEps !== eps) {
-      const M = HM * HM;
-      const fld = new Float64Array(M);
-      for (let k = 0; k < st.K; k++) {
-        const f = protoField(st.gridFlat, st.protos[k * 2], st.protos[k * 2 + 1], eps);
-        for (let i = 0; i < M; i++) if (f[i] > fld[i]) fld[i] = f[i];
+    // ── background: max-kernel field (cached by eps on jax-js) rasterized to a
+    // bitmap (cached by eps + theme), so dragging the query is a single drawImage
+    // rather than rebuilding HM² pixels every move ──
+    const fieldKey = eps + '|' + colors.bg + '|' + colors.accent;
+    if (!st.fieldBitmap || st.fieldKey !== fieldKey) {
+      if (!st.field || st.fieldEps !== eps) {
+        const M = HM * HM;
+        const fld = new Float64Array(M);
+        for (let k = 0; k < st.K; k++) {
+          const f = protoField(st.gridFlat, st.protos[k * 2], st.protos[k * 2 + 1], eps);
+          for (let i = 0; i < M; i++) if (f[i] > fld[i]) fld[i] = f[i];
+        }
+        st.field = fld; st.fieldEps = eps;
       }
-      st.field = fld; st.fieldEps = eps;
+      let fmax = 1e-9; for (let i = 0; i < st.field.length; i++) if (st.field[i] > fmax) fmax = st.field[i];
+      const bg = parseColor(colors.bg), accent = parseColor(colors.accent);
+      const img = ctx.createImageData(HM, HM);
+      for (let i = 0; i < HM * HM; i++) {
+        const t = Math.pow(Math.min(1, st.field[i] / fmax), 0.6) * 0.5;
+        img.data[i * 4] = Math.round(bg[0] + (accent[0] - bg[0]) * t);
+        img.data[i * 4 + 1] = Math.round(bg[1] + (accent[1] - bg[1]) * t);
+        img.data[i * 4 + 2] = Math.round(bg[2] + (accent[2] - bg[2]) * t);
+        img.data[i * 4 + 3] = 255;
+      }
+      const tmp = st.fieldBitmap || (st.fieldBitmap = document.createElement('canvas'));
+      tmp.width = HM; tmp.height = HM;
+      tmp.getContext('2d').putImageData(img, 0, 0);
+      st.fieldKey = fieldKey;
     }
-    let fmax = 1e-9; for (let i = 0; i < st.field.length; i++) if (st.field[i] > fmax) fmax = st.field[i];
-    const bg = parseColor(colors.bg), accent = parseColor(colors.accent);
-    const img = ctx.createImageData(HM, HM);
-    for (let i = 0; i < HM * HM; i++) {
-      const t = Math.pow(Math.min(1, st.field[i] / fmax), 0.6) * 0.5;
-      img.data[i * 4] = Math.round(bg[0] + (accent[0] - bg[0]) * t);
-      img.data[i * 4 + 1] = Math.round(bg[1] + (accent[1] - bg[1]) * t);
-      img.data[i * 4 + 2] = Math.round(bg[2] + (accent[2] - bg[2]) * t);
-      img.data[i * 4 + 3] = 255;
-    }
-    const tmp = document.createElement('canvas'); tmp.width = HM; tmp.height = HM;
-    tmp.getContext('2d').putImageData(img, 0, 0);
     ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(tmp, x0, y0, plotW, plotH);
+    ctx.drawImage(st.fieldBitmap, x0, y0, plotW, plotH);
     ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.strokeRect(x0 + 0.5, y0 + 0.5, plotW - 1, plotH - 1);
 
     // ── query activations, on jax-js ──

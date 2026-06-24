@@ -16,7 +16,7 @@ import { eigh, withJax, drawJaxLoading } from './engine/jax.js';
 
 // The spectrum of a representation. The feature covariance splits into two stacked
 // regimes: the top C−1 modes are the PROTOTYPE FRAME (the simplex / Welch packing /
-// label kernel — the separation channel), and the tail is the INFORMATION the
+// label kernel, the separation channel), and the tail is the INFORMATION the
 // features carry between the prototypes (within-class + fine structure). Press
 // Play to run training: as the model collapses (neural collapse, Σ_W → 0) the
 // information tail is ground to nothing. Drag 'label structure' to shape the
@@ -76,7 +76,7 @@ defineViz('infospectrum', {
       ctx.moveTo(x0, py + ph + yoff); ctx.lineTo(x0, py + ph + yoff + 5); ctx.lineTo(x1, py + ph + yoff + 5); ctx.lineTo(x1, py + ph + yoff); ctx.stroke();
       text(ctx, label, (x0 + x1) / 2, py + ph + yoff + 8, colors, { align: 'center', size: 9.5, color: col });
     };
-    bracket(px + 2, px + PROTO * bw - 2, `prototype frame — Welch-packed (${PROTO} modes)`, colors.accent, 4);
+    bracket(px + 2, px + PROTO * bw - 2, `prototype frame, Welch-packed (${PROTO} modes)`, colors.accent, 4);
     bracket(px + PROTO * bw + 2, px + D * bw - 2, 'information', colors.green, 4);
 
     const protoE = proto.reduce((a, b) => a + b, 0), infoE = TAIL * w;

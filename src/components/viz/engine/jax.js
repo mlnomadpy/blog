@@ -1,4 +1,4 @@
-// jax.js — the engine's compute backend. All blog ML math runs on real jax-js
+// jax.js, the engine's compute backend. All blog ML math runs on real jax-js
 // (@jax-js/jax): NumPy/JAX in the browser. This module owns the one async bit
 // (device init) and the glue that lets a synchronous vizkit spec use it:
 // kick `withJax` in setup(), guard draw() with `drawJaxLoading`.
@@ -9,14 +9,14 @@
 //
 // We pin the `cpu` device. jax-js's faster wasm/webgpu backends read tensor data
 // back synchronously through a `SharedArrayBuffer`, which the browser only exposes
-// on cross-origin-isolated pages (COOP/COEP) — and COEP would break giscus and our
+// on cross-origin-isolated pages (COOP/COEP), and COEP would break giscus and our
 // other cross-origin embeds site-wide. The `cpu` backend is the reference JS
 // interpreter: its synchronous read is a plain buffer slice (no SharedArrayBuffer),
-// so it runs in every browser with zero isolation. It's still real jax-js — true
-// NumPy semantics, real LU-based `linalg.solve`, real `nn.softmax` — just
+// so it runs in every browser with zero isolation. It's still real jax-js, true
+// NumPy semantics, real LU-based `linalg.solve`, real `nn.softmax`, just
 // interpreted rather than SIMD-compiled, which is irrelevant at our problem sizes.
 //
-// Reminder: arrays have Rust-like move semantics — every op consumes its inputs.
+// Reminder: arrays have Rust-like move semantics, every op consumes its inputs.
 // Reuse a value -> take `.ref`. A forward pass that allocates fresh and reads out
 // once per call never leaks; only long training loops that reuse params do.
 import { numpy as np, nn, init, defaultDevice, tree, random } from '@jax-js/jax';
@@ -47,7 +47,7 @@ export { np, nn, tree, random };
 // LAPACK's dsyev shape: Householder tridiagonalization with the O(n³) reflections
 // H·A·H and the eigenvector accumulation Q·H run as real jax-js matmuls; the cheap
 // O(n²) tridiagonal QL solve (tql2) is JS glue. Robust on degenerate/clustered
-// spectra where orthogonal iteration stalls — verified to the analytical spectrum
+// spectra where orthogonal iteration stalls, verified to the analytical spectrum
 // of block / simplex / graded kernels (jax-js cpu is float32, so ~1e-6 accurate).
 //   eigh(rows) → { values: [λ desc], vectors: [v0, v1, …] }  (vectors[k] = k-th eigenvector, length n)
 function tql2(d, e, n) {

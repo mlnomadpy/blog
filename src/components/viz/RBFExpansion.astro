@@ -14,7 +14,7 @@ import { defineViz } from './engine/vizkit.js';
 import { np, withJax, drawJaxLoading } from './engine/jax.js';
 
 // RBF basis expansion: fit f as Σ αⱼ K(·, kⱼ) over fixed anchors by solving the
-// real kernel ridge system (K + λI)α = y live — jax-js builds the Gram matrix and
+// real kernel ridge system (K + λI)α = y live, jax-js builds the Gram matrix and
 // solves it with np.linalg.solve (LU under the hood), n=9.
 const n = 9, M = 240, PADL = 30, PADR = 14, PADT = 16, PADB = 26;
 const target = (x) => Math.sin(x * Math.PI * 2.2) * 0.6 - x * 0.1 + 0.1;

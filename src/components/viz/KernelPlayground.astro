@@ -32,7 +32,7 @@ const id = `kp-${Math.random().toString(36).slice(2, 9)}`;
       <button type="button" class="kp-action" data-action="autofit">auto-fit α</button>
       <button type="button" class="kp-action" data-action="clear">clear prototypes</button>
       <button type="button" class="kp-action" data-action="resample">resample data</button>
-      <span class="kp-acc" id={`${id}-acc`}>accuracy — · 0 prototypes</span>
+      <span class="kp-acc" id={`${id}-acc`}>accuracy, · 0 prototypes</span>
     </div>
     <span class="faint kp-hint">click empty space to place a prototype · drag a prototype to move · shift-click a prototype to delete · use sliders below to set each α</span>
   </div>
@@ -379,7 +379,7 @@ const id = `kp-${Math.random().toString(36).slice(2, 9)}`;
       const xWorld = (px) => xMin + ((px - plotX) / plotW) * (xMax - xMin);
       const yWorld = (py) => yMax - ((py - plotY) / plotH) * (yMax - yMin);
 
-      // Diverging heatmap of f(x) — only if there are prototypes
+      // Diverging heatmap of f(x), only if there are prototypes
       if (protos.length > 0) {
         const HM = 80;
         const vals = new Float32Array(HM * HM);
@@ -546,7 +546,7 @@ const id = `kp-${Math.random().toString(36).slice(2, 9)}`;
 
       // Acc readout in the controls
       sigmaReadout.textContent = sigma.toFixed(2);
-      accReadout.textContent = (acc === null ? 'accuracy — · 0 prototypes' :
+      accReadout.textContent = (acc === null ? 'accuracy, · 0 prototypes' :
         'accuracy = ' + (acc * 100).toFixed(1) + '%  ·  ' + protos.length + ' prototype' + (protos.length === 1 ? '' : 's'));
     };
 

@@ -44,11 +44,15 @@ import AttractorField from '../../components/viz/AttractorField.astro';
 import TeachByExample from '../../components/viz/TeachByExample.astro';
 import ForgetMatch from '../../components/viz/ForgetMatch.astro';
 
-*To make this network forget a class, you delete a few rows of a matrix. To teach it a new one, you paste a few rows in. No gradient steps either way, and you can diff the weights afterward to check that nothing else moved. Both of those are supposed to be hard. Teaching a deployed model a new class without wrecking the old ones is the problem people call catastrophic forgetting; making a model genuinely forget what it learned is machine unlearning, the one courts have started asking about. They are hard because of how an ordinary network stores a class, and easy here because of how this one does. A [previous post](/blog/your-neuron-is-a-picture/) swapped a neuron's activation for the Yat kernel, which turns the neuron from a direction into a prototype: a point in input space, and on an image a literal picture. A network of those is a list of pictures, and a list is something you edit by hand. Every number below comes from a real run; the script is `scripts/yat_editable_fmnist.py`.*
+*Someone asks you to make a trained model forget one person: a court ordered it, or a user invoked their right to be forgotten. So you go looking for the place in the network that holds them, and there is no such place. What a model knows is smeared across all of its weights at once, every number leaning on every other, with nothing you can point to and pull out. The only honest fix is to delete the data and train the whole network over from nothing. Of every artifact in software, a neural network is the one you cannot open and edit. You can only grow a new one.*
+
+*Now picture a different kind of network, one where each neuron is not a sliver of some shared tangle but a single picture, one image per unit. Stack those and the whole network is a list of pictures, and a list is something you edit by hand. Tell it to forget a class and you delete that class's pictures; tell it to learn a new one and you paste a few in. No gradient steps either way, and you can diff the weights afterward to prove nothing else moved.*
+
+*So the two operations that are supposed to be brutal come down to a delete and a paste: adding a class without wrecking the rest, the problem called catastrophic forgetting, and making a model genuinely forget, the one called machine unlearning that courts have started to ask about. They are hard in an ordinary network because of how it stores a class, and easy here because of how this one does. The [previous post](/blog/your-neuron-is-a-picture/) is where that began: swap a neuron's activation for the Yat kernel and it stops being a direction and becomes a prototype, a point in input space, and on an image a literal picture. Every number below is from a real run (`scripts/yat_editable_fmnist.py`).*
 
 ## A network you edit instead of train
 
-A standard neuron stores a direction $w$. You cannot point at a direction: you cannot hand-write a useful one, read meaning off one, or edit a network by rewriting them. Training is the only way in, because the weights mean nothing until gradient descent puts meaning there.
+Why can you not just open an ordinary network and rewrite a class by hand? Because a standard neuron stores a direction $w$, and you cannot point at a direction: you cannot hand-write a useful one, read meaning off one, or edit anything by retyping it. Training is the only way in, since the weights mean nothing until gradient descent puts meaning there.
 
 A Yat unit stores a prototype $W_u$ instead, and scores an input by a kernel against it, $\phi_u(x) = (W_u^\top x + b)^2 / (\lVert x - W_u\rVert^2 + \varepsilon)$. The prototype sits in the same space as the data, so you can point at it: on Fashion-MNIST it is a 28x28 picture of a piece of clothing. A classifier is a bank of these prototypes and a readout where each one votes for its class. Built by hand from k-means centroids and a one-hot readout, with no gradient steps at all, it reaches **79%** on Fashion-MNIST.
 
@@ -76,7 +80,7 @@ A class is now one vector $\mu_c\in\mathcal H$, the mean of its prototypes in fe
 
 ## The network is a landscape of wells
 
-The denominator repays a second look. $1 / (\lVert x - W_u\rVert^2 + \varepsilon)$ is a softened inverse-square law, the shape of gravity and of electrostatics, and the $\varepsilon$ is its softening length, the same constant an N-body simulation adds so the force stays finite when two bodies meet. Read that way, a prototype is a mass. It digs a well into input space whose pull falls off with the square of the distance.
+Everything so far has lived in a space with 784 axes, which is to say you cannot picture any of it. Here is the move that rescues the intuition, and it is not a metaphor I am reaching for; it is sitting in the formula. Look at the denominator, $1 / (\lVert x - W_u\rVert^2 + \varepsilon)$. That is a softened inverse-square law, the exact shape of gravity and of electrostatics, and the $\varepsilon$ is its softening length, the same constant an N-body simulation adds so the force stays finite when two bodies meet. So a prototype is a mass. It digs a well into the input space, and no matter how many dimensions that space has, you can now hold the whole thing in your head as one picture: a landscape of wells that things fall into.
 
 A bank of prototypes is then a landscape of wells, one cluster per class, and the class score is its field: $s_c(x) = \sum_{u\in c} \phi_u(x)$ sums class $c$'s wells the way a gravitational field sums the potentials of its masses. A point is classified by the deepest basin it can feel, $\hat y(x) = \arg\max_c s_c(x)$, and the boundary is the watershed where two fields come out even, $\{x : s_c(x) = s_{c'}(x)\}$. Far from every prototype the field stays bounded instead of blowing up, so a point that looks like nothing settles nowhere and the network can hold back. Drag the marker below across a ridge and its class flips.
 
@@ -86,7 +90,7 @@ The two edits ahead are moves on this landscape. Teaching drops a new mass and o
 
 ## Teach it a class, no training
 
-Start with a deliberately incomplete model: a hand-built classifier that has only ever seen eight of the ten classes. It places twenty prototypes for each of classes 0 through 7 and knows nothing about Bag or Boot. On the test images of the classes it does know, it scores **77.8%**.
+Give the network a hole, then watch how cheaply it fills. This hand-built classifier has only ever seen eight of the ten classes, twenty prototypes each for classes 0 through 7, and it has never laid eyes on a Bag or a Boot; on the classes it does know, it scores **77.8%**. So how do you teach it the two it is missing?
 
 Now teach it the two it is missing. Take twenty example images of Bag and twenty of Boot, drop them in as new prototypes, and give each a readout row so it can vote. Forty pictures placed, no optimizer, no backward pass, no epochs.
 

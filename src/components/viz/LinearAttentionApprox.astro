@@ -16,7 +16,7 @@ import { np, nn, withJax, drawJaxLoading } from './engine/jax.js';
 
 // Does the random-feature trick really reconstruct attention? Left: the exact
 // N×N softmax matrix A = softmax(QKᵀ/√d). Right: the matrix you get from
-// random features, Â = D⁻¹ φ(Q)φ(K)ᵀ — never formed in a real Performer (that
+// random features, Â = D⁻¹ φ(Q)φ(K)ᵀ, never formed in a real Performer (that
 // would cost N²), but drawn here so you can see it converge to A as m grows.
 // The bar reports the relative error of the actual output Ŷ = D⁻¹φ(Q)(φ(K)ᵀV)
 // against Y = AV. positive features stay valid; trig features wobble and the
@@ -45,7 +45,7 @@ defineViz('linearattentionapprox', {
   setup(api) {
     // structured sequence: tokens sit on a latent circle, q=k up to noise, so the
     // exact attention matrix is a recognizable diagonal band (each token attends to
-    // its neighbours, wrapping at the corners) rather than uniform noise — and the
+    // its neighbours, wrapping at the corners) rather than uniform noise, and the
     // low effective dimension lets the random-feature estimate actually converge.
     const rng = lcg(91), R = 1.5, noise = 0.2;
     const Q = new Float64Array(N * D), Km = new Float64Array(N * D), V = new Float64Array(N * D);

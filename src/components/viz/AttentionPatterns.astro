@@ -16,11 +16,11 @@ import { heatmap, text } from './engine/draw.js';
 import { np, nn, withJax, drawJaxLoading } from './engine/jax.js';
 
 // Real attention. Three causal heads over one token sequence, each a different
-// REAL Q/K projection — the attention matrices are computed live by jax-js
+// REAL Q/K projection, the attention matrices are computed live by jax-js
 // (softmax(QKᵀ/√d)), not hand-painted. The three "kernel structures":
-//   positional — Q,K read a sinusoidal position code → diagonal decay
-//   previous   — W_Q applies the rotary shift pᵢ→pᵢ₋₁ → sub-diagonal
-//   induction  — Q reads current-token content, K reads previous-token content
+//   positional, Q,K read a sinusoidal position code → diagonal decay
+//   previous  , W_Q applies the rotary shift pᵢ→pᵢ₋₁ → sub-diagonal
+//   induction , Q reads current-token content, K reads previous-token content
 // Animation sweeps the causal query frontier down the rows; τ sharpens softmax.
 
 const buildModel = (N) => {

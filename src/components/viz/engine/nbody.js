@@ -1,4 +1,4 @@
-// nbody.js — shared gravity bookkeeping used by DirectNBody, FieldMesh and the
+// nbody.js, shared gravity bookkeeping used by DirectNBody, FieldMesh and the
 // combined BookkeepingFour viz. A physically honest toy, not a GR simulator:
 //   direct = softened Newtonian N-body force summation (pure JS, O(N^2));
 //   field  = Newtonian particle-mesh gravity: deposit mass density on a fixed
@@ -68,8 +68,14 @@ export function drawFieldPanel(ctx, box, colors, state, N) {
 }
 
 // ── physics ──
+// reused acceleration scratch buffers: the consumed region [0,2N) is fully
+// overwritten each call and read immediately by integrate, so reuse is exact and
+// avoids a Float64Array allocation every animation frame.
+const _accDirect = new Float64Array(MAX_N * 2);
+const _accSample = new Float64Array(MAX_N * 2);
+
 function directAcceleration(pos, mass, N) {
-  const acc = new Float64Array(MAX_N * 2);
+  const acc = _accDirect;
   for (let i = 0; i < N; i++) {
     const xi = pos[2 * i], yi = pos[2 * i + 1];
     let ax = 0, ay = 0;
@@ -140,7 +146,7 @@ function gradient(phi) {
 }
 
 function sampleFieldAcceleration(pos, grad, N) {
-  const acc = new Float64Array(MAX_N * 2);
+  const acc = _accSample;
   for (let i = 0; i < N; i++) {
     const gx = toGrid(pos[2 * i]);
     const gy = toGrid(pos[2 * i + 1]);

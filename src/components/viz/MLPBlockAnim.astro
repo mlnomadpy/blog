@@ -58,7 +58,7 @@ const stages = [
     const stageNames = [
       'input vector x',
       'first linear: h = W₁x + b₁',
-      'pointwise activation: a = φ(h)  — geometry collapses here',
+      'pointwise activation: a = φ(h) , geometry collapses here',
       'second linear: y = W₂a + b₂',
     ];
 
@@ -461,7 +461,7 @@ const stages = [
       });
     }
 
-    // Pause when tab is hidden — don't waste battery.
+    // Pause when tab is hidden, don't waste battery.
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && playing) setPlaying(false);
     });

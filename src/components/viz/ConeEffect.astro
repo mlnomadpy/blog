@@ -14,7 +14,7 @@ import { defineViz } from './engine/vizkit.js';
 import { panel, unitCircle, dot, arrow, text, PALETTE } from './engine/draw.js';
 
 // Random untrained ReLU net: outputs already bunch into a narrow cone (the cone
-// effect). No training — pure forward passes, recomputed on slider/re-roll.
+// effect). No training, pure forward passes, recomputed on slider/re-roll.
 const D = 16, H = 24, DE = 2, N = 320;
 const randn = () => { let u = Math.random(), v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
 
@@ -72,7 +72,7 @@ defineViz('coneeffect', {
         ctx.fillStyle = colors.accent;
         ctx.beginPath();
         ctx.moveTo(m.cx, m.cy);
-        ctx.arc(m.cx, m.cy, m.R, -ang - width, -ang + width);
+        ctx.arc(m.cx, m.cy, Math.max(0, m.R), -ang - width, -ang + width);
         ctx.closePath();
         ctx.fill();
         ctx.restore();

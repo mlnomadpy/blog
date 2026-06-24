@@ -92,7 +92,7 @@ defineViz('roperelative', {
     for (let d = -T + 2; d < T; d += 6) text(ctx, String(d), sx(d), plot.y + plot.h + 5, colors, { align: 'center', size: 9, mono: true, color: colors.muted });
     text(ctx, '0', sx(0), plot.y + plot.h + 5, colors, { align: 'center', size: 9, mono: true, color: colors.fg });
 
-    text(ctx, 'same q, k — the score now depends only on the gap i − j, and inter-token dependence decays with distance',
+    text(ctx, 'same q, k, the score now depends only on the gap i − j, and inter-token dependence decays with distance',
       box.x + 14, box.y + box.h - 14, colors, { size: 10, mono: true, color: colors.muted });
     api.readout('rd', `Δ=0 score ${baseline.toFixed(2)} · relative, not absolute · jax-js`);
   },

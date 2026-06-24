@@ -14,7 +14,7 @@ import { defineViz } from './engine/vizkit.js';
 import { panel, text, parseColor, PALETTE } from './engine/draw.js';
 import { np, nn, withJax, drawJaxLoading } from './engine/jax.js';
 
-// Information is not stored AT the prototypes — it lives in the continuous field
+// Information is not stored AT the prototypes, it lives in the continuous field
 // BETWEEN them. Three superclass prototypes anchor the corners; every interior point
 // is a soft mixture, and its colour is that mixture. The corners are pure and
 // saturated (a confident prototype carries one bit: "I am an animal"); the interior
@@ -22,7 +22,7 @@ import { np, nn, withJax, drawJaxLoading } from './engine/jax.js';
 // features drift through this field carrying colour, not labels. Crank sharpness τ
 // and the field hardens into three flat tiles: neural collapse swallowing the
 // spectrum, leaving only the corners.
-// The field is one big batched softmax over a grid of locations — computed on jax-js
+// The field is one big batched softmax over a grid of locations, computed on jax-js
 // (nn.softmax) and cached per τ; the drifting cloud is JS glue.
 const NAMES = ['animals', 'vehicles', 'plants'];
 const TRI = [[0, -1], [0.866, 0.5], [-0.866, 0.5]];   // equilateral barycentric anchors
