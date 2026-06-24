@@ -83,7 +83,7 @@ defineViz('qkbilinear', {
 
     const cx = left.x + left.w / 2, cy = left.y + left.h / 2, R = Math.min(left.w, left.h) * 0.40;
     const xy = p => [cx + p[0] * R, cy - p[1] * R];
-    ctx.strokeStyle = colors.border; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = colors.border; ctx.beginPath(); ctx.arc(cx, cy, Math.max(0, R), 0, Math.PI * 2); ctx.stroke();
     for (let i = 0; i < X.length; i++) {
       const [x, y] = xy(X[i]);
       const [qx, qy] = xy([X[i][0] + Q[i][0] * 0.28, X[i][1] + Q[i][1] * 0.28]);

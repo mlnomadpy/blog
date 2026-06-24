@@ -12,7 +12,7 @@ const { caption, height = 400 } = Astro.props;
 <script>
 // Explainability is the kernel theory, computed live on jax-js. A layer of Yat
 // units, each a prototype with a message mᵤ. For a query x the output is an exact
-// convex combination of those messages, f(x) = Σ aᵤ mᵤ with aᵤ = κ(x,Wᵤ)/Σκ — the
+// convex combination of those messages, f(x) = Σ aᵤ mᵤ with aᵤ = κ(x,Wᵤ)/Σκ, the
 // representer theorem, no surrogate. Drag the query: the bars are the exact
 // contribution of each prototype to the output, and they always sum to one. The
 // readout also shows the query's RKHS intensity (‖x‖²+b)²/ε, a capacity you can
@@ -25,7 +25,7 @@ const B = 0.5;
 const PAD = 10;
 const DOM = 2.2;
 
-// kernel value of every prototype against the query — on jax-js
+// kernel value of every prototype against the query, on jax-js
 const queryKer = (protos, K, qx, qy, eps) => {
   const Pv = np.reshape(np.array(protos), [K, 2]);
   const qv = np.reshape(np.array([qx, qy]), [1, 2]);

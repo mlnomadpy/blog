@@ -14,7 +14,7 @@ import { defineViz } from './engine/vizkit.js';
 import { panel, text, PALETTE } from './engine/draw.js';
 import { np, withJax, drawJaxLoading } from './engine/jax.js';
 
-// Two independent constraints — nonnegativity and summing to one — sort the same
+// Two independent constraints, nonnegativity and summing to one, sort the same
 // readout y = Σ a_u r_u into four regimes with four reachable sets:
 //   convex (a≥0, Σa=1)  → convex hull (a segment here)
 //   conic  (a≥0)        → conical hull (a wedge from the origin)
@@ -133,7 +133,7 @@ defineViz('hulllattice', {
       text(ctx, lab, ix + 16, ly, colors, { size: 10.5, weight: '600' });
       text(ctx, '→ ' + region, ix + 16, ly + 16, colors, { size: 10, color: colors.muted });
     }
-    text(ctx, 'same scores s, four constraint regimes — each readout stays in its own reachable set',
+    text(ctx, 'same scores s, four constraint regimes, each readout stays in its own reachable set',
       box.x + 12, box.y + box.h - 16, colors, { size: 10, mono: true, color: colors.muted });
 
     api.readout('rd', `Σs ${sum.toFixed(2)} · convex⊂conic, convex⊂affine⊂linear · jax-js`);

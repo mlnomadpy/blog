@@ -1,0 +1,84 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 400 } = Astro.props;
+---
+<figure class="viz semanticgraph" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { panel, dot, text, PALETTE } from './engine/draw.js';
+
+// The label kernel as a living graph. Classes are free nodes laid out by metric
+// MDS on the target similarity, there is no circle to pin them to. Edges are
+// drawn where classes are kin; thickness is similarity. Slide structure from 0
+// (a flat kernel: an even, relationship-free gas) to 1 (a taxonomy: kin snap
+// into clusters, strangers drift apart). This is what "match the label kernel"
+// looks like when you let the geometry breathe.
+const NAMES = ['cat', 'dog', 'wolf', 'car', 'bus', 'jet', 'apple', 'pear', 'plum'];
+const GROUP = [0, 0, 0, 1, 1, 1, 2, 2, 2];
+const C = NAMES.length;
+const randn = () => { const u = Math.random() || 1e-9, v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+
+function targetDist(structure, i, j) {
+  const sim = structure * (GROUP[i] === GROUP[j] ? 0.85 : -0.25);
+  return 1.05 * (1 - sim); // similar → short rest length, different → long
+}
+
+defineViz('semanticgraph', {
+  title: 'The label kernel, as a graph that settles',
+  height: 400, stepsPerFrame: 2,
+  controls: [
+    { type: 'play' }, { type: 'button', name: 'reroll', label: 're-roll', reset: true }, { type: 'speed' },
+    { type: 'newrow' },
+    { type: 'range', name: 'structure', label: 'label structure', min: 0, max: 1, step: 0.02, value: 0.75, fmt: v => v.toFixed(2) },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) { const p = []; for (let i = 0; i < C; i++) p.push([randn() * 0.6, randn() * 0.6]); api.state.p = p; },
+  step(api) {
+    const p = api.state.p, s = api.get('structure'), lr = 0.012, g = p.map(() => [0, 0]);
+    for (let i = 0; i < C; i++) for (let j = 0; j < C; j++) {
+      if (i === j) continue;
+      const dx = p[i][0] - p[j][0], dy = p[i][1] - p[j][1], d = Math.hypot(dx, dy) + 1e-6;
+      const coef = 2 * (d - targetDist(s, i, j)) / d;     // metric-MDS stress gradient
+      g[i][0] += coef * dx; g[i][1] += coef * dy;
+    }
+    let cx = 0, cy = 0;
+    for (let i = 0; i < C; i++) { p[i][0] -= lr * g[i][0]; p[i][1] -= lr * g[i][1]; cx += p[i][0]; cy += p[i][1]; }
+    cx /= C; cy /= C;
+    for (let i = 0; i < C; i++) { p[i][0] -= cx; p[i][1] -= cy; }  // keep centred
+  },
+  draw(api) {
+    const { ctx, colors, size, state } = api;
+    const box = { x: 6, y: 4, w: size.W - 12, h: size.H - 8 };
+    panel(ctx, box, colors, { header: 24 });
+    const p = state.p, s = api.get('structure');
+    // auto-fit positions to the panel
+    let mx = 0.6; for (const q of p) mx = Math.max(mx, Math.abs(q[0]), Math.abs(q[1]));
+    const cx = box.x + box.w / 2, cy = box.y + box.h / 2 + 6, R = Math.min(box.w, box.h) * 0.42 / mx;
+    const xy = q => [cx + q[0] * R, cy + q[1] * R];
+    // edges (kin only; thickness ~ similarity)
+    for (let i = 0; i < C; i++) for (let j = i + 1; j < C; j++) {
+      if (GROUP[i] !== GROUP[j]) continue;
+      const sim = s * 0.85; if (sim < 0.05) continue;
+      const [ax, ay] = xy(p[i]), [bx, by] = xy(p[j]);
+      ctx.strokeStyle = PALETTE[GROUP[i] % PALETTE.length]; ctx.globalAlpha = 0.18 + 0.5 * sim; ctx.lineWidth = 1 + 3 * sim;
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    // nodes
+    for (let i = 0; i < C; i++) {
+      const [x, y] = xy(p[i]);
+      dot(ctx, x, y, 9, PALETTE[GROUP[i] % PALETTE.length]); ctx.lineWidth = 2; ctx.strokeStyle = colors.bg; ctx.beginPath(); ctx.arc(x, y, 9, 0, 2 * Math.PI); ctx.stroke();
+      text(ctx, NAMES[i], x, y - 16, colors, { align: 'center', size: 10.5, color: colors.fg });
+    }
+    text(ctx, 'class nodes, laid out by the label kernel', box.x + 10, box.y + 5, colors, { size: 11.5, color: colors.fg });
+    text(ctx, s < 0.05 ? 'flat kernel → an even, relationship-free gas' : 'kin cluster · strangers drift apart', box.x + 10, box.y + box.h - 14, colors, { size: 10, mono: true, color: colors.muted });
+    api.readout('rd', `structure ${s.toFixed(2)}`);
+  },
+});
+</script>

@@ -38,7 +38,7 @@ import CiteAs from '../../components/CiteAs.astro';
 
 ## The layer, and what its rows are
 
-A Yat unit scores an input against a prototype $W_u$ with the kernel $(W_u^\top x + b)^2 / (\lVert x - W_u\rVert^2 + \varepsilon)$. A layer is a bank of them, and the readout lets each prototype vote for a class. The thing to notice for this post is the shape: the prototypes are the rows of `W`, and each row's vote is a row of the readout. Editing the network is editing those rows.
+If teaching and forgetting are going to be array edits, the array has to be shaped for it: one prototype to a row, and nothing about a class smeared anywhere else. A Yat unit scores an input against a prototype $W_u$ with the kernel $(W_u^\top x + b)^2 / (\lVert x - W_u\rVert^2 + \varepsilon)$, a layer is a bank of them, and the readout lets each prototype vote for a class. The prototypes are the rows of `W`, each row's vote a row of the readout, and editing the network will turn out to be nothing more than editing those rows.
 
 ```python
 import jax, jax.numpy as jnp
@@ -65,7 +65,7 @@ There is no `nnx.Linear`, no nonlinearity, and crucially no entanglement: protot
 
 ## Build it by hand
 
-Take a few k-means centroids per class as the prototypes and wire each one's readout row to one-hot. No optimizer touches this.
+Before you can edit a network you need one to edit, and this one arrives without training. A few k-means centroids per class become the prototypes, each one's readout row wired to one-hot, and no optimizer touches it.
 
 ```python
 import numpy as np, torchvision
@@ -104,7 +104,7 @@ Everything from here is editing that field.
 
 ## Teaching a class is a concatenate
 
-To teach a class the network has never seen, build its prototypes and the matching one-hot rows, and stack them on. That is the entire operation.
+Teaching a deployed model a new class is supposed to be the dangerous direction, the one that quietly wrecks the classes it already knows. Here it is a stack of rows: build the new class's prototypes and their one-hot readout rows, concatenate them on, and stop. That is the entire operation.
 
 ```python
 def add_class(model, c, per=20):

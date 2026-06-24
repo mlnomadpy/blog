@@ -16,9 +16,9 @@ import { np, eigh, withJax, drawJaxLoading } from './engine/jax.js';
 
 // Positive-definite and pointwise-nonnegative are INDEPENDENT properties, and a
 // Nadaraya–Watson readout needs the second, not the first. This figure puts both
-// on their own axis. For each kernel we compute, live: the profile κ(x₀, ·) — a
-// dip below zero means it is not nonnegative — and the smallest eigenvalue of a
-// Gram matrix on sample points (via the engine's eigh) — λ_min < 0 means it is
+// on their own axis. For each kernel we compute, live: the profile κ(x₀, ·), a
+// dip below zero means it is not nonnegative, and the smallest eigenvalue of a
+// Gram matrix on sample points (via the engine's eigh), λ_min < 0 means it is
 // not positive definite. The four canonical kernels land in four quadrants.
 //   Gaussian, Yat  → nonnegative AND PSD (the useful corner)
 //   linear x·y     → PSD but signed
@@ -107,7 +107,7 @@ defineViz('kernelquadrant', {
       text(ctx, v.name.split('  ')[0], qx + 9, qy - 5, colors, { size: on ? 11 : 10, weight: on ? '700' : '500', color: on ? colors.fg : colors.muted });
     });
 
-    // ── bottom-left: profile κ(x₀, ·) — nonnegativity ──
+    // ── bottom-left: profile κ(x₀, ·), nonnegativity ──
     const pb = { x: box.x + 12, y: box.y + qh + 10, w: (box.w - 36) / 2, h: box.h - qh - 54 };
     text(ctx, `profile  κ(${ANCHOR}, x)`, pb.x, pb.y - 12, colors, { size: 11, weight: '600' });
     panel(ctx, pb, colors, {});
@@ -120,7 +120,7 @@ defineViz('kernelquadrant', {
     ctx.strokeStyle = cur.nonneg ? yesCol : noCol; ctx.lineWidth = 1.8; ctx.stroke();
     text(ctx, cur.nonneg ? 'nonnegative ✓' : `dips to ${cur.pmin.toFixed(2)} ✗`, pb.x + 6, pb.y + pb.h - 14, colors, { size: 10.5, mono: true, color: cur.nonneg ? yesCol : noCol });
 
-    // ── bottom-right: signed Gram heatmap — positive definiteness ──
+    // ── bottom-right: signed Gram heatmap, positive definiteness ──
     const gb = { x: box.x + 24 + (box.w - 36) / 2, y: box.y + qh + 10, w: (box.w - 36) / 2, h: box.h - qh - 54 };
     text(ctx, 'Gram matrix · λ_min', gb.x, gb.y - 12, colors, { size: 11, weight: '600' });
     panel(ctx, gb, colors, {});

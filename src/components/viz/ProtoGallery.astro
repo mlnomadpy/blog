@@ -74,8 +74,8 @@ defineViz('protogallery', {
 
     const lx = pad + (panelW - gridW) / 2;
     const rx = pad + panelW + panelGap + (panelW - gridW) / 2;
-    panel(st.protos, lx, 'Yat prototypes — each a learned picture', true);
-    panel(st.relu, rx, 'ReLU filters — the same network, unreadable', false);
+    panel(st.protos, lx, 'Yat prototypes, each a learned picture', true);
+    panel(st.relu, rx, 'ReLU filters, the same network, unreadable', false);
 
     // divider
     ctx.strokeStyle = colors.border; ctx.lineWidth = 1;
@@ -84,7 +84,7 @@ defineViz('protogallery', {
     // footer
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
     ctx.fillStyle = colors.muted; ctx.font = '11px ui-monospace, monospace';
-    ctx.fillText(`same architecture, comparable accuracy — Yat ${meta.yatAcc}%  ·  ReLU ${meta.reluAcc}% test`, W / 2, H - 5);
+    ctx.fillText(`same architecture, comparable accuracy, Yat ${meta.yatAcc}%  ·  ReLU ${meta.reluAcc}% test`, W / 2, H - 5);
 
     api.readout('rd', 'left: prototypes that live in pixel space (bordered by the class they vote for). right: weight vectors with no reason to look like anything');
   },

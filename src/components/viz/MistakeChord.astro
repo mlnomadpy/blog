@@ -17,7 +17,7 @@ import { np, withJax, drawJaxLoading } from './engine/jax.js';
 // Where the errors flow. Classes sit on the rim, grouped into superclass arcs.
 // Each ribbon is a confusion: it leaves the true class and lands on the predicted
 // class, its width = how much error mass, its colour = mild (lands inside the same
-// superclass — a cat called a dog) or severe (jumps the rim to another superclass —
+// superclass, a cat called a dog) or severe (jumps the rim to another superclass —
 // a cat called a car). A simplex codebook scatters its mistakes everywhere; a
 // structured codebook keeps them local. Same error RATE, completely different error
 // COST. Drag the slider to morph the codebook between the two regimes.
@@ -137,7 +137,7 @@ defineViz('mistakechord', {
     for (const r of ribbons) {
       if (r.w < cutoff) continue;
       const [ax, ay] = pt(r.i, rim), [bx, by] = pt(r.j, rim);
-      // bezier dipping toward the centre — deeper dip for cross-group jumps
+      // bezier dipping toward the centre, deeper dip for cross-group jumps
       const dip = r.sev ? 0.12 : 0.55;
       const mx = cx + (ax + bx - 2 * cx) * dip, my = cy + (ay + by - 2 * cy) * dip;
       const col = r.sev ? (colors.red || '#c2553a') : colors.accent;
@@ -158,8 +158,8 @@ defineViz('mistakechord', {
     // verdict
     const sevPct = total > 0 ? 100 * severe / total : 0;
     text(ctx, 'where the errors flow', box.x + 10, box.y + 6, colors, { size: 12, color: colors.fg, weight: '600' });
-    const verdict = sevPct > 45 ? 'mistakes scatter across superclasses — every error is a category error'
-      : sevPct < 12 ? 'mistakes stay home — a cat is mistaken for a dog, never a car'
+    const verdict = sevPct > 45 ? 'mistakes scatter across superclasses, every error is a category error'
+      : sevPct < 12 ? 'mistakes stay home, a cat is mistaken for a dog, never a car'
       : 'mistakes are starting to localise inside superclasses';
     text(ctx, verdict, box.x + 10, box.y + box.h - 16, colors, { size: 10.5, mono: true, color: sevPct > 45 ? (colors.red || '#c2553a') : colors.fg });
     // legend chips

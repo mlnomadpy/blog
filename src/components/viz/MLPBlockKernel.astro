@@ -190,43 +190,48 @@ const id = `mbk-${Math.random().toString(36).slice(2, 9)}`;
       const xWorld = (px) => xMin + ((px - leftX) / leftW) * (xMax - xMin);
       const yWorld = (py) => yMax - ((py - leftY) / leftH) * (yMax - yMin);
 
-      // Background heatmap of f(x) = Σ α_u K(x, W_u) over the 2D space
+      // Background heatmap f(x) = Σ α_u K(x, W_u), cached. It depends only on the
+      // prototypes (position + α), sigma and the theme, not on the dragged input
+      // marker, so moving the input reuses the bitmap; only editing a prototype, α
+      // or sigma recomputes. Pixel-identical (diverging map: bg→accent positive,
+      // bg→fg negative).
       const HM = 64;
-      const vals = new Float32Array(HM * HM);
-      let absMax = 0;
-      for (let py = 0; py < HM; py++) {
-        const yw = yWorld(leftY + (py / HM) * leftH);
-        for (let px = 0; px < HM; px++) {
-          const xw = xWorld(leftX + (px / HM) * leftW);
-          let s = 0;
-          for (const p of protos) s += p.alpha * K(xw, yw, p.x, p.y, sigma);
-          vals[py * HM + px] = s;
-          const a = Math.abs(s);
-          if (a > absMax) absMax = a;
+      const bgCol = parseColor(colors.bgSunken), posCol = parseColor(colors.accent), negCol = parseColor(colors.fg);   // also used by the proto markers below
+      let fieldKey = sigma + '|' + colors.bgSunken + '|' + colors.accent + '|' + colors.fg;
+      for (const p of protos) fieldKey += '|' + p.x + ',' + p.y + ',' + p.alpha;
+      if (state._fieldKey !== fieldKey) {
+        const vals = new Float32Array(HM * HM);
+        let absMax = 0;
+        for (let py = 0; py < HM; py++) {
+          const yw = yWorld(leftY + (py / HM) * leftH);
+          for (let px = 0; px < HM; px++) {
+            const xw = xWorld(leftX + (px / HM) * leftW);
+            let s = 0;
+            for (const p of protos) s += p.alpha * K(xw, yw, p.x, p.y, sigma);
+            vals[py * HM + px] = s;
+            const a = Math.abs(s);
+            if (a > absMax) absMax = a;
+          }
         }
+        const cap = absMax > 0 ? absMax : 1;
+        const img = ctx.createImageData(HM, HM);
+        for (let i = 0; i < HM * HM; i++) {
+          const v = vals[i];
+          const t = Math.min(1, Math.pow(Math.abs(v) / cap, 0.6));
+          const target = v >= 0 ? posCol : negCol;
+          const o = i * 4;
+          img.data[o] = Math.round(bgCol[0] + (target[0] - bgCol[0]) * t);
+          img.data[o + 1] = Math.round(bgCol[1] + (target[1] - bgCol[1]) * t);
+          img.data[o + 2] = Math.round(bgCol[2] + (target[2] - bgCol[2]) * t);
+          img.data[o + 3] = 255;
+        }
+        const tmp = state._fieldCanvas || (state._fieldCanvas = document.createElement('canvas'));
+        tmp.width = HM; tmp.height = HM;
+        tmp.getContext('2d').putImageData(img, 0, 0);
+        state._fieldKey = fieldKey;
       }
-      // Diverging colour map: bg → accent (positive), bg → muted-fg (negative).
-      const bgCol = parseColor(colors.bgSunken);
-      const posCol = parseColor(colors.accent);
-      // Use fg as the negative-saturation pole.
-      const negCol = parseColor(colors.fg);
-      const cap = absMax > 0 ? absMax : 1;
-      const img = ctx.createImageData(HM, HM);
-      for (let i = 0; i < HM * HM; i++) {
-        const v = vals[i];
-        const t = Math.min(1, Math.pow(Math.abs(v) / cap, 0.6));
-        let target = v >= 0 ? posCol : negCol;
-        const r = Math.round(bgCol[0] + (target[0] - bgCol[0]) * t);
-        const g = Math.round(bgCol[1] + (target[1] - bgCol[1]) * t);
-        const b = Math.round(bgCol[2] + (target[2] - bgCol[2]) * t);
-        const o = i * 4;
-        img.data[o] = r; img.data[o + 1] = g; img.data[o + 2] = b; img.data[o + 3] = 255;
-      }
-      const tmp = document.createElement('canvas');
-      tmp.width = HM; tmp.height = HM;
-      tmp.getContext('2d').putImageData(img, 0, 0);
       ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(tmp, leftX, leftY, leftW, leftH);
+      ctx.drawImage(state._fieldCanvas, leftX, leftY, leftW, leftH);
 
       // Frame
       ctx.strokeStyle = colors.border;

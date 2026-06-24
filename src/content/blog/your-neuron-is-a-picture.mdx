@@ -73,7 +73,7 @@ For something to point at, I trained a one-hidden-layer Yat-MLP on Fashion-MNIST
 
 ## Every neuron is a picture
 
-This is the entire thesis in one image. On the left, the 50 Yat prototypes, each reshaped to 28x28 and bordered by the class it votes for: shirts, trousers, sneakers, bags, boots, a wall of readable templates the network compares every input against. On the right, the ReLU MLP's first-layer weights, the nearest thing it has to a "unit": noise. Same architecture, same data, comparable accuracy, and one side is legible while the other is static.
+The two networks are nearly twins: same shape, same data, three points apart in accuracy. Put their hidden units side by side and they could not look less alike. On the left, the 50 Yat prototypes, each reshaped to 28x28 and bordered by the class it votes for: shirts, trousers, sneakers, bags, boots, a wall of templates the network compares every input against. On the right, the ReLU MLP's first-layer weights, the nearest thing it has to a unit: noise. Why does swapping a projection for a kernel turn static into pictures? Look first, then we will say why.
 
 <ProtoGallery caption="Left: the 50 hidden units of a Yat-kernel MLP, each a prototype that lives in pixel space, so each is a picture, bordered by the class it votes for. Right: the 50 first-layer filters of a same-sized ReLU MLP, weight vectors with no reason to look like anything, and they don't. Same data, comparable accuracy, shown side by side." />
 
@@ -91,7 +91,7 @@ That is the claim made visible. And it points at something stronger, which is th
 
 ## You can build it by hand, with no training
 
-If a neuron is a labeled picture, you do not need gradient descent to get a classifier. Take a handful of training images per class as your prototypes and wire the readout to one-hot, $A_{uc} = \mathbb{1}[\text{class}(u) = c]$, so each prototype votes for its own class. The prediction is then just a tally of resemblances,
+Here is where a nice way to draw weights turns into something stranger. If a neuron is a labeled picture, then a classifier is just a list of pictures, and a list is something you can write by hand, no gradient descent required. Take a handful of training images per class as your prototypes and wire the readout to one-hot, $A_{uc} = \mathbb{1}[\text{class}(u) = c]$, so each prototype votes for its own class. The prediction is then just a tally of resemblances,
 
 $$
 \hat y(x) \;=\; \arg\max_c \sum_{u:\,\text{class}(u) = c} \phi_u(x),
@@ -111,7 +111,7 @@ And because the network reasons by resemblance, every part of it is readable by 
 
 ## The network explains itself
 
-Because the output is a kernel-weighted vote over pictures, every prediction carries its own explanation, in the model's own parts. Normalize the activations into weights $a_u(x) = \phi_u(x) / \sum_v \phi_v(x)$, with $\sum_u a_u(x) = 1$, and the output is a convex combination of the prototypes' votes: the input is *40% that shirt, 25% that pullover*, and the class is whoever the matched pictures vote for. There is no separate explainer; the bars *are* the forward pass.
+A legible unit is worth little if the prediction built from it is still a black box. The test of interpretability is not the weights at rest; it is the moment the model makes a call. So put the question to it directly: why this class, for this input? The answer is already inside the forward pass, because the output is a vote and you can read the ballots. Normalize the activations into weights $a_u(x) = \phi_u(x) / \sum_v \phi_v(x)$, with $\sum_u a_u(x) = 1$, and the prediction is a convex combination of the prototypes' votes: this input is *40% that shirt, 25% that pullover*, and the class is whoever the matched pictures elect. There is no separate explainer; the bars *are* the computation.
 
 Switch the input to MNIST digits, which this model has never seen, and the explanation collapses: every $\phi_u(x)$ is small, $\max_u \phi_u(x) < \tau$, and the network says "I don't recognize this" rather than confidently calling a 7 a sandal. A ReLU MLP has no such floor; off its training distribution it extrapolates a confident answer for anything. Knowing when it does not know is just the kernel being local.
 
@@ -127,7 +127,7 @@ And once more, in reverse: a class. The readout is linear, so a class is a weigh
 
 ## Its geometry is a map you can walk
 
-The prototypes are points in pixel space, so they have a geometry, and you can see it. Lay all fifty out by similarity and you get the network's concept map: sneakers beside ankle boots, shirts beside pullovers and coats, trousers and bags in their own corners. The internal organization of "kinds of clothing" is not buried in a weight tensor; it is a chart you read with your eyes.
+One prototype is a picture; fifty of them are a map. Because they are points in pixel space, they have distances and neighbours, so the whole network's sense of "kinds of clothing" can be laid out flat and walked. Sneakers fall beside ankle boots, shirts beside pullovers and coats, trousers and bags off in their own corners. The internal organization is not buried in a weight tensor; it is a chart you read with your eyes.
 
 <ProtoAtlas caption="The 50 prototypes projected to 2-D by visual similarity (PCA), each rendered as its picture and coloured by the class it votes for. Hover to enlarge one. Similar prototypes sit together and classes form neighbourhoods: this is the network's concept map, legible because its concepts are images." />
 
@@ -137,7 +137,7 @@ And the decision boundary, usually an abstraction, becomes a place you can stand
 
 ## Reading the mistakes
 
-The payoff of all this is that debugging stops being guesswork. Every misclassified image carries its reason: the prototype the kernel fired on hardest. Click any mistake and you see the input beside the look-alike prototype of the wrong class. *It is a coat, but it matched a pullover prototype, so the model said pullover.* That is not a heatmap hinting at "important pixels"; it is the actual evidence the decision rested on, which means you can act on it, by adding prototypes where the classes collide or relabelling the confusable ones.
+When a network is wrong, it usually leaves you guessing why. This one hands you the culprit. Every misclassified image carries its reason: the prototype the kernel fired on hardest. Click any mistake and you see the input beside the look-alike prototype of the wrong class. *It is a coat, but it matched a pullover prototype, so the model said pullover.* That is not a heatmap hinting at "important pixels"; it is the actual evidence the decision rested on, which means you can act on it, by adding prototypes where the classes collide or relabelling the confusable ones.
 
 <MistakeWall caption="Every mistake, explained by the prototype that caused it. Click a misclassified image to see it next to the wrong-class prototype it most resembled. The explanation is the kernel's actual top match, not a post-hoc saliency method, so it tells you what the model confused and lets you fix it." />
 

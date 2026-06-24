@@ -57,11 +57,11 @@ const stages = [
     const stageReadout = document.getElementById(id + '-stage');
     const dots = wrap.querySelectorAll('.anim-dot');
     const stageNames = [
-      'token sequence X — N rows of d-dim embeddings',
-      'project: Q = XW_Q,  K = XW_K,  V = XW_V — three [N, dₖ] matrices',
-      'similarity S = Q Kᵀ / √dₖ — an [N, N] kernel between every pair',
-      'α = softmax(S) row-wise — each row a distribution over keys',
-      'output = α V — each output row is a convex mix of value rows',
+      'token sequence X, N rows of d-dim embeddings',
+      'project: Q = XW_Q,  K = XW_K,  V = XW_V, three [N, dₖ] matrices',
+      'similarity S = Q Kᵀ / √dₖ, an [N, N] kernel between every pair',
+      'α = softmax(S) row-wise, each row a distribution over keys',
+      'output = α V, each output row is a convex mix of value rows',
     ];
 
     // ── State ──
@@ -77,7 +77,7 @@ const stages = [
     const spdGroup = wrap.querySelector('[data-spd-group]');
     const zoomGroup = wrap.querySelector('[data-zoom-group]');
 
-    // Hovered (i, j) cell on the S or α matrix — drives the highlight overlay
+    // Hovered (i, j) cell on the S or α matrix, drives the highlight overlay
     // showing which Q row and K row produced that score.
     let hover = null; // { which: 'S' | 'A' | 'O', i, j }
 

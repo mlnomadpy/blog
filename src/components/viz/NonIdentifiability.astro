@@ -16,8 +16,8 @@ import { np, withJax, drawJaxLoading } from './engine/jax.js';
 
 // Carathéodory non-identifiability, made literal. One fixed point y, many convex
 // decompositions y = Σ a_u r_u over an overcomplete prototype set. We enumerate the
-// triangles of prototypes that contain y — each gives a UNIQUE barycentric (sparse,
-// 3-prototype) decomposition — and then animate between them. The set of valid
+// triangles of prototypes that contain y, each gives a UNIQUE barycentric (sparse,
+// 3-prototype) decomposition, and then animate between them. The set of valid
 // decompositions is convex, so any interpolation of two valid ones is valid and
 // reads out the SAME y. The readout is recomputed live in jax-js each frame to prove
 // the point never moves while the "contributions" change completely.
@@ -81,7 +81,7 @@ defineViz('nonidentifiability', {
     const m = panel(ctx, stage, colors, {});
     const map = m.map;
 
-    // interpolate around the cycle of sparse decompositions — every intermediate is valid
+    // interpolate around the cycle of sparse decompositions, every intermediate is valid
     const tt = (state.t || 0) % K;
     const i = Math.floor(tt), f = smooth(tt - i);
     const a = lerp(A[i], A[(i + 1) % K], f);
@@ -129,7 +129,7 @@ defineViz('nonidentifiability', {
     text(ctx, `Σa = ${sum.toFixed(3)} · all ≥ 0 · active prototypes: ${active}  (Carathéodory: 3 suffice in the plane)`,
       box.x + 12, box.y + box.h - 14, colors, { size: 10, mono: true, color: colors.muted });
 
-    api.readout('rd', `y recomputed (${yNow[0].toFixed(3)}, ${yNow[1].toFixed(3)}) — constant · jax-js`);
+    api.readout('rd', `y recomputed (${yNow[0].toFixed(3)}, ${yNow[1].toFixed(3)}), constant · jax-js`);
   },
 });
 </script>

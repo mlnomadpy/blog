@@ -70,7 +70,7 @@ defineViz('mistakewall', {
     const gridW = Math.floor(W * 0.52);
     ctx.fillStyle = colors.muted; ctx.font = '11px ui-sans-serif, system-ui';
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    ctx.fillText(`${mis.length} mistakes — click one`, pad, pad);
+    ctx.fillText(`${mis.length} mistakes, click one`, pad, pad);
     const gcols = 7, gcell = Math.min(34, (gridW - pad * 2 - (gcols - 1) * 4) / gcols), ggap = 4;
     st.tiles = [];
     ctx.imageSmoothingEnabled = true;

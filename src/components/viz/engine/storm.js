@@ -1,10 +1,10 @@
-// storm.js — shared attention bookkeeping used by SoftmaxStorm, LinearReservoir
+// storm.js, shared attention bookkeeping used by SoftmaxStorm, LinearReservoir
 // and the combined BookkeepingFour viz. Two pure-canvas panels (no jax needed):
 //   storm     = exact softmax attention as an all-pairs web (visible work ~ N x N);
 //   reservoir = linear attention pouring keys/values into a fixed feature state
 //               phi(K)^T V that every query reads (token work ~ N x m).
 // Both renderers are fraction-based so they fit any box, including a 2x2 quadrant.
-import { text, arrow, parseColor } from './draw.js';
+import { text, arrow, parseColor, rgba, mix } from './draw.js';
 
 const TWO_PI = Math.PI * 2;
 export const MAX_N = 96;
@@ -15,6 +15,7 @@ export function drawStormPanel(ctx, box, colors, iter, N) {
   const cy = box.y + box.h * 0.54;
   const R = Math.min(box.w, box.h * 1.1) * 0.3;
   const pts = tokenCircle(cx, cy, R, N, iter * 0.003);
+  const blue = parseColor(colors.blue);   // parse once, not up to 1200×/frame in the edge loop
 
   text(ctx, 'exact attention', cx, box.y + 2, colors, { align: 'center', size: 14, weight: '700', color: colors.blue });
   text(ctx, 'every token asks every token', cx, box.y + 24, colors, { align: 'center', size: 11.5, color: colors.muted });
@@ -27,7 +28,7 @@ export function drawStormPanel(ctx, box, colors, iter, N) {
     if (i === j) continue;
     const a = pts[i], b = pts[j];
     const glow = 0.04 + 0.16 * Math.abs(Math.sin((e + iter) * 0.021));
-    ctx.strokeStyle = rgba(colors.blue, glow);
+    ctx.strokeStyle = rgba(blue, glow);
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
@@ -66,6 +67,7 @@ export function drawReservoirPanel(ctx, box, colors, iter, N, m, phase) {
   const span = box.w - 54;
   const startX = box.x + 27;
   const rowsBank = Math.max(1, Math.ceil(m / 6) - 1 || 1);
+  const green = parseColor(colors.green);   // parse once for the per-token pour lines
   for (let i = 0; i < tokenCount; i++) {
     const x = startX + (tokenCount === 1 ? 0.5 : i / (tokenCount - 1)) * span;
     const y = tokenY + Math.sin(i * 0.8 + iter * 0.05) * 4;
@@ -79,7 +81,7 @@ export function drawReservoirPanel(ctx, box, colors, iter, N, m, phase) {
     const pulse = ((iter * 0.025 + i / tokenCount) % 1);
     const px = x + (tx - x) * pulse;
     const py = y + (ty - y) * pulse;
-    ctx.strokeStyle = rgba(colors.green, 0.14);
+    ctx.strokeStyle = rgba(green, 0.14);
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(x, y - 5);
@@ -114,11 +116,12 @@ function drawFeatureBank(ctx, box, m, phase, colors) {
   ctx.strokeRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1);
   const cols = 6, rows = Math.ceil(m / cols);
   const cw = (box.w - 10) / cols, ch = (box.h - 10) / rows;
+  const cellBgP = parseColor(colors.cellBg), accentP = parseColor(colors.accent);
   for (let i = 0; i < m; i++) {
     const c = i % cols, r = Math.floor(i / cols);
     const x = box.x + 5 + c * cw, y = box.y + 5 + r * ch;
     const v = 0.25 + 0.75 * Math.abs(Math.sin(phase * 8 + i * 0.9));
-    ctx.fillStyle = mix(colors.cellBg, colors.accent, v);
+    ctx.fillStyle = rgba(mix(cellBgP, accentP, v));
     ctx.fillRect(x, y, cw - 2, ch - 2);
   }
 }
@@ -129,9 +132,3 @@ export function fmt(n) {
   return `${n}`;
 }
 
-function rgba(hex, a) { const p = parseColor(hex); return `rgba(${p[0]},${p[1]},${p[2]},${a})`; }
-function mix(a, b, t) {
-  const pa = parseColor(a), pb = parseColor(b);
-  t = Math.max(0, Math.min(1, t));
-  return `rgb(${Math.round(pa[0] + (pb[0] - pa[0]) * t)},${Math.round(pa[1] + (pb[1] - pa[1]) * t)},${Math.round(pa[2] + (pb[2] - pa[2]) * t)})`;
-}

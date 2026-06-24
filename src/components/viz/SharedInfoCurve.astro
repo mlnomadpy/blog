@@ -43,15 +43,18 @@ const id = `sic-${Math.random().toString(36).slice(2, 9)}`;
 
     let thetaDeg = 90;
     const state = { dpr: 1, w: 0, h: 0 };
+    const baseH = +c.getAttribute('height') || 260;   // intended display height
+    c.style.height = baseH + 'px';                     // pin it: with CSS width:100% and no CSS height the
+                                                       // canvas would collapse to 0 via its intrinsic ratio
 
     const fit = () => {
       const rect = c.getBoundingClientRect();
       const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
       state.dpr = dpr;
       state.w = rect.width;
-      state.h = rect.height;
+      state.h = baseH;
       c.width = Math.round(rect.width * dpr);
-      c.height = Math.round(rect.height * dpr);
+      c.height = Math.round(baseH * dpr);
     };
 
     const themeObs = new MutationObserver(() => { colors = readColors(); requestRedraw(); });

@@ -82,7 +82,7 @@ defineViz('statemorph', {
     else { label = 'STRUCTURED'; lcol = colors.green; }
 
     // faint ring (the target shell)
-    ctx.strokeStyle = colors.border; ctx.setLineDash([3, 4]); ctx.beginPath(); ctx.arc(cx, cy, 0.82 * R, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = colors.border; ctx.setLineDash([3, 4]); ctx.beginPath(); ctx.arc(cx, cy, Math.max(0, 0.82 * R), 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
     // satellites
     ctx.globalAlpha = 0.6;
     for (let i = 0; i < N; i++) { const [px, py] = map(state.P[i]); dot(ctx, px, py, 2.6, PALETTE[state.lab[i] % PALETTE.length]); }

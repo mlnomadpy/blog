@@ -16,12 +16,12 @@ import { panel, unitCircle, text, PALETTE } from './engine/draw.js';
 // Welch's 1974 problem, in 2-D. N users share a channel; each gets a unit
 // "signature" vector. Interference between two users grows with the square of
 // their correlation, so total interference is the frame potential Σ⟨sᵢ,sⱼ⟩². Up
-// to N = d (=2) you can make signatures orthogonal — zero interference. Past
+// to N = d (=2) you can make signatures orthogonal, zero interference. Past
 // that there is no room, and the best you can do is the Welch floor. Live descent.
 function randUnit() { const a = 2 * Math.PI * Math.random(); return [Math.cos(a), Math.sin(a)]; }
 
 defineViz('siginterf', {
-  title: "Welch's problem — signatures sharing a channel",
+  title: "Welch's problem, signatures sharing a channel",
   height: 360, stepsPerFrame: 0.6, maxStep: 220,
   controls: [
     { type: 'play' }, { type: 'button', name: 'reroll', label: 're-roll', reset: true }, { type: 'speed' },
@@ -69,7 +69,7 @@ defineViz('siginterf', {
     const fh = barH(floor); ctx.strokeStyle = colors.green; ctx.setLineDash([5, 4]); ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(gx, gy + gh - fh); ctx.lineTo(gx + gw, gy + gh - fh); ctx.stroke(); ctx.setLineDash([]);
     text(ctx, 'Welch floor', gx + gw - 4, gy + gh - fh - 4, colors, { align: 'right', baseline: 'bottom', size: 10, color: colors.green });
     text(ctx, `now ${FP.toFixed(2)}`, gx + 2, gy + gh - h - 4, colors, { baseline: 'bottom', size: 11, mono: true, color: colors.accent });
-    const verdict = N <= 2 ? 'orthogonal — zero interference possible' : 'no room — interference cannot beat the floor';
+    const verdict = N <= 2 ? 'orthogonal, zero interference possible' : 'no room, interference cannot beat the floor';
     text(ctx, verdict, rbox.x + 12, rbox.y + rbox.h - 16, colors, { size: 10.5, color: colors.muted });
     api.readout('rd', `N=${N} in d=2 · floor ${floor.toFixed(2)}`);
   },

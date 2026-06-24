@@ -1,0 +1,99 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 380 } = Astro.props;
+---
+<figure class="viz gracefulmistakes" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { panel, unitCircle, dot, text, PALETTE } from './engine/draw.js';
+
+// A live classification stress test. Noisy features land near a class code and
+// get assigned to the nearest one. When the codebook is a SIMPLEX every wrong
+// answer is equally far, cat→dog and cat→car are the same mistake. When the
+// codebook is STRUCTURED, noise spills into the nearest *neighbour*, so errors
+// stay within the superclass: a cat becomes a dog, not a car. Same noise, very
+// different mistakes.
+const C = 6, KEEP = 14;
+const randn = () => { const u = Math.random() || 1e-9, v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+function buildCodebook(structured) {
+  // labels alternate (animals even, vehicles odd) so the SIMPLEX hexagon does NOT
+  // accidentally cluster a superclass, adjacent codes are cross-group, making its
+  // mistakes severe. The structured codebook clusters by superclass instead.
+  const z = [], lab = new Int32Array(C);
+  for (let i = 0; i < C; i++) {
+    lab[i] = i % 2;
+    const g = i % 2, w = Math.floor(i / 2);
+    const ang = structured ? g * Math.PI + [-0.5, 0, 0.5][w] : (2 * Math.PI * i) / C;
+    z.push([Math.cos(ang), Math.sin(ang)]);
+  }
+  return { z, lab };
+}
+
+defineViz('gracefulmistakes', {
+  title: 'Same noise, better mistakes',
+  height: 380, stepsPerFrame: 1,
+  controls: [
+    { type: 'play' }, { type: 'speed' },
+    { type: 'toggle', name: 'structured', label: 'structured codebook', value: true },
+    { type: 'newrow' },
+    { type: 'range', name: 'noise', label: 'feature noise', min: 0.1, max: 0.9, step: 0.02, value: 0.45, fmt: v => v.toFixed(2) },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) {
+    api.state = { simplex: buildCodebook(false), struct: buildCodebook(true), recent: [], correct: 0, mild: 0, severe: 0, lastMode: api.get('structured') };
+  },
+  step(api) {
+    const mode = api.get('structured');
+    if (mode !== api.state.lastMode) { api.state.correct = 0; api.state.mild = 0; api.state.severe = 0; api.state.recent = []; api.state.lastMode = mode; }
+    const cb = mode ? api.state.struct : api.state.simplex, z = cb.z, lab = cb.lab, sigma = api.get('noise');
+    for (let r = 0; r < 2; r++) {
+      const t = Math.floor(Math.random() * C);
+      const ta = Math.atan2(z[t][1], z[t][0]) + randn() * sigma;
+      const s = [Math.cos(ta), Math.sin(ta)];
+      let best = 0, bc = -2;
+      for (let k = 0; k < C; k++) { const c = s[0] * z[k][0] + s[1] * z[k][1]; if (c > bc) { bc = c; best = k; } }
+      let kind;
+      if (best === t) { kind = 0; api.state.correct++; }
+      else if (lab[best] === lab[t]) { kind = 1; api.state.mild++; }
+      else { kind = 2; api.state.severe++; }
+      api.state.recent.push({ s, t, best, kind });
+      if (api.state.recent.length > KEEP) api.state.recent.shift();
+    }
+  },
+  draw(api) {
+    const { ctx, colors, size, state } = api;
+    const box = { x: 6, y: 4, w: size.W - 12, h: size.H - 8 };
+    const m = panel(ctx, box, colors, { header: 22 });
+    unitCircle(ctx, m, colors);
+    const mode = api.get('structured'), cb = mode ? state.struct : state.simplex, z = cb.z, lab = cb.lab;
+    const COL = { 0: colors.green, 1: colors.accent, 2: colors.red || '#c2553a' };
+    // recent classifications: sample dot + arc to predicted code
+    for (const e of state.recent) {
+      const [sx, sy] = m.map(e.s), [bx, by] = m.map(z[e.best]);
+      ctx.strokeStyle = COL[e.kind]; ctx.globalAlpha = 0.5; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(bx, by); ctx.stroke(); ctx.globalAlpha = 1;
+      dot(ctx, sx, sy, 2.6, COL[e.kind]);
+    }
+    // codebook codes
+    for (let i = 0; i < C; i++) { const [px, py] = m.map(z[i]); dot(ctx, px, py, 7.5, PALETTE[lab[i] % PALETTE.length]); ctx.lineWidth = 1.8; ctx.strokeStyle = colors.bg; ctx.beginPath(); ctx.arc(px, py, 7.5, 0, 2 * Math.PI); ctx.stroke(); }
+    text(ctx, mode ? 'structured codebook (superclass clusters)' : 'simplex codebook (every class equidistant)', box.x + 8, box.y + 4, colors, { size: 11.5, color: colors.fg });
+    const errs = state.mild + state.severe, total = state.correct + errs;
+    const sevRate = errs ? state.severe / errs : 0;
+    // severity bar
+    const bx = box.x + 8, byy = box.y + box.h - 30, bw = box.w - 16, bh = 9;
+    if (errs > 0) {
+      ctx.fillStyle = colors.accent; ctx.fillRect(bx, byy, bw * (state.mild / errs), bh);
+      ctx.fillStyle = colors.red || '#c2553a'; ctx.fillRect(bx + bw * (state.mild / errs), byy, bw * (state.severe / errs), bh);
+    }
+    ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.strokeRect(bx + 0.5, byy + 0.5, bw - 1, bh - 1);
+    text(ctx, `of mistakes: ${(100 * (1 - sevRate)).toFixed(0)}% mild (same superclass) · ${(100 * sevRate).toFixed(0)}% severe (cross)`, box.x + 8, box.y + box.h - 12, colors, { size: 10, mono: true, color: colors.muted });
+    api.readout('rd', `acc ${total ? (100 * state.correct / total).toFixed(0) : 0}% · severe-mistake rate ${(100 * sevRate).toFixed(0)}%`);
+  },
+});
+</script>

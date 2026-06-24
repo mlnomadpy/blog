@@ -14,14 +14,14 @@ import { defineViz } from './engine/vizkit.js';
 import { panel, dot, text } from './engine/draw.js';
 
 // Wish 3: use every direction. The same cloud, but the slider squashes its
-// covariance from a round, isotropic blob (effective rank 2 — both directions
-// used) down to a thin sliver on a line (effective rank → 1 — a whole dimension
+// covariance from a round, isotropic blob (effective rank 2, both directions
+// used) down to a thin sliver on a line (effective rank → 1, a whole dimension
 // wasted). The ellipse is the 2σ covariance; the readout is the effective rank.
 const N = 110;
 const randn = () => { const u = Math.random() || 1e-9, v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
 
 defineViz('rankiso', {
-  title: 'Wish 3 — fill the space, do not waste a dimension',
+  title: 'Wish 3, fill the space, do not waste a dimension',
   height: 330,
   controls: [
     { type: 'range', name: 'squash', label: 'squash', min: 0, max: 1, step: 0.01, value: 0, fmt: v => v.toFixed(2) },
@@ -46,8 +46,8 @@ defineViz('rankiso', {
     ctx.globalAlpha = 0.66; for (const p of state.pts) { const [px, py] = m.map(tf(p)); dot(ctx, px, py, 2.4, colors.blue); } ctx.globalAlpha = 1;
     // effective rank from the two eigenvalues (variances)
     const l1 = sx * sx, l2 = sy * sy; const erank = ((l1 + l2) ** 2) / (l1 * l1 + l2 * l2);
-    text(ctx, 'embedding covariance — round = both dimensions used', box.x + 8, box.y + 3, colors, { size: 11.5, color: colors.fg });
-    const tag = erank > 1.9 ? 'isotropic — effective rank ≈ 2 (a tight frame in 2-D)' : erank < 1.1 ? 'collapsed to a line — effective rank ≈ 1, a dimension wasted' : `effective rank ${erank.toFixed(2)} of 2`;
+    text(ctx, 'embedding covariance, round = both dimensions used', box.x + 8, box.y + 3, colors, { size: 11.5, color: colors.fg });
+    const tag = erank > 1.9 ? 'isotropic, effective rank ≈ 2 (a tight frame in 2-D)' : erank < 1.1 ? 'collapsed to a line, effective rank ≈ 1, a dimension wasted' : `effective rank ${erank.toFixed(2)} of 2`;
     text(ctx, tag, box.x + 8, box.y + box.h - 15, colors, { size: 10.5, mono: true, color: colors.muted });
     api.readout('rd', `eff. rank ${erank.toFixed(2)}`);
   },

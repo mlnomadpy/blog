@@ -15,7 +15,7 @@ import { np, withJax, drawJaxLoading } from './engine/jax.js';
 
 // A kernel is what you get by averaging random features. For the RBF kernel
 // k(δ) = exp(-δ²/2σ²), Bochner's theorem says it is the average of cosines whose
-// frequencies are drawn from the kernel's spectral density — here w ~ N(0, 1/σ²),
+// frequencies are drawn from the kernel's spectral density, here w ~ N(0, 1/σ²),
 // since E_w[cos(wδ)] = exp(-δ²/2σ²). Each step draws one frequency, adds the
 // cosine cos(wδ) (top strip) to the running average (main panel), and the jagged
 // estimate smooths into the bell. The per-step cosine is evaluated on jax-js.

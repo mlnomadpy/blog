@@ -15,7 +15,7 @@ import { defineViz } from './engine/vizkit.js';
 import { panel, unitCircle, dot, text, PALETTE } from './engine/draw.js';
 
 // Where does class structure come from? The DATA. Perceptually similar classes
-// (cats, dogs) sit in overlapping regions of feature space — the faint clouds.
+// (cats, dogs) sit in overlapping regions of feature space, the faint clouds.
 // A code descends under two forces: the data pulls it toward its perceptual
 // home, and supervision (a one-hot / label-smoothing pressure) pushes every
 // class equally apart, toward the simplex. Crank supervision and watch the
@@ -24,7 +24,7 @@ const C = 6, M = 10;
 const randn = () => { const u = Math.random() || 1e-9, v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
 
 defineViz('datavslabel', {
-  title: 'Structure comes from the data — supervision can erase it',
+  title: 'Structure comes from the data, supervision can erase it',
   height: 380, stepsPerFrame: 0.6,
   controls: [
     { type: 'play' }, { type: 'button', name: 'reroll', label: 're-roll', reset: true }, { type: 'speed' },
@@ -78,8 +78,8 @@ defineViz('datavslabel', {
     const align = dot1 / (Math.sqrt(n1 * n2) + 1e-9);
     const b = api.get('sup');
     text(ctx, 'faint = data (perceptual clouds) · bold = class codes', box.x + 8, box.y + 4, colors, { size: 11.5, color: colors.fg });
-    const verdict = b < 0.15 ? 'codes match the data — structure preserved'
-      : b > 0.8 ? 'codes torn into a simplex — structure erased'
+    const verdict = b < 0.15 ? 'codes match the data, structure preserved'
+      : b > 0.8 ? 'codes torn into a simplex, structure erased'
       : 'supervision pulling codes off the data structure';
     text(ctx, `${verdict}  ·  structure retained ${(Math.max(0, align) * 100).toFixed(0)}%`, box.x + 8, box.y + box.h - 14, colors, { size: 10, mono: true, color: align > 0.6 ? colors.green : (align > 0.3 ? colors.accent : (colors.red || '#c2553a')) });
     api.readout('rd', `supervision ${b.toFixed(2)}`);

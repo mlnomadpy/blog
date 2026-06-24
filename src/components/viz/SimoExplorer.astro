@@ -47,12 +47,12 @@ import { makeData, DATASETS } from './engine/datasets.js';
 
 const D = 12, Hd = 16, DE = 2, EPS = 1.0;
 const PRESETS = [
-  { name: 'orthogonal frame (b → 0)', b: 0.02, data: 'c4', note: 'Below the bifurcation bᴄ, "different" is sent toward orthogonal — concepts get their own near-perpendicular axes, full rank, but only a 90° margin.' },
-  { name: 'max-margin simplex (b = 0.5)', b: 0.5, data: 'c4', note: 'Above the simplex threshold the classes spread to the regular simplex — the certified > 90° margin. This is the default, healthy regime.' },
-  { name: 'near-antipodal (b → 1)', b: 0.97, data: 'c2', note: 'Aiming "different" at opposite (cos −1). With two classes that is rank-collapsing — the embeddings live on a line, not a frame.' },
+  { name: 'orthogonal frame (b → 0)', b: 0.02, data: 'c4', note: 'Below the bifurcation bᴄ, "different" is sent toward orthogonal, concepts get their own near-perpendicular axes, full rank, but only a 90° margin.' },
+  { name: 'max-margin simplex (b = 0.5)', b: 0.5, data: 'c4', note: 'Above the simplex threshold the classes spread to the regular simplex, the certified > 90° margin. This is the default, healthy regime.' },
+  { name: 'near-antipodal (b → 1)', b: 0.97, data: 'c2', note: 'Aiming "different" at opposite (cos −1). With two classes that is rank-collapsing, the embeddings live on a line, not a frame.' },
   { name: 'two-moons', b: 0.5, data: 'moons', note: 'Curved, non-linearly-separable classes; the encoder warps them and AFCL still lands them on the simplex.' },
   { name: 'concentric rings', b: 0.5, data: 'rings', note: 'A bare cosine cannot separate nested rings; the encoder must unfold them before the kernel can place them.' },
-  { name: 'two spirals', b: 0.5, data: 'spiral', note: 'The hard case — interleaved spirals. Watch how many steps the encoder needs before the simplex appears.' },
+  { name: 'two spirals', b: 0.5, data: 'spiral', note: 'The hard case, interleaved spirals. Watch how many steps the encoder needs before the simplex appears.' },
 ];
 
 function initExp(root) {
@@ -60,6 +60,7 @@ function initExp(root) {
   const q = (s) => root.querySelector(s);
   const cS = q('[data-ctl="scatter"]'), ctxS = cS.getContext('2d');
   const cP = q('[data-ctl="plots"]'), ctxP = cP.getContext('2d');
+  [cS, cP].forEach((c) => { c.style.height = (+c.getAttribute('height') || 300) + 'px'; });   // pin height: clientHeight is 0 without a CSS height (collapse)
   const presetSel = q('[data-ctl="preset"]'), dataSel = q('[data-ctl="data"]'), bInp = q('[data-ctl="b"]'), bVal = q('[data-ctl="bval"]'), preNormChk = q('[data-ctl="prenorm"]');
   const iterEl = q('[data-ctl="iter"]'), annEl = q('[data-ctl="ann"]');
   PRESETS.forEach((p, i) => { const o = document.createElement('option'); o.value = i; o.textContent = p.name; if (i === 1) o.selected = true; presetSel.appendChild(o); });
@@ -87,7 +88,7 @@ function initExp(root) {
     const intra = ng.div(ng.sumAll(ng.mul(ng.recip(ng.addk(y, 1)), M.same)), ng.scalar(M.nS));
     const inter = ng.div(ng.sumAll(ng.mul(ng.addk(y, 1), M.diff)), ng.scalar(M.nD));
     return ng.add(intra, inter); };
-  // Classify with the SAME ⵟ-kernel the loss trains on — not a linear/cosine probe.
+  // Classify with the SAME ⵟ-kernel the loss trains on, not a linear/cosine probe.
   // Class prototypes are the (normalised) mean embeddings; each point is assigned to
   // the class of maximum kernel probability ⵟ(S)=(S+b)²/(ε+2−2S), S=⟨x,cₖ⟩ on the sphere.
   const acc = () => { const z = enc(), N = data.N, C = data.C, b = +bInp.value; const cen = Array.from({ length: C }, () => [0, 0]), cnt = new Array(C).fill(0);
@@ -105,7 +106,7 @@ function initExp(root) {
     ctxS.setTransform(dpr, 0, 0, dpr, 0, 0); ctxS.clearRect(0, 0, W, H);
     const side = Math.min(W, H) - 6, ox = (W - side) / 2, oy = (H - side) / 2, cx = ox + side / 2, cy = oy + side / 2, R = side * 0.42;
     ctxS.fillStyle = colors.cellBg; ctxS.fillRect(ox, oy, side, side); ctxS.strokeStyle = colors.border; ctxS.lineWidth = 1; ctxS.strokeRect(ox + 0.5, oy + 0.5, side - 1, side - 1);
-    ctxS.beginPath(); ctxS.arc(cx, cy, R, 0, 6.283); ctxS.stroke();
+    ctxS.beginPath(); ctxS.arc(cx, cy, Math.max(0, R), 0, 6.283); ctxS.stroke();
     const zr = encRaw(); const showRaw = preNormChk.checked;
     // direction is preserved by normalisation, so each on-sphere point is zr/‖zr‖
     const nrm = new Float64Array(data.N);

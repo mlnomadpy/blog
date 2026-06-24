@@ -12,8 +12,8 @@ const { caption, height = 360 } = Astro.props;
 <script>
 // Off-distribution behaviour, computed live on jax-js. One ReLU unit and one Yat
 // unit over a 1-D input. Inside the data band both are fine. Leave the band and
-// the ReLU pre-activation climbs without bound — a large, confident answer for an
-// input it has never seen — while the Yat unit stays bounded, its response a
+// the ReLU pre-activation climbs without bound, a large, confident answer for an
+// input it has never seen, while the Yat unit stays bounded, its response a
 // fraction of its in-data peak. Unbounded extrapolation versus a bounded,
 // "nothing near here" response: the difference between a half-plane and a kernel.
 import { defineViz } from './engine/vizkit.js';

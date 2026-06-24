@@ -21,7 +21,7 @@ const D = 16, H = 24, DE = 2, N = 80;
 const randn = () => { let u = Math.random(), v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
 
 defineViz('collapseroutes', {
-  title: 'Collapse, and the route around it — live',
+  title: 'Collapse, and the route around it, live',
   height: 300, stepsPerFrame: 1, maxStep: 1300,
   controls: [{ type: 'play' }, { type: 'step' }, { type: 'reset' }, { type: 'speed' }, { type: 'readout', name: 'rd' }],
   setup(api) {
@@ -46,7 +46,7 @@ defineViz('collapseroutes', {
   step(api) { for (const m of api.state.models) { const L = m.lossFn(); ng.backward(L); m.adam.step(); } },
   draw(api) {
     const { ctx, colors, size, state } = api; const cells = grid(size.W, size.H, 2, 1, 12);
-    const names = ['alignment only — no repulsion', 'ⵟ-kernel — repulsion by construction'];
+    const names = ['alignment only, no repulsion', 'ⵟ-kernel, repulsion by construction'];
     state.models.forEach((m, k) => {
       const box = cells[k], mp = panel(ctx, box, colors, { header: 18 }); unitCircle(ctx, mp, colors);
       const z = m.enc(); const col = k === 0 ? colors.muted : colors.accent;

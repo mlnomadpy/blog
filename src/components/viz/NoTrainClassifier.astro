@@ -27,7 +27,7 @@ defineViz('notrainclf', {
   title: 'Solve it without training',
   height: 440,
   controls: [
-    { type: 'range', name: 'nper', label: 'prototypes per class', min: 1, max: 20, step: 1, value: 5, int: true, reset: false, fmt: (v) => v },
+    { type: 'range', name: 'nper', label: 'prototypes per class', min: 1, max: 20, step: 1, value: 5, int: true, reset: false, fmt: (v) => v, play: { period: 4000, loop: false } },
     { type: 'readout', name: 'rd' },
   ],
 

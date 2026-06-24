@@ -8,7 +8,7 @@ const id = `clab-${Math.random().toString(36).slice(2, 9)}`;
 ---
 <figure class="viz clab" data-id={id} tabindex="0">
   <div class="viz-cell">
-    <h4>Four losses racing on the engine — live</h4>
+    <h4>Four losses racing on the engine, live</h4>
     <div class="clab-controls">
       <div class="clab-row">
         <button data-act="play" class="clab-play">▶ Play</button>
@@ -50,6 +50,7 @@ function initLab(root) {
   if (root.dataset.ready) return; root.dataset.ready = '1';
   const q = (s) => root.querySelector(s);
   const canvas = q('[data-ctl="canvas"]'), ctx = canvas.getContext('2d');
+  canvas.style.height = (+canvas.getAttribute('height') || 460) + 'px';   // pin height: CSS width:100% with no CSS height makes clientHeight 0 (collapse)
   const dataSel = q('[data-ctl="data"]'), nSel = q('[data-ctl="n"]'), seedInp = q('[data-ctl="seed"]'), iterEl = q('[data-ctl="iter"]');
   DATASETS.forEach((d, i) => { const o = document.createElement('option'); o.value = d.value; o.textContent = d.label; if (i === 0) o.selected = true; dataSel.appendChild(o); });
 
@@ -116,7 +117,7 @@ function initLab(root) {
       const side = Math.min(pw - 2 * pad, ph - 2 * pad - 28), ox = gx + (pw - side) / 2, oy = gy + 28 + (ph - 28 - side) / 2;
       ctx.fillStyle = colors.cellBg; ctx.fillRect(ox, oy, side, side); ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.strokeRect(ox + 0.5, oy + 0.5, side - 1, side - 1);
       const cx = ox + side / 2, cy = oy + side / 2, R = side * 0.42;
-      ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.283); ctx.strokeStyle = colors.border; ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, Math.max(0, R), 0, 6.283); ctx.strokeStyle = colors.border; ctx.stroke();
       const z = m.enc(); const N = data.N;
       for (let i = 0; i < N; i++) { ctx.fillStyle = PAL[data.lab[i] % PAL.length];
         ctx.beginPath(); ctx.arc(cx + z.d[i * DE] * R, cy - z.d[i * DE + 1] * R, 2.4, 0, 6.283); ctx.fill(); }

@@ -43,15 +43,17 @@ const id = `sp-${Math.random().toString(36).slice(2, 9)}`;
 
     let n = 10;
     const state = { dpr: 1, w: 0, h: 0 };
+    const baseH = +c.getAttribute('height') || 320;   // intended display height
+    c.style.height = baseH + 'px';                     // pin it: CSS width:100% with no CSS height collapses the canvas
 
     const fit = () => {
       const rect = c.getBoundingClientRect();
       const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
       state.dpr = dpr;
       state.w = rect.width;
-      state.h = rect.height;
+      state.h = baseH;
       c.width = Math.round(rect.width * dpr);
-      c.height = Math.round(rect.height * dpr);
+      c.height = Math.round(baseH * dpr);
     };
 
     const themeObs = new MutationObserver(() => { colors = readColors(); requestRedraw(); });

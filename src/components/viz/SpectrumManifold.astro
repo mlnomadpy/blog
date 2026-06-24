@@ -14,14 +14,14 @@ import { defineViz } from './engine/vizkit.js';
 import { panel, text, PALETTE } from './engine/draw.js';
 import { eigh, withJax, drawJaxLoading } from './engine/jax.js';
 
-// What shape does a label kernel want to be? Embed it with classical MDS — the same
-// spectral fact behind kernel PCA — and the geometry falls out of the spectrum:
+// What shape does a label kernel want to be? Embed it with classical MDS, the same
+// spectral fact behind kernel PCA, and the geometry falls out of the spectrum:
 //   · independent labels (identity kernel, flat spectrum) → an even spread: the SIMPLEX.
 //   · a taxonomy (block kernel, two big modes) → tight clusters: a simplex of simplexes.
 //   · a graded SPECTRUM (similarity decays with order) → a curved arch, the famous
 //     "horseshoe" of MDS (Diaconis–Goel–Holmes). The first eigenmode recovers the
 //     latent ordering; the second bends it into a curve. Cats really do sit between
-//     dogs and the far end of the rainbow — on a manifold, not a circle.
+//     dogs and the far end of the rainbow, on a manifold, not a circle.
 // The eigendecomposition runs on jax-js (engine `eigh`: Householder + QL); we recompute
 // only when the kernel changes and ease the embedding into place so it animates.
 const C = 12, GS = 4;                     // 12 classes, groups of 4 for the taxonomy
@@ -145,7 +145,7 @@ defineViz('spectrummanifold', {
       ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, 6.5, 0, 2 * Math.PI); ctx.fill();
       ctx.lineWidth = 1.6; ctx.strokeStyle = colors.bg; ctx.stroke();
     }
-    text(ctx, 'the kernel, embedded (classical MDS — top 2 modes)', box.x + 10, box.y + 6, colors, { size: 11, color: colors.fg, weight: '600' });
+    text(ctx, 'the kernel, embedded (classical MDS, top 2 modes)', box.x + 10, box.y + 6, colors, { size: 11, color: colors.fg, weight: '600' });
     const tag = mode === 'independent' ? 'flat spectrum → an even spread: the simplex'
       : mode === 'taxonomy' ? 'two big modes → tight clusters: a simplex of simplexes'
       : 'one dominant mode → a curved arch: the horseshoe (classes on a spectrum)';
@@ -165,7 +165,7 @@ defineViz('spectrummanifold', {
     }
     ctx.globalAlpha = 1;
     const peaked = vals[0] / (vals.reduce((a, b) => a + Math.max(0, b), 0) + 1e-9);
-    text(ctx, mode === 'independent' ? 'flat — no preferred direction' : `top mode holds ${(100 * peaked).toFixed(0)}%`,
+    text(ctx, mode === 'independent' ? 'flat, no preferred direction' : `top mode holds ${(100 * peaked).toFixed(0)}%`,
       sb.x + 8, sb.y + sb.h - 16, colors, { size: 9.5, mono: true, color: colors.muted });
 
     api.readout('rd', `${mode} · structure ${api.get('structure').toFixed(2)} · jax-js`);

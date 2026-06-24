@@ -15,7 +15,7 @@ import { np, withJax, drawJaxLoading } from './engine/jax.js';
 
 // Nadaraya–Watson kernel regression. Real computation: ŷ(x) = Σ wₖ yₖ / Σ wₖ
 // with Gaussian weights wₖ = exp(-(x-xₖ)²/2h²). Both the smoothed curve over the
-// domain and the per-query prediction are computed live by jax-js — one vectorised
+// domain and the per-query prediction are computed live by jax-js, one vectorised
 // (M+1)×N weight matrix, softmax-free normalised sum. Drag the chart to move query.
 const N = 22, M = 200;
 const PADL = 36, PADR = 14, PADT = 18, PADB = 30;

@@ -17,7 +17,7 @@ import { PALETTE } from './engine/draw.js';
 // Eight contrastive losses optimised in-place on the SAME 2-D dataset, side by
 // side. Each panel owns a copy of the points; its step() mutates them and
 // returns the loss. Boilerplate (controls, loop, speed, resize, theme,
-// visibility, keyboard) lives in vizkit — this file is just the losses + draw.
+// visibility, keyboard) lives in vizkit, this file is just the losses + draw.
 const randn = (rng) => { let u = 0, v = 0; while (u === 0) u = rng(); while (v === 0) v = rng(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
 
 const makeData = (kind, n, seed) => {
@@ -214,7 +214,7 @@ defineViz('contrastiverace', {
       const pts = base.map((p) => [p[0], p[1]]); if (L.onSphere) projectSphere(pts);
       return { loss: L, pts, labels, rng: rng32(seed * 1000 + L.id.charCodeAt(0)), accHistory: [], lastLoss: NaN, lastAcc: accuracy(pts, labels) };
     });
-    // hover hit-test across panels — wired once per canvas
+    // hover hit-test across panels, wired once per canvas
     if (!api.canvas.dataset.crHover) {
       api.canvas.dataset.crHover = '1';
       api.canvas.addEventListener('pointermove', (e) => {

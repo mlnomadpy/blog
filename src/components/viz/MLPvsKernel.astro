@@ -122,34 +122,42 @@ const id = `mvk-${Math.random().toString(36).slice(2, 9)}`;
       const xWorld = (px) => xMin + ((px - pad) / plotW) * (xMax - xMin);
       const yWorld = (py) => yMax - ((py - pad) / plotH) * (yMax - yMin);
 
+      // Heatmap field, cached per canvas. The field depends only on the kernel
+      // and theta (the px/py→world mapping cancels the plot size), so the HM×HM
+      // raster is recomputed only when theta or the theme changes, not on every
+      // hover (which only moves the cursor dot) or resize. Output is identical.
       const HM = 64;
-      const vals = new Float32Array(HM * HM);
-      let maxV = 0;
-      for (let py = 0; py < HM; py++) {
-        const yw = yWorld(pad + (py / HM) * plotH);
-        for (let px = 0; px < HM; px++) {
-          const xw = xWorld(pad + (px / HM) * plotW);
-          const v = fn(xw, yw);
-          vals[py * HM + px] = v;
-          if (v > maxV) maxV = v;
+      const fieldKey = theta + '|' + colors.bg + '|' + colors.accent;
+      if (canvas._fieldKey !== fieldKey) {
+        const vals = new Float32Array(HM * HM);
+        let maxV = 0;
+        for (let py = 0; py < HM; py++) {
+          const yw = yWorld(pad + (py / HM) * plotH);
+          for (let px = 0; px < HM; px++) {
+            const xw = xWorld(pad + (px / HM) * plotW);
+            const v = fn(xw, yw);
+            vals[py * HM + px] = v;
+            if (v > maxV) maxV = v;
+          }
         }
+        const bg = parseColor(colors.bg);
+        const accent = parseColor(colors.accent);
+        const cap = maxV > 0 ? maxV : 1;
+        const img = ctx.createImageData(HM, HM);
+        for (let i = 0; i < HM * HM; i++) {
+          const t = Math.min(1, Math.pow(Math.max(0, vals[i]) / cap, 0.55));
+          img.data[i * 4] = Math.round(bg[0] + (accent[0] - bg[0]) * t);
+          img.data[i * 4 + 1] = Math.round(bg[1] + (accent[1] - bg[1]) * t);
+          img.data[i * 4 + 2] = Math.round(bg[2] + (accent[2] - bg[2]) * t);
+          img.data[i * 4 + 3] = 255;
+        }
+        const tmp = canvas._fieldCanvas || (canvas._fieldCanvas = document.createElement('canvas'));
+        tmp.width = HM; tmp.height = HM;
+        tmp.getContext('2d').putImageData(img, 0, 0);
+        canvas._fieldKey = fieldKey;
       }
-      const bg = parseColor(colors.bg);
-      const accent = parseColor(colors.accent);
-      const cap = maxV > 0 ? maxV : 1;
-      const img = ctx.createImageData(HM, HM);
-      for (let i = 0; i < HM * HM; i++) {
-        const t = Math.min(1, Math.pow(Math.max(0, vals[i]) / cap, 0.55));
-        img.data[i * 4] = Math.round(bg[0] + (accent[0] - bg[0]) * t);
-        img.data[i * 4 + 1] = Math.round(bg[1] + (accent[1] - bg[1]) * t);
-        img.data[i * 4 + 2] = Math.round(bg[2] + (accent[2] - bg[2]) * t);
-        img.data[i * 4 + 3] = 255;
-      }
-      const tmp = document.createElement('canvas');
-      tmp.width = HM; tmp.height = HM;
-      tmp.getContext('2d').putImageData(img, 0, 0);
       ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(tmp, pad, pad, plotW, plotH);
+      ctx.drawImage(canvas._fieldCanvas, pad, pad, plotW, plotH);
       ctx.strokeStyle = colors.border;
       ctx.lineWidth = 1;
       ctx.strokeRect(pad, pad, plotW, plotH);

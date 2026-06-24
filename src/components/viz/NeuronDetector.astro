@@ -75,7 +75,7 @@ defineViz('neurondetector', {
     const gridW = Math.floor(W * 0.46);
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
     ctx.fillStyle = colors.muted; ctx.font = '11px ui-sans-serif, system-ui';
-    ctx.fillText('the 50 neurons — hover and click one', pad, pad);
+    ctx.fillText('the 50 neurons, hover and click one', pad, pad);
     const gc = 8, cell = Math.min(30, (gridW - pad * 2 - (gc - 1) * 4) / gc), gap = 4;
     st.tiles = [];
     ctx.imageSmoothingEnabled = true;
@@ -121,7 +121,7 @@ defineViz('neurondetector', {
       ctx.lineWidth = 1; ctx.strokeStyle = colors.border; ctx.strokeRect(x - 0.5, y - 0.5, ms + 1, ms + 1);
     }
 
-    api.readout('rd', `neuron #${u} is a ${classes[det.domClass[u]]} detector — its prototype is a picture, and so is everything it responds to`);
+    api.readout('rd', `neuron #${u} is a ${classes[det.domClass[u]]} detector, its prototype is a picture, and so is everything it responds to`);
   },
 });
 </script>

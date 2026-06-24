@@ -33,14 +33,16 @@ const id = `hdc-${Math.random().toString(36).slice(2, 9)}`;
     const ctx = c.getContext('2d');
     const state = { dpr: 1, w: 0, h: 0 };
 
+    const baseH = +c.getAttribute('height') || 300;   // intended display height
+    c.style.height = baseH + 'px';                     // pin it: CSS width:100% with no CSS height collapses the canvas
     const fit = () => {
       const rect = c.getBoundingClientRect();
       const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
       state.dpr = dpr;
       state.w = rect.width;
-      state.h = rect.height;
+      state.h = baseH;
       c.width = Math.round(rect.width * dpr);
-      c.height = Math.round(rect.height * dpr);
+      c.height = Math.round(baseH * dpr);
     };
 
     const draw = () => {
@@ -144,13 +146,12 @@ const id = `hdc-${Math.random().toString(36).slice(2, 9)}`;
       requestAnimationFrame(() => { rafScheduled = false; draw(); });
     };
 
-    const ro = new ResizeObserver(() => { fit(); requestRedraw(); });
+    const ro = new ResizeObserver(() => { fit(); if (state.w > 0) draw(); });   // draw once the canvas truly has a width
     ro.observe(c);
 
     const io = new IntersectionObserver((entries) => {
-      const was = visible;
       visible = entries[0].isIntersecting;
-      if (visible && !was) { fit(); draw(); }
+      if (visible) { fit(); draw(); }
     }, { rootMargin: '120px' });
     io.observe(c);
   };
