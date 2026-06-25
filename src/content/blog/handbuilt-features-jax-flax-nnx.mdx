@@ -1,0 +1,137 @@
+---
+title: "The Hand-Built Network, in JAX/Flax NNX"
+seoTitle: "Hand-Built Features in JAX/Flax NNX"
+description: "A runnable companion: build the training-free image classifier from the post in JAX. The feature extractor is pure JAX (Sobel gradients, orientation binning, patch pooling); the classifier is a Flax NNX module holding k-means prototypes that votes with the Yat kernel. Nothing is trained, and it reproduces the 83.3% on Fashion-MNIST."
+seoDescription: "Build the hand-built Fashion-MNIST classifier in JAX/Flax NNX: a pure-JAX HOG-style feature extractor and a constructed Yat head, 83.3% with zero training."
+pubDate: 2026-06-24T10:00:00-07:00
+draft: false
+tags: [ml, kernels, computer-vision, hog, jax, flax, nnx, implementation, prototypes, yat, deep-learning]
+references:
+  - authors: "Dalal, N., Triggs, B."
+    year: 2005
+    title: "Histograms of Oriented Gradients for Human Detection"
+    venue: "CVPR 2005"
+  - authors: "Chen, C., Li, O., Tao, D., Barnett, A., Su, J., Rudin, C."
+    year: 2019
+    title: "This Looks Like That: Deep Learning for Interpretable Image Recognition"
+    venue: "NeurIPS 2019"
+    arxiv: "1806.10574"
+  - authors: "Xiao, H., Rasul, K., Vollgraf, R."
+    year: 2017
+    title: "Fashion-MNIST: a Novel Image Dataset for Benchmarking Machine Learning Algorithms"
+    arxiv: "1708.07747"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+keywords:
+  - hand-built features JAX
+  - histogram of oriented gradients JAX
+  - constructed classifier Flax NNX
+  - training-free image classifier
+  - Yat kernel head
+---
+import CiteAs from '../../components/CiteAs.astro';
+
+*The [explainer](/blog/you-dont-have-to-train-the-features/) argued that you can build a whole image classifier by hand, features and all, and still reach 83.3% on Fashion-MNIST with nothing trained. This is the implementation. The feature extractor is pure JAX, a few lines of gradient and pooling; the classifier is a [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html) module that holds k-means prototypes and votes with the Yat kernel. There is no training loop in this post, because there is nothing to train. Every number is from a real run; the script is `scripts/jax_handbuilt.py`.*
+
+## The detectors, as a convolution
+
+A hand-built feature starts as a gradient. Two Sobel kernels give the horizontal and vertical derivative of the image, and from those come the magnitude and angle of every edge. The only subtlety is the padding: we replicate the border (`mode='edge'`) so an edge at the image boundary is not invented out of zeros.
+
+```python
+import jax, jax.numpy as jnp
+
+NB, GRID, NCH = 6, 7, 7                                  # 6 edge orientations + 1 corner, 7x7 patches
+CENTERS = jnp.linspace(0, jnp.pi, NB, endpoint=False)   # orientation bin centres
+SX = jnp.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], jnp.float32)
+SY = SX.T
+
+def _conv(imgs, k):                                     # edge-replicated 3x3 correlation
+    x = jnp.pad(imgs, ((0, 0), (1, 1), (1, 1)), mode='edge')[:, None]
+    return jax.lax.conv_general_dilated(x, k[None, None], (1, 1), 'VALID',
+                                        dimension_numbers=('NCHW', 'OIHW', 'NCHW'))[:, 0]
+```
+
+The seven channels follow directly. Each oriented-edge channel is the gradient magnitude weighted by how close the edge angle sits to that channel's orientation; the corner channel is the product of the two gradient directions, large only where both are strong. None of this has a parameter to fit.
+
+```python
+@jax.jit
+def features(imgs):                                     # [N,28,28] in [0,1] -> [N,343]
+    gx, gy = _conv(imgs, SX), _conv(imgs, SY)
+    mag = jnp.sqrt(gx ** 2 + gy ** 2) + 1e-6
+    ang = jnp.mod(jnp.arctan2(gy, gx), jnp.pi)          # undirected edge angle
+    d = jnp.abs(jnp.mod(ang[:, None] - CENTERS[None, :, None, None] + jnp.pi / 2, jnp.pi) - jnp.pi / 2)
+    edges = jnp.clip(1 - d / (jnp.pi / NB), 0, 1) * mag[:, None]   # [N,NB,28,28]
+    corner = (jnp.abs(gx) * jnp.abs(gy))[:, None]
+    chans = jnp.concatenate([edges, corner], 1)         # [N,NCH,28,28]
+    ...
+```
+
+## The pooling, where the dimensions are named
+
+The maps are full resolution, far more than a classifier wants, so each gets averaged over a 7-by-7 grid of patches. After that, the feature vector is one number for every (detector, patch) pair, 343 of them, and we L2-normalise each image so contrast does not matter.
+
+```python
+    n = imgs.shape[0]; ps = 28 // GRID
+    pooled = chans[:, :, :GRID * ps, :GRID * ps].reshape(n, NCH, GRID, ps, GRID, ps).mean((3, 5))
+    V = pooled.reshape(n, -1)
+    return V / (jnp.linalg.norm(V, axis=1, keepdims=True) + 1e-6)    # [N,343]
+```
+
+The whole extractor is `@jax.jit` and has no state. It is a function from an image to a fixed, named vector, which is exactly the thing the explainer means by "you built the representation."
+
+## The head, as a parameter-free NNX module
+
+The classifier is the constructed Yat head from the earlier posts, written as a Flax NNX module so it slots into the same code as a trained network. The difference is that its variables are placed, not learned: the rows of `W` are k-means centroids of the training features, and `A` is a one-hot table sending each prototype's vote to its class. The forward pass is the Yat kernel against every prototype, then the per-class maximum, then an argmax.
+
+```python
+from flax import nnx
+
+class YatHead(nnx.Module):
+    """Prototypes W (k-means centroids), one-hot votes A, nearest-prototype vote."""
+    def __init__(self, W, vote, b=0.5, eps=1.0):
+        self.W = nnx.Variable(jnp.asarray(W))                       # [K, 343] prototypes
+        self.A = nnx.Variable(jax.nn.one_hot(jnp.asarray(vote), 10))
+        self.b, self.eps = b, eps
+
+    def __call__(self, z):                                         # z: [N, 343] features
+        dot = z @ self.W.value.T
+        d2 = (z ** 2).sum(1, keepdims=True) + (self.W.value ** 2).sum(1) - 2 * dot
+        ker = (dot + self.b) ** 2 / (d2 + self.eps)                # the Yat kernel
+        scores = jnp.where(self.A.value.T[None].astype(bool), ker[:, None, :], -jnp.inf).max(-1)
+        return scores.argmax(-1)
+```
+
+There is no `nnx.Param` anywhere in it. `nnx.Variable` holds state that an optimizer would never touch, which is the right type for a thing you place by hand.
+
+## Building it and running it
+
+The pieces assemble with no training step. Extract the features, z-score them, run k-means per class to get the prototypes, and hand them to the head.
+
+```python
+Ftr, Fte = np.asarray(features(Xtr)), np.asarray(features(Xte))
+mu, sd = Ftr.mean(0), Ftr.std(0) + 1e-6
+Ftr, Fte = (Ftr - mu) / sd, (Fte - mu) / sd                        # z-score into the head's space
+
+PER = 20; W, vote = [], []
+for c in range(10):
+    W += list(KMeans(PER, n_init=2, random_state=0).fit(Ftr[ytr == c][:2500]).cluster_centers_)
+    vote += [c] * PER
+
+head = YatHead(np.array(W, 'float32'), np.array(vote))
+pred = np.asarray(head(jnp.asarray(Fte)))
+print(f"hand-built, no training anywhere: {100 * (pred == yte).mean():.1f}%")   # 83.3%
+```
+
+It prints **83.3%**, the same number the explainer's interactive demo computes in the browser, because it is the same pipeline. The only place a fit happens at all is k-means, which is choosing where to place the prototypes, not learning a representation; swap it for one centroid per class (a plain class mean) and the same head still reaches about 75.6%.
+
+## What this leaves out
+
+The k-means step is the one piece that looks like learning, and it is worth being precise: it is an unsupervised clustering of features the extractor already fixed, used only to pick prototype locations, with no gradient and no objective tied to accuracy. Everything upstream of it, the part that turns a picture into 343 numbers, is hand-written and frozen. That is the whole claim of the post made literal in code: a network whose every layer you can read, none of which was trained, that still classifies most of Fashion-MNIST correctly.
+
+---
+
+*Hand-built oriented-gradient features are the HOG idea from [Dalal and Triggs (2005)](https://doi.org/10.1109/CVPR.2005.177); the prototype head from [Chen et al. (2019)](https://arxiv.org/abs/1806.10574); [Fashion-MNIST](https://arxiv.org/abs/1708.07747) from Xiao et al. (2017); the Yat kernel from [Bouhsine (2026)](https://arxiv.org/abs/2605.03262). The conceptual companion is [You Don't Even Have to Train the Features](/blog/you-dont-have-to-train-the-features/).*
+
+<CiteAs slug="handbuilt-features-jax-flax-nnx" title="The Hand-Built Network, in JAX/Flax NNX" pubDate="2026-06-24T10:00:00-07:00" />

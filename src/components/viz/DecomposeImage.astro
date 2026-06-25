@@ -1,0 +1,78 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 300 } = Astro.props;
+---
+<figure class="viz decompose" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// One image, seen through the seven hand-built detectors. The garment on the left
+// is run through each oriented-edge channel and the corner channel; every panel on
+// the right is one detector's energy map, brightest where that edge angle is
+// present. The image is not a grid of pixels to the network, it is this stack of
+// named measurements. Slide to change the garment.
+import { defineViz } from './engine/vizkit.js';
+import { loadHB, decImg, mapsImg, CHAN_COL } from './handbuilt.js';
+import { gate, loadingText } from './engine/draw.js';
+
+defineViz('decompose', {
+  title: 'A garment, decomposed into named edge maps',
+  height: 300,
+  controls: [
+    { type: 'range', name: 'img', label: 'garment', min: 0, max: 9, step: 1, value: 0, int: true, reset: false, fmt: (v) => v },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    gate(api, () => Promise.all([loadHB(), decImg(), mapsImg()]), (api, [d, dec, maps]) => {
+      Object.assign(api.state, { d, dec, maps });
+    });
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    ctx.clearRect(0, 0, W, H);
+    if (!st.ready) { loadingText(api); return; }
+    const d = st.d, N = d.nChan, i = api.get('img');
+
+    ctx.imageSmoothingEnabled = true; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    const pad = 14, top = 22;
+    ctx.fillStyle = colors.muted; ctx.font = '11px ui-sans-serif, system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the same garment as the network sees it: a stack of named edge-energy maps', pad, 16);
+
+    // source image, left
+    const srcS = Math.min(108, H - top - 40);
+    const sy0 = top + (H - top - 30 - srcS) / 2;
+    ctx.drawImage(st.dec, 0, i * 28, 28, 28, pad, sy0, srcS, srcS);
+    ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.strokeRect(pad - 0.5, sy0 - 0.5, srcS + 1, srcS + 1);
+    ctx.fillStyle = colors.fg; ctx.font = 'bold 12px ui-sans-serif, system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(d.classes[i], pad + srcS / 2, sy0 + srcS + 16);   // decimg sprite is in class order
+
+    // arrow
+    const ax = pad + srcS + 8;
+    ctx.strokeStyle = colors.faint; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(ax, H / 2); ctx.lineTo(ax + 14, H / 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ax + 9, H / 2 - 4); ctx.lineTo(ax + 14, H / 2); ctx.lineTo(ax + 9, H / 2 + 4); ctx.stroke();
+
+    // the 7 detector maps, right
+    const gx0 = ax + 22, gap = 8;
+    const cell = Math.min(78, (W - gx0 - pad - gap * (N - 1)) / N);
+    const gy = top + (H - top - 34 - cell) / 2;
+    for (let ch = 0; ch < N; ch++) {
+      const x = gx0 + ch * (cell + gap);
+      ctx.drawImage(st.maps, ch * 28, i * 28, 28, 28, x, gy, cell, cell);
+      ctx.lineWidth = 1.5; ctx.strokeStyle = CHAN_COL[ch]; ctx.strokeRect(x - 0.5, gy - 0.5, cell + 1, cell + 1);
+      ctx.fillStyle = CHAN_COL[ch]; ctx.font = '9px ui-sans-serif, system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText(ch === N - 1 ? 'corner' : `${d.centersDeg[ch]}°`, x + cell / 2, gy + cell + 5);
+    }
+
+    api.readout('rd', `${d.classes[i]}: the same picture as ${N} measurements, one per hand-built detector, bright where that edge angle is strong`);
+  },
+});
+</script>

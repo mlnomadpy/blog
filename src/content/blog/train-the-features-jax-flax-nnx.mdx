@@ -1,0 +1,131 @@
+---
+title: "Constructing the Head on Learned Features, in JAX/Flax NNX"
+seoTitle: "Constructed Head on Learned Features in JAX"
+description: "A runnable companion: train a small conv backbone in Flax NNX, then on its frozen features build a constructed Yat head with no gradient steps and compare. The constructed head lands within a couple of points of the trained one, and even a random backbone's features sort at 73% while its trained head is at chance."
+seoDescription: "Train a Flax NNX conv backbone, build a constructed Yat head on its features with no training: 85.9% vs 87.7%, and 73% on a random backbone whose trained head is at chance."
+pubDate: 2026-06-22T17:00:00-07:00
+draft: false
+tags: [ml, kernels, representation-learning, transfer-learning, jax, flax, nnx, implementation, prototypes, yat, deep-learning]
+references:
+  - authors: "Saxe, A. M., Koh, P. W., Chen, Z., Bhand, M., Suresh, B., Ng, A. Y."
+    year: 2011
+    title: "On Random Weights and Unsupervised Feature Learning"
+    venue: "ICML 2011"
+  - authors: "Chen, C., Li, O., Tao, D., Barnett, A., Su, J., Rudin, C."
+    year: 2019
+    title: "This Looks Like That: Deep Learning for Interpretable Image Recognition"
+    venue: "NeurIPS 2019"
+    arxiv: "1806.10574"
+  - authors: "Xiao, H., Rasul, K., Vollgraf, R."
+    year: 2017
+    title: "Fashion-MNIST: a Novel Image Dataset for Benchmarking Machine Learning Algorithms"
+    arxiv: "1708.07747"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+keywords:
+  - constructed head learned features JAX
+  - random weights features
+  - Flax NNX conv backbone
+  - Yat kernel head
+  - representation learning
+---
+import CiteAs from '../../components/CiteAs.astro';
+
+*The [explainer](/blog/train-the-features/) split a network into a backbone that builds features and a head that classifies, trained only the backbone, and built the head by hand. This is the implementation in JAX. The backbone is a small [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html) convolutional network with a normal training loop; the head is a constructed Yat vote placed on the frozen features, with no gradient steps. The whole point is to run both and see how little the head needs. Every number is from a real run; the script is `scripts/jax_train_features.py`.*
+
+## The two stages, as two modules
+
+A network is a backbone and a head. The backbone is the part we train, two conv-and-pool blocks down to a 64-dimensional feature; the head is a plain linear layer for the trained baseline, and later a placed Yat vote for the constructed version.
+
+```python
+import jax, jax.numpy as jnp, optax
+from flax import nnx
+
+class Backbone(nnx.Module):
+    """Two conv-pool blocks to a 64-d feature. This is the only part that gets trained."""
+    def __init__(self, rngs):
+        self.c1 = nnx.Conv(1, 16, (3, 3), padding='SAME', rngs=rngs)
+        self.c2 = nnx.Conv(16, 32, (3, 3), padding='SAME', rngs=rngs)
+        self.lin = nnx.Linear(32 * 7 * 7, 64, rngs=rngs)
+
+    def __call__(self, x):                               # x: [N,28,28,1]
+        x = nnx.max_pool(nnx.relu(self.c1(x)), (2, 2), (2, 2))
+        x = nnx.max_pool(nnx.relu(self.c2(x)), (2, 2), (2, 2))
+        return nnx.relu(self.lin(x.reshape(x.shape[0], -1)))   # [N,64]
+
+class Net(nnx.Module):
+    def __init__(self, rngs):
+        self.feat = Backbone(rngs); self.head = nnx.Linear(64, 10, rngs=rngs)
+    def __call__(self, x): return self.head(self.feat(x))
+```
+
+## The head you build instead of train
+
+The constructed head needs no module of its own; it is a function of the frozen features. Z-score them, place twenty k-means prototypes per class, and classify a test point by the nearest prototype under the Yat kernel. Not one gradient step is involved.
+
+```python
+from sklearn.cluster import KMeans
+
+def build_head(Ftr, ytr, Fte, per=20):
+    mu, sd = Ftr.mean(0), Ftr.std(0) + 1e-6
+    Ztr, Zte = (Ftr - mu) / sd, (Fte - mu) / sd
+    W, vote = [], []
+    for c in range(10):
+        W += list(KMeans(per, n_init=2, random_state=0).fit(Ztr[ytr == c][:2500]).cluster_centers_)
+        vote += [c] * per
+    W = np.array(W, 'float32'); vote = np.array(vote)
+    dot = Zte @ W.T
+    d2 = (Zte ** 2).sum(1, keepdims=True) + (W ** 2).sum(1) - 2 * dot
+    ker = (dot + 0.5) ** 2 / (d2 + np.median(d2) * 0.1)
+    score = np.full((len(Zte), 10), -1e9)
+    for c in range(10): score[:, c] = ker[:, vote == c].max(1)
+    return score.argmax(1)
+```
+
+## The surprise, before any training
+
+Here is the cleanest version of the claim. Take a backbone with **random** weights, never trained, and build the head on the garbage features that come out. You would expect nothing, and the trained linear head on those features confirms it: it sits at chance. But the constructed head sorts them anyway.
+
+```python
+rnd = Net(nnx.Rngs(0))
+con_rand = accuracy(build_head(feats(rnd, Xtr), ytr, feats(rnd, Xte)), yte)
+print(con_rand)   # 72.7%
+```
+
+**72.7%** from a network that never saw a gradient. Random convolutional features are a known free lunch: even an untuned stack of filters keeps enough class structure for a head that only has to read it.
+
+## Train the backbone, compare the heads
+
+Now the ordinary training loop, but on the backbone only. Flax NNX makes the step a few lines: a loss, its gradient, an optimizer update.
+
+```python
+net = Net(nnx.Rngs(0)); opt = nnx.Optimizer(net, optax.adam(1e-3), wrt=nnx.Param)
+
+@nnx.jit
+def step(net, opt, xb, yb):
+    def loss(net):
+        return optax.softmax_cross_entropy_with_integer_labels(net(xb), yb).mean()
+    l, g = nnx.value_and_grad(loss)(net); opt.update(net, g); return l
+
+for ep in range(6):
+    perm = np.random.RandomState(ep).permutation(len(Xtr))
+    for i in range(0, len(Xtr) - 256, 256):
+        j = perm[i:i + 256]; step(net, opt, Xtr[j], jnp.asarray(ytr[j]))
+```
+
+After six epochs the trained head reaches **87.7%**. Freeze the same backbone, throw the trained head away, and build a fresh Yat head on its features: **85.9%**, with no head training at all. Training the classifier bought under two points; the other seventy-five came from the backbone.
+
+```python
+trained = accuracy(net, Xte, yte)                       # 87.7%
+con = accuracy(build_head(feats(net, Xtr), ytr, feats(net, Xte)), yte)   # 85.9%
+```
+
+So the curve runs from 72.7% on random features to 85.9% on trained ones, all read by a head that was never trained, always a point or two under the trained head and never more. (The explainer quotes a reference PyTorch run, 74 / 83.2 / 85.7; the story is identical, the last digits move with the framework and the seed.) The accuracy lives in the representation. The classifier, and its edits, are furniture you place.
+
+---
+
+*The strength of random convolutional features is from [Saxe et al. (2011)](https://proceedings.mlr.press/v15/saxe11a.html); the prototype head from [Chen et al. (2019)](https://arxiv.org/abs/1806.10574); [Fashion-MNIST](https://arxiv.org/abs/1708.07747) from Xiao et al. (2017); the Yat kernel from [Bouhsine (2026)](https://arxiv.org/abs/2605.03262). The conceptual companion is [You Only Have to Train the Features](/blog/train-the-features/).*
+
+<CiteAs slug="train-the-features-jax-flax-nnx" title="Constructing the Head on Learned Features, in JAX/Flax NNX" pubDate="2026-06-22T17:00:00-07:00" />
