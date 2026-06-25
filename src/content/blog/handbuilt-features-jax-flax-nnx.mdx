@@ -137,8 +137,8 @@ print(f"hand-built, no training anywhere: {100 * (pred == yte).mean():.1f}%")   
 It prints **83.3%**, the same number the explainer's interactive demo computes in the browser, because it is the same pipeline. The only place a fit happens at all is k-means, which is choosing where to place the prototypes, not learning a representation; swap it for one centroid per class (a plain class mean) and the same head still reaches about 75.6%.
 
 <figure class="jax-fig">
-  <img src="/blog/handbuilt-yat-well.gif" alt="A potential landscape with ten basins, one per class, where a garment's feature-particle rolls into the deepest well to be classified" loading="lazy" width="740" height="560" />
-  <figcaption>The forward pass of the head, as a fall. Each class digs a basin whose depth is the real Yat score it gives this garment, and the feature-particle rolls into the deepest one: that is the <code>scores.argmax</code> in the module above, made physical. Most garments fall into the right well; the occasional miss (a coat read as a pullover) is the honest 83.3%, not a perfect classifier. Rendered by <code>scripts/render_handbuilt_gifs.py</code>.</figcaption>
+  <img src="/blog/handbuilt-yat-well.gif" alt="Ten wells along the class axis, each well's depth set to the garment's real Yat score for that class, with the garment sitting in its deepest well" loading="lazy" width="780" height="520" />
+  <figcaption>The forward pass of the head, drawn as ten wells. Each well's depth is this garment's <em>real</em> Yat score for that class, the numbers the module computes, so the feature vector already fixes all ten depths and the garment sits at the bottom of the deepest one: that is <code>scores.argmax</code>, nothing simulated. Here a coat scores highest for pullover, the runner-up well being coat itself, which is exactly why the two confuse: the honest 83.3%, not a perfect classifier. Rendered by <code>scripts/render_handbuilt_gifs.py</code>.</figcaption>
 </figure>
 
 ## What this leaves out

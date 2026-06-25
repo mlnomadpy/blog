@@ -257,8 +257,10 @@ def gif_coarsegrain():
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# GIF 3 — the Yat well: ten basins, the deepest set by the real per-class score,
-#          and the garment's feature-particle rolls into it
+# GIF 3 — the Yat well: ten wells along the class axis, each well's depth is the
+#          garment's REAL Yat score for that class. The feature vector already
+#          fixes all ten depths, so the garment sits in its deepest well from the
+#          start (no fake trajectory). The only motion is the real scores forming.
 # ═══════════════════════════════════════════════════════════════════════════
 def gif_yat_well():
     protos = np.array(HB['protos'], np.float32)        # [200,343] z-scored
@@ -273,89 +275,68 @@ def gif_yat_well():
         k = dot ** 2 / d2
         return np.array([k[vote == c].max() for c in range(10)])
 
-    # ten wells on a ring; their DEPTH is the real per-class score for this garment
-    ang = np.linspace(0, 2 * np.pi, 10, endpoint=False) - np.pi / 2
-    WELL = np.stack([0.78 * np.cos(ang), 0.78 * np.sin(ang)], 1)   # [10,2] ring
-    SIG = 0.30
+    WSIG = 0.34                                         # half-width of a drawn well
+    xs = np.arange(10.0)                                # one well per class on the x-axis
+    xgrid = np.linspace(-0.7, 9.7, 600)
 
-    def field(p, depth):                                # smooth potential, deeper = more negative
-        d2 = ((WELL - p) ** 2).sum(1)
-        return -(depth * np.exp(-d2 / (2 * SIG ** 2))).sum()
+    def profile(depth):                                 # smooth multi-well potential V(x) <= 0
+        bumps = depth[None, :] * np.exp(-((xgrid[:, None] - xs[None, :]) / WSIG) ** 2 / 2)
+        return -bumps.max(1)
 
-    def grad(p, depth):
-        e = 1e-3
-        gx = (field(p + np.array([e, 0]), depth) - field(p - np.array([e, 0]), depth)) / (2 * e)
-        gy = (field(p + np.array([0, e]), depth) - field(p - np.array([0, e]), depth)) / (2 * e)
-        return np.array([gx, gy])
-
-    gN = 150
-    gxv = np.linspace(-1.25, 1.25, gN); gyv = np.linspace(-1.25, 1.25, gN)
-    GXX, GYY = np.meshgrid(gxv, gyv); flat = np.stack([GXX.ravel(), GYY.ravel()], 1)
-
-    # choose demos: one per class, mostly hits + keep an honest miss, deterministic
+    # choose demos: real garments, three clean hits + one honest miss, deterministic
     demos = []; used = set()
     for i in range(len(samples)):
         if lab[i] in used: continue
         used.add(lab[i])
         s = class_scores(Z[i]); pred = int(np.argmax(s))
-        demos.append((i, s, pred));
-        if len(demos) >= 12: break
-    hits = [d for d in demos if d[2] == d[0] and lab[d[0]] == d[2]]
+        demos.append((i, s, pred))
     hits = [d for d in demos if d[2] == lab[d[0]]]
     miss = [d for d in demos if d[2] != lab[d[0]]]
-    chosen = hits[:3] + (miss[:1] if miss else [])     # 3 clean hits, 1 honest miss
+    chosen = hits[:3] + (miss[:1] if miss else hits[3:4])
 
-    FRAMES_PER, HOLD_BETWEEN = 34, 8
+    GROW, HOLD = 22, 12
     frames = []
     for di, (si, s, pred) in enumerate(chosen):
-        depth = (s - s.min()) / (s.max() - s.min() + 1e-9)   # 0..1 relative well depth
-        depth = 0.25 + 0.95 * depth                           # floor so all wells visible
-        Vfield = np.array([field(p, depth) for p in flat]).reshape(gN, gN)
-        # roll the particle from the centre into the deepest basin
-        p = np.array([0.02, 0.04]); v = np.zeros(2); traj = [p.copy()]
-        for _ in range(80):
-            g = grad(p, depth); v = 0.84 * v - 0.012 * g; p = p + v; traj.append(p.copy())
-        traj = np.array(traj)
+        # real per-class scores -> relative well depths (ordering and gaps are real)
+        d = (s - s.min()) / (s.max() - s.min() + 1e-9)
+        depthF = 0.12 + 0.88 * d                        # floor so the shallow wells stay visible
         img = grab(int(lab[si]), di)
-        for fi in range(FRAMES_PER + HOLD_BETWEEN):
-            t = min(fi, FRAMES_PER - 1); k = int(ease(t / (FRAMES_PER - 1)) * (len(traj) - 1))
-            here = traj[k]
-            fig = plt.figure(figsize=(7.4, 5.6), dpi=110, facecolor=BG)
-            fig.text(0.5, 0.95, 'Classification as falling into the deepest Yat well',
-                     ha='center', fontsize=14, weight='bold')
-            fig.text(0.5, 0.905, 'each class digs a basin whose depth is its real Yat score for this garment; the feature-particle rolls into the deepest',
-                     ha='center', fontsize=8.8, color=MUTED)
-            ax = fig.add_axes([0.06, 0.05, 0.88, 0.82]); ax.set_facecolor(PANEL)
-            ax.set_xlim(-1.25, 1.25); ax.set_ylim(-1.25, 1.25); ax.set_xticks([]); ax.set_yticks([]); ax.set_aspect('equal')
-            ax.contourf(GXX, GYY, Vfield, levels=26, cmap='magma', alpha=0.95)
-            # label each well with its class, brighten the winner
+        for fi in range(GROW + HOLD):
+            g = ease(min(fi, GROW) / GROW)              # scores resolve from a shallow baseline
+            depth = (0.12 + (depthF - 0.12) * g)
+            V = profile(depth)
+            fig = plt.figure(figsize=(7.8, 5.2), dpi=110, facecolor=BG)
+            fig.text(0.5, 0.95, 'The head is a landscape of ten Yat wells', ha='center', fontsize=14, weight='bold')
+            fig.text(0.5, 0.905, 'each well’s depth is this garment’s real Yat score for that class; its features already place it in the deepest one',
+                     ha='center', fontsize=8.6, color=MUTED)
+            ax = fig.add_axes([0.07, 0.16, 0.74, 0.70]); ax.set_facecolor(PANEL)
+            ax.set_xlim(-0.7, 9.7); ax.set_ylim(-1.18, 0.16)
+            ax.plot(xgrid, V, color=MUTED, lw=1.6, zorder=2)
+            ax.fill_between(xgrid, V, 0.16, color='#000000', alpha=0.0)
+            ax.fill_between(xgrid, V, -1.18, color='#1d1a14', zorder=1)
+            ax.axhline(0, color=LINE, lw=0.8)
             for c in range(10):
                 win = c == pred
-                ax.scatter([WELL[c, 0]], [WELL[c, 1]], s=70 if win else 34,
+                ax.scatter([xs[c]], [-depth[c]], s=120 if win else 48,
                            color=CLASS_COL[c], edgecolors='white' if win else BG,
-                           linewidths=1.4 if win else 0.5, zorder=3)
-                lx, ly = WELL[c] * 1.30
-                ax.text(lx, ly, CLASSES[c], ha='center', va='center', fontsize=8.5,
-                        color=CLASS_COL[c], weight='bold' if win else 'normal')
-            tr = traj[:k + 1]
-            ax.plot(tr[:, 0], tr[:, 1], color='#36d6c4', lw=2.2, alpha=0.9, zorder=4)
-            ax.scatter([here[0]], [here[1]], s=170, color='white', edgecolors=BG,
-                       linewidths=1.8, zorder=5)
-            axt = fig.add_axes([0.075, 0.69, 0.155, 0.155]); axt.imshow(img, cmap='gray', vmin=0, vmax=1)
+                           linewidths=1.6 if win else 0.6, zorder=4)
+            # the garment: a single point that already sits at the bottom of its deepest well
+            ax.scatter([xs[pred]], [-depth[pred]], s=210, marker='*', color='white',
+                       edgecolors=BG, linewidths=1.4, zorder=5)
+            ax.set_xticks(xs); ax.set_xticklabels(CLASSES, rotation=40, ha='right', fontsize=8, color=MUTED)
+            ax.set_yticks([]); ax.set_ylabel('Yat score (well depth)', color=MUTED, fontsize=9)
+            for sp in ax.spines.values(): sp.set_color(LINE)
+            # garment thumbnail
+            axt = fig.add_axes([0.83, 0.55, 0.14, 0.21]); axt.imshow(img, cmap='gray', vmin=0, vmax=1)
             axt.set_xticks([]); axt.set_yticks([])
             for sp in axt.spines.values(): sp.set_color(LINE)
-            axt.set_title(f'true: {CLASSES[int(lab[si])]}', fontsize=8.5, color=INK, pad=2)
-            done = k >= len(traj) - 1
-            if done:
-                ok = pred == lab[si]
-                msg = f'fell into: {CLASSES[pred]}  ' + ('✓ correct' if ok else '✗ a miss (the honest 83.3%)')
-                fig.text(0.5, 0.015, msg, ha='center', fontsize=11.5,
-                         color='#7bbf5a' if ok else '#e08a6a', weight='bold')
-            else:
-                fig.text(0.5, 0.015, 'rolling downhill…', ha='center', fontsize=10, color=MUTED)
-            for sp in ax.spines.values(): sp.set_color(LINE)
+            axt.set_title(f'true:\n{CLASSES[int(lab[si])]}', fontsize=8.5, color=INK, pad=2)
+            ok = pred == lab[si]
+            msg = f'deepest well: {CLASSES[pred]}  ' + ('✓ correct' if ok else '✗ a miss (the honest 83.3%)')
+            fig.text(0.5, 0.03, msg, ha='center', fontsize=11.5,
+                     color='#7bbf5a' if ok else '#e08a6a', weight='bold')
             frames.append(fig_rgba(fig))
-    save_gif(PUB / 'handbuilt-yat-well.gif', frames, fps=15, hold=10)
+    save_gif(PUB / 'handbuilt-yat-well.gif', frames, fps=13, hold=12)
 
 
 if __name__ == '__main__':
