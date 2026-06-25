@@ -1,0 +1,447 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="generator" content="Astro v5.18.1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#fbfaf6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)"><title>You Only Have to Train the Features</title><meta name="description" content="A Yat head built on learned features hits 83.2% vs 85.7% trained, and 74% on a random backbone. The accuracy is in the representation, not the classifier."><meta name="keywords" content="construction versus optimization, prototype head on learned features, representation learning, random weights classifier, Yat kernel, ml, kernels, interpretability, prototypes, representation-learning, transfer-learning, yat, deep-learning"><meta name="author" content="Taha Bouhsine"><link rel="canonical" href="https://tahabouhsine.com/blog/train-the-features/"><link rel="icon" href="/blog/favicon.svg" type="image/svg+xml"><link rel="alternate" type="application/rss+xml" title="Records of the !mmortal Data Scientist" href="/blog/rss.xml"><link rel="sitemap" href="/blog/sitemap-index.xml"><link rel="me" href="https://github.com/mlnomadpy"><link rel="me" href="https://x.com/mlnomadpy"><link rel="me" href="https://www.linkedin.com/in/tahabsn/"><link rel="me" href="https://scholar.google.com/citations?user=IsBjb3EAAAAJ"><link rel="me" href="https://g.dev/tahabsn"><link rel="author" href="https://github.com/mlnomadpy"><meta property="og:type" content="article"><meta property="og:site_name" content="Records of the !mmortal Data Scientist"><meta property="og:title" content="You Only Have to Train the Features"><meta property="og:description" content="A Yat head built on learned features hits 83.2% vs 85.7% trained, and 74% on a random backbone. The accuracy is in the representation, not the classifier."><meta property="og:url" content="https://tahabouhsine.com/blog/train-the-features/"><meta property="og:locale" content="en_US"><meta property="og:image" content="https://tahabouhsine.com/blog/og/train-the-features.png"><meta property="og:image:alt" content="You Only Have to Train the Features — Records of the !mmortal Data Scientist"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:type" content="image/png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@mlnomadpy"><meta name="twitter:creator" content="@mlnomadpy"><meta name="twitter:title" content="You Only Have to Train the Features"><meta name="twitter:description" content="A Yat head built on learned features hits 83.2% vs 85.7% trained, and 74% on a random backbone. The accuracy is in the representation, not the classifier."><meta name="twitter:image" content="https://tahabouhsine.com/blog/og/train-the-features.png"><meta name="twitter:image:alt" content="You Only Have to Train the Features — Records of the !mmortal Data Scientist"><meta property="article:published_time" content="2026-06-23T01:00:00.000Z"><meta property="article:author" content="Taha Bouhsine"><meta property="article:section" content="Machine Learning"><meta property="article:tag" content="ml"><meta property="article:tag" content="kernels"><meta property="article:tag" content="interpretability"><meta property="article:tag" content="prototypes"><meta property="article:tag" content="representation-learning"><meta property="article:tag" content="transfer-learning"><meta property="article:tag" content="yat"><meta property="article:tag" content="deep-learning"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","@id":"https://tahabouhsine.com/blog/train-the-features/#article","headline":"You Only Have to Train the Features","name":"You Only Have to Train the Features","description":"A Yat head built on learned features hits 83.2% vs 85.7% trained, and 74% on a random backbone. The accuracy is in the representation, not the classifier.","image":["https://tahabouhsine.com/blog/og/train-the-features.png"],"datePublished":"2026-06-23T01:00:00.000Z","dateModified":"2026-06-23T01:00:00.000Z","author":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#author","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","jobTitle":"Machine Learning Researcher","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"publisher":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#publisher","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"mainEntityOfPage":{"@type":"WebPage","@id":"https://tahabouhsine.com/blog/train-the-features/"},"keywords":"construction versus optimization, prototype head on learned features, representation learning, random weights classifier, Yat kernel, ml, kernels, interpretability, prototypes, representation-learning, transfer-learning, yat, deep-learning","url":"https://tahabouhsine.com/blog/train-the-features/","inLanguage":"en-US","wordCount":2230,"timeRequired":"PT12M","articleSection":"Machine Learning","isPartOf":{"@type":"Blog","@id":"https://tahabouhsine.com/blog/","name":"Records of the !mmortal Data Scientist","url":"https://tahabouhsine.com/blog/"}}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Blog","item":"https://tahabouhsine.com/blog/"},{"@type":"ListItem","position":2,"name":"Machine Learning","item":"https://tahabouhsine.com/blog/tag/ml/"},{"@type":"ListItem","position":3,"name":"You Only Have to Train the Features","item":"https://tahabouhsine.com/blog/train-the-features/"}]}</script><script>
+    (function () {
+      if (window.__gaSetup) return;
+      window.__gaSetup = true;
+      var GA_ID = 'G-373438VHJB';
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ dataLayer.push(arguments); }
+      window.gtag = window.gtag || gtag;
+      window.__gaEventQueue = window.__gaEventQueue || [];
+      window.__trackGA = function (eventName, params) {
+        if (!eventName) return;
+        var item = { name: eventName, params: params || {} };
+        if (window.__gaLoaded) {
+          gtag('event', item.name, item.params);
+        } else {
+          window.__gaEventQueue.push(item);
+        }
+      };
+
+      // Track whether the first astro:page-load has fired, so a mid-session
+      // Accept can still record the current page.
+      window.__gaFirstLoadDone = window.__gaFirstLoadDone || false;
+      document.addEventListener('astro:page-load', function () { window.__gaFirstLoadDone = true; });
+
+      window.__loadGA = function () {
+        if (window.__gaLoaded) return;
+        window.__gaLoaded = true;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+        document.head.appendChild(s);
+        gtag('js', new Date());
+        gtag('config', GA_ID, { send_page_view: false });
+        (window.__gaEventQueue || []).splice(0).forEach(function (item) {
+          gtag('event', item.name, item.params);
+        });
+        function sendPV() {
+          gtag('event', 'page_view', {
+            page_title: document.title,
+            page_location: location.href,
+            page_path: location.pathname + location.search,
+          });
+        }
+        document.addEventListener('astro:page-load', sendPV);
+        // If the initial page-load already happened (accept mid-session),
+        // record this page now; otherwise the listener catches the first one.
+        if (window.__gaFirstLoadDone) sendPV();
+      };
+
+      try {
+        if (localStorage.getItem('analytics-consent') === 'granted') window.__loadGA();
+      } catch (e) {}
+    })();
+  </script><script>
+  (() => {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'light' || stored === 'dark') {
+      document.documentElement.setAttribute('data-theme', stored);
+    }
+  })();
+</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.DstInXr_.css">
+<link rel="stylesheet" href="/blog/_astro/_slug_.1UYF8z3a.css"></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/writeups">writeups</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>
+  (() => {
+    const apply = (theme) => {
+      document.documentElement.setAttribute('data-theme', theme);
+      const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+      if (meta) meta.setAttribute('content', theme === 'dark' ? '#0e1116' : '#fbfaf6');
+      // Sync giscus iframe if present
+      const giscus = document.querySelector('iframe.giscus-frame');
+      if (giscus && giscus.contentWindow) {
+        giscus.contentWindow.postMessage(
+          { giscus: { setConfig: { theme: theme === 'dark' ? 'dark' : 'light' } } },
+          'https://giscus.app'
+        );
+      }
+    };
+
+    const init = () => {
+      const btns = document.querySelectorAll('[data-theme-toggle]');
+      btns.forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', () => {
+          const current = document.documentElement.getAttribute('data-theme')
+            || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          const next = current === 'dark' ? 'light' : 'dark';
+          localStorage.setItem('theme', next);
+          apply(next);
+        });
+      });
+    };
+
+    init();
+    document.addEventListener('astro:after-swap', init);
+    document.addEventListener('astro:page-load', init);
+  })();
+</script> </nav> </div> </header> <main id="main">  <div class="reading-progress" data-reading-progress aria-hidden="true"></div> <script>
+  (() => {
+    const init = () => {
+      const bar = document.querySelector('[data-reading-progress]');
+      if (!bar) return;
+      const update = () => {
+        const h = document.documentElement;
+        const scrolled = h.scrollTop;
+        const max = h.scrollHeight - h.clientHeight;
+        const pct = max > 0 ? Math.min(100, (scrolled / max) * 100) : 0;
+        bar.style.width = pct + '%';
+      };
+      // Coalesce scroll events into one paint per frame so fast/touch
+      // scrolling stays smooth.
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => { update(); ticking = false; });
+      };
+      update();
+      window.removeEventListener('scroll', window.__rp_onScroll || (() => {}));
+      window.removeEventListener('resize', window.__rp_onScroll || (() => {}));
+      window.__rp_onScroll = onScroll;
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+    };
+    init();
+    document.addEventListener('astro:page-load', init);
+    document.addEventListener('astro:after-swap', init);
+  })();
+</script> <article data-blog-post data-pagefind-body data-pagefind-meta="date:2026-06-23"> <header class="post-header">  <h1 data-pagefind-meta="title">You Only Have to Train the Features</h1> <p class="meta"> <time datetime="2026-06-23T01:00:00.000Z">June 23, 2026</time>   · 12 min read </p> <p style="margin-top:0.65rem" data-pagefind-meta="tags:ml,kernels,interpretability,prototypes,representation-learning,transfer-learning,yat,deep-learning"> <a class="tag" href="/blog/tag/ml/">#ml</a><a class="tag" href="/blog/tag/kernels/">#kernels</a><a class="tag" href="/blog/tag/interpretability/">#interpretability</a><a class="tag" href="/blog/tag/prototypes/">#prototypes</a><a class="tag" href="/blog/tag/representation-learning/">#representation-learning</a><a class="tag" href="/blog/tag/transfer-learning/">#transfer-learning</a><a class="tag" href="/blog/tag/yat/">#yat</a><a class="tag" href="/blog/tag/deep-learning/">#deep-learning</a> </p> </header> <a class="companion-callout explainer" href="/blog/train-the-features-jax-flax-nnx/" data-astro-cid-x4o4rwnl><span class="cc-icon" aria-hidden="true" data-astro-cid-x4o4rwnl>⌨</span><span class="cc-body" data-astro-cid-x4o4rwnl><span class="cc-eyebrow" data-astro-cid-x4o4rwnl>Runnable JAX companion</span><span class="cc-title" data-astro-cid-x4o4rwnl>Constructing the Head on Learned Features, in JAX/Flax NNX</span><span class="cc-lead" data-astro-cid-x4o4rwnl>Prefer to read the code? This post has a hands-on JAX / Flax NNX implementation.</span></span><span class="cc-cta" data-astro-cid-x4o4rwnl>Open the JAX companion<span aria-hidden="true" data-astro-cid-x4o4rwnl>→</span></span></a>  <p><em>Which part of a network actually needs to be trained? The obvious answer is all of it, and the obvious answer is wrong. Take a convolutional network and leave every weight at its random starting value; it sorts Fashion-MNIST at chance, ten percent, the way a pile of random numbers should. Now throw away its untrained last layer and build the classifier by hand instead, twenty prototype pictures per class, no gradient steps anywhere. The same random network jumps to <strong>74%</strong>. Whatever the training was for, it was not for the classifier. This post is about where that line falls, between what you have to optimize and what you can simply place, and it turns out to fall somewhere sharp: you train the features, and you build everything above them.</em></p>
+<h2 id="what-a-feature-actually-is">What a feature actually is<a class="heading-anchor-link" aria-label="Link to heading" href="#what-a-feature-actually-is"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Before any of that, two words have to carry their weight, because the whole post turns on them. A network does its job in two stages. First it boils the raw image down to a short list of numbers that summarize it; those numbers are the <strong>features</strong>, and the stack of layers that produces them is the <strong>backbone</strong>. Then it draws boundaries between the classes using only those numbers; that second part is the <strong>head</strong>, also called the readout or the classifier. Ordinary training moves both stages at once, which is exactly why it is hard to say which one is pulling its weight.</p>
+<p>So pull them apart. And to see why the features matter at all, ask what a good one even buys you.</p>
+<p>Pixels are already a representation of an image, just a poor one. Lay the raw images out by similarity and the two clothes the network confuses most, a pullover and a coat, fall into one overlapping cloud: there is no line you could draw through raw pixels that keeps them apart. A feature is a <strong>learned measurement</strong>, a number the backbone is trained to compute precisely so that this stops being true. Train the backbone and the same two classes pull apart into separate clusters. The measurements were chosen, by gradient descent, to make the classes separable.</p>
+<figure class="viz featvspix" data-caption="The two clothes the network confuses most, Pullover and Coat, in two spaces. Left: raw pixel space, where they overlap in one cloud and no boundary can split them. Right: the backbone's feature space; slide its training and the same two classes pull apart. The percentage under each panel is how separable the two are in exactly the layout shown. Training the features is what turns the left picture into the right one, computed live in your browser." data-height="480" tabindex="0"> <div class="viz-cell"></div> </figure> <script type="module" src="/blog/_astro/FeatureVsPixel.astro_astro_type_script_index_0_lang.DGzmuymS.js"></script>
+<p>That is what “train the features” means: you train the backbone until its features lay the classes out cleanly. Everything after that, the part that finally says <em>coat</em> or <em>pullover</em>, is the head, and the rest of this post is about how little that head needs you.</p>
+<h2 id="split-the-bill">Split the bill<a class="heading-anchor-link" aria-label="Link to heading" href="#split-the-bill"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>To learn what each stage is worth, pay for them separately. First buy the features: train a small convolutional backbone the ordinary way, two conv-and-pool blocks down to 64 features, with a linear head and cross-entropy, reaching <strong>85.7%</strong>. Then refuse to pay for the classifier. Freeze the backbone, throw its trained head away, and on the frozen features build a new head by hand: twenty prototype points per class from k-means, each wired to vote for its own class, classify by the nearest one. No gradient step ever touches it. It reaches <strong>83.2%</strong>.</p>
+<p>Training the head, on the very same features, bought <strong>2.5 points</strong>. The other seventy-five, everything that separates this from a coin flip, came from the backbone. (The same built head on raw pixels, from the <a href="/blog/edit-a-network-by-hand/">previous post</a>, capped out at 79%, which is the whole reason we wanted features in the first place.)</p>
+<figure class="viz trainedbuilt" data-caption="The experiment as one forward pass. An image becomes 64 features through the backbone g, the only part that is trained, then a class through the head h, which is built by hand with zero gradient steps. Slide to train the backbone: the features change and the accuracy climbs, while the head never moves. You train the features; you build the classifier." data-height="360" tabindex="0"> <div class="viz-cell"></div> </figure> <script type="module" src="/blog/_astro/TrainedVsBuilt.astro_astro_type_script_index_0_lang.CeHoAAdq.js"></script>
+<p>Write it down and the split is one line. The network is <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>f</mi><mo>=</mo><mi>h</mi><mo>∘</mo><mi>g</mi></mrow><annotation encoding="application/x-tex">f = h \circ g</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em"></span><span class="mord mathnormal" style="margin-right:0.1076em">f</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6944em"></span><span class="mord mathnormal">h</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">∘</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em"></span><span class="mord mathnormal" style="margin-right:0.0359em">g</span></span></span></span>: a backbone <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>g</mi></mrow><annotation encoding="application/x-tex">g</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em"></span><span class="mord mathnormal" style="margin-right:0.0359em">g</span></span></span></span> that maps an image to features <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>z</mi><mo>=</mo><mi>g</mi><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mo>∈</mo><msup><mi mathvariant="double-struck">R</mi><mn>64</mn></msup></mrow><annotation encoding="application/x-tex">z = g(x)\in\mathbb R^{64}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em"></span><span class="mord mathnormal" style="margin-right:0.044em">z</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord mathnormal" style="margin-right:0.0359em">g</span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.8141em"></span><span class="mord"><span class="mord mathbb">R</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">64</span></span></span></span></span></span></span></span></span></span></span></span>, and a head <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>h</mi></mrow><annotation encoding="application/x-tex">h</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em"></span><span class="mord mathnormal">h</span></span></span></span> that scores classes from <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>z</mi></mrow><annotation encoding="application/x-tex">z</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em"></span><span class="mord mathnormal" style="margin-right:0.044em">z</span></span></span></span>. Training minimizes a loss over both. Building the head replaces <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>h</mi></mrow><annotation encoding="application/x-tex">h</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em"></span><span class="mord mathnormal">h</span></span></span></span> with a kernel vote over prototypes <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>μ</mi><mi>u</mi></msub></mrow><annotation encoding="application/x-tex">\mu_u</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em"></span><span class="mord"><span class="mord mathnormal">μ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">u</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span></span></span></span> placed at the k-means centroids of each class,</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>s</mi><mi>c</mi></msub><mo stretchy="false">(</mo><mi>z</mi><mo stretchy="false">)</mo><mo>=</mo><munder><mo>∑</mo><mrow><mi>u</mi><mo>:</mo><mtext> </mtext><mtext>class</mtext><mo stretchy="false">(</mo><mi>u</mi><mo stretchy="false">)</mo><mo>=</mo><mi>c</mi></mrow></munder><mi>k</mi><mo stretchy="false">(</mo><mi>z</mi><mo separator="true">,</mo><msub><mi>μ</mi><mi>u</mi></msub><mo stretchy="false">)</mo><mo separator="true">,</mo><mspace width="2em"></mspace><mover accent="true"><mi>y</mi><mo>^</mo></mover><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mo>=</mo><mi>arg</mi><mo>⁡</mo><munder><mrow><mi>max</mi><mo>⁡</mo></mrow><mi>c</mi></munder><mtext> </mtext><msub><mi>s</mi><mi>c</mi></msub><mtext> ⁣</mtext><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">(</mo><mi>g</mi><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">)</mo><mi mathvariant="normal">.</mi></mrow><annotation encoding="application/x-tex">s_c(z) = \sum_{u:\,\text{class}(u)=c} k(z, \mu_u), \qquad \hat y(x) = \arg\max_c\, s_c\!\big(g(x)\big).</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathnormal">s</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.044em">z</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:2.566em;vertical-align:-1.516em"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.05em"><span style="top:-1.809em;margin-left:0em"><span class="pstrut" style="height:3.05em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">u</span><span class="mrel mtight">:</span><span class="mspace mtight" style="margin-right:0.1952em"></span><span class="mord text mtight"><span class="mord mtight">class</span></span><span class="mopen mtight">(</span><span class="mord mathnormal mtight">u</span><span class="mclose mtight">)</span><span class="mrel mtight">=</span><span class="mord mathnormal mtight">c</span></span></span></span><span style="top:-3.05em"><span class="pstrut" style="height:3.05em"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.516em"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0315em">k</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.044em">z</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal">μ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">u</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em"></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6944em"><span style="top:-3em"><span class="pstrut" style="height:3em"></span><span class="mord mathnormal" style="margin-right:0.0359em">y</span></span><span style="top:-3em"><span class="pstrut" style="height:3em"></span><span class="accent-body" style="left:-0.1944em"><span class="mord">^</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em"><span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1.55em;vertical-align:-0.7em"></span><span class="mop">ar<span style="margin-right:0.0139em">g</span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.4306em"><span style="top:-2.4em;margin-left:0em"><span class="pstrut" style="height:3em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span><span style="top:-3em"><span class="pstrut" style="height:3em"></span><span><span class="mop">max</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.7em"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal">s</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:-0.1667em"></span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mord mathnormal" style="margin-right:0.0359em">g</span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose">)</span><span class="mord"><span class="delimsizing size1">)</span></span><span class="mord">.</span></span></span></span></span>
+<p>It has no free parameters to fit, so its accuracy is a function of <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>g</mi></mrow><annotation encoding="application/x-tex">g</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em"></span><span class="mord mathnormal" style="margin-right:0.0359em">g</span></span></span></span> and nothing else. The two heads differ in exactly one freedom: the trained head moves <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>g</mi></mrow><annotation encoding="application/x-tex">g</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em"></span><span class="mord mathnormal" style="margin-right:0.0359em">g</span></span></span></span> and <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>h</mi></mrow><annotation encoding="application/x-tex">h</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em"></span><span class="mord mathnormal">h</span></span></span></span> together, the built head rides whatever <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>g</mi></mrow><annotation encoding="application/x-tex">g</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em"></span><span class="mord mathnormal" style="margin-right:0.0359em">g</span></span></span></span> the backbone settled into.</p>
+<h2 id="the-network-that-never-trained">The network that never trained<a class="heading-anchor-link" aria-label="Link to heading" href="#the-network-that-never-trained"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>There is a cleaner way to feel that the head is just along for the ride, and it is the most surprising number in the post. Take the experiment to its limit and train nothing at all. Leave the backbone at its random initialization, every weight a fresh random draw, and build the same head on the garbage features that fall out.</p>
+<p>You would expect nothing, and the trained head delivers nothing: it has learned zero, so it sorts the test set into ten bins that are each a random rainbow, dead at chance. But the built head, on those same random features, sorts them into mostly-pure bins and lands at <strong>74%</strong>.</p>
+<p>Seventy-four percent, from a network that never saw a gradient. Random convolutional features are a known free lunch: even an untuned stack of filters scrambles the image in a way that keeps some of its class structure intact, and a head that only has to <em>read</em> structure does not care that nobody trained it.</p>
+<figure class="viz randomsurprise" data-caption="One untrained network, two heads, sorting the test images into class bins (each dot is an image, coloured by its true class). Its trained linear head has learned nothing, so it sorts at chance and the bins are a rainbow of every class. Place a prototype head on the same random features and it sorts into mostly-pure bins, 74% right, with no gradient steps. Even random features carry enough structure to sort; the classifier never needed training. The placed head's labels run live in your browser." data-height="460" tabindex="0"> <div class="viz-cell"></div> </figure> <script type="module" src="/blog/_astro/RandomSurprise.astro_astro_type_script_index_0_lang.BTmydU-V.js"></script>
+<h2 id="the-whole-trade-off-in-one-curve">The whole trade-off, in one curve<a class="heading-anchor-link" aria-label="Link to heading" href="#the-whole-trade-off-in-one-curve"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Two endpoints make a story but not a law, so watch the whole way across. At every epoch, freeze the backbone, read its trained head, then build a fresh head on the current features and read that too.</p>
+<p>The two curves climb together. The trained head starts at chance and the built head starts at 74%, and from the moment the backbone has any real features the two run nearly parallel, a couple of points apart, all the way up. The gap between them is the entire value of training the classifier. Everything else is the backbone lifting both at once.</p>
+<figure class="viz boundarycurve" data-caption="Both heads against backbone training. The trained head (it learns the classifier and the features at once) starts at chance and climbs to 86%. The constructed head (it never trains the classifier, only places prototypes on whatever features exist) starts at 74% on the random backbone and climbs to 83%. Slide to read the gap at any stage: it is a couple of points once any features exist, and the dashed line is the raw-pixel head with no backbone at all. Real run." data-height="420" tabindex="0"> <div class="viz-cell"></div> </figure> <script type="module" src="/blog/_astro/BoundaryCurve.astro_astro_type_script_index_0_lang.Bbhy2Yg-.js"></script>
+<p>The number says the representation does the work. The geometry says why.</p>
+<h2 id="why-the-head-only-reads-what-the-features-already-sorted">Why the head only reads what the features already sorted<a class="heading-anchor-link" aria-label="Link to heading" href="#why-the-head-only-reads-what-the-features-already-sorted"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Lay the test features out in two dimensions at each stage and the climb has a shape. An untrained backbone gives a single tangled blob, and the built head, which labels a point by the nearest prototype, has nothing to grab: points and prototypes are all piled together. Train the backbone and the blob resolves into clusters, one per class. The head never changed. The space under it did, and suddenly nearest-prototype is enough.</p>
+<figure class="viz repfold" data-caption="The experiment, live. Each dot is a test image, laid out in 2D by the backbone's features at the chosen training stage; the diamonds are the prototypes the constructed head places. Slide the backbone training: an untrained network is a tangle the head cannot read, and as the backbone trains the classes pull apart into clusters. The constructed head's accuracy is evaluated in your browser at every stage, 74% on the blob climbing to 83% as the classes separate, always a few points under the trained head printed beside it. Red rings mark the images it still gets wrong." data-height="520" tabindex="0"> <div class="viz-cell"></div> </figure> <script type="module" src="/blog/_astro/RepresentationFold.astro_astro_type_script_index_0_lang.D_7etZem.js"></script>
+<p>That is the whole mechanism. The built head is a fixed rule, <em>which stored point is this closest to</em>, and a fixed rule is only ever as good as the layout it runs on. Training the features is the act of arranging the layout until the fixed rule works.</p>
+<h2 id="the-head-you-built-is-one-you-can-read">The head you built is one you can read<a class="heading-anchor-link" aria-label="Link to heading" href="#the-head-you-built-is-one-you-can-read"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>There is a bonus hiding in having built the head instead of training it: you can still read it, the way the earlier posts read a network of pixel prototypes. A prototype is a stored point, and a stored point has a nearest real image, the training example whose features land closest to it. On raw pixels that stand-in was a blurry k-means average. In feature space, where a class clusters tightly, the nearest real image is one sharp, specific example, the <em>this looks like that</em> of <a href="https://arxiv.org/abs/1806.10574">prototype networks</a>.</p>
+<figure class="viz pixelexemplar" data-caption="The same prototype, in two spaces. Left: a pixel prototype is a k-means average of a class, a blurry mean garment. Right: a feature prototype's nearest real image is one specific, sharp example. Both say this looks like that; feature space groups a class tightly enough that the stand-in is a crisp picture instead of a smear. Hover a row to focus a class." data-height="520" tabindex="0"> <div class="viz-cell"></div> </figure> <script type="module" src="/blog/_astro/PixelVsExemplar.astro_astro_type_script_index_0_lang.m2hIPJR0.js"></script>
+<p>And the reading survives the move even though the backbone does not. The trained backbone is a genuine black box, sixty-four numbers with no individual meaning. The head riding on top is still a bank of pictures, so the classifier stays legible while the representation under it never was. The interpretability lives in the part you place, not the part you train.</p>
+<figure class="viz blackbox" data-caption="A readable head on an unreadable body. Left: the trained backbone is a black box whose 64 output numbers mean nothing on their own. Right: the placed head is a bank of prototype pictures, and the prediction is resemblance to them. The interpretability lives in the head you place, not the body you train, so you get a legible classifier riding an illegible representation. Hover a class to focus its prototypes." data-height="470" tabindex="0"> <div class="viz-cell"></div> </figure> <script type="module" src="/blog/_astro/BlackBoxHead.astro_astro_type_script_index_0_lang.7pOIp_Dc.js"></script>
+<p>The edits survive too, unchanged in form, because the head is still a list of prototypes with a one-hot readout. Forgetting a class is deleting its block: drop the Sandal prototypes and Sandal recall falls from <strong>93% to 0%</strong> while the other nine classes hold at <strong>82.2% to 82.5%</strong>, untouched, because their scores never referenced a Sandal prototype. Teaching a class is appending a block: build the head from eight classes, then add prototypes for Bag and Boot, and they are recognized at <strong>95%</strong> each while the head reaches its full <strong>83.2%</strong>, exactly as if all ten had been there from the start. Adding and forgetting were never properties of pixels. They are properties of storing a class as its own block of prototypes, which holds in whatever space the prototypes live in.</p>
+<h2 id="where-the-line-falls">Where the line falls<a class="heading-anchor-link" aria-label="Link to heading" href="#where-the-line-falls"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>So the boundary has a location, and it is sharp. A network is a representation with a classifier on top. The representation is the part you must learn: random features give 74%, trained features give 83 to 86, and that climb is the only place real accuracy comes from. The classifier is the part you can build: place prototypes, wire a one-hot readout, and you are within a couple of points of the trained head, with the teaching and forgetting thrown in for free.</p>
+<p>Which leaves the greedy question. If the head comes for free, how much of the <em>backbone</em> can you get without training either? More than you would think. Swap the learned features for hand-designed ones, oriented-edge and corner detectors pooled over the image, the kind of thing computer vision built by hand for decades, and feed those to the same built head. With no training anywhere, not in the features and not in the classifier, it reaches <strong>83.3%</strong>, matching the trained backbone. That is the next post: building the features by hand too, and seeing how far down the construction can reach before you finally have to learn.</p>
+<hr/>
+<p><em>The prototype-network idea (“this looks like that”) is from <a href="https://arxiv.org/abs/1806.10574">Chen et al. (2019)</a>; the surprising strength of random convolutional features is from <a href="https://proceedings.mlr.press/v15/saxe11a.html">Saxe et al. (2011)</a>; <a href="https://arxiv.org/abs/1708.07747">Fashion-MNIST</a> from Xiao et al. (2017); the Yat kernel from <a href="https://arxiv.org/abs/2605.03262">Bouhsine (2026)</a>. This continues <a href="/blog/edit-a-network-by-hand/">Your Network Is a List of Pictures. You Can Edit It.</a></em></p>  <section class="references" aria-labelledby="references-heading" data-astro-cid-rn7nvbl4><h2 id="references-heading" data-astro-cid-rn7nvbl4>References</h2><ol data-astro-cid-rn7nvbl4><li id="ref-1" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Chen, C., Li, O., Tao, D., Barnett, A., Su, J., Rudin, C.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2019)</span>. <a class="ref-title" href="https://arxiv.org/abs/1806.10574" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>This Looks Like That: Deep Learning for Interpretable Image Recognition</a>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>NeurIPS 2019</span>.<a class="ref-ext" href="https://arxiv.org/abs/1806.10574" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:1806.10574</a></li><li id="ref-2" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Saxe, A. M., Koh, P. W., Chen, Z., Bhand, M., Suresh, B., Ng, A. Y.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2011)</span>. <span class="ref-title" data-astro-cid-rn7nvbl4>On Random Weights and Unsupervised Feature Learning</span>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>ICML 2011</span>.</li><li id="ref-3" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Xiao, H., Rasul, K., Vollgraf, R.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2017)</span>. <a class="ref-title" href="https://arxiv.org/abs/1708.07747" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>Fashion-MNIST: a Novel Image Dataset for Benchmarking Machine Learning Algorithms</a>.
+<a class="ref-ext" href="https://arxiv.org/abs/1708.07747" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:1708.07747</a></li><li id="ref-4" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Bouhsine, T.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2026)</span>. <a class="ref-title" href="https://arxiv.org/abs/2605.03262" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance</a>.
+<a class="ref-ext" href="https://arxiv.org/abs/2605.03262" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:2605.03262</a></li></ol></section> </article> <script>(function(){const payload = {"post_title":"You Only Have to Train the Features","post_slug":"train-the-features","post_path":"/blog/train-the-features/","post_tags":"ml,kernels,interpretability,prototypes,representation-learning,transfer-learning,yat,deep-learning","word_count":2230,"reading_time_minutes":12,"is_draft":false};
+
+  (() => {
+    const thresholds = [25, 50, 75, 90, 100];
+    const state = { viewed: false, sent: new Set() };
+
+    const track = (name, params = {}) => {
+      if (typeof window.__trackGA === 'function') {
+        window.__trackGA(name, {
+          ...payload,
+          ...params,
+          non_interaction: name === 'blog_post_view',
+        });
+      }
+    };
+
+    const init = () => {
+      const article = document.querySelector('[data-blog-post]');
+      if (!article) return;
+
+      if (!state.viewed) {
+        state.viewed = true;
+        track('blog_post_view');
+      }
+
+      const progress = () => {
+        const rect = article.getBoundingClientRect();
+        const articleTop = window.scrollY + rect.top;
+        const articleHeight = Math.max(1, article.offsetHeight);
+        const viewportBottom = window.scrollY + window.innerHeight;
+        return Math.max(0, Math.min(100, ((viewportBottom - articleTop) / articleHeight) * 100));
+      };
+
+      const update = () => {
+        const pct = progress();
+        thresholds.forEach((threshold) => {
+          if (pct >= threshold && !state.sent.has(threshold)) {
+            state.sent.add(threshold);
+            track('blog_post_read_depth', { read_percent: threshold });
+            if (threshold === 90) {
+              track('blog_post_read', { read_percent: threshold });
+            }
+          }
+        });
+      };
+
+      if (window.__postAnalyticsCleanup) window.__postAnalyticsCleanup();
+
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => {
+          update();
+          ticking = false;
+        });
+      };
+
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+      window.__postAnalyticsCleanup = () => {
+        window.removeEventListener('scroll', onScroll);
+        window.removeEventListener('resize', onScroll);
+      };
+      update();
+    };
+
+    init();
+    document.addEventListener('astro:page-load', init, { once: true });
+  })();
+})();</script> <aside class="related" aria-labelledby="related-heading" data-astro-cid-dpgbfi7r><h2 id="related-heading" data-astro-cid-dpgbfi7r>Related posts</h2><ul data-astro-cid-dpgbfi7r><li data-astro-cid-dpgbfi7r><a href="/blog/train-the-features-jax-flax-nnx/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>Constructing the Head on Learned Features, in JAX/Flax NNX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion: train a small conv backbone in Flax NNX, then on its frozen features build a constructed Yat head with no gradient steps and compare. The constructed head lands within a couple of points of the trained one, and even a random backbone&#39;s features sort at 73% while its trained head is at chance.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-06-23T00:00:00.000Z" data-astro-cid-dpgbfi7r>Jun 23, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/you-dont-have-to-train-the-features/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>You Don&#39;t Even Have to Train the Features</span><span class="related-desc" data-astro-cid-dpgbfi7r>The last post trained a backbone and built the classifier by hand. This one builds the features by hand too: oriented-edge and corner detectors pooled over a grid of patches, the way computer vision worked for decades. Feed those to the same constructed Yat head and, with nothing trained anywhere, it classifies Fashion-MNIST at 83.3%, matching a trained backbone and within a couple of points of a fully trained network. The whole network is hand-built and readable end to end.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-06-24T00:00:00.000Z" data-astro-cid-dpgbfi7r>Jun 24, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/edit-a-network-jax-flax-nnx/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>Editing a Network by Hand, in JAX/Flax NNX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion: build the prototype Yat-MLP in Flax NNX, then add a class by concatenating a few prototype rows and forget a class by masking them out, with no gradient steps. Class-incremental learning that matches a from-scratch build, and exact machine unlearning, both as array edits you can read. Every number is from a real run on Fashion-MNIST.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-06-22T18:00:00.000Z" data-astro-cid-dpgbfi7r>Jun 22, 2026</time></span></a></li></ul></aside> <nav class="post-nav" aria-label="Adjacent posts"><a href="/blog/train-the-features-jax-flax-nnx/" class="prev" rel="prev"><div class="label">← Previous</div><div class="title">Constructing the Head on Learned Features, in JAX/Flax NNX</div></a><a href="/blog/you-dont-have-to-train-the-features/" class="next" rel="next"><div class="label">Next →</div><div class="title">You Don&#39;t Even Have to Train the Features</div></a></nav> <section aria-label="Comments" id="giscus-mount" style="margin-top:3rem" data-giscus="{&#34;repo&#34;:&#34;mlnomadpy/blog&#34;,&#34;repoId&#34;:&#34;MDEwOlJlcG9zaXRvcnk0MDQ4MzY2NDU=&#34;,&#34;category&#34;:&#34;Announcements&#34;,&#34;categoryId&#34;:&#34;DIC_kwDOGCFRJc4C9EiR&#34;,&#34;mapping&#34;:&#34;pathname&#34;,&#34;reactionsEnabled&#34;:&#34;1&#34;,&#34;emitMetadata&#34;:&#34;0&#34;,&#34;inputPosition&#34;:&#34;top&#34;,&#34;theme&#34;:&#34;preferred_color_scheme&#34;,&#34;lang&#34;:&#34;en&#34;}"></section><script>
+    (() => {
+      const load = () => {
+        const mount = document.getElementById('giscus-mount');
+        if (!mount || mount.dataset.loaded === '1') return;
+        const cfg = JSON.parse(mount.dataset.giscus);
+        const theme = document.documentElement.getAttribute('data-theme')
+          || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        const s = document.createElement('script');
+        s.src = 'https://giscus.app/client.js';
+        s.async = true;
+        s.crossOrigin = 'anonymous';
+        const attrs = {
+          'data-repo': cfg.repo,
+          'data-repo-id': cfg.repoId,
+          'data-category': cfg.category,
+          'data-category-id': cfg.categoryId,
+          'data-mapping': cfg.mapping,
+          'data-strict': '0',
+          'data-reactions-enabled': cfg.reactionsEnabled,
+          'data-emit-metadata': cfg.emitMetadata,
+          'data-input-position': cfg.inputPosition,
+          'data-theme': theme,
+          'data-lang': cfg.lang,
+          'data-loading': 'lazy',
+        };
+        for (const k in attrs) s.setAttribute(k, attrs[k]);
+        mount.appendChild(s);
+        mount.dataset.loaded = '1';
+      };
+      load();
+      document.addEventListener('astro:page-load', load);
+      document.addEventListener('astro:after-swap', load);
+    })();
+  </script> <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('pre').forEach((pre) => {
+        if (pre.dataset.copyEnhanced) return;
+        pre.dataset.copyEnhanced = '1';
+        const btn = document.createElement('button');
+        btn.className = 'code-copy';
+        btn.type = 'button';
+        btn.textContent = 'copy';
+        btn.setAttribute('aria-label', 'Copy code');
+        btn.addEventListener('click', async () => {
+          const code = pre.querySelector('code');
+          const text = (code ? code.innerText : pre.innerText) || '';
+          try {
+            await navigator.clipboard.writeText(text);
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = 'copy';
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+        pre.appendChild(btn);
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>  </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span class="site-footer__links"> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> <a class="site-footer__support" href="https://buymeacoffee.com/mlnomadpy" target="_blank" rel="noopener noreferrer" aria-label="Support this blog on Buy Me a Coffee">
+buy me a coffee
+</a> </span> </footer> <div id="consent-banner" class="consent-banner" role="dialog" aria-live="polite" aria-label="Analytics consent" hidden><p class="consent-text">
+I use Google Analytics to see which posts get read. It sets cookies only
+      if you accept. No ads, no selling data.
+</p><div class="consent-actions"><button type="button" id="consent-decline" class="consent-btn consent-decline">Decline</button><button type="button" id="consent-accept" class="consent-btn consent-accept">Accept</button></div></div>
+
+  <script>
+    (() => {
+      const KEY = 'analytics-consent';
+      const setup = () => {
+        const banner = document.getElementById('consent-banner');
+        if (!banner) return;
+        let choice = null;
+        try { choice = localStorage.getItem(KEY); } catch (e) {}
+        // Already decided → keep hidden.
+        if (choice === 'granted' || choice === 'denied') { banner.hidden = true; return; }
+        banner.hidden = false;
+
+        const decide = (value) => {
+          try { localStorage.setItem(KEY, value); } catch (e) {}
+          banner.hidden = true;
+          if (value === 'granted' && typeof window.__loadGA === 'function') window.__loadGA();
+        };
+        const accept = document.getElementById('consent-accept');
+        const decline = document.getElementById('consent-decline');
+        if (accept && !accept.dataset.bound) {
+          accept.dataset.bound = '1';
+          accept.addEventListener('click', () => decide('granted'));
+        }
+        if (decline && !decline.dataset.bound) {
+          decline.dataset.bound = '1';
+          decline.addEventListener('click', () => decide('denied'));
+        }
+      };
+      setup();
+      document.addEventListener('astro:page-load', setup);
+    })();
+  </script>
+
+  <style>
+    /* Author `display:flex` below would otherwise override the UA [hidden]
+       rule, leaving the banner visible after a choice. This wins on specificity. */
+    .consent-banner[hidden] { display: none !important; }
+    .consent-banner {
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      right: 1rem;
+      max-width: 30rem;
+      margin-left: auto;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+      padding: 0.95rem 1.1rem;
+      background: var(--bg-elev, #fff);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      font-family: var(--sans);
+    }
+    .consent-text {
+      margin: 0;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: var(--fg-muted);
+    }
+    .consent-actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+    }
+    .consent-btn {
+      font-family: var(--sans);
+      font-size: 0.82rem;
+      padding: 0.4rem 0.95rem;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    }
+    .consent-decline {
+      background: transparent;
+      color: var(--fg-muted);
+    }
+    .consent-decline:hover { color: var(--fg); border-color: var(--fg-faint); }
+    .consent-accept {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg);
+      font-weight: 600;
+    }
+    .consent-accept:hover { filter: brightness(1.05); }
+    @media (max-width: 520px) {
+      .consent-banner { left: 0.6rem; right: 0.6rem; bottom: 0.6rem; }
+    }
+  </style> <script>
+      // Inject a fullscreen toggle button onto every .viz figure on the page.
+      (() => {
+        const ENTER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10V4h6"/><path d="M20 10V4h-6"/><path d="M4 14v6h6"/><path d="M20 14v6h-6"/></svg>';
+        const EXIT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H4v6"/><path d="M14 4h6v6"/><path d="M10 20H4v-6"/><path d="M14 20h6v-6"/></svg>';
+        const inFs = () => document.fullscreenElement || document.webkitFullscreenElement;
+        const enhance = () => {
+          document.querySelectorAll('.viz').forEach((fig) => {
+            if (fig.dataset.fsReady) return;
+            fig.dataset.fsReady = '1';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'viz-fs-btn';
+            btn.setAttribute('aria-label', 'Toggle fullscreen');
+            btn.innerHTML = ENTER_SVG + '<span>fullscreen</span>';
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              try {
+                if (inFs() === fig) {
+                  await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen?.());
+                } else if (fig.requestFullscreen) {
+                  await fig.requestFullscreen();
+                } else if (fig.webkitRequestFullscreen) {
+                  await fig.webkitRequestFullscreen();
+                }
+              } catch (_) {}
+            });
+            fig.appendChild(btn);
+          });
+          const sync = () => {
+            document.querySelectorAll('.viz-fs-btn').forEach((b) => {
+              const fig = b.parentElement;
+              const open = inFs() === fig;
+              b.innerHTML = (open ? EXIT_SVG : ENTER_SVG) + '<span>' + (open ? 'exit' : 'fullscreen') + '</span>';
+            });
+          };
+          document.addEventListener('fullscreenchange', sync);
+          document.addEventListener('webkitfullscreenchange', sync);
+        };
+        enhance();
+        document.addEventListener('astro:page-load', enhance);
+        document.addEventListener('astro:after-swap', enhance);
+      })();
+    </script> </body> </html>
