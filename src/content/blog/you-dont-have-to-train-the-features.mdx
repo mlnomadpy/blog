@@ -61,7 +61,19 @@ What is a feature, underneath? The last post called it a learned measurement, a 
 
 Six of them look for an edge at a fixed angle; the seventh looks for a corner, a place where two strong edge directions meet at once. That is it. No filter here was tuned to Fashion-MNIST or to anything else. They are the generic structure of natural images, written down.
 
-Run an image through them and it stops being a grid of pixels and becomes a stack of these named measurements, one map per detector, each lit where its kind of edge is present.
+And written down literally, because the whole bank is a closed form. Two Sobel kernels give the image gradient, $g_x = S_x * I$ and $g_y = S_y * I$, and the gradient carries the only two facts any of these detectors reads, how strong an edge is and which way it points:
+
+$$
+m(p) = \sqrt{g_x(p)^2 + g_y(p)^2}, \qquad \theta(p) = \operatorname{atan2}\big(g_y(p),\, g_x(p)\big) \bmod \pi.
+$$
+
+An oriented-edge channel is then the edge energy weighted by how close the edge angle sits to that channel's preferred direction $\theta_b = b\,\pi/6$. With a triangular window of half-width $\Delta = \pi/6$, the circular distance $|\cdot|_\pi$, and $[\,\cdot\,]_+ = \max(0, \cdot)$,
+
+$$
+e_b(p) = \Big[\,1 - \tfrac{|\theta(p) - \theta_b|_\pi}{\Delta}\,\Big]_+ \, m(p), \qquad b = 0, \dots, 5,
+$$
+
+and the corner channel fires where both gradient directions are strong at once, $e_{\text{corner}}(p) = |g_x(p)|\,|g_y(p)|$. Seven maps, not a parameter among them. Run an image through and it stops being a grid of pixels and becomes a stack of these named measurements, one per detector, each lit where its kind of edge is present.
 
 <DecomposeImage caption="One garment seen through the seven hand-built detectors. The picture on the left is run through each oriented-edge channel and the corner channel; each panel on the right is one detector's energy, bright where that angle of edge appears. A vertical-edge detector lights the sides of a trouser leg, a horizontal one lights a hem. The network never sees pixels, it sees these named maps. Slide to change the garment." />
 
@@ -71,17 +83,32 @@ Seven full-resolution maps per image is more than a classifier wants, so each on
 
 <AssignedDimensions caption="The 343 dimensions, and where each one comes from. The garment is cut into a 7x7 grid of patches; in every patch all seven detectors are measured, so each dimension is a detector at a place. Pick a detector to see its energy across the grid, and hover a patch to read one dimension off by name: 'corner energy in the top-left patch', '90-degree edge in the middle'. A trained network also has a feature vector, but its axes mean nothing you can say out loud. Here every axis is a sentence." />
 
-This is the difference between a constructed representation and a learned one, made literal. A trained backbone also turns an image into a vector, and that vector also separates the classes, but ask what its tenth coordinate measures and there is no answer in words; it is whatever gradient descent found useful. Here the tenth coordinate is "thirty-degree edge in patch four," and you assigned it. You decided, in advance, which information lives on which axis. The representation is legible before the data ever arrives, because you built it to be.
+The pooling is one line. Average each channel $d$ over each patch $P_{ij}$ of the $7\times 7$ grid, stack the results, and divide by the length:
+
+$$
+\phi_{d,i,j}(x) = \frac{1}{|P_{ij}|}\sum_{p \,\in\, P_{ij}} e_d(p), \qquad
+\phi(x) = \frac{\big(\phi_{d,i,j}(x)\big)_{d,i,j}}{\big\lVert \big(\phi_{d,i,j}(x)\big)_{d,i,j}\big\rVert} \;\in\; \mathbb{R}^{343}.
+$$
+
+That final normalisation is the one concession to robustness, the HOG trick that sends a bright garment and a dim one to the same place. Set $\phi$ beside a trained backbone $g_\theta$ and the whole post sits in a single comparison: $g_\theta$ has millions of parameters $\theta$ that gradient descent went looking for, while $\phi$ has exactly none. It is a fixed function, written once and never moved.
+
+That is also the difference between a constructed representation and a learned one, made literal. A trained backbone turns an image into a vector that separates the classes too, but ask what its tenth coordinate measures and there is no answer in words; it is whatever gradient descent found useful. Here the tenth coordinate is "thirty-degree edge in patch four," and you assigned it. You decided, in advance, which information lives on which axis. The representation is legible before the data ever arrives, because you built it to be.
 
 ## Hand it to the built head
 
-Now the features are in hand, frozen, and we are back on familiar ground. The classifier is the constructed Yat head from the [earlier posts](/blog/edit-a-network-by-hand/): twenty prototype points per class, placed at the k-means centroids of the training features, and a prediction by the nearest prototype,
+Now the features are in hand, frozen, and we are back on familiar ground. The classifier is the constructed Yat head from the [editing post](/blog/edit-a-network-by-hand/): twenty prototypes per class, each $\mu_u$ a k-means centroid of that class's training features, scored by the Yat kernel
 
 $$
-s_c(x) = \sum_{u:\,\text{class}(u)=c} k\big(\phi(x), \mu_u\big), \qquad \hat y(x) = \arg\max_c\, s_c(x),
+k(z, \mu) = \frac{\big(\langle z, \mu\rangle + b\big)^2}{\lVert z - \mu\rVert^2 + \varepsilon}.
 $$
 
-with the one change that $\phi(x)$ is now the hand-built feature map instead of a trained backbone. No gradient step touches the detectors, the pooling, the prototypes, or the readout. Every part of the path was either written down or placed. And it works: you can follow a single prediction the whole way through and never meet a number that was learned.
+It is the same softened inverse-square well that post dropped masses into, a denominator that pulls hardest where the feature lands nearest a prototype, except the space it pulls in is now hand-built features instead of pixels. Each class is represented by its nearest prototype, and the strongest class wins:
+
+$$
+s_c(x) = \max_{u:\,\text{class}(u)=c} k\big(\phi(x),\, \mu_u\big), \qquad \hat y(x) = \arg\max_c\, s_c(x).
+$$
+
+Write the network out in full and there is nowhere for training to hide. It is $\hat y \circ \phi$, a fixed feature map composed with a parameter-free vote, and no gradient step touches the detectors, the pooling, the prototypes, or the readout. You can follow a single prediction the whole way down and never meet a number that was learned.
 
 <HandBuiltVote caption="The whole network, read end to end, with nothing trained. A garment becomes 343 detector readings, those are scored against the 200 stored prototypes with the Yat kernel, and the class of the nearest prototype wins. The middle picture is that nearest prototype, the stored example the input most resembles. The detectors are hand-chosen, the prototypes are k-means centroids, the vote is a fixed rule, and the kernel runs live in your browser. Slide to pick a garment." />
 
