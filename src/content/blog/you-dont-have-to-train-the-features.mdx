@@ -1,0 +1,114 @@
+---
+title: "You Don't Even Have to Train the Features"
+seoTitle: "You Don't Even Have to Train the Features"
+description: "The last post trained a backbone and built the classifier by hand. This one builds the features by hand too: oriented-edge and corner detectors pooled over a grid of patches, the way computer vision worked for decades. Feed those to the same constructed Yat head and, with nothing trained anywhere, it classifies Fashion-MNIST at 83.3%, matching a trained backbone and within a couple of points of a fully trained network. The whole network is hand-built and readable end to end."
+seoDescription: "Hand-built edge and corner detectors plus a constructed Yat head classify Fashion-MNIST at 83.3% with zero training anywhere, matching a trained backbone."
+pubDate: 2026-06-24
+draft: false
+companion: handbuilt-features-jax-flax-nnx
+tags: [ml, kernels, interpretability, prototypes, computer-vision, hog, construction, yat, deep-learning]
+references:
+  - authors: "Dalal, N., Triggs, B."
+    year: 2005
+    title: "Histograms of Oriented Gradients for Human Detection"
+    venue: "CVPR 2005"
+  - authors: "Lowe, D. G."
+    year: 2004
+    title: "Distinctive Image Features from Scale-Invariant Keypoints"
+    venue: "International Journal of Computer Vision 60, 91–110"
+  - authors: "Chen, C., Li, O., Tao, D., Barnett, A., Su, J., Rudin, C."
+    year: 2019
+    title: "This Looks Like That: Deep Learning for Interpretable Image Recognition"
+    venue: "NeurIPS 2019"
+    arxiv: "1806.10574"
+  - authors: "Xiao, H., Rasul, K., Vollgraf, R."
+    year: 2017
+    title: "Fashion-MNIST: a Novel Image Dataset for Benchmarking Machine Learning Algorithms"
+    arxiv: "1708.07747"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+keywords:
+  - hand-built features
+  - histogram of oriented gradients
+  - training-free image classifier
+  - constructed neural network
+  - interpretable by construction
+  - Yat kernel
+---
+
+import DetectorBank from '../../components/viz/DetectorBank.astro';
+import DecomposeImage from '../../components/viz/DecomposeImage.astro';
+import AssignedDimensions from '../../components/viz/AssignedDimensions.astro';
+import HandBuiltVote from '../../components/viz/HandBuiltVote.astro';
+import ConstructionLadder from '../../components/viz/ConstructionLadder.astro';
+import HandBuiltLive from '../../components/viz/HandBuiltLive.astro';
+
+*The [last post](/blog/train-the-features/) split a network into features and a classifier, trained the features, and built the classifier by hand. It ended on a greedy question: if the classifier comes for free, how much of the features can you get without training either? This post answers it. Build the features by hand too, the way computer vision built them for decades, edges and corners and nothing learned, feed them to the same constructed head, and the whole network classifies Fashion-MNIST at **83.3%** with no training anywhere. Every number is from a real run; the script is `scripts/handbuilt_vision.py`.*
+
+## The part everyone says you cannot skip
+
+You can skip the classifier. The previous posts made that case three times over: a neuron is a picture, a network is a list of those pictures, and you can place them by hand instead of learning them. But all of that sat on top of features, and the features came from a trained backbone. That backbone is supposed to be the irreducible core, the part deep learning exists to provide. The whole story of the last fifteen years is that you cannot hand-design good features, you have to learn them.
+
+People did hand-design them, though, and it worked. Before the deep-learning turn, the best vision systems ran on features a person wrote down: oriented-edge histograms, corner and blob detectors, gradients pooled over a grid. HOG and SIFT did not learn anything; they measured the image in ways an engineer chose, and those measurements fed a plain classifier. So the honest version of the greedy question is concrete. Take features of exactly that kind, hand-built and frozen, hand them to the constructed head from the last post, and see how far a network with nothing trained anywhere can actually get.
+
+## A feature you can name
+
+What is a feature, underneath? The last post called it a learned measurement, a number a backbone is trained to compute. A hand-built feature is that same thing with the word "learned" struck out: a measurement *you* choose, and because you chose it, you can name it. Here is the whole bank.
+
+<DetectorBank caption="The entire feature bank, chosen by hand. Six detectors for edges at six orientations, plus one for corners. None of these was learned; each is a fixed measurement of local gradient, the kind of thing computer vision wrote down by hand for decades. Hover one to see what it responds to. These seven channels are the network's whole vocabulary." />
+
+Six of them look for an edge at a fixed angle; the seventh looks for a corner, a place where two strong edge directions meet at once. That is it. No filter here was tuned to Fashion-MNIST or to anything else. They are the generic structure of natural images, written down.
+
+Run an image through them and it stops being a grid of pixels and becomes a stack of these named measurements, one map per detector, each lit where its kind of edge is present.
+
+<DecomposeImage caption="One garment seen through the seven hand-built detectors. The picture on the left is run through each oriented-edge channel and the corner channel; each panel on the right is one detector's energy, bright where that angle of edge appears. A vertical-edge detector lights the sides of a trouser leg, a horizontal one lights a hem. The network never sees pixels, it sees these named maps. Slide to change the garment." />
+
+## Where the dimensions come from, and what they mean
+
+Seven full-resolution maps per image is more than a classifier wants, so each one gets boiled down, and how it boils down is where the dimensions are born. Cut the image into a grid of patches and, in each patch, record how much of each detector fired. That is the whole feature vector: one number for every (detector, patch) pair. With seven detectors and a seven-by-seven grid that is **343 numbers**, and the move that matters is what each one means.
+
+<AssignedDimensions caption="The 343 dimensions, and where each one comes from. The garment is cut into a 7x7 grid of patches; in every patch all seven detectors are measured, so each dimension is a detector at a place. Pick a detector to see its energy across the grid, and hover a patch to read one dimension off by name: 'corner energy in the top-left patch', '90-degree edge in the middle'. A trained network also has a feature vector, but its axes mean nothing you can say out loud. Here every axis is a sentence." />
+
+This is the difference between a constructed representation and a learned one, made literal. A trained backbone also turns an image into a vector, and that vector also separates the classes, but ask what its tenth coordinate measures and there is no answer in words; it is whatever gradient descent found useful. Here the tenth coordinate is "thirty-degree edge in patch four," and you assigned it. You decided, in advance, which information lives on which axis. The representation is legible before the data ever arrives, because you built it to be.
+
+## Hand it to the built head
+
+Now the features are in hand, frozen, and we are back on familiar ground. The classifier is the constructed Yat head from the [earlier posts](/blog/edit-a-network-by-hand/): twenty prototype points per class, placed at the k-means centroids of the training features, and a prediction by the nearest prototype,
+
+$$
+s_c(x) = \sum_{u:\,\text{class}(u)=c} k\big(\phi(x), \mu_u\big), \qquad \hat y(x) = \arg\max_c\, s_c(x),
+$$
+
+with the one change that $\phi(x)$ is now the hand-built feature map instead of a trained backbone. No gradient step touches the detectors, the pooling, the prototypes, or the readout. Every part of the path was either written down or placed. And it works: you can follow a single prediction the whole way through and never meet a number that was learned.
+
+<HandBuiltVote caption="The whole network, read end to end, with nothing trained. A garment becomes 343 detector readings, those are scored against the 200 stored prototypes with the Yat kernel, and the class of the nearest prototype wins. The middle picture is that nearest prototype, the stored example the input most resembles. The detectors are hand-chosen, the prototypes are k-means centroids, the vote is a fixed rule, and the kernel runs live in your browser. Slide to pick a garment." />
+
+Over the whole test set, this fully hand-built network reaches **83.3%**. For reference, the same constructed head on raw pixels managed 79%, and a single centroid per class, the simplest head imaginable, already gets 75.6%. The hand-built features buy real accuracy over pixels, and they do it with detectors a person could have written in 2004.
+
+## Run it yourself
+
+Eighty-three percent from edges and a vote is the kind of number you should not take on faith, so do not. Draw a garment in the pad below, or load a real one, and the entire network runs right here in the page: the seven detectors fire on your strokes, the patches pool into 343 numbers, the kernel scores your drawing against the stored prototypes, and a class wins. There is no trained model loaded anywhere to fall back on, only the detectors and the vote. The exact pipeline you are watching is `scripts/handbuilt_vision.py` in the repo, line for line, so you can run the whole experiment yourself and get the same 83.3%.
+
+<HandBuiltLive caption="The whole hand-built network, run live on whatever you draw. Paint a garment, or load a real test image, and watch it flow through the pipeline: Sobel gradients, the seven oriented-edge and corner detectors (shown firing on your drawing), a 7x7 patch pool to 343 named numbers, then the Yat kernel against 200 stored prototypes and a nearest-prototype vote. Nothing is precomputed for your drawing and no trained network is involved. Computed live in your browser." />
+
+A crude drawing will not classify as cleanly as a real photo, which is the honest point: the detectors are generic, not tuned to your handwriting or to anything else. But load a real garment and it lands, every time, with the same edges and the same vote you could compute by hand.
+
+## Where the line finally falls
+
+So how does building the features by hand compare to learning them? A trained convolutional backbone, with the same constructed head on top, scored 83.2% in the last post. The hand-built features match it, point for point. Train the head too, end to end, and you reach 85.7%. The whole series fits in one chart.
+
+<ConstructionLadder caption="Four networks, from nothing trained to everything trained. Blue is built by hand, orange is learned. Raw pixels into a built head sit at the floor; hand-built edge and corner detectors into a built head reach 83.3%, level with a trained backbone's 83.2%; training the whole network end to end reaches 85.7%. Construction gets you a fully readable network within a couple of points of the trained one. Hover a row for what is built and what is learned." />
+
+Read it as a ladder and the boundary is finally visible. Construction reaches all the way up to **83.3%**, and everything below that line is a network you can read end to end, no weights, no mystery, every dimension named and every prototype a picture. The last **2.4 points**, the climb from 83.3 to 85.7, are the only thing training buys, and they are real: gradient descent finds features tuned to *this* data, the particular ways a sandal differs from a sneaker, that no one would think to hand-write. That is what learning is for. Not the bulk of the accuracy, which generic edges and a nearest-prototype vote already deliver, but the last slice that comes from fitting the detectors to the problem instead of to images in general.
+
+## What this says about the whole thing
+
+Stand back and the arc of these posts is a single deflation, in a good sense. A network looked like an indivisible black box; it turned out to be a feature map with a classifier on top, and we took it apart one piece at a time. The classifier is a list of pictures you place. The features are measurements, and the measurements can be ones you name and write down. Put both together and "a deep network" is, at its readable core, a bank of detectors feeding a nearest-prototype vote, and every part of that core is something you can construct rather than optimize.
+
+This is also just the history of computer vision, run forward and then read backward. The field spent decades hand-building features, switched to learning them, and got a few points and a great deal of opacity in trade. Looking back through the constructed network, you can see exactly what the trade was: learning bought the last 2.4 points and charged you the ability to say what any dimension means. Whether that is a good deal depends on what you need. If you need the accuracy, train it. If you need to know what the network is doing, you can now build almost all of it by hand and read every line.
+
+---
+
+*Hand-built oriented-gradient features are the HOG idea from [Dalal and Triggs (2005)](https://doi.org/10.1109/CVPR.2005.177), in the lineage of [SIFT](https://doi.org/10.1023/B:VISI.0000029664.99615.94) (Lowe, 2004); the prototype head ("this looks like that") is from [Chen et al. (2019)](https://arxiv.org/abs/1806.10574); [Fashion-MNIST](https://arxiv.org/abs/1708.07747) from Xiao et al. (2017); the Yat kernel from [Bouhsine (2026)](https://arxiv.org/abs/2605.03262). This closes the thread opened in [You Only Have to Train the Features](/blog/train-the-features/).*
