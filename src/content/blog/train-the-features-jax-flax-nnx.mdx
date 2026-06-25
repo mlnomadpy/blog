@@ -135,8 +135,18 @@ So the curve runs from 72.7% on random features to 85.9% on trained ones, all re
 </figure>
 
 <figure class="jax-fig">
+  <img src="/blog/train-errors-melt.gif" alt="The same 2D feature cloud over training epochs, each point colored green if the never-trained built head classifies it correctly and red if not, the red points turning green as the backbone trains" loading="lazy" width="696" height="708" />
+  <figcaption>The same untangling, scored. Now each point is coloured by the never-trained built head's real verdict: green if it gets that test image right, red if it misses. The head is frozen the whole time, yet its mistakes melt away, from 206 misses to about 90, purely because the backbone underneath is sharpening the features it reads. Rendered by <code>scripts/render_train_features_gifs.py</code>.</figcaption>
+</figure>
+
+<figure class="jax-fig">
   <img src="/blog/train-two-heads.gif" alt="Two accuracy curves drawing themselves over training epochs: the built head starts high and the trained head climbs from chance to finish only a couple of points above it" loading="lazy" width="792" height="600" />
   <figcaption>The two heads, read off the same backbone as it trains. The built head is good immediately, at 73% before a single gradient step, because it just reads the features. The trained head starts at chance and has to climb, and after six epochs it finishes only a point or two ahead. The gap is all training the head ever buys. Rendered by <code>scripts/render_train_features_gifs.py</code>.</figcaption>
+</figure>
+
+<figure class="jax-fig">
+  <img src="/blog/train-head-swap.gif" alt="A bar chart on one frozen trained backbone, swapping between a random linear head at 16%, the built Yat head at 86%, and the trained linear head at 88%" loading="lazy" width="816" height="600" />
+  <figcaption>The thesis in one chart. Freeze the trained backbone and bolt on three different heads. A random, untrained linear head reads its features at 16%, near chance; the built Yat head, placed with no gradient, reads them at 86%; the trained linear head, at 88%. Once the features are good, the head is furniture: any reasonable one recovers almost all the accuracy, and training it buys the last point or two. Rendered by <code>scripts/render_train_features_gifs.py</code>.</figcaption>
 </figure>
 
 ---

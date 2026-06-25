@@ -339,8 +339,185 @@ def gif_yat_well():
     save_gif(PUB / 'handbuilt-yat-well.gif', frames, fps=13, hold=12)
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# GIF 4 — the Sobel convolution: a real 3x3 kernel sweeps the image and builds
+#          the gradient field (gx, gy -> magnitude + angle). All real convolution.
+# ═══════════════════════════════════════════════════════════════════════════
+def gif_sobel_gradient():
+    img = grab(0, 2)                                    # a T-shirt
+    gx = convolve(img, SX, mode='nearest'); gy = convolve(img, SY, mode='nearest')
+    mag = np.sqrt(gx ** 2 + gy ** 2); ang = np.mod(np.arctan2(gy, gx), np.pi)
+    H = 28
+    # sweep order: row-major kernel positions
+    order = [(r, c) for r in range(H) for c in range(H)]
+    NSTEP = 40                                          # reveal in chunks
+    frames = []
+    # arrow subsample for the field
+    step = 2
+    for fi in range(NSTEP + 14):
+        prog = ease(min(fi, NSTEP) / NSTEP)
+        nrev = int(prog * len(order))
+        revealed = np.zeros((H, H), bool)
+        for (r, c) in order[:nrev]: revealed[r, c] = True
+        fig = plt.figure(figsize=(8.8, 3.6), dpi=110, facecolor=BG)
+        fig.text(0.5, 0.92, 'A hand-built detector starts as a convolution', ha='center', fontsize=14, weight='bold')
+        fig.text(0.5, 0.83, 'two Sobel kernels sweep the image to give the gradient gₓ, g_y at every pixel, then its magnitude and angle',
+                 ha='center', fontsize=9, color=MUTED)
+        titles = ['image', 'gₓ (Sobel-x)', 'g_y (Sobel-y)', 'gradient field']
+        for pi in range(4):
+            ax = fig.add_axes([0.035 + pi * 0.245, 0.10, 0.20, 0.62]); ax.set_facecolor(PANEL)
+            ax.set_xticks([]); ax.set_yticks([])
+            for s in ax.spines.values(): s.set_color(LINE)
+            ax.set_title(titles[pi], fontsize=9, color=MUTED, pad=3)
+            if pi == 0:
+                ax.imshow(img, cmap='gray', vmin=0, vmax=1)
+                # the sweeping 3x3 kernel window
+                if nrev < len(order):
+                    r, c = order[min(nrev, len(order) - 1)]
+                    ax.add_patch(plt.Rectangle((c - 1.5, r - 1.5), 3, 3, fill=False, ec='#36d6c4', lw=1.6))
+            elif pi == 1:
+                ax.imshow(np.where(revealed, gx, np.nan), cmap='coolwarm', vmin=-4, vmax=4)
+            elif pi == 2:
+                ax.imshow(np.where(revealed, gy, np.nan), cmap='coolwarm', vmin=-4, vmax=4)
+            else:
+                ax.imshow(np.where(revealed, mag, np.nan), cmap='magma', vmin=0, vmax=4)
+                ys, xs = np.mgrid[0:H:step, 0:H:step]
+                u = np.cos(ang[::step, ::step]); v = -np.sin(ang[::step, ::step])
+                m = (mag[::step, ::step] > 0.8) & revealed[::step, ::step]
+                ax.quiver(xs[m], ys[m], u[m], v[m], color='#36d6c4', scale=34, width=0.006, alpha=0.8)
+                ax.set_xlim(-0.5, H - 0.5); ax.set_ylim(H - 0.5, -0.5)
+        frames.append(fig_rgba(fig))
+    save_gif(PUB / 'handbuilt-sobel.gif', frames, fps=13)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# GIF 5 — the Yat kernel itself: a softened inverse-square well, bounded and
+#          peaked, against a Gaussian and an unbounded dot product. Real formula.
+# ═══════════════════════════════════════════════════════════════════════════
+def gif_kernel_shape():
+    B = 0.5
+    mu = np.array([1.0, 0.0])                           # a prototype off-origin
+    gN = 220
+    gv = np.linspace(-1.2, 2.6, gN); gw = np.linspace(-1.9, 1.9, gN)
+    GX, GY = np.meshgrid(gv, gw); P = np.stack([GX.ravel(), GY.ravel()], 1)
+    dot = P @ mu + B; dist2 = ((P - mu) ** 2).sum(1)
+    # 1D cross-section PERPENDICULAR to mu (x = mu_x): z.mu is constant, so this
+    # isolates the distance term and the kernel is a clean radial well.
+    t = np.linspace(-1.9, 1.9, 400)
+    cdot = (mu @ mu) + B                                # constant along the perpendicular line
+    EPS_SEQ = np.geomspace(0.9, 0.05, 19)              # softening shrinks
+    frames = []
+    for fi, eps in enumerate(EPS_SEQ):
+        yat = (dot ** 2 / (dist2 + eps)).reshape(gN, gN)
+        lyat = cdot ** 2 / (t ** 2 + eps)                          # softened inverse-square
+        linv = cdot ** 2 / (t ** 2 + 1e-3)                         # true inverse-square (blows up)
+        lrbf = (cdot ** 2 / eps) * np.exp(-t ** 2 / (2 * (eps ** 0.5) ** 2))   # matched-peak Gaussian
+        ymax = cdot ** 2 / eps * 1.15
+        fig = plt.figure(figsize=(8.6, 4.2), dpi=98, facecolor=BG)
+        fig.text(0.5, 0.93, 'The Yat kernel: a softened inverse-square well', ha='center', fontsize=14, weight='bold')
+        fig.text(0.5, 0.85, 'k(z, μ) = (z·μ + b)² / (‖z − μ‖² + ε): peaked at the prototype, finite there because ε softens the singularity, heavy-tailed where a Gaussian dies',
+                 ha='center', fontsize=8.0, color=MUTED)
+        axH = fig.add_axes([0.04, 0.09, 0.42, 0.68]); axH.set_facecolor(PANEL)
+        axH.imshow(yat, extent=[-1.2, 2.6, -1.9, 1.9], origin='lower', cmap='magma',
+                   vmin=0, vmax=np.percentile(yat, 99.0))
+        axH.scatter([mu[0]], [mu[1]], s=70, color='#36d6c4', edgecolors='white', linewidths=1.2, zorder=3)
+        axH.text(mu[0], mu[1] + 0.26, 'prototype μ', color='#36d6c4', fontsize=8.5, ha='center')
+        axH.axvline(mu[0], color='#36d6c4', lw=0.8, ls=':', alpha=0.6)   # the cross-section line
+        axH.set_xticks([]); axH.set_yticks([]); axH.set_title('k(z, μ) over the plane', fontsize=9, color=MUTED, pad=3)
+        for s in axH.spines.values(): s.set_color(LINE)
+        axC = fig.add_axes([0.57, 0.16, 0.39, 0.58]); axC.set_facecolor(PANEL)
+        axC.plot(t, np.minimum(linv, ymax * 1.5), color='#c2553a', lw=1.3, ls=':', label='true 1/r²  (blows up)')
+        axC.plot(t, lrbf, color='#5a9fd0', lw=1.6, ls='--', label='Gaussian (thin tails)')
+        axC.plot(t, lyat, color='#e0a45a', lw=2.6, label='Yat (finite peak, heavy tails)')
+        axC.axvline(0, color='#36d6c4', lw=0.7, ls=':')
+        axC.set_ylim(0, ymax); axC.set_xticks([])
+        axC.set_xlabel('distance from μ (perpendicular cut)', color=MUTED, fontsize=8.5)
+        axC.set_ylabel('kernel value', color=MUTED, fontsize=8.5); axC.tick_params(colors=MUTED, labelsize=7)
+        axC.legend(loc='upper right', fontsize=7.2, facecolor=PANEL, edgecolor=LINE, labelcolor=INK)
+        axC.set_title(f'ε = {eps:.2f}   (softening knob)', fontsize=9, color=INK, pad=3)
+        for s in axC.spines.values(): s.set_color(LINE)
+        frames.append(fig_rgba(fig))
+    frames = frames + frames[::-1]                     # breathe in and out
+    save_gif(PUB / 'handbuilt-kernel-shape.gif', frames, fps=16, hold=2)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# GIF 6 — k-means places the prototypes: real Lloyd iterations on real features
+#          for the confusable trio (Pullover, Coat, Shirt). No gradients.
+# ═══════════════════════════════════════════════════════════════════════════
+def feats343(imgs):
+    out = []
+    for im in imgs:
+        _, _, _, _, _, pooled = pipeline(im)
+        v = pooled.reshape(-1); v = v / (np.linalg.norm(v) + 1e-6)
+        out.append(v)
+    return np.array(out)
+
+
+def gif_kmeans_prototypes():
+    mu = np.array(HB['mu']); sd = np.array(HB['sd'])
+    trio = [1, 7, 8]                                    # Trouser, Sneaker, Bag: well separated
+    cols = [CLASS_COL[c] for c in trio]
+    feats, labs = [], []
+    for c in trio:
+        idx = np.where(TEY == c)[0][:220]
+        F = (feats343(TEX[idx]) - mu) / sd
+        feats.append(F); labs += [c] * len(F)
+    F = np.vstack(feats); labs = np.array(labs)
+    # shared 2D PCA for display (fit on the trio)
+    Fc = F - F.mean(0); U, S, Vt = np.linalg.svd(Fc, full_matrices=False); ax2 = Vt[:2]
+    P2 = (F - F.mean(0)) @ ax2.T
+    sc = np.abs(P2).max(); P2 /= sc
+    PER = 12
+    # real Lloyd per class, capturing centroids each iteration (in 343-d, projected for display)
+    rng = np.random.RandomState(0); ITER = 9
+    history = []                                        # list of [centroids2d, assign] per frame
+    cent343 = {}; assign = {}
+    for c in trio:
+        Fc_ = F[labs == c]; init = Fc_[rng.choice(len(Fc_), PER, replace=False)]
+        cent343[c] = init.copy()
+    snaps = []
+    for it in range(ITER):
+        snap = {}
+        for c in trio:
+            Fc_ = F[labs == c]; C = cent343[c]
+            d = ((Fc_[:, None] - C[None]) ** 2).sum(2); a = d.argmin(1)
+            cen2 = ((C - F.mean(0)) @ ax2.T) / sc
+            snap[c] = (cen2.copy(), a.copy())
+            newC = np.array([Fc_[a == k].mean(0) if (a == k).any() else C[k] for k in range(PER)])
+            cent343[c] = newC
+        snaps.append(snap)
+    frames = []
+    HOLDN = 4
+    for it in range(ITER):
+        for rep in range(HOLDN if it in (0, ITER - 1) else 2):
+            fig = plt.figure(figsize=(6.6, 5.6), dpi=110, facecolor=BG)
+            fig.text(0.5, 0.95, 'Placing the prototypes with k-means (no gradients)', ha='center', fontsize=13.5, weight='bold')
+            fig.text(0.5, 0.905, 'the one step that looks like learning: clustering moves each prototype to the centre of nearby features',
+                     ha='center', fontsize=8.8, color=MUTED)
+            ax = fig.add_axes([0.05, 0.06, 0.90, 0.80]); ax.set_facecolor(PANEL)
+            ax.set_xlim(-1.1, 1.1); ax.set_ylim(-1.1, 1.1); ax.set_xticks([]); ax.set_yticks([])
+            for ci, c in enumerate(trio):
+                m = labs == c
+                ax.scatter(P2[m, 0], P2[m, 1], s=15, color=cols[ci], alpha=0.42, linewidths=0)
+                cen2, _ = snaps[it][c]
+                ax.scatter(cen2[:, 0], cen2[:, 1], s=95, marker='X', color=cols[ci],
+                           edgecolors='white', linewidths=1.3, zorder=4)
+            ax.text(0.03, 0.95, f'k-means iteration {it + 1}/{ITER}', transform=ax.transAxes,
+                    ha='left', fontsize=10.5, color=INK, weight='bold')
+            for ci, c in enumerate(trio):
+                ax.scatter([], [], marker='X', color=cols[ci], s=70, label=CLASSES[c], edgecolors='white')
+            ax.legend(loc='lower right', fontsize=8.5, facecolor=PANEL, edgecolor=LINE, labelcolor=INK)
+            for s in ax.spines.values(): s.set_color(LINE)
+            frames.append(fig_rgba(fig))
+    save_gif(PUB / 'handbuilt-kmeans.gif', frames, fps=4, hold=8)
+
+
 if __name__ == '__main__':
     gif_orient_rose()
     gif_coarsegrain()
     gif_yat_well()
+    gif_sobel_gradient()
+    gif_kernel_shape()
+    gif_kmeans_prototypes()
     print('HANDBUILT_GIFS_DONE')

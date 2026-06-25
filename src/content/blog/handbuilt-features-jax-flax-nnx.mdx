@@ -53,6 +53,11 @@ def _conv(imgs, k):                                     # edge-replicated 3x3 co
                                         dimension_numbers=('NCHW', 'OIHW', 'NCHW'))[:, 0]
 ```
 
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/handbuilt-sobel.gif" alt="Two Sobel kernels sweeping a garment to produce the x and y gradient images, then the gradient field as arrows over the edge-magnitude map" loading="lazy" width="968" height="396" />
+  <figcaption>The first line of the network, run. The two Sobel kernels sweep the image and give the derivatives gₓ and g_y at every pixel; their magnitude and angle are the gradient field on the right. This is the <code>_conv</code> call above, nothing more, a fixed convolution with no weights to learn. Rendered by <code>scripts/render_handbuilt_gifs.py</code>.</figcaption>
+</figure>
+
 The seven channels follow directly. Each oriented-edge channel is the gradient magnitude weighted by how close the edge angle sits to that channel's orientation; the corner channel is the product of the two gradient directions, large only where both are strong. None of this has a parameter to fit.
 
 ```python
@@ -113,6 +118,11 @@ class YatHead(nnx.Module):
         return scores.argmax(-1)
 ```
 
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/handbuilt-kernel-shape.gif" alt="The Yat kernel drawn as a 2D field and as a 1D cross-section, a finite peak at the prototype with heavy inverse-square tails, compared to a true inverse-square that blows up and a Gaussian with thin tails, as epsilon shrinks" loading="lazy" width="968" height="472" />
+  <figcaption>The one line that does the work, <code>(dot + b)² / (d2 + eps)</code>, drawn out. Cut perpendicular to the prototype the kernel is a softened inverse-square well: a true 1/r² blows up at the prototype, a Gaussian dies too fast in the tails, and the Yat kernel sits between them, finite at the prototype because ε softens the singularity and heavy-tailed beyond it. The ε you place sets how sharp the well is. Rendered by <code>scripts/render_handbuilt_gifs.py</code>.</figcaption>
+</figure>
+
 There is no `nnx.Param` anywhere in it. `nnx.Variable` holds state that an optimizer would never touch, which is the right type for a thing you place by hand.
 
 ## Building it and running it
@@ -133,6 +143,11 @@ head = YatHead(np.array(W, 'float32'), np.array(vote))
 pred = np.asarray(head(jnp.asarray(Fte)))
 print(f"hand-built, no training anywhere: {100 * (pred == yte).mean():.1f}%")   # 83.3%
 ```
+
+<figure class="jax-fig">
+  <img src="/blog/handbuilt-kmeans.gif" alt="k-means iterations placing twelve prototypes inside each of three well-separated feature clouds (Trouser, Sneaker, Bag), the centroids settling to cluster centers" loading="lazy" width="660" height="560" />
+  <figcaption>The only step that even looks like learning. Inside each class's real feature cloud, k-means moves a handful of prototypes to the centres of nearby points, iteration by iteration, with no gradient and no labels beyond the class it runs within. The result is the rows of <code>W</code>: a few exemplars per class that the kernel votes against. Shown for three well-separated classes; the real head uses twenty per class. Rendered by <code>scripts/render_handbuilt_gifs.py</code>.</figcaption>
+</figure>
 
 It prints **83.3%**, the same number the explainer's interactive demo computes in the browser, because it is the same pipeline. The only place a fit happens at all is k-means, which is choosing where to place the prototypes, not learning a representation; swap it for one centroid per class (a plain class mean) and the same head still reaches about 75.6%.
 
