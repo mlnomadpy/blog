@@ -53,6 +53,11 @@ def _conv(imgs, k):                                     # edge-replicated 3x3 co
                                         dimension_numbers=('NCHW', 'OIHW', 'NCHW'))[:, 0]
 ```
 
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/handbuilt-sobel.gif" alt="Two Sobel kernels sweeping a garment to produce the x and y gradient images, then the gradient field as arrows over the edge-magnitude map" loading="lazy" width="968" height="396" />
+  <figcaption>The first line of the network, run. The two Sobel kernels sweep the image and give the derivatives gₓ and g_y at every pixel; their magnitude and angle are the gradient field on the right. This is the <code>_conv</code> call above, nothing more, a fixed convolution with no weights to learn. Rendered by <code>scripts/render_handbuilt_gifs.py</code>.</figcaption>
+</figure>
+
 The seven channels follow directly. Each oriented-edge channel is the gradient magnitude weighted by how close the edge angle sits to that channel's orientation; the corner channel is the product of the two gradient directions, large only where both are strong. None of this has a parameter to fit.
 
 ```python
@@ -68,6 +73,11 @@ def features(imgs):                                     # [N,28,28] in [0,1] -> 
     ...
 ```
 
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/handbuilt-orient-rose.gif" alt="Strong edges in a Fashion-MNIST garment flying off the image and stacking, by angle, into six orientation bins arranged as a rose diagram" loading="lazy" width="946" height="495" />
+  <figcaption>What an oriented-edge channel measures, made visual. Every strong edge in the picture flies to the bin nearest its angle, and the six wedges grow into the garment's edge signature. This is exactly the <code>edges</code> tensor above: gradient magnitude weighted by closeness to each of the six orientations, nothing fit. Rendered by <code>scripts/render_handbuilt_gifs.py</code>.</figcaption>
+</figure>
+
 ## The pooling, where the dimensions are named
 
 The maps are full resolution, far more than a classifier wants, so each gets averaged over a 7-by-7 grid of patches. After that, the feature vector is one number for every (detector, patch) pair, 343 of them, and we L2-normalise each image so contrast does not matter.
@@ -80,6 +90,11 @@ The maps are full resolution, far more than a classifier wants, so each gets ave
 ```
 
 The whole extractor is `@jax.jit` and has no state. It is a function from an image to a fixed, named vector, which is exactly the thing the explainer means by "you built the representation."
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/handbuilt-coarsegrain.gif" alt="Seven full-resolution detector maps cooling into a 7 by 7 block grid, then flattening into a single 343-number feature vector colored by detector" loading="lazy" width="968" height="506" />
+  <figcaption>The pooling step as a coarse-graining. Each detector map cools from full resolution into a 7-by-7 grid of patch averages, the way a fine field freezes into blocks, and the 7 maps of 49 cells flatten into one vector. That vector is φ(x): 343 numbers, one per (detector, patch) pair, every axis with a name. Rendered by <code>scripts/render_handbuilt_gifs.py</code>.</figcaption>
+</figure>
 
 ## The head, as a parameter-free NNX module
 
@@ -103,6 +118,11 @@ class YatHead(nnx.Module):
         return scores.argmax(-1)
 ```
 
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/handbuilt-kernel-shape.gif" alt="The Yat kernel drawn as a 2D field and as a 1D cross-section, a finite peak at the prototype with heavy inverse-square tails, compared to a true inverse-square that blows up and a Gaussian with thin tails, as epsilon shrinks" loading="lazy" width="968" height="472" />
+  <figcaption>The one line that does the work, <code>(dot + b)² / (d2 + eps)</code>, drawn out. Cut perpendicular to the prototype the kernel is a softened inverse-square well: a true 1/r² blows up at the prototype, a Gaussian dies too fast in the tails, and the Yat kernel sits between them, finite at the prototype because ε softens the singularity and heavy-tailed beyond it. The ε you place sets how sharp the well is. Rendered by <code>scripts/render_handbuilt_gifs.py</code>.</figcaption>
+</figure>
+
 There is no `nnx.Param` anywhere in it. `nnx.Variable` holds state that an optimizer would never touch, which is the right type for a thing you place by hand.
 
 ## Building it and running it
@@ -124,7 +144,17 @@ pred = np.asarray(head(jnp.asarray(Fte)))
 print(f"hand-built, no training anywhere: {100 * (pred == yte).mean():.1f}%")   # 83.3%
 ```
 
+<figure class="jax-fig">
+  <img src="/blog/handbuilt-kmeans.gif" alt="k-means iterations placing twelve prototypes inside each of three well-separated feature clouds (Trouser, Sneaker, Bag), the centroids settling to cluster centers" loading="lazy" width="660" height="560" />
+  <figcaption>The only step that even looks like learning. Inside each class's real feature cloud, k-means moves a handful of prototypes to the centres of nearby points, iteration by iteration, with no gradient and no labels beyond the class it runs within. The result is the rows of <code>W</code>: a few exemplars per class that the kernel votes against. Shown for three well-separated classes; the real head uses twenty per class. Rendered by <code>scripts/render_handbuilt_gifs.py</code>.</figcaption>
+</figure>
+
 It prints **83.3%**, the same number the explainer's interactive demo computes in the browser, because it is the same pipeline. The only place a fit happens at all is k-means, which is choosing where to place the prototypes, not learning a representation; swap it for one centroid per class (a plain class mean) and the same head still reaches about 75.6%.
+
+<figure class="jax-fig">
+  <img src="/blog/handbuilt-yat-well.gif" alt="Ten wells along the class axis, each well's depth set to the garment's real Yat score for that class, with the garment sitting in its deepest well" loading="lazy" width="780" height="520" />
+  <figcaption>The forward pass of the head, drawn as ten wells. Each well's depth is this garment's <em>real</em> Yat score for that class, the numbers the module computes, so the feature vector already fixes all ten depths and the garment sits at the bottom of the deepest one: that is <code>scores.argmax</code>, nothing simulated. Here a coat scores highest for pullover, the runner-up well being coat itself, which is exactly why the two confuse: the honest 83.3%, not a perfect classifier. Rendered by <code>scripts/render_handbuilt_gifs.py</code>.</figcaption>
+</figure>
 
 ## What this leaves out
 
@@ -135,3 +165,10 @@ The k-means step is the one piece that looks like learning, and it is worth bein
 *Hand-built oriented-gradient features are the HOG idea from [Dalal and Triggs (2005)](https://doi.org/10.1109/CVPR.2005.177); the prototype head from [Chen et al. (2019)](https://arxiv.org/abs/1806.10574); [Fashion-MNIST](https://arxiv.org/abs/1708.07747) from Xiao et al. (2017); the Yat kernel from [Bouhsine (2026)](https://arxiv.org/abs/2605.03262). The conceptual companion is [You Don't Even Have to Train the Features](/blog/you-dont-have-to-train-the-features/).*
 
 <CiteAs slug="handbuilt-features-jax-flax-nnx" title="The Hand-Built Network, in JAX/Flax NNX" pubDate="2026-06-24T10:00:00-07:00" />
+
+<style>{`
+.jax-fig { margin: 1.8rem auto; text-align: center; }
+.jax-fig img { max-width: 520px; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; background: #fbf8f1; }
+.jax-fig-wide img { max-width: 880px; }
+.jax-fig figcaption { margin-top: 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--fg-muted); max-width: 64ch; margin-left: auto; margin-right: auto; }
+`}</style>

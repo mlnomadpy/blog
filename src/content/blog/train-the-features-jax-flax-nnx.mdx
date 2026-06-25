@@ -96,6 +96,11 @@ print(con_rand)   # 72.7%
 
 **72.7%** from a network that never saw a gradient. Random convolutional features are a known free lunch: even an untuned stack of filters keeps enough class structure for a head that only has to read it.
 
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/train-free-lunch.gif" alt="Test images poured through two heads on the same random-backbone features: a coin flip sorts them at 10% while the built Yat head sorts them into the right bins at 73%" loading="lazy" width="968" height="528" />
+  <figcaption>The free lunch, poured out. The same random-backbone features fall through two heads into ten class bins. A coin flip lands them anywhere, at the 10% you would expect from a network that never trained; the built Yat head sorts the very same features into the right bins at 73%. The structure was already in the random filters; the head only had to read it. Rendered by <code>scripts/render_train_features_gifs.py</code>.</figcaption>
+</figure>
+
 ## Train the backbone, compare the heads
 
 Now the ordinary training loop, but on the backbone only. Flax NNX makes the step a few lines: a loss, its gradient, an optimizer update.
@@ -124,8 +129,35 @@ con = accuracy(build_head(feats(net, Xtr), ytr, feats(net, Xte)), yte)   # 85.9%
 
 So the curve runs from 72.7% on random features to 85.9% on trained ones, all read by a head that was never trained, always a point or two under the trained head and never more. (The explainer quotes a reference PyTorch run, 74 / 83.2 / 85.7; the story is identical, the last digits move with the framework and the seed.) The accuracy lives in the representation. The classifier, and its edits, are furniture you place.
 
+<figure class="jax-fig">
+  <img src="/blog/train-crystallize.gif" alt="A 2D cloud of Fashion-MNIST test features condensing smoothly from a tangle into separated class droplets as the backbone trains, with a thermometer showing the built head's accuracy climbing" loading="lazy" width="672" height="684" />
+  <figcaption>What training the backbone does, read the whole way by a head that is never trained. Each dot is a test image, placed by the backbone's features at that moment. The untrained cloud is a warm tangle the built head reads at 73%; as the backbone trains the classes condense into droplets and the same built head climbs to 86%, with no head training at any point. Rendered by <code>scripts/render_train_features_gifs.py</code>.</figcaption>
+</figure>
+
+<figure class="jax-fig">
+  <img src="/blog/train-errors-melt.gif" alt="The same 2D feature cloud over training epochs, each point colored green if the never-trained built head classifies it correctly and red if not, the red points turning green as the backbone trains" loading="lazy" width="696" height="708" />
+  <figcaption>The same untangling, scored. Now each point is coloured by the never-trained built head's real verdict: green if it gets that test image right, red if it misses. The head is frozen the whole time, yet its mistakes melt away, from 206 misses to about 90, purely because the backbone underneath is sharpening the features it reads. Rendered by <code>scripts/render_train_features_gifs.py</code>.</figcaption>
+</figure>
+
+<figure class="jax-fig">
+  <img src="/blog/train-two-heads.gif" alt="Two accuracy curves drawing themselves over training epochs: the built head starts high and the trained head climbs from chance to finish only a couple of points above it" loading="lazy" width="792" height="600" />
+  <figcaption>The two heads, read off the same backbone as it trains. The built head is good immediately, at 73% before a single gradient step, because it just reads the features. The trained head starts at chance and has to climb, and after six epochs it finishes only a point or two ahead. The gap is all training the head ever buys. Rendered by <code>scripts/render_train_features_gifs.py</code>.</figcaption>
+</figure>
+
+<figure class="jax-fig">
+  <img src="/blog/train-head-swap.gif" alt="A bar chart on one frozen trained backbone, swapping between a random linear head at 16%, the built Yat head at 86%, and the trained linear head at 88%" loading="lazy" width="816" height="600" />
+  <figcaption>The thesis in one chart. Freeze the trained backbone and bolt on three different heads. A random, untrained linear head reads its features at 16%, near chance; the built Yat head, placed with no gradient, reads them at 86%; the trained linear head, at 88%. Once the features are good, the head is furniture: any reasonable one recovers almost all the accuracy, and training it buys the last point or two. Rendered by <code>scripts/render_train_features_gifs.py</code>.</figcaption>
+</figure>
+
 ---
 
 *The strength of random convolutional features is from [Saxe et al. (2011)](https://proceedings.mlr.press/v15/saxe11a.html); the prototype head from [Chen et al. (2019)](https://arxiv.org/abs/1806.10574); [Fashion-MNIST](https://arxiv.org/abs/1708.07747) from Xiao et al. (2017); the Yat kernel from [Bouhsine (2026)](https://arxiv.org/abs/2605.03262). The conceptual companion is [You Only Have to Train the Features](/blog/train-the-features/).*
 
 <CiteAs slug="train-the-features-jax-flax-nnx" title="Constructing the Head on Learned Features, in JAX/Flax NNX" pubDate="2026-06-22T17:00:00-07:00" />
+
+<style>{`
+.jax-fig { margin: 1.8rem auto; text-align: center; }
+.jax-fig img { max-width: 520px; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; background: #fbf8f1; }
+.jax-fig-wide img { max-width: 880px; }
+.jax-fig figcaption { margin-top: 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--fg-muted); max-width: 64ch; margin-left: auto; margin-right: auto; }
+`}</style>

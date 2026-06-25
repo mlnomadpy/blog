@@ -50,6 +50,12 @@ Re-explaining bloats the post and reads as padding.
 Putting code or GIFs in an explainer, or engine viz in a companion, has cost
 rewrites. They are different artifacts.
 
+**A JAX companion is not done until it has at least one GIF.** A code-only
+companion is incomplete, no matter how good the code is. This rule is easy to drop
+under scope pressure ("ship the code now, add GIFs later"); that rationalisation
+has shipped half-built companions. Render the GIF in the same pass that writes the
+code, or the companion is not finished.
+
 ## Writing craft (the part that backslides)
 
 The full guide is `docs/writing-style.md`; the load-bearing rules:
@@ -141,6 +147,10 @@ These three bugs recur and are invisible until you screenshot on a real device:
    not redundant with another panel? If it is weak, rebuild it.
 4. **Grep then look** for em dashes in reader-facing strings (`grep $'—'`),
    and confirm "jax-js" is nowhere in captions/readouts.
+5. **Companion has its GIF(s).** A JAX companion is not done until at least one
+   `<figure class="jax-fig">` points at a real `public/*.gif` rendered by a
+   `scripts/render_*_gif.py`. Check it: `grep '\.gif' src/content/blog/<companion>.mdx`
+   and confirm the file exists in `public/`. Code-only is incomplete; do not ship it.
 
 Both scripts are Node-22 + headless Chrome over the DevTools Protocol (no
 puppeteer). They are the only way to see the actual rendered output here.
