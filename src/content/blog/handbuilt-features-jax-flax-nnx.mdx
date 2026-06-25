@@ -68,6 +68,11 @@ def features(imgs):                                     # [N,28,28] in [0,1] -> 
     ...
 ```
 
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/handbuilt-orient-rose.gif" alt="Strong edges in a Fashion-MNIST garment flying off the image and stacking, by angle, into six orientation bins arranged as a rose diagram" loading="lazy" width="946" height="495" />
+  <figcaption>What an oriented-edge channel measures, made visual. Every strong edge in the picture flies to the bin nearest its angle, and the six wedges grow into the garment's edge signature. This is exactly the <code>edges</code> tensor above: gradient magnitude weighted by closeness to each of the six orientations, nothing fit. Rendered by <code>scripts/render_handbuilt_gifs.py</code>.</figcaption>
+</figure>
+
 ## The pooling, where the dimensions are named
 
 The maps are full resolution, far more than a classifier wants, so each gets averaged over a 7-by-7 grid of patches. After that, the feature vector is one number for every (detector, patch) pair, 343 of them, and we L2-normalise each image so contrast does not matter.
@@ -80,6 +85,11 @@ The maps are full resolution, far more than a classifier wants, so each gets ave
 ```
 
 The whole extractor is `@jax.jit` and has no state. It is a function from an image to a fixed, named vector, which is exactly the thing the explainer means by "you built the representation."
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/handbuilt-coarsegrain.gif" alt="Seven full-resolution detector maps cooling into a 7 by 7 block grid, then flattening into a single 343-number feature vector colored by detector" loading="lazy" width="968" height="506" />
+  <figcaption>The pooling step as a coarse-graining. Each detector map cools from full resolution into a 7-by-7 grid of patch averages, the way a fine field freezes into blocks, and the 7 maps of 49 cells flatten into one vector. That vector is φ(x): 343 numbers, one per (detector, patch) pair, every axis with a name. Rendered by <code>scripts/render_handbuilt_gifs.py</code>.</figcaption>
+</figure>
 
 ## The head, as a parameter-free NNX module
 
@@ -126,9 +136,9 @@ print(f"hand-built, no training anywhere: {100 * (pred == yte).mean():.1f}%")   
 
 It prints **83.3%**, the same number the explainer's interactive demo computes in the browser, because it is the same pipeline. The only place a fit happens at all is k-means, which is choosing where to place the prototypes, not learning a representation; swap it for one centroid per class (a plain class mean) and the same head still reaches about 75.6%.
 
-<figure class="jax-fig jax-fig-wide">
-  <img src="/blog/handbuilt-detectors.gif" alt="Fashion-MNIST garments cycling, each shown beside its seven hand-built detector maps and the Yat-kernel vote" loading="lazy" width="970" height="320" />
-  <figcaption>The hand-built network at work, garment by garment. Each picture is run through the seven detectors (six oriented edges plus a corner, coloured here), and the Yat kernel votes by the nearest prototype. Nothing in this path was trained; the maps and the vote are exactly the code above, run on the test set. The occasional miss (a T-shirt read as a shirt) is the honest 83.3%, not a perfect classifier. Rendered by <code>scripts/render_handbuilt_features_gif.py</code>.</figcaption>
+<figure class="jax-fig">
+  <img src="/blog/handbuilt-yat-well.gif" alt="A potential landscape with ten basins, one per class, where a garment's feature-particle rolls into the deepest well to be classified" loading="lazy" width="740" height="560" />
+  <figcaption>The forward pass of the head, as a fall. Each class digs a basin whose depth is the real Yat score it gives this garment, and the feature-particle rolls into the deepest one: that is the <code>scores.argmax</code> in the module above, made physical. Most garments fall into the right well; the occasional miss (a coat read as a pullover) is the honest 83.3%, not a perfect classifier. Rendered by <code>scripts/render_handbuilt_gifs.py</code>.</figcaption>
 </figure>
 
 ## What this leaves out
