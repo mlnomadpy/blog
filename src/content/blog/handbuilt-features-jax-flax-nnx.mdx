@@ -126,6 +126,11 @@ print(f"hand-built, no training anywhere: {100 * (pred == yte).mean():.1f}%")   
 
 It prints **83.3%**, the same number the explainer's interactive demo computes in the browser, because it is the same pipeline. The only place a fit happens at all is k-means, which is choosing where to place the prototypes, not learning a representation; swap it for one centroid per class (a plain class mean) and the same head still reaches about 75.6%.
 
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/handbuilt-detectors.gif" alt="Fashion-MNIST garments cycling, each shown beside its seven hand-built detector maps and the Yat-kernel vote" loading="lazy" width="970" height="320" />
+  <figcaption>The hand-built network at work, garment by garment. Each picture is run through the seven detectors (six oriented edges plus a corner, coloured here), and the Yat kernel votes by the nearest prototype. Nothing in this path was trained; the maps and the vote are exactly the code above, run on the test set. The occasional miss (a T-shirt read as a shirt) is the honest 83.3%, not a perfect classifier. Rendered by <code>scripts/render_handbuilt_features_gif.py</code>.</figcaption>
+</figure>
+
 ## What this leaves out
 
 The k-means step is the one piece that looks like learning, and it is worth being precise: it is an unsupervised clustering of features the extractor already fixed, used only to pick prototype locations, with no gradient and no objective tied to accuracy. Everything upstream of it, the part that turns a picture into 343 numbers, is hand-written and frozen. That is the whole claim of the post made literal in code: a network whose every layer you can read, none of which was trained, that still classifies most of Fashion-MNIST correctly.
@@ -135,3 +140,10 @@ The k-means step is the one piece that looks like learning, and it is worth bein
 *Hand-built oriented-gradient features are the HOG idea from [Dalal and Triggs (2005)](https://doi.org/10.1109/CVPR.2005.177); the prototype head from [Chen et al. (2019)](https://arxiv.org/abs/1806.10574); [Fashion-MNIST](https://arxiv.org/abs/1708.07747) from Xiao et al. (2017); the Yat kernel from [Bouhsine (2026)](https://arxiv.org/abs/2605.03262). The conceptual companion is [You Don't Even Have to Train the Features](/blog/you-dont-have-to-train-the-features/).*
 
 <CiteAs slug="handbuilt-features-jax-flax-nnx" title="The Hand-Built Network, in JAX/Flax NNX" pubDate="2026-06-24T10:00:00-07:00" />
+
+<style>{`
+.jax-fig { margin: 1.8rem auto; text-align: center; }
+.jax-fig img { max-width: 520px; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; background: #fbf8f1; }
+.jax-fig-wide img { max-width: 880px; }
+.jax-fig figcaption { margin-top: 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--fg-muted); max-width: 64ch; margin-left: auto; margin-right: auto; }
+`}</style>

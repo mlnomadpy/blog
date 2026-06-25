@@ -124,8 +124,20 @@ con = accuracy(build_head(feats(net, Xtr), ytr, feats(net, Xte)), yte)   # 85.9%
 
 So the curve runs from 72.7% on random features to 85.9% on trained ones, all read by a head that was never trained, always a point or two under the trained head and never more. (The explainer quotes a reference PyTorch run, 74 / 83.2 / 85.7; the story is identical, the last digits move with the framework and the seed.) The accuracy lives in the representation. The classifier, and its edits, are furniture you place.
 
+<figure class="jax-fig">
+  <img src="/blog/train-features-untangle.gif" alt="A 2D layout of Fashion-MNIST test features as the backbone trains, going from a tangled blob to separated class clusters, with the constructed head's accuracy climbing" loading="lazy" width="666" height="640" />
+  <figcaption>What training the backbone does, read by a head that is never trained. Each dot is a test image, laid out in 2D by the backbone's features at that epoch. The untrained backbone is a tangle the built head reads at 73%; as the backbone trains the classes pull apart and the same built head climbs to 86%, with no head training at any point. Rendered by <code>scripts/render_train_features_untangle_gif.py</code>.</figcaption>
+</figure>
+
 ---
 
 *The strength of random convolutional features is from [Saxe et al. (2011)](https://proceedings.mlr.press/v15/saxe11a.html); the prototype head from [Chen et al. (2019)](https://arxiv.org/abs/1806.10574); [Fashion-MNIST](https://arxiv.org/abs/1708.07747) from Xiao et al. (2017); the Yat kernel from [Bouhsine (2026)](https://arxiv.org/abs/2605.03262). The conceptual companion is [You Only Have to Train the Features](/blog/train-the-features/).*
 
 <CiteAs slug="train-the-features-jax-flax-nnx" title="Constructing the Head on Learned Features, in JAX/Flax NNX" pubDate="2026-06-22T17:00:00-07:00" />
+
+<style>{`
+.jax-fig { margin: 1.8rem auto; text-align: center; }
+.jax-fig img { max-width: 520px; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; background: #fbf8f1; }
+.jax-fig-wide img { max-width: 880px; }
+.jax-fig figcaption { margin-top: 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--fg-muted); max-width: 64ch; margin-left: auto; margin-right: auto; }
+`}</style>
