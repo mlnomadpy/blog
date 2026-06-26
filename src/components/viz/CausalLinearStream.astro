@@ -142,7 +142,23 @@ function bar(ctx, x, y, w, h, frac, color, colors, label, value) {
   ctx.fillStyle = color;
   ctx.fillRect(x + 8, y + h - 12 - (h - 28) * frac, w - 16, (h - 28) * frac);
   text(ctx, label, x + w / 2, y + 8, colors, { align: 'center', size: 11, color });
-  text(ctx, value, x + w / 2, y + h - 18, colors, { align: 'center', mono: true, size: 10, color: colors.fg });
+  ctx.save();
+  ctx.font = '10px ui-monospace, SFMono-Regular, Menlo, monospace';
+  const vw = ctx.measureText(value).width;
+  const vx = x + w / 2, vy = y + h - 18;
+  const padX = 6, padY = 3, chipH = 16;
+  const cx = vx - vw / 2 - padX, cy = vy - padY, cw = vw + padX * 2, cr = 5;
+  ctx.beginPath();
+  ctx.moveTo(cx + cr, cy);
+  ctx.arcTo(cx + cw, cy, cx + cw, cy + chipH, cr);
+  ctx.arcTo(cx + cw, cy + chipH, cx, cy + chipH, cr);
+  ctx.arcTo(cx, cy + chipH, cx, cy, cr);
+  ctx.arcTo(cx, cy, cx + cw, cy, cr);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(15,18,28,0.78)';
+  ctx.fill();
+  ctx.restore();
+  text(ctx, value, vx, vy, colors, { align: 'center', mono: true, size: 10, color: '#ffffff' });
 }
 
 function mix(a, b, t) {

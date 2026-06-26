@@ -1,0 +1,125 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 430 } = Astro.props;
+---
+<figure class="viz pricelist" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The audition: which weights can live in this kernel's space? A lineup of five
+// candidate weights, a smooth bump, a gentle wave, a corner, a jump, a spike, each
+// auditions for the chosen kernel. The verdict is its real RKHS norm, ‖f‖² = Σ
+// cₖ²/λₖ: a finite, affordable bill means admitted; an infinite one means the
+// weight is too rough for this space and is rejected. Switch the kernel and watch
+// the guest list change: the Gaussian turns away every sharp weight; the Sobolev
+// kernel lets the corner back in but still bars the jump. Every verdict is real.
+import { defineViz } from './engine/vizkit.js';
+import { softPanel, areaCurve, roundRect, T, rgba, mix, parseColor } from './engine/draw.js';
+
+const K = 160;
+const G_RGB = [58, 143, 94], R_RGB = [194, 85, 58];
+
+function eigs(kind) {                                   // λₖ, the kernel's prices (λ₁ = 1)
+  const l = new Float64Array(K + 1);
+  for (let k = 1; k <= K; k++) {
+    if (kind === 'gaussian') l[k] = Math.exp(-0.5 * (0.55 * k) ** 2);
+    else if (kind === 'sobolev') l[k] = Math.pow(1 + k * k, -1.0);    // H¹: corners pass, jumps do not
+    else if (kind === 'poly') l[k] = k <= 5 ? Math.pow(k, -1.1) : 0;
+    else l[k] = k <= 10 ? 1 : 0;                        // bandlimited / sinc: hard cutoff
+  }
+  const n = l[1] || 1; for (let k = 1; k <= K; k++) l[k] /= n; return l;
+}
+
+// candidate weights as explicit, recognizable functions on [-π, π]
+const FUNCS = {
+  bump: (x) => Math.exp(-(x * x) / (2 * 0.62 * 0.62)),
+  wave: (x) => Math.cos(2 * x),
+  corner: (x) => Math.max(0, 1 - Math.abs(x) / 1.7),
+  jump: (x) => (x >= 0 ? 0.75 : -0.75),
+  spike: (x) => Math.exp(-Math.abs(x) / 0.3),
+};
+const CANDS = [
+  { id: 'bump', name: 'a smooth bump' }, { id: 'wave', name: 'a gentle wave' },
+  { id: 'corner', name: 'a corner' }, { id: 'jump', name: 'a jump' }, { id: 'spike', name: 'a spike' },
+];
+const THRESH = 15;                                      // above this bill, too rough to admit
+const ZERO = 1e-8;                                      // numerically-zero energy (genuine band limit)
+
+// per-frequency energy eₖ = aₖ² + bₖ² of g, by numerical projection; unit total energy
+function energy(id) {
+  const g = FUNCS[id]; const M = 900; const a = new Float64Array(K + 1), b = new Float64Array(K + 1);
+  for (let i = 0; i < M; i++) { const x = -Math.PI + (i + 0.5) / M * 2 * Math.PI; const gv = g(x);
+    for (let k = 1; k <= K; k++) { a[k] += gv * Math.cos(k * x); b[k] += gv * Math.sin(k * x); } }
+  const e = new Float64Array(K + 1); let tot = 0;
+  for (let k = 1; k <= K; k++) { e[k] = a[k] * a[k] + b[k] * b[k]; tot += e[k]; }
+  for (let k = 1; k <= K; k++) e[k] = e[k] / (tot || 1);
+  return e;
+}
+// the bill Σ eₖ/λₖ over every mode the weight really uses (kept tail and all);
+// a mode with real energy but zero price (above a finite-dim or band cutoff) → ∞
+function normOf(e, l) { let s = 0; for (let k = 1; k <= K; k++) { if (e[k] < ZERO) continue; if (l[k] === 0) return Infinity; s += e[k] / l[k]; if (s > 1e9) return Infinity; } return s; }
+
+defineViz('pricelist', {
+  title: 'The audition: which weights can live in this kernel’s space?',
+  height: 430,
+  controls: [
+    { type: 'select', name: 'kernel', label: 'the kernel', reset: false, options: [
+      { value: 'gaussian', label: 'Gaussian (bars every sharp weight)' },
+      { value: 'sobolev', label: 'Sobolev / Matérn (lets corners in)' },
+      { value: 'poly', label: 'polynomial (only the smoothest few)' },
+      { value: 'band', label: 'bandlimited / sinc (a hard cutoff)' },
+    ], value: 'gaussian' },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) { api.state = {}; },
+
+  draw(api) {
+    const { ctx, colors, size } = api;
+    const W = size.W, H = size.H; if (W === 0) return;
+    const kind = api.get('kernel'); const l = eigs(kind);
+    const ACC = parseColor(colors.accent), baseBG = parseColor(colors.cellBg || colors.bg);
+    ctx.clearRect(0, 0, W, H);
+    const pad = 16, topH = 52, gap = 13;
+
+    const verdicts = CANDS.map((cd) => { const e = energy(cd.id); const nrm = normOf(e, l); return { cd, nrm, ok: nrm <= THRESH }; });
+    const nAdmit = verdicts.filter((v) => v.ok).length;
+
+    T(ctx, colors, 'title'); ctx.fillText(`This kernel admits ${nAdmit} of 5 weights`, pad, pad + 14);
+    T(ctx, colors, 'sub'); ctx.fillText('a weight is admitted when its real RKHS norm ‖f‖² = Σ cₖ²/λₖ is finite; an infinite bill is too rough', pad, pad + 33);
+
+    const cw = (W - pad * 2 - gap * 4) / 5, cardY = pad + topH, cardH = H - cardY - pad;
+    const LBL = 48;                                       // reserved bottom band for name + verdict
+    const ptop = cardY + 16, pbot = cardY + cardH - LBL, mid = (ptop + pbot) / 2, half = (pbot - ptop) / 2 - 3;
+    verdicts.forEach((v, i) => {
+      const cx = pad + i * (cw + gap);
+      const litS = api.tween('lit' + i, v.ok ? 1 : 0, 340);       // smooth crossfade on kernel change
+      const vc = mix(R_RGB, G_RGB, litS);
+      softPanel(ctx, cx, cardY, cw, cardH, colors, { r: 11, fill: rgba(mix(baseBG, vc, 0.07), 1), border: rgba(vc, 0.35 + 0.45 * litS), lw: 1.4, glow: litS > 0.45 ? rgba(G_RGB, 0.28 * litS) : null });
+      // a divider above the label band, so curve and text never share space
+      ctx.strokeStyle = rgba(parseColor(colors.border), 0.7); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx + 10, pbot + 8); ctx.lineTo(cx + cw - 10, pbot + 8); ctx.stroke();
+      // the weight curve, filled, confined to [ptop, pbot]
+      const g = FUNCS[v.cd.id]; let fmax = 1e-6; const vs = []; const Np = 160;
+      for (let j = 0; j < Np; j++) { const x = (j / (Np - 1)) * 2 * Math.PI - Math.PI; const val = g(x); vs.push(val); if (Math.abs(val) > fmax) fmax = Math.abs(val); }
+      const pts = vs.map((val, j) => [cx + 12 + (j / (Np - 1)) * (cw - 24), mid - (val / fmax) * half]);
+      const stroke = rgba(mix([150, 146, 132], ACC, litS), 1);
+      ctx.save(); roundRect(ctx, cx + 1, ptop - 2, cw - 2, pbot - ptop + 4, 8); ctx.clip();
+      areaCurve(ctx, pts, pbot, stroke, rgba(ACC, 0.16 * litS), 2.6);
+      ctx.restore();
+      // name + verdict, in the reserved band
+      T(ctx, colors, 'label', { align: 'center', baseline: 'middle', color: colors.muted }); ctx.fillText(v.cd.name, cx + cw / 2, cardY + cardH - 31);
+      T(ctx, colors, 'value', { align: 'center', baseline: 'middle', weight: 'b', color: rgba(vc, 1) });
+      ctx.fillText(v.ok ? `✓  cost ${v.nrm < 10 ? v.nrm.toFixed(1) : Math.round(v.nrm)}` : '✗  cost ∞', cx + cw / 2, cardY + cardH - 14);
+    });
+
+    api.readout('rd', kind === 'gaussian' ? 'only analytic weights pass; every corner, jump or spike costs infinity'
+      : kind === 'sobolev' ? 'the corner and the spike are affordable now, but a true jump is still too rough even here'
+      : kind === 'poly' ? 'a finite-dimensional space holds only trigonometric polynomials; even a smooth bump is not one'
+      : 'anything built from frequencies below the cutoff passes; everything sharper is barred');
+  },
+});
+</script>

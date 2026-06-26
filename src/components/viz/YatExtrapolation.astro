@@ -104,21 +104,47 @@ defineViz('yatextrap', {
     plot(relu, colors.blue, 2);
     plot(yat, colors.accent, 2);
 
-    // ReLU "→ ∞" marker where it leaves the top
+    // ReLU "→ ∞" marker where it leaves the top. Anchor it to the right of the
+    // exit point but clamp so the text stays inside the plot box.
     let exitX = null;
     for (let i = 0; i < M; i++) if (relu[i] > yMax) { exitX = xg[i]; break; }
     if (exitX !== null) {
-      ctx.fillStyle = colors.blue; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
       ctx.font = '11px ui-sans-serif, system-ui';
-      ctx.fillText('ReLU → ∞ (unbounded)', sx(exitX) + 4, PADT + 14);
+      const label = '→ ∞';
+      const lw = ctx.measureText(label).width;
+      let lx = sx(exitX) + 6;
+      lx = Math.min(lx, Wd - PADR - lw - 4);   // keep inside the right edge
+      ctx.fillStyle = colors.blue; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+      ctx.fillText(label, lx, PADT + 14);
     }
 
-    // legend
-    ctx.font = '11px ui-sans-serif, system-ui'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
-    ctx.fillStyle = colors.blue; ctx.fillRect(Wd - PADR - 150, PADT + 6, 14, 3);
-    ctx.fillStyle = colors.fg; ctx.fillText('ReLU  σ(w·x+b)', Wd - PADR - 132, PADT + 8);
-    ctx.fillStyle = colors.accent; ctx.fillRect(Wd - PADR - 150, PADT + 22, 14, 3);
-    ctx.fillStyle = colors.fg; ctx.fillText('Yat unit', Wd - PADR - 132, PADT + 24);
+    // legend on a semi-transparent rounded chip, placed top-left where ReLU sits
+    // on the axis (w·x+b ≤ 0 for x < −0.6) so no curve crosses the text.
+    {
+      ctx.font = '11px ui-sans-serif, system-ui'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+      const lines = ['ReLU  σ(w·x+b)', 'Yat unit'];
+      let tw = 0; for (const s of lines) tw = Math.max(tw, ctx.measureText(s).width);
+      const cx = PADL + 8, cy = PADT + 6;
+      const chipW = 22 + tw + 12, chipH = 16 * lines.length + 8;
+      const rr = 6;
+      ctx.fillStyle = colors.bg; ctx.globalAlpha = 0.82;
+      ctx.beginPath();
+      ctx.moveTo(cx + rr, cy);
+      ctx.arcTo(cx + chipW, cy, cx + chipW, cy + chipH, rr);
+      ctx.arcTo(cx + chipW, cy + chipH, cx, cy + chipH, rr);
+      ctx.arcTo(cx, cy + chipH, cx, cy, rr);
+      ctx.arcTo(cx, cy, cx + chipW, cy, rr);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.stroke();
+      const tx = cx + 8, swW = 14;
+      const row0 = cy + 12, row1 = cy + 28;
+      ctx.fillStyle = colors.blue; ctx.fillRect(tx, row0 - 1, swW, 3);
+      ctx.fillStyle = colors.fg; ctx.fillText(lines[0], tx + swW + 6, row0);
+      ctx.fillStyle = colors.accent; ctx.fillRect(tx, row1 - 1, swW, 3);
+      ctx.fillStyle = colors.fg; ctx.fillText(lines[1], tx + swW + 6, row1);
+    }
 
     // query
     const qx = state.qx, qi = Math.round(((qx - XMIN) / (XMAX - XMIN)) * (M - 1));
@@ -129,7 +155,7 @@ defineViz('yatextrap', {
     if (rq <= yMax) { ctx.fillStyle = colors.blue; ctx.beginPath(); ctx.arc(sx(qx), sy(rq), 4, 0, Math.PI * 2); ctx.fill(); }
 
     const inband = Math.abs(qx) <= BAND;
-    api.readout('rd', `x ${qx.toFixed(2)} ${inband ? '(in data)' : '(off-distribution)'} · ReLU ${rq.toFixed(2)} · Yat ${yq.toFixed(2)} · jax-js`);
+    api.readout('rd', `x ${qx.toFixed(2)} ${inband ? '(in data)' : '(off-distribution)'} · ReLU ${rq.toFixed(2)} · Yat ${yq.toFixed(2)}`);
   },
 });
 </script>

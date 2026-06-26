@@ -1,0 +1,112 @@
+---
+title: "What Can a Weight Be?"
+seoTitle: "What Can a Weight Be? The RKHS Zoo"
+description: "Once a kernel gives a weight a home, a second question follows: what is the weight allowed to be? Not all reproducing kernel Hilbert spaces are the same. A Sobolev space lets the weight have a sharp corner; a Gaussian's space forbids it; on normalized data the home is a sphere graded by spherical harmonics. A kernel is secretly a price list for roughness, and that list decides everything. Four interactive panels."
+seoDescription: "Not all RKHS are alike. Sobolev spaces allow a corner, the Gaussian's forbids it, the sphere is graded by harmonics. A kernel is a price list for roughness."
+pubDate: 2026-06-26
+draft: true
+tags: [ml, kernels, rkhs, sobolev, sphere, spherical-harmonics, smoothness, yat, deep-learning, theory]
+references:
+  - authors: "Schoenberg, I. J."
+    year: 1942
+    title: "Positive Definite Functions on Spheres"
+    venue: "Duke Mathematical Journal"
+  - authors: "Wendland, H."
+    year: 2004
+    title: "Scattered Data Approximation"
+    venue: "Cambridge University Press"
+  - authors: "Steinwart, I., Christmann, A."
+    year: 2008
+    title: "Support Vector Machines"
+    venue: "Springer"
+  - authors: "Stein, M. L."
+    year: 1999
+    title: "Interpolation of Spatial Data: Some Theory for Kriging"
+    venue: "Springer"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+keywords:
+  - types of RKHS
+  - Sobolev space kernel
+  - reproducing kernel Hilbert space on the sphere
+  - spherical harmonics zonal kernel
+  - Gaussian kernel RKHS analytic functions
+---
+import KernelPriceList from '../../components/viz/KernelPriceList.astro';
+import CornerFit from '../../components/viz/CornerFit.astro';
+import SphereHarmonics from '../../components/viz/SphereHarmonics.astro';
+import KernelZooMap from '../../components/viz/KernelZooMap.astro';
+
+A kernel gives a weight a home: a space where the weight is a point among the data, built from the data, [as the last post argued](/blog/where-does-a-weight-live/). That settles *where* the weight lives. It leaves a sharper question wide open. Once it has a home, what is the weight actually allowed to *be*?
+
+The question is not idle, because two kernels can both make the weight a point among the data and still disagree completely about its character. Pick one kernel and the weight can have a sharp corner, a kink, a sudden spike. Pick another and that corner is not merely discouraged, it is impossible: no weight in that space has one, ever. Nothing in the data changed, nothing in the picture from last time changed. The kernel, quietly, decided what kinds of function the weight is permitted to be. So not all of these homes are the same, and it is worth knowing what kind you just moved into.
+
+## A kernel is a price list for roughness
+
+Every kernel hides the same skeleton. By Mercer's theorem it splits into a set of modes $\phi_i$, fixed shapes, each with a non-negative weight $\lambda_i$:
+
+$$
+k(x, y) = \sum_i \lambda_i\, \phi_i(x)\, \phi_i(y).
+$$
+
+The reproducing kernel Hilbert space built from $k$ is then nothing but the functions you can write in those modes, $f = \sum_i c_i \phi_i$, with a very particular notion of size:
+
+$$
+\lVert f \rVert_{\mathcal{H}}^2 = \sum_i \frac{c_i^2}{\lambda_i}.
+$$
+
+Read that norm as a bill. To use mode $i$ with amplitude $c_i$ you pay $c_i^2/\lambda_i$. A mode with a large eigenvalue $\lambda_i$ is cheap; a mode with a tiny eigenvalue is ruinously expensive. The RKHS is exactly the set of functions whose total bill is finite, the functions you can *afford*. And since sharp features, corners and spikes, are built from the high-frequency modes, whether the weight can be rough comes down to one thing: **how fast the eigenvalues decay**. That single curve is the kernel's whole personality.
+
+<KernelPriceList client:visible caption="An audition. Five candidate weights, a smooth bump, a gentle wave, a corner, a jump, a spike, each tries to live in the chosen kernel's space. The verdict is its real RKHS norm: a finite bill is admitted, an infinite one means the weight is too rough for this space. Switch the kernel and the guest list changes. The Gaussian admits only the two analytic weights and bars every corner, jump and spike; the Sobolev kernel lets the corner and the spike back in but still rejects the true jump; the polynomial space holds only the pure wave; the bandlimited one takes anything below its cutoff. Choosing a kernel is choosing who gets in." />
+
+## Sobolev: the home with room for a corner
+
+Start with the roomy case, because it is the one most worth wanting. A large family of kernels, the Matérn kernels of spatial statistics, the Laplace kernel $e^{-\lVert x-y\rVert}$, and the inverse-multiquadric, all have eigenvalues that decay like a *polynomial* in the frequency, $\lambda_k \sim (1 + \lVert\omega\rVert^2)^{-s}$. Slow decay means high frequencies are merely expensive, not banned.
+
+That has an exact name. The RKHS of such a kernel is norm-equivalent to a **Sobolev space** $H^s$, the functions whose first $s$ derivatives are square-integrable:
+
+$$
+\lVert f \rVert_{\mathcal{H}}^2 \;\asymp\; \int \bigl(1 + \lVert\omega\rVert^2\bigr)^{s}\, \lvert \hat{f}(\omega)\rvert^2 \, d\omega .
+$$
+
+For the Matérn kernel of smoothness $\nu$ in $d$ dimensions, $s = \nu + d/2$. The point of a Sobolev space is that it is the natural home of functions with a *finite* amount of smoothness. A function with a corner has a finite Sobolev norm for small enough $s$, so it sits comfortably inside. The weight is allowed to be sharp. This is the right-sized home: big enough to hold the rough functions real data needs, structured enough to still penalize nonsense.
+
+## The Gaussian: a home too small to bend
+
+Now the cautionary opposite, and it is the kernel almost everyone reaches for first. The Gaussian, or RBF, kernel $e^{-\lVert x-y\rVert^2 / 2\sigma^2}$ has eigenvalues that do not decay like a polynomial. They fall off like a Gaussian themselves, faster than any power of the frequency. So the high-frequency modes are not expensive, they are astronomically expensive, and the bill for any function with a sharp feature is not large but *infinite*.
+
+The consequence is severe and not widely felt: the RKHS of the Gaussian kernel contains **only analytic functions**, the infinitely smooth ones, and it is a strict subset of *every* Sobolev space at once. A function with a corner is not in it. A bump that is exactly zero outside a small region is not in it. The Gaussian kernel does not just prefer smooth weights, it makes a non-smooth weight literally impossible to express. You feel this the moment you fit data with a real edge in it.
+
+<CornerFit client:visible caption="The same data, two homes, overlaid, with the apex zoomed in the inset. A signal with a sharp corner, fit live by kernel ridge with a Gaussian kernel and with a Sobolev (Laplace) kernel at the same bandwidth. The Gaussian fit rounds the corner off, because a corner is not in its space at any cost; the Sobolev fit turns the corner, because its space has room for one. Drag the bandwidth and add noise: the Gaussian can sharpen everywhere or nowhere, but it can never make just the corner sharp." />
+
+## The sphere: the home of normalized data
+
+Both of those homes sit in flat space, but the data in this series does not. We L2-normalize every feature vector, which puts every point on a sphere, and on a sphere the natural kernels are the ones that depend only on the *angle* between two points, $k(x, y) = \kappa(\langle x, y\rangle)$. These are the zonal, or dot-product, kernels, and Schoenberg settled their structure in 1942: such a kernel is positive definite on the sphere exactly when it expands in Gegenbauer polynomials with non-negative coefficients.
+
+What makes the sphere beautiful is that its modes are already famous. The eigenfunctions are the **spherical harmonics** $Y_{k,j}$, the standing-wave patterns of a sphere, graded by a degree $k$: degree zero is a constant, degree one is a single smooth swell, and the patterns ripple faster as $k$ grows. A zonal kernel assigns one price $b_k$ to an entire degree at once, and its RKHS is the functions on the sphere whose harmonic content it can afford:
+
+$$
+\mathcal{H} = \Bigl\{\, f = \sum_{k, j} f_{k,j}\, Y_{k,j} \;:\; \sum_{k, j} \frac{f_{k,j}^2}{b_k} < \infty \,\Bigr\}.
+$$
+
+Same skeleton as before, a price list over modes, but now the modes are the vibrations of a sphere and the smoothness of the weight is set by how fast the kernel lets the degrees fade.
+
+<SphereHarmonics client:visible caption="A weight on the globe. Normalized features live on a sphere, and a weight there is a pattern painted over it: a sum of kernel caps at a few prototypes, the representer form, with positive lobes in one color and negative in the other. Drag the prototypes to move the lobes. The bars are the kernel's price for each spherical-harmonic degree, the standing waves of the sphere; sharpen the kernel and the high degrees grow affordable, so the same weight is allowed to ripple finely instead of only swelling slowly. This is the home the prototypes of this series actually live on." />
+
+## The rest of the zoo, in one line each
+
+The same lens classifies every kernel you have met. A **polynomial** kernel keeps only finitely many modes alive, so its RKHS is finite-dimensional: the weight can only be a polynomial of bounded degree, and there is no room for anything finer. A **bandlimited**, or sinc, kernel sets its prices to a hard step, one below a cutoff frequency and zero above, so its RKHS is the bandlimited functions and the cutoff is an absolute wall. The **Brownian-motion** kernel $\min(s, t)$ sits at the opposite extreme, with such slow decay that its space contains genuinely jagged paths, the $H^1$ functions. In every case the story is the same sentence: the eigenvalue decay is the personality, and the personality is the only thing that matters.
+
+## Where the prototype lives
+
+So when this series puts a prototype in the space, which home does it move into? The [Yat kernel](https://arxiv.org/abs/2605.03262) is a product of two pieces, a squared alignment $(\langle x, W\rangle + b)^2$ and an inverse-multiquadric distance gate $1/(\lVert x - W\rVert^2 + \varepsilon)$, and each piece places it on the map. The inverse-multiquadric factor is precisely a Sobolev-type kernel, with the same polynomial eigenvalue decay as the Matérn family, so the weight lives in a Sobolev space, roomy, corner-allowing, universal for $\varepsilon > 0$, and emphatically not the cramped analytic home of the Gaussian. And because the inputs are normalized, the kernel is a function of $\langle x, W\rangle$, a zonal kernel on the sphere, so its modes are the spherical harmonics.
+
+<KernelZooMap client:visible caption="The zoo on two axes: how rough the weight may be, and the geometry it lives on. The Gaussian sits in the corner of forbidden roughness; the polynomial kernel in finite dimension; the Sobolev and Matérn family fills the roomy middle. The Yat kernel lands where this series wants to live: a Sobolev-grade smoothness, on the sphere, where a prototype can be a sharp picture and still be a legal weight." />
+
+That is the whole answer to what a weight can be. It can be exactly as rough as the kernel's eigenvalues let it afford to be, on exactly the geometry the kernel is built around. Choosing a kernel is not choosing a similarity score; it is choosing a smoothness class and a shape of space, and signing your weight up to live there. The reason the prototypes of this series can be sharp, legible pictures rather than blurred ghosts is that they were quietly given a Sobolev home on a sphere, the one home roomy enough to hold them.
+
+---
+
+*Positive-definite kernels on the sphere are [Schoenberg (1942)](https://doi.org/10.1215/S0012-7094-42-00908-6); native spaces and the Sobolev correspondence are in [Wendland (2004)](https://www.cambridge.org/core/books/scattered-data-approximation/980EEC9DBC4CAA711D089187818135E3) and [Stein (1999)](https://link.springer.com/book/10.1007/978-1-4612-1494-6); the smallness of the Gaussian RKHS is in [Steinwart and Christmann (2008)](https://link.springer.com/book/10.1007/978-0-387-77242-4); the polynomial-alignment and IMQ construction is [Bouhsine (2026)](https://arxiv.org/abs/2605.03262). The conceptual predecessor is [Where Does a Weight Live?](/blog/where-does-a-weight-live/).*

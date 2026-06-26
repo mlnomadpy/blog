@@ -1,0 +1,179 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 480 } = Astro.props;
+---
+<figure class="viz tworeadings" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// One weight, two readings of it. In a standard neuron the weight w is a
+// DIRECTION: to use it you cast the input's shadow onto it (the dot product w·x),
+// and the weight lives nowhere among the data, it is an arrow, a rule. Swap to the
+// kernel reading and the same handle becomes a PLACE: a point sitting in the data
+// cloud, used by measuring how close the input is to it. Drag the weight and the
+// test point in each mode. The thesis of the post in one panel: a kernel turns the
+// weight from a direction you project onto into a location you can point at.
+import { defineViz } from './engine/vizkit.js';
+
+const DOM = 2.0, SIG = 0.62, HM = 96;
+const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+
+function blobs() {                                     // two fixed classes (seeded)
+  let s = 20240617; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  const rn = () => Math.sqrt(-2 * Math.log(rnd() || 1e-9)) * Math.cos(6.283 * rnd());
+  const pts = [];
+  const C = [[-0.95, -0.55], [0.95, 0.55]];
+  for (let c = 0; c < 2; c++) for (let i = 0; i < 26; i++) pts.push({ x: C[c][0] + rn() * 0.34, y: C[c][1] + rn() * 0.34, c });
+  return pts;
+}
+
+defineViz('tworeadings', {
+  title: 'One weight, two readings: a direction you project onto, or a place you sit beside',
+  height: 480,
+  controls: [
+    { type: 'select', name: 'mode', label: 'read the weight as', reset: false, options: [
+      { value: 'dir', label: 'a direction  w·x  (standard neuron)' },
+      { value: 'place', label: 'a place  k(w, x)  (kernel)' },
+    ], value: 'dir' },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    api.state = { pts: blobs(), w: { x: 0.95, y: 0.55 }, test: { x: -0.2, y: 0.7 }, drag: null };
+    bind(api);
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H; if (W === 0 || !st) return;
+    const mode = api.get('mode');
+    const BLUE = '#4a7fb3', ORANGE = '#b3661b', INK = colors.fg;
+    ctx.clearRect(0, 0, W, H);
+
+    const pad = 12, topH = 30;
+    const side = Math.min(W - pad * 2, H - pad - topH - 14);
+    const x0 = (W - side) / 2, y0 = pad + topH;
+    const sx = (wx) => x0 + (wx + DOM) / (2 * DOM) * side;
+    const sy = (wy) => y0 + (DOM - wy) / (2 * DOM) * side;
+    const wxOf = (px) => (px - x0) / side * 2 * DOM - DOM;
+    const wyOf = (py) => DOM - (py - y0) / side * 2 * DOM;
+    st._g = { x0, y0, side, sx, sy, wxOf, wyOf };
+
+    // header line
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = colors.fg; ctx.font = 'bold 13px ui-sans-serif, system-ui';
+    ctx.fillText(mode === 'dir' ? 'the weight is a direction; the input meets it only as a shadow'
+                                : 'the weight is a place; the input meets it as a distance', pad, pad + 13);
+
+    const w = st.w, t = st.test;
+
+    if (mode === 'dir') {
+      // half-plane tint by sign(w·x), boundary through origin perpendicular to w
+      const off = api.canvas; // draw tint cheaply with two big triangles via clip is overkill; sample coarse
+      const bg = hex(colors.bg), cb = hex(BLUE), co = hex(ORANGE);
+      const HM2 = 64; const cell = side / HM2;
+      for (let r = 0; r < HM2; r++) for (let cc = 0; cc < HM2; cc++) {
+        const X = wxOf(x0 + (cc + 0.5) * cell), Y = wyOf(y0 + (r + 0.5) * cell);
+        const s = X * w.x + Y * w.y;
+        const col = s >= 0 ? co : cb; const a = 0.10;
+        ctx.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},${a})`;
+        ctx.fillRect(x0 + cc * cell, y0 + r * cell, cell + 0.6, cell + 0.6);
+      }
+      // decision line w·x = 0 (perpendicular to w), clipped to the plot box so it never pokes into the header
+      const nrm = Math.hypot(w.x, w.y) || 1; const ux = -w.y / nrm, uy = w.x / nrm;
+      ctx.save(); ctx.beginPath(); ctx.rect(x0, y0, side, side); ctx.clip();
+      ctx.strokeStyle = colors.muted; ctx.lineWidth = 1.4; ctx.setLineDash([5, 4]);
+      ctx.beginPath(); ctx.moveTo(sx(ux * DOM * 1.5), sy(uy * DOM * 1.5)); ctx.lineTo(sx(-ux * DOM * 1.5), sy(-uy * DOM * 1.5)); ctx.stroke(); ctx.setLineDash([]);
+      ctx.restore();
+    } else {
+      // kernel similarity bump around the weight-as-place
+      const bg = hex(colors.bg), acc = hex(colors.accent);
+      const HM2 = HM; const cell = side / HM2;
+      for (let r = 0; r < HM2; r++) for (let cc = 0; cc < HM2; cc++) {
+        const X = wxOf(x0 + (cc + 0.5) * cell), Y = wyOf(y0 + (r + 0.5) * cell);
+        const d2 = (X - w.x) ** 2 + (Y - w.y) ** 2; const k = Math.exp(-d2 / (2 * SIG * SIG));
+        const a = 0.62 * k;
+        ctx.fillStyle = `rgba(${acc[0]},${acc[1]},${acc[2]},${a})`;
+        ctx.fillRect(x0 + cc * cell, y0 + r * cell, cell + 0.6, cell + 0.6);
+      }
+    }
+
+    // frame
+    ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.strokeRect(x0 + 0.5, y0 + 0.5, side - 1, side - 1);
+
+    // data
+    for (const p of st.pts) { ctx.globalAlpha = 0.85; ctx.fillStyle = p.c ? ORANGE : BLUE; ctx.beginPath(); ctx.arc(sx(p.x), sy(p.y), 3, 0, 6.283); ctx.fill(); }
+    ctx.globalAlpha = 1;
+
+    if (mode === 'dir') {
+      // the weight as an arrow from the origin
+      arrowTo(ctx, sx(0), sy(0), sx(w.x), sy(w.y), INK, 2.4);
+      ctx.fillStyle = INK; ctx.font = 'bold 12px ui-sans-serif, system-ui'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+      ctx.fillText('w (a direction)', sx(w.x) + 7, sy(w.y) - 4);
+      // the test point and its shadow (projection) onto w
+      const wn2 = w.x * w.x + w.y * w.y || 1; const proj = (t.x * w.x + t.y * w.y) / wn2;
+      const fx = proj * w.x, fy = proj * w.y;
+      ctx.strokeStyle = colors.muted; ctx.lineWidth = 1.2; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(sx(t.x), sy(t.y)); ctx.lineTo(sx(fx), sy(fy)); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = colors.muted; ctx.beginPath(); ctx.arc(sx(fx), sy(fy), 3.5, 0, 6.283); ctx.fill();
+      drawHandle(ctx, sx(t.x), sy(t.y), INK, colors, 'test x');
+      const dot = t.x * w.x + t.y * w.y;
+      ctx.textAlign = 'left';
+      api.readout('rd', `w·x = ${dot.toFixed(2)}  ·  the weight is an arrow, off in its own space; x meets it only at the shadow`);
+    } else {
+      // the weight as a place: a point among the data + closeness link
+      const d2 = (t.x - w.x) ** 2 + (t.y - w.y) ** 2; const k = Math.exp(-d2 / (2 * SIG * SIG));
+      ctx.strokeStyle = colors.accent; ctx.lineWidth = 1.4 + 2.4 * k; ctx.globalAlpha = 0.5 + 0.5 * k;
+      ctx.beginPath(); ctx.moveTo(sx(t.x), sy(t.y)); ctx.lineTo(sx(w.x), sy(w.y)); ctx.stroke(); ctx.globalAlpha = 1;
+      // the weight point
+      ctx.fillStyle = colors.accent; ctx.beginPath(); ctx.arc(sx(w.x), sy(w.y), 7, 0, 6.283); ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = colors.bg; ctx.stroke();
+      ctx.fillStyle = colors.accent; ctx.font = 'bold 12px ui-sans-serif, system-ui'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+      ctx.fillText('w (a place)', sx(w.x) + 9, sy(w.y) - 6);
+      drawHandle(ctx, sx(t.x), sy(t.y), INK, colors, 'test x');
+      api.readout('rd', `k(w, x) = ${k.toFixed(2)}  ·  the weight is a point in the data; x meets it as a distance you can measure`);
+    }
+
+    // a small "drag" hint
+    ctx.fillStyle = colors.faint; ctx.font = '10px ui-sans-serif, system-ui'; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+    ctx.fillText('drag w and x', x0 + side - 6, y0 + side - 6);
+  },
+});
+
+function arrowTo(ctx, x0, y0, x1, y1, color, w = 2) {
+  ctx.strokeStyle = color; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+  const a = Math.atan2(y1 - y0, x1 - x0), h = 9;
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 - h * Math.cos(a - 0.4), y1 - h * Math.sin(a - 0.4));
+  ctx.moveTo(x1, y1); ctx.lineTo(x1 - h * Math.cos(a + 0.4), y1 - h * Math.sin(a + 0.4)); ctx.stroke();
+}
+function drawHandle(ctx, X, Y, color, colors, label) {
+  ctx.fillStyle = colors.fg; ctx.beginPath(); ctx.arc(X, Y, 6, 0, 6.283); ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = colors.bg; ctx.stroke();
+  ctx.fillStyle = colors.muted; ctx.font = '10px ui-sans-serif, system-ui'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText(label, X + 9, Y);
+}
+
+function bind(api) {
+  if (api.canvas.dataset.trBound) return; api.canvas.dataset.trBound = '1'; api.canvas.style.cursor = 'grab';
+  const at = (e) => { const rc = api.canvas.getBoundingClientRect(); return { px: (e.clientX - rc.left) * api.size.W / rc.width, py: (e.clientY - rc.top) * api.size.H / rc.height }; };
+  api.canvas.addEventListener('pointerdown', (e) => {
+    const st = api.state, g = st && st._g; if (!g) return; const { px, py } = at(e);
+    const dw = Math.hypot(px - g.sx(st.w.x), py - g.sy(st.w.y));
+    const dt = Math.hypot(px - g.sx(st.test.x), py - g.sy(st.test.y));
+    st.drag = dw < dt && dw < 22 ? 'w' : dt < 22 ? 'test' : (dw < dt ? 'w' : 'test');
+    api.canvas.style.cursor = 'grabbing';
+    moveTo(api, px, py); api.render();
+  });
+  api.canvas.addEventListener('pointermove', (e) => { const st = api.state, g = st && st._g; if (!g || !st.drag) return; const { px, py } = at(e); moveTo(api, px, py); api.render(); });
+  const up = () => { if (api.state) api.state.drag = null; api.canvas.style.cursor = 'grab'; };
+  api.canvas.addEventListener('pointerup', up); api.canvas.addEventListener('pointercancel', up);
+}
+function moveTo(api, px, py) {
+  const st = api.state, g = st._g; const wx = Math.max(-DOM, Math.min(DOM, g.wxOf(px))), wy = Math.max(-DOM, Math.min(DOM, g.wyOf(py)));
+  if (st.drag === 'w') { st.w.x = wx; st.w.y = wy; } else if (st.drag === 'test') { st.test.x = wx; st.test.y = wy; }
+}
+</script>

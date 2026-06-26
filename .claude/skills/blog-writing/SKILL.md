@@ -50,11 +50,40 @@ Re-explaining bloats the post and reads as padding.
 Putting code or GIFs in an explainer, or engine viz in a companion, has cost
 rewrites. They are different artifacts.
 
-**A JAX companion is not done until it has at least one GIF.** A code-only
-companion is incomplete, no matter how good the code is. This rule is easy to drop
-under scope pressure ("ship the code now, add GIFs later"); that rationalisation
-has shipped half-built companions. Render the GIF in the same pass that writes the
-code, or the companion is not finished.
+**A JAX companion needs a GIF for every concept (three is only the floor), and
+they must be faithful and teach, not show.** A code-only companion is incomplete;
+so is one with one dry GIF; so is a thin set that undersells the concepts. We shipped
+six GIFs (hand-built) and five (train-features) only after the user said "we need
+better gifs and more gifs... we are underselling it." Do not undersell: each distinct
+idea earns its own GIF. Render them in the same pass that writes the code.
+
+What separates a GIF that teaches from a slideshow that does not:
+- **Faithful: every moving thing is a real number from the real computation.** NEVER
+  fabricate a metaphor's mechanics (an invented potential, an arbitrary 2D layout, a
+  synthetic gradient-descent path) and pass it off as explanation. A classified point
+  is already at its location, fixed by its features, so place it where the real math
+  puts it (already in its well); do not animate it arriving. A well's depth is the
+  real per-class score, a curve is the real metric per epoch, a cluster is real
+  k-means. If a viewer asks "is that motion real or made up?", every part must answer
+  "real." (The user: "never make up explanations with synthetic metaphor... use our
+  math to compute it with real things not fake animation.")
+- **Motion must carry the meaning.** The animation IS the explanation. A garment next
+  to its feature maps, or a scatter that jump-cuts between epochs, explains nothing,
+  it just displays. Instead animate the *real process*: the scores resolving into
+  wells, a cloud condensing into clusters, a curve drawing itself, edges sorting into
+  bins, errors melting from red to green. If you removed the motion and lost nothing,
+  it is a slideshow, redo it.
+- **Be physics-inspired, but compute the physics from the model.** The series has one
+  physical world (Yat denominator = softened inverse-square well; classification =
+  the deepest basin; training = a phase change from warm gas to ordered droplets).
+  Borrow it only when the real numbers drive it. Reuse the one world, do not invent a
+  new one, and if you reduce to 2D say plainly it is a shadow and keep the shown
+  verdict equal to the real model verdict.
+- **Each GIF is one idea with a narrative arc** (setup, motion, resolution), smooth
+  (tween or simulate, never jump-cut), slowly paced, with real labels and a title
+  that states what the motion shows. Keep each under ~1.6 MB (trim frames/dpi/palette).
+- Inspiration: 3Blue1Brown (visuals-first, a storyline that morphs and moves to
+  illuminate), particle/field systems (attractions, trajectories, flow).
 
 ## Writing craft (the part that backslides)
 
@@ -147,10 +176,17 @@ These three bugs recur and are invisible until you screenshot on a real device:
    not redundant with another panel? If it is weak, rebuild it.
 4. **Grep then look** for em dashes in reader-facing strings (`grep $'—'`),
    and confirm "jax-js" is nowhere in captions/readouts.
-5. **Companion has its GIF(s).** A JAX companion is not done until at least one
-   `<figure class="jax-fig">` points at a real `public/*.gif` rendered by a
-   `scripts/render_*_gif.py`. Check it: `grep '\.gif' src/content/blog/<companion>.mdx`
-   and confirm the file exists in `public/`. Code-only is incomplete; do not ship it.
+5. **Companion has a faithful GIF per concept (>= 3 floor).** A JAX companion is not
+   done until every distinct idea has its own `<figure class="jax-fig">` pointing at a
+   real `public/*.gif` from `scripts/render_*_gif.py` (three is the minimum, not the
+   target; we shipped 5-6). Check `grep -c '\.gif' src/content/blog/<companion>.mdx`
+   and confirm each file exists and is under ~1.6 MB. Then VIEW each (extract the
+   preview PNG and a mid-frame) and ask two questions: (a) is every moving thing a
+   real number from the real run, or did I fabricate a field/layout/trajectory? A
+   synthetic metaphor is not done. (b) Does the motion explain a process (scores
+   resolving, a cloud condensing, a curve drawing, errors melting), or is it a
+   slideshow? A slideshow is not done. Code-only, one-dry-GIF, a thin underselling
+   set, or any faked animation is incomplete; do not ship it.
 
 Both scripts are Node-22 + headless Chrome over the DevTools Protocol (no
 puppeteer). They are the only way to see the actual rendered output here.

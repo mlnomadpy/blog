@@ -241,10 +241,16 @@ defineViz('contrastiverace', {
     for (let pi = 0; pi < state.panels.length; pi++) {
       const P = state.panels[pi], R = rects[pi];
       ctx.fillStyle = cellBg; ctx.strokeStyle = border; ctx.lineWidth = 1; ctx.fillRect(R.x, R.y, R.w, R.h); ctx.strokeRect(R.x + 0.5, R.y + 0.5, R.w - 1, R.h - 1);
-      ctx.fillStyle = fg; ctx.font = '600 12px ui-sans-serif, system-ui'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(P.loss.name, R.x + 8, R.y + 6);
-      ctx.fillStyle = faint; ctx.font = '10px ui-monospace, monospace'; ctx.fillText(P.loss.sub, R.x + 8, R.y + 22);
       const acc = P.lastAcc, accColor = acc >= 0.95 ? colors.green : (acc >= 0.8 ? accent : muted);
-      ctx.fillStyle = accColor; ctx.font = '600 11px ui-monospace, monospace'; ctx.textAlign = 'right'; ctx.fillText('acc ' + (acc * 100).toFixed(0) + '%', R.x + R.w - 8, R.y + 6);
+      const accText = 'acc ' + (acc * 100).toFixed(0) + '%';
+      ctx.font = '600 11px ui-monospace, monospace'; const accW = ctx.measureText(accText).width;
+      const titleClipR = R.x + R.w - 8 - accW - 10; // reserve right band for the acc badge with a 10px gap
+      const shortName = P.loss.name.replace(/\s*\([^)]*\)\s*$/, '');   // drop the parenthetical citation so the title fits beside the badge
+      ctx.save(); ctx.beginPath(); ctx.rect(R.x + 8, R.y + 4, Math.max(0, titleClipR - (R.x + 8)), 16); ctx.clip();
+      ctx.fillStyle = fg; ctx.font = '600 12px ui-sans-serif, system-ui'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(shortName, R.x + 8, R.y + 6);
+      ctx.restore();
+      ctx.fillStyle = faint; ctx.font = '10px ui-monospace, monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(P.loss.sub, R.x + 8, R.y + 22);
+      ctx.fillStyle = accColor; ctx.font = '600 11px ui-monospace, monospace'; ctx.textAlign = 'right'; ctx.fillText(accText, R.x + R.w - 8, R.y + 6);
       ctx.fillStyle = faint; ctx.font = '10px ui-monospace, monospace'; ctx.fillText(isFinite(P.lastLoss) ? ('L ' + P.lastLoss.toFixed(3)) : '', R.x + R.w - 8, R.y + 22);
       const g = plotGeom(R, P.loss.onSphere);
       ctx.save(); ctx.beginPath(); ctx.rect(g.px, g.py, g.pw, g.ph); ctx.clip();

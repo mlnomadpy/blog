@@ -77,11 +77,13 @@ defineViz('accseverity', {
     ctx.fillStyle = colors.accent; ctx.beginPath(); ctx.arc(x, y, 7, 0, 2 * Math.PI); ctx.fill();
     ctx.strokeStyle = colors.bg; ctx.lineWidth = 2; ctx.stroke();
 
-    const side = { x: box.x + box.w - 160, y: box.y + 42, w: 124, h: 98 };
-    text(ctx, `${m.accuracy.toFixed(1)}%`, side.x, side.y, colors, { size: 28, weight: '700', color: colors.fg });
-    text(ctx, 'top-1 accuracy', side.x, side.y + 32, colors, { size: 10, color: colors.muted });
-    text(ctx, `${m.severe.toFixed(0)}%`, side.x, side.y + 58, colors, { size: 28, weight: '700', color: m.severe > 35 ? (colors.red || '#c2553a') : colors.green });
-    text(ctx, 'severe error mass', side.x, side.y + 90, colors, { size: 10, color: colors.muted });
+    // readouts in the empty bottom-right corner (the curve runs top-right→bottom-left,
+    // so it never reaches here, and the 'simplex' endpoint label stays clear)
+    const side = { x: box.x + box.w - 150, y: box.y + box.h - 110, w: 124, h: 98 };
+    text(ctx, `${m.accuracy.toFixed(1)}%`, side.x, side.y, colors, { size: 26, weight: '700', color: colors.fg });
+    text(ctx, 'top-1 accuracy', side.x, side.y + 28, colors, { size: 10, color: colors.muted });
+    text(ctx, `${m.severe.toFixed(0)}%`, side.x, side.y + 52, colors, { size: 26, weight: '700', color: m.severe > 35 ? (colors.red || '#c2553a') : colors.green });
+    text(ctx, 'severe error mass', side.x, side.y + 80, colors, { size: 10, color: colors.muted });
 
     text(ctx, 'same knob, two objectives', box.x + 10, box.y + 8, colors, { size: 12, weight: '600', color: colors.fg });
     text(ctx, 'simplex maximizes margin; structure buys cheaper wrong answers', box.x + 10, box.y + box.h - 18, colors, { size: 10, mono: true, color: colors.muted });
