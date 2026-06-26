@@ -5,10 +5,17 @@
 // are scrolled near.
 const _json = new Map();
 const _img = new Map();
+const _bin = new Map();
 
 export function loadJSON(url) {
   if (!_json.has(url)) _json.set(url, fetch(url).then((r) => r.json()));
   return _json.get(url);
+}
+
+// fetch a binary asset once as a Float32Array (little-endian); shared across callers
+export function loadFloat32(url) {
+  if (!_bin.has(url)) _bin.set(url, fetch(url).then((r) => r.arrayBuffer()).then((b) => new Float32Array(b)));
+  return _bin.get(url);
 }
 
 export function loadImage(url) {

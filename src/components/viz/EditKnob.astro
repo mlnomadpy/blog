@@ -1,0 +1,89 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 430 } = Astro.props;
+---
+<figure class="viz editknob" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// White-box surgery on the real model. Pick a readable memory slot (the one that writes
+// newlines, say), turn its gain up, and the model generates live with that one value
+// vector amplified. Because the output is Σ_u k(W_u,x) v_u, scaling one v_u is a precise,
+// predictable edit: the slot floods the stream and the text fills with what it writes.
+// Left is the untouched model; right is the same model with one slot turned up.
+import { defineViz } from './engine/vizkit.js';
+import { gate, loadingText, softPanel, T, rgba, parseColor } from './engine/draw.js';
+import { loadModel, encode, decode, generate, namedSlots } from './mlprep.js';
+
+const NGEN = 64, TEMP = 0.7;
+const TARGETS = [
+  { tok: '\n', label: 'newline' }, { tok: ' ', label: 'space' },
+  { tok: ',', label: 'comma' }, { tok: 'e', label: 'the letter e' },
+];
+const show = (c) => (c === '\n' ? '⏎\n' : c);
+
+function wrapText(ctx, str, x, y, maxW, lh, color) {
+  ctx.fillStyle = color; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.font = '12px ui-monospace, SFMono-Regular, monospace';
+  let line = '', cy = y;
+  for (const ch of str) {
+    if (ch === '\n') { ctx.fillText(line, x, cy); line = ''; cy += lh; continue; }
+    if (ctx.measureText(line + ch).width > maxW) { ctx.fillText(line, x, cy); line = ''; cy += lh; }
+    line += ch;
+  }
+  if (line) ctx.fillText(line, x, cy);
+}
+
+defineViz('editknob', {
+  title: 'Edit one memory slot, watch the model change',
+  height: 430,
+  controls: [
+    { type: 'text', name: 'prompt', label: 'prompt', value: 'GLOUCESTER:', width: 180, maxLength: 60 },
+    { type: 'select', name: 'slot', label: 'amplify the slot that writes', reset: false, value: 'newline',
+      options: TARGETS.map(t => ({ value: t.label, label: t.label })) },
+    { type: 'range', name: 'gain', label: 'gain', min: 1, max: 30, step: 1, value: 18, reset: false, fmt: v => '×' + v },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) { api.state = { base: new Map(), edit: new Map() }; gate(api, loadModel, (api, m) => { api.state.m = m; api.state.named = {}; namedSlots(m, TARGETS).forEach(s => { api.state.named[s.label] = s; }); }); },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H; if (W === 0 || !st) return;
+    ctx.clearRect(0, 0, W, H);
+    if (!st.ready) { loadingText(api, 'loading the trained model…'); return; }
+    const m = st.m, prompt = (api.get('prompt') || 'The').slice(-48) || 'The';
+    const ids = encode(m, prompt); if (ids.length === 0) { T(ctx, colors, 'label', { color: colors.muted }); ctx.fillText('type a prompt above', 12, 40); return; }
+    const slotLabel = api.get('slot'), gain = api.get('gain'), named = st.named[slotLabel];
+    const lastLayer = m.meta.lastLayer;
+
+    // base generation (cached per prompt) and edited generation (per prompt+slot+gain)
+    let base = st.base.get(prompt);
+    if (!base) { base = decode(m, generate(m, ids, NGEN, TEMP, {}, 7)).slice(prompt.length); st.base.set(prompt, base); }
+    const ek = `${prompt}|${named.u}|${gain}`;
+    let edit = st.edit.get(ek);
+    if (!edit) { edit = decode(m, generate(m, ids, NGEN, TEMP, { edit: { layer: lastLayer, slot: named.u, gain } }, 7)).slice(prompt.length); st.edit.set(ek, edit); }
+
+    const pad = 12; let y = pad;
+    T(ctx, colors, 'small', { color: colors.muted });
+    ctx.fillText(`slot ${named.u} writes ${named.writes.slice(0, 4).map(c => c === '\n' ? '⏎' : c === ' ' ? '␣' : c).join(' ')} · turning its gain up should flood the output with that token`, pad, y);
+    y += 22;
+    const colW = (W - pad * 3) / 2, ph = H - y - pad;
+    const panel = (x, head, txt, col) => {
+      softPanel(ctx, x, y, colW, ph, colors, { r: 10 });
+      T(ctx, colors, 'label', { color: col }); ctx.fillText(head, x + 12, y + 10);
+      wrapText(ctx, prompt + txt, x + 12, y + 32, colW - 24, 16, colors.fg);
+    };
+    panel(pad, 'the model, untouched', base, colors.muted);
+    panel(pad * 2 + colW, `slot ${named.u} amplified ×${gain}`, edit, '#b3661b');
+
+    const tgt = named.tok, bn = (base.match(new RegExp(tgt === '\n' ? '\\n' : tgt.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
+    const en = (edit.match(new RegExp(tgt === '\n' ? '\\n' : tgt.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
+    api.readout('rd', `${named.label} count: untouched ${bn} → amplified ${en}   ·   one value vector, one knob, a predictable effect`);
+  },
+});
+</script>

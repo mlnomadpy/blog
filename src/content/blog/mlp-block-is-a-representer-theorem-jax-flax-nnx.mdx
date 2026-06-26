@@ -1,0 +1,169 @@
+---
+title: "A White-Box FFN: the Representer Theorem in JAX/Flax NNX"
+seoTitle: "White-Box Transformer FFN in JAX"
+description: "A runnable companion: build a transformer whose feed-forward block is a Yat kernel, so the FFN is exactly a representer sum over learned key-value memory slots. Train it on tinyshakespeare, then do four things you cannot do to an opaque ReLU FFN: read each memory slot, attribute an output to the slots that wrote it, edit one slot and watch generation change, and read off when the memory is out of its depth."
+seoDescription: "Build a representer-form transformer FFN in Flax NNX: a Yat kernel makes it a key-value memory you can read, attribute, edit, and trust to abstain."
+pubDate: 2026-06-27T10:00:00-07:00
+draft: false
+tags: [ml, kernels, transformers, mlp, representer-theorem, interpretability, model-editing, yat, jax, flax, nnx, theory]
+references:
+  - authors: "Geva, M., Schuster, R., Berant, J., Levy, O."
+    year: 2021
+    title: "Transformer Feed-Forward Layers Are Key-Value Memories"
+    venue: "EMNLP 2021"
+  - authors: "Sukhbaatar, S., Grave, E., Lample, G., Jegou, H., Joulin, A."
+    year: 2019
+    title: "Augmenting Self-attention with Persistent Memory"
+    venue: "arXiv:1907.01470"
+  - authors: "Schölkopf, B., Herbrich, R., Smola, A. J."
+    year: 2001
+    title: "A Generalized Representer Theorem"
+    venue: "COLT 2001"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+keywords:
+  - white-box transformer FFN
+  - representer theorem feed-forward
+  - Yat kernel key-value memory
+  - FFN model editing JAX
+  - kernel weight out-of-distribution
+---
+import CiteAs from '../../components/CiteAs.astro';
+
+*The [explainer](/blog/mlp-block-is-a-representer-theorem/) argued that a transformer's feed-forward block, with a kernel in place of its activation, becomes a representer-theorem vote: `out(x) = Σ_u k(W_u, x) v_u`, a sum over learned (key, value) slots, the same equation as the attention beside it but over a fixed learned memory. That is not just elegant, it is a **white box**. This companion builds it in Flax NNX, trains it on tinyshakespeare, and then does four things to the FFN that are impossible when it is an opaque slab of ReLU. Every number is from a real run; the script is `scripts/yat_ffn_whitebox.py`.*
+
+## The feed-forward block, rewritten as a memory
+
+A transformer FFN maps a token's residual vector `x ∈ ℝ^d` to a vector it adds back to the stream, `out(x) = W_2\,\sigma(W_1 x)`. Replace the activation with the [Yat kernel](/blog/what-a-finite-kernel-buys-an-mlp/) and the block stops being a slab. Each row of `W_1` becomes a **key** `W_u`, a prototype direction; each column of `W_2` becomes a **value** `v_u`, a vector written into the residual stream; and the output is a similarity-weighted sum of values:
+
+$$
+\mathrm{out}(x) = \sum_u k(W_u, x)\, v_u , \qquad v_u = (W_2)_{:,u} .
+$$
+
+That is the representer form, and it is exactly the attention equation `Σ_j a_j v_j`, except the memory `{(W_u, v_u)}` is learned and persistent instead of read from the context. The FFN is attention over a fixed key-value store (Geva et al.; Sukhbaatar et al.), and with a real Mercer kernel the store is a readable RKHS expansion.
+
+```python
+import jax, jax.numpy as jnp
+from flax import nnx
+
+class YatFFN(nnx.Module):
+    """The FFN as a key-value memory: out(x) = Σ_u k(W_u, x) v_u."""
+    def __init__(s, d, ff, *, rngs, b0=0.5, eps0=1.0):
+        s.W  = nnx.Param(jax.random.normal(rngs.params(), (ff, d)) * 0.02)   # [ff, d] keys W_u
+        s.Vv = nnx.Param(jax.random.normal(rngs.params(), (d, ff)) * 0.02)   # [d, ff] values, v_u = Vv[:, u]
+        s.log_b = nnx.Param(jnp.full((), jnp.log(jnp.expm1(b0))))
+        s.log_eps = nnx.Param(jnp.full((), jnp.log(jnp.expm1(eps0))))
+    def kernel(s, x):                                  # k(W_u, x): the memory weights [..., ff]
+        b = jax.nn.softplus(s.log_b.value); eps = jax.nn.softplus(s.log_eps.value)
+        dot = x @ s.W.value.T
+        d2 = (x**2).sum(-1, keepdims=True) + (s.W.value**2).sum(-1) - 2 * dot
+        return (dot + b)**2 / (d2 + eps)
+    def __call__(s, x):
+        return s.kernel(x) @ s.Vv.value.T              # Σ_u k(W_u, x) v_u
+```
+
+Drop that into a standard pre-LN block (causal attention, then this FFN) and train a small char-level language model on tinyshakespeare: 3 layers, `d=128`, 256 memory slots per block. It reaches a validation loss of 1.80, an ordinary little transformer. The point is not its quality; it is that its feed-forward memory is now legible. The two arrays you read it from are the keys and values, nothing else:
+
+```python
+ffn   = model.blocks[-1].ffn
+keys  = ffn.W.value     # [ff, d]  the prototype directions W_u
+vals  = ffn.Vv.value    # [d, ff]  the value vectors, v_u = vals[:, u]
+U     = model.head.kernel.value   # [d, vocab]  the unembedding; U[:, t] reads token t
+```
+
+## 1. Read the memory
+
+Because each slot writes a fixed vector `v_u` into the residual stream, you can ask what it writes by decoding `v_u` through the unembedding, the logit lens. Every slot gets a human-readable label:
+
+```python
+def writes(u, k=6):                                    # the tokens slot u promotes
+    return [itos[i] for i in (vals[:, u] @ U).argsort()[::-1][:k]]
+
+# slot 198  writes: ['L', 'P', 'N', 'M', 'R', 'I']     a capital-letter / line-start slot
+# slot 145  writes: [' ', 's', '\n', '-', 'd', 'T']    a word- and line-boundary slot
+# slot 248  writes: ['\n', '3', 'm', 'k', 'e']         the newline slot
+```
+
+Geva et al. found this kind of structure heuristically inside ReLU FFNs. Here it is not a heuristic: the slot's contribution is literally `k(W_u, x)\,v_u`, so `v_u` is exactly what it adds, and its decoding is exactly what it promotes.
+
+## 2. Attribute an output to its slots
+
+The FFN output is a sum, so any output decomposes, with no gradients and no approximation, into the slots that produced it. Take a context, compute each slot's push toward the predicted next token, and rank:
+
+```python
+x  = residual_into_ffn(model, encode("ROMEO:\nWhat"), layer=-1)[0, -1]  # the FFN's input
+kw = ffn.kernel(x[None])[0]                             # k(W_u, x), the memory weights
+out = kw @ vals.T                                       # the FFN output
+nxt = (U.T @ out).argmax()                              # most-promoted next char
+push = kw * (vals.T @ U[:, nxt])                        # each slot's signed push toward it
+
+# the FFN most promotes next-char 'e'
+# reconstruction error |Σ_u k_u v_u - out| = 0.00e+00   <- it IS the sum, exactly
+#   slot 181  k=0.67  push=+0.43  writes ['e', ':', ',', '\n']
+#   slot 202  k=0.86  push=+0.42  writes ['e', 'o', 's', 'a']
+#   slot   4  k=0.94  push=+0.41  writes ['t', 'e', 'I', 'E']
+```
+
+The reconstruction error is exactly zero because the decomposition is not a story laid over the block, it is the block's arithmetic. This is what "white box" means here: the explanation and the computation are the same object.
+
+## 3. Edit one slot and watch the output change
+
+If a slot writes a known token, you can turn it up. Multiply one value vector `v_u` by a gain and regenerate: nothing else in the model touched, and the change is predictable in closed form because the output is linear in `k(W_u, x)`.
+
+```python
+def amplify(model, u, g, layer=-1):                    # v_u  ->  g * v_u
+    v = model.blocks[layer].ffn.Vv
+    nv = np.asarray(v.value); nv[:, u] *= g; v.value = jnp.asarray(nv)
+
+# slot 248 is the newline-writer. Generate from "GLOUCESTER:\n":
+#   gain x1   ->   4 newlines:  "He my deak not name! The sir, in my g..."   (coherent)
+#   gain x12  ->  13 newlines:  "He my deak not name!\n\nBENVOLIO:\nThe sir..."  (choppy)
+#   gain x30  -> 200 newlines:  "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n..."             (only newlines)
+```
+
+Sweep the gain and the effect is a clean phase transition: below a threshold the text stays coherent, then the one slot floods the residual stream and the model writes nothing but what that slot says. This is white-box model surgery, an edit to a single readable memory cell, and you predicted the result from its label before running it.
+
+<figure class="jax-fig">
+  <img src="/blog/yat-ffn-edit.png" alt="A curve: the fraction of generated text that is a newline stays near zero as the gain on the newline-writing slot rises, then sharply jumps to 1.0 past a gain of about fifteen, where the model emits only newlines" loading="lazy" width="660" height="380" />
+  <figcaption>Turning up one readable slot. The x-axis is the gain on slot 248, the newline-writer; the y-axis is the fraction of the generated continuation that is a newline. The text stays coherent until the gain crosses a threshold, then the slot floods the stream and the output becomes nothing but newlines, exactly the token that slot was decoded to write. One value vector, one knob, a predictable effect. Rendered by <code>scripts/yat_ffn_whitebox.py</code>.</figcaption>
+</figure>
+
+## 4. Read off when the memory is out of its depth
+
+The Yat kernel is local and bounded: `k(W_u, x)` is large only when `x` is near and aligned with key `W_u`, and small everywhere else. So a token unlike anything the memory learned lights up no slot, and the FFN writes almost nothing. The kernel weights are an out-of-distribution signal you can read directly off the forward pass.
+
+```python
+def peak_weight(seq):                                  # max_u k(W_u, x) at each token
+    x = residual_into_ffn(model, seq, layer=-1)[0]
+    return ffn.kernel(x).max(-1)
+
+# peak memory weight, averaged over tokens:
+#   real Shakespeare (in-distribution)  2.12
+#   random characters                   0.96
+#   a repeated character                0.77
+```
+
+Real prose excites the memory two to three times more strongly than off-distribution input. The block does not need a separate detector for "I have not seen this"; the representer weights already say so, because a kernel reports how much each reference counts, out loud, and when nothing counts it tells you.
+
+<figure class="jax-fig">
+  <img src="/blog/yat-ffn-abstain.png" alt="Three overlaid histograms of the peak memory weight per token: in-distribution Shakespeare spreads out to high values with mean 2.12, while random characters and a repeated character pile up at low values around mean 0.9 and 0.77" loading="lazy" width="660" height="380" />
+  <figcaption>The memory lights up only for inputs it has seen. Each histogram is the peak kernel weight, max₍ᵤ₎ k(Wᵤ, x), over the tokens of a real Shakespeare passage, a random-character string, and a repeated character. In-distribution tokens reach far higher weights; off-distribution tokens leave the memory dark, and the FFN writes little. The abstention is not bolted on, it is the kernel being local. Rendered by <code>scripts/yat_ffn_whitebox.py</code>.</figcaption>
+</figure>
+
+## The point
+
+None of these four are tricks specific to a toy. They follow from one fact: a Yat FFN's output is `Σ_u k(W_u, x)\, v_u`, the representer form, so the block is a key-value memory whose slots you can read, whose outputs you can attribute exactly, whose cells you can edit one at a time, and whose confidence you can measure from the kernel weights. The opaque half of the transformer was never doomed to be opaque. Give its feed-forward block a kernel, and it becomes a memory you can open, the same way the representer theorem promised and the attention beside it already was.
+
+---
+
+*Feed-forward layers as key-value memories is [Geva et al. (2021)](https://aclanthology.org/2021.emnlp-main.446/); the FFN-as-persistent-memory equivalence is [Sukhbaatar et al. (2019)](https://arxiv.org/abs/1907.01470); the representer theorem is [Schölkopf, Herbrich and Smola (2001)](https://link.springer.com/chapter/10.1007/3-540-44581-1_27); the Yat kernel is [Bouhsine (2026)](https://arxiv.org/abs/2605.03262). The conceptual companion is [The MLP Block Is a Representer Theorem](/blog/mlp-block-is-a-representer-theorem/).*
+
+<CiteAs slug="mlp-block-is-a-representer-theorem-jax-flax-nnx" title="A White-Box FFN: the Representer Theorem in JAX/Flax NNX" pubDate="2026-06-27T10:00:00-07:00" />
+
+<style>{`
+.jax-fig { margin: 1.8rem auto; text-align: center; }
+.jax-fig img { max-width: 600px; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; background: #0e0d0b; }
+.jax-fig figcaption { margin-top: 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--fg-muted); max-width: 64ch; margin-left: auto; margin-right: auto; }
+`}</style>

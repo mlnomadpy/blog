@@ -28,6 +28,7 @@ function eigs(kind) {                                   // λₖ, the kernel's p
   for (let k = 1; k <= K; k++) {
     if (kind === 'gaussian') l[k] = Math.exp(-0.5 * (0.55 * k) ** 2);
     else if (kind === 'sobolev') l[k] = Math.pow(1 + k * k, -1.0);    // H¹: corners pass, jumps do not
+    else if (kind === 'yat') l[k] = Math.exp(-0.346 * k);             // Yat / IMQ: exponential, smooth like the Gaussian but roomier
     else if (kind === 'poly') l[k] = k <= 5 ? Math.pow(k, -1.1) : 0;
     else l[k] = k <= 10 ? 1 : 0;                        // bandlimited / sinc: hard cutoff
   }
@@ -70,6 +71,7 @@ defineViz('pricelist', {
     { type: 'select', name: 'kernel', label: 'the kernel', reset: false, options: [
       { value: 'gaussian', label: 'Gaussian (bars every sharp weight)' },
       { value: 'sobolev', label: 'Sobolev / Matérn (lets corners in)' },
+      { value: 'yat', label: 'Yat / IMQ (smooth, universal, roomier than Gaussian)' },
       { value: 'poly', label: 'polynomial (only the smoothest few)' },
       { value: 'band', label: 'bandlimited / sinc (a hard cutoff)' },
     ], value: 'gaussian' },
@@ -118,6 +120,7 @@ defineViz('pricelist', {
 
     api.readout('rd', kind === 'gaussian' ? 'only analytic weights pass; every corner, jump or spike costs infinity'
       : kind === 'sobolev' ? 'the corner and the spike are affordable now, but a true jump is still too rough even here'
+      : kind === 'yat' ? 'smooth like the Gaussian, so the sharp weights are still barred; only roomier, and universal'
       : kind === 'poly' ? 'a finite-dimensional space holds only trigonometric polynomials; even a smooth bump is not one'
       : 'anything built from frequencies below the cutoff passes; everything sharper is barred');
   },

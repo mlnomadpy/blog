@@ -1,0 +1,92 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 440 } = Astro.props;
+---
+<figure class="viz memmap" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The whole feed-forward memory of the real trained transformer, one cell per slot.
+// Each slot v_u is decoded through the unembedding to the token it writes, shown as a
+// letter. Type a prompt and the slots fire live: a cell brightens with k(W_u, x), the
+// real kernel weight at your prompt's last character. Hover a slot to read what it
+// writes. This is the FFN as a legible key-value store, not a wall of numbers.
+import { defineViz } from './engine/vizkit.js';
+import { gate, loadingText, T, rgba, parseColor } from './engine/draw.js';
+import { loadModel, encode, forward } from './mlprep.js';
+
+const show = (c) => (c === '\n' ? '⏎' : c === ' ' ? '␣' : c);
+
+defineViz('memmap', {
+  title: 'Read the memory: every slot is a token it writes',
+  height: 440,
+  controls: [
+    { type: 'text', name: 'prompt', label: 'prompt', value: 'First Citizen:', width: 220, maxLength: 80 },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) { api.state = { cache: new Map(), hover: -1 }; gate(api, loadModel, (api, m) => { api.state.m = m; bind(api); }); },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H; if (W === 0 || !st) return;
+    ctx.clearRect(0, 0, W, H);
+    if (!st.ready) { loadingText(api, 'loading the trained model…'); return; }
+    const m = st.m, FF = m.meta.ff, prompt = (api.get('prompt') || '').slice(-64);
+    const ids = encode(m, prompt);
+    const pad = 12, top = pad + 18;
+    T(ctx, colors, 'small', { color: colors.muted }); ctx.fillText('each cell is a memory slot, lit by how hard your prompt fires it', pad, pad);
+
+    // live kernel weights at the last character
+    let kw = null, kmax = 1;
+    if (ids.length) {
+      let r = st.cache.get(prompt);
+      if (!r) { r = forward(m, ids); st.cache.set(prompt, r); }
+      const base = (r.T - 1) * FF; kw = new Float64Array(FF);
+      for (let u = 0; u < FF; u++) kw[u] = r.captured.kw[base + u];
+      kmax = Math.max(...kw, 1e-6);
+    }
+
+    const cols = Math.max(12, Math.floor((W - pad * 2) / 30));
+    const rows = Math.ceil(FF / cols);
+    const cw = (W - pad * 2) / cols, ch = Math.min(cw, (H - top - pad) / rows);
+    const acc = parseColor(colors.accent), grid = parseColor(colors.border);
+    st._g = { top, cols, cw, ch, pad };
+    for (let u = 0; u < FF; u++) {
+      const c = u % cols, rr = Math.floor(u / cols);
+      const x = pad + c * cw, yy = top + rr * ch;
+      const t = kw ? kw[u] / kmax : 0;
+      ctx.fillStyle = rgba(acc, 0.06 + 0.9 * t * t);
+      ctx.fillRect(x + 0.5, yy + 0.5, cw - 1, ch - 1);
+      if (u === st.hover) { ctx.strokeStyle = colors.fg; ctx.lineWidth = 1.6; ctx.strokeRect(x + 0.8, yy + 0.8, cw - 1.6, ch - 1.6); }
+      else { ctx.strokeStyle = rgba(grid, 0.5); ctx.lineWidth = 0.5; ctx.strokeRect(x + 0.5, yy + 0.5, cw - 1, ch - 1); }
+      // the token this slot writes
+      const wr = m.meta.slotWrites[u][0];
+      ctx.fillStyle = t > 0.45 ? colors.bg : rgba(parseColor(colors.fg), 0.75);
+      ctx.font = `${Math.min(13, ch * 0.6) | 0}px ui-monospace, monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(show(wr), x + cw / 2, yy + ch / 2 + 0.5);
+    }
+
+    const hv = st.hover;
+    if (hv >= 0) api.readout('rd', `slot ${hv} writes: ${m.meta.slotWrites[hv].map(show).join(' ')}${kw ? `   ·   k=${kw[hv].toFixed(2)} at the last char` : ''}`);
+    else api.readout('rd', `${FF} memory slots · brighter = fires harder on your prompt · hover a slot to read it`);
+  },
+});
+
+function bind(api) {
+  if (api.canvas.dataset.mmBound) return; api.canvas.dataset.mmBound = '1';
+  const at = (e) => { const rc = api.canvas.getBoundingClientRect(); return { px: (e.clientX - rc.left) * api.size.W / rc.width, py: (e.clientY - rc.top) * api.size.H / rc.height }; };
+  api.canvas.addEventListener('pointermove', (e) => {
+    const st = api.state, g = st && st._g; if (!g) return; const { px, py } = at(e);
+    const c = Math.floor((px - g.pad) / g.cw), r = Math.floor((py - g.top) / g.ch);
+    let h = -1; if (c >= 0 && c < g.cols && r >= 0) { const u = r * g.cols + c; if (u < api.state.m.meta.ff && px >= g.pad && px <= api.size.W - g.pad) h = u; }
+    if (h !== st.hover) { st.hover = h; api.render(); }
+  });
+  api.canvas.addEventListener('pointerleave', () => { if (api.state) { api.state.hover = -1; api.render(); } });
+}
+</script>
