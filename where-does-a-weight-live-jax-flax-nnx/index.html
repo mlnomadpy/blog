@@ -1,0 +1,502 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="generator" content="Astro v5.18.1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#fbfaf6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)"><title>The Representer Weight in JAX/Flax NNX</title><meta name="description" content="Build the representer-theorem weight in JAX: a kernel, a Gram solve, and the weight is a combination of the data. A line fails on rings; the placed weight does not."><meta name="keywords" content="representer theorem JAX, kernel ridge regression JAX, reproducing kernel Hilbert space code, Flax NNX kernel weight, weight as combination of data, ml, kernels, rkhs, representer-theorem, jax, flax, nnx, implementation, yat, deep-learning"><meta name="author" content="Taha Bouhsine"><link rel="canonical" href="https://tahabouhsine.com/blog/where-does-a-weight-live-jax-flax-nnx/"><link rel="icon" href="/blog/favicon.svg" type="image/svg+xml"><link rel="alternate" type="application/rss+xml" title="Records of the !mmortal Data Scientist" href="/blog/rss.xml"><link rel="sitemap" href="/blog/sitemap-index.xml"><link rel="me" href="https://github.com/mlnomadpy"><link rel="me" href="https://x.com/mlnomadpy"><link rel="me" href="https://www.linkedin.com/in/tahabsn/"><link rel="me" href="https://scholar.google.com/citations?user=IsBjb3EAAAAJ"><link rel="me" href="https://g.dev/tahabsn"><link rel="author" href="https://github.com/mlnomadpy"><meta property="og:type" content="article"><meta property="og:site_name" content="Records of the !mmortal Data Scientist"><meta property="og:title" content="The Representer Weight in JAX/Flax NNX"><meta property="og:description" content="Build the representer-theorem weight in JAX: a kernel, a Gram solve, and the weight is a combination of the data. A line fails on rings; the placed weight does not."><meta property="og:url" content="https://tahabouhsine.com/blog/where-does-a-weight-live-jax-flax-nnx/"><meta property="og:locale" content="en_US"><meta property="og:image" content="https://tahabouhsine.com/blog/og/where-does-a-weight-live-jax-flax-nnx.png"><meta property="og:image:alt" content="Where a Weight Lives, in JAX/Flax NNX — Records of the !mmortal Data Scientist"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:type" content="image/png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@mlnomadpy"><meta name="twitter:creator" content="@mlnomadpy"><meta name="twitter:title" content="The Representer Weight in JAX/Flax NNX"><meta name="twitter:description" content="Build the representer-theorem weight in JAX: a kernel, a Gram solve, and the weight is a combination of the data. A line fails on rings; the placed weight does not."><meta name="twitter:image" content="https://tahabouhsine.com/blog/og/where-does-a-weight-live-jax-flax-nnx.png"><meta name="twitter:image:alt" content="Where a Weight Lives, in JAX/Flax NNX — Records of the !mmortal Data Scientist"><meta property="article:published_time" content="2026-06-25T17:00:00.000Z"><meta property="article:author" content="Taha Bouhsine"><meta property="article:section" content="Machine Learning"><meta property="article:tag" content="ml"><meta property="article:tag" content="kernels"><meta property="article:tag" content="rkhs"><meta property="article:tag" content="representer-theorem"><meta property="article:tag" content="jax"><meta property="article:tag" content="flax"><meta property="article:tag" content="nnx"><meta property="article:tag" content="implementation"><meta property="article:tag" content="yat"><meta property="article:tag" content="deep-learning"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","@id":"https://tahabouhsine.com/blog/where-does-a-weight-live-jax-flax-nnx/#article","headline":"Where a Weight Lives, in JAX/Flax NNX","name":"Where a Weight Lives, in JAX/Flax NNX","description":"Build the representer-theorem weight in JAX: a kernel, a Gram solve, and the weight is a combination of the data. A line fails on rings; the placed weight does not.","image":["https://tahabouhsine.com/blog/og/where-does-a-weight-live-jax-flax-nnx.png"],"datePublished":"2026-06-25T17:00:00.000Z","dateModified":"2026-06-25T17:00:00.000Z","author":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#author","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","jobTitle":"Machine Learning Researcher","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"publisher":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#publisher","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"mainEntityOfPage":{"@type":"WebPage","@id":"https://tahabouhsine.com/blog/where-does-a-weight-live-jax-flax-nnx/"},"keywords":"representer theorem JAX, kernel ridge regression JAX, reproducing kernel Hilbert space code, Flax NNX kernel weight, weight as combination of data, ml, kernels, rkhs, representer-theorem, jax, flax, nnx, implementation, yat, deep-learning","url":"https://tahabouhsine.com/blog/where-does-a-weight-live-jax-flax-nnx/","inLanguage":"en-US","wordCount":1157,"timeRequired":"PT6M","articleSection":"Machine Learning","isPartOf":{"@type":"Blog","@id":"https://tahabouhsine.com/blog/","name":"Records of the !mmortal Data Scientist","url":"https://tahabouhsine.com/blog/"}}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Blog","item":"https://tahabouhsine.com/blog/"},{"@type":"ListItem","position":2,"name":"Machine Learning","item":"https://tahabouhsine.com/blog/tag/ml/"},{"@type":"ListItem","position":3,"name":"Where a Weight Lives, in JAX/Flax NNX","item":"https://tahabouhsine.com/blog/where-does-a-weight-live-jax-flax-nnx/"}]}</script><script>
+    (function () {
+      if (window.__gaSetup) return;
+      window.__gaSetup = true;
+      var GA_ID = 'G-373438VHJB';
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ dataLayer.push(arguments); }
+      window.gtag = window.gtag || gtag;
+      window.__gaEventQueue = window.__gaEventQueue || [];
+      window.__trackGA = function (eventName, params) {
+        if (!eventName) return;
+        var item = { name: eventName, params: params || {} };
+        if (window.__gaLoaded) {
+          gtag('event', item.name, item.params);
+        } else {
+          window.__gaEventQueue.push(item);
+        }
+      };
+
+      // Track whether the first astro:page-load has fired, so a mid-session
+      // Accept can still record the current page.
+      window.__gaFirstLoadDone = window.__gaFirstLoadDone || false;
+      document.addEventListener('astro:page-load', function () { window.__gaFirstLoadDone = true; });
+
+      window.__loadGA = function () {
+        if (window.__gaLoaded) return;
+        window.__gaLoaded = true;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+        document.head.appendChild(s);
+        gtag('js', new Date());
+        gtag('config', GA_ID, { send_page_view: false });
+        (window.__gaEventQueue || []).splice(0).forEach(function (item) {
+          gtag('event', item.name, item.params);
+        });
+        function sendPV() {
+          gtag('event', 'page_view', {
+            page_title: document.title,
+            page_location: location.href,
+            page_path: location.pathname + location.search,
+          });
+        }
+        document.addEventListener('astro:page-load', sendPV);
+        // If the initial page-load already happened (accept mid-session),
+        // record this page now; otherwise the listener catches the first one.
+        if (window.__gaFirstLoadDone) sendPV();
+      };
+
+      try {
+        if (localStorage.getItem('analytics-consent') === 'granted') window.__loadGA();
+      } catch (e) {}
+    })();
+  </script><script>
+  (() => {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'light' || stored === 'dark') {
+      document.documentElement.setAttribute('data-theme', stored);
+    }
+  })();
+</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.DstInXr_.css">
+<link rel="stylesheet" href="/blog/_astro/_slug_.1UYF8z3a.css"><style>.cite-as[data-astro-cid-p234urri]{margin:3.5rem 0 0;padding-top:1.5rem;border-top:1px solid var(--border)}.cite-as[data-astro-cid-p234urri] h2[data-astro-cid-p234urri]{font-family:var(--mono);font-size:.82rem;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-faint);font-weight:500;margin:0 0 .75rem}.cite-as[data-astro-cid-p234urri] h3[data-astro-cid-p234urri]{font-family:var(--mono);font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-faint);font-weight:500;margin:1.5rem 0 .6rem}.cite-line[data-astro-cid-p234urri]{font-family:var(--serif);font-size:.98rem;line-height:1.55;color:var(--fg-muted);margin:0 0 .5rem}.cite-line[data-astro-cid-p234urri] em[data-astro-cid-p234urri]{color:var(--fg)}.cite-bib[data-astro-cid-p234urri]{margin:.4rem 0 0;position:relative}.cite-bib[data-astro-cid-p234urri] summary[data-astro-cid-p234urri]{cursor:pointer;font-family:var(--mono);font-size:.78rem;color:var(--fg-muted);padding:.25rem 0;user-select:none}.cite-bib[data-astro-cid-p234urri] summary[data-astro-cid-p234urri]:hover{color:var(--accent)}.cite-bib[data-astro-cid-p234urri] pre[data-astro-cid-p234urri]{margin:.4rem 0 0;padding:.85rem 1rem;background:var(--bg-elev);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;font-size:.82rem;line-height:1.55}.cite-bib[data-astro-cid-p234urri] pre[data-astro-cid-p234urri] code[data-astro-cid-p234urri]{background:transparent;border:0;padding:0}.cite-copy[data-astro-cid-p234urri]{position:absolute;top:2.1rem;right:.55rem;background:var(--bg);border:1px solid var(--border);color:var(--fg-muted);font-family:var(--mono);font-size:.72rem;padding:.25rem .55rem;border-radius:var(--radius-sm);cursor:pointer;transition:color var(--transition-fast),border-color var(--transition-fast)}.cite-copy[data-astro-cid-p234urri]:hover,.cite-copy[data-astro-cid-p234urri].copied{color:var(--accent);border-color:var(--accent)}
+</style></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/writeups">writeups</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>
+  (() => {
+    const apply = (theme) => {
+      document.documentElement.setAttribute('data-theme', theme);
+      const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+      if (meta) meta.setAttribute('content', theme === 'dark' ? '#0e1116' : '#fbfaf6');
+      // Sync giscus iframe if present
+      const giscus = document.querySelector('iframe.giscus-frame');
+      if (giscus && giscus.contentWindow) {
+        giscus.contentWindow.postMessage(
+          { giscus: { setConfig: { theme: theme === 'dark' ? 'dark' : 'light' } } },
+          'https://giscus.app'
+        );
+      }
+    };
+
+    const init = () => {
+      const btns = document.querySelectorAll('[data-theme-toggle]');
+      btns.forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', () => {
+          const current = document.documentElement.getAttribute('data-theme')
+            || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          const next = current === 'dark' ? 'light' : 'dark';
+          localStorage.setItem('theme', next);
+          apply(next);
+        });
+      });
+    };
+
+    init();
+    document.addEventListener('astro:after-swap', init);
+    document.addEventListener('astro:page-load', init);
+  })();
+</script> </nav> </div> </header> <main id="main">  <div class="reading-progress" data-reading-progress aria-hidden="true"></div> <script>
+  (() => {
+    const init = () => {
+      const bar = document.querySelector('[data-reading-progress]');
+      if (!bar) return;
+      const update = () => {
+        const h = document.documentElement;
+        const scrolled = h.scrollTop;
+        const max = h.scrollHeight - h.clientHeight;
+        const pct = max > 0 ? Math.min(100, (scrolled / max) * 100) : 0;
+        bar.style.width = pct + '%';
+      };
+      // Coalesce scroll events into one paint per frame so fast/touch
+      // scrolling stays smooth.
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => { update(); ticking = false; });
+      };
+      update();
+      window.removeEventListener('scroll', window.__rp_onScroll || (() => {}));
+      window.removeEventListener('resize', window.__rp_onScroll || (() => {}));
+      window.__rp_onScroll = onScroll;
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+    };
+    init();
+    document.addEventListener('astro:page-load', init);
+    document.addEventListener('astro:after-swap', init);
+  })();
+</script> <article data-blog-post data-pagefind-body data-pagefind-meta="date:2026-06-25"> <header class="post-header">  <h1 data-pagefind-meta="title">Where a Weight Lives, in JAX/Flax NNX</h1> <p class="meta"> <time datetime="2026-06-25T17:00:00.000Z">June 25, 2026</time>   · 6 min read </p> <p style="margin-top:0.65rem" data-pagefind-meta="tags:ml,kernels,rkhs,representer-theorem,jax,flax,nnx,implementation,yat,deep-learning"> <a class="tag" href="/blog/tag/ml/">#ml</a><a class="tag" href="/blog/tag/kernels/">#kernels</a><a class="tag" href="/blog/tag/rkhs/">#rkhs</a><a class="tag" href="/blog/tag/representer-theorem/">#representer-theorem</a><a class="tag" href="/blog/tag/jax/">#jax</a><a class="tag" href="/blog/tag/flax/">#flax</a><a class="tag" href="/blog/tag/nnx/">#nnx</a><a class="tag" href="/blog/tag/implementation/">#implementation</a><a class="tag" href="/blog/tag/yat/">#yat</a><a class="tag" href="/blog/tag/deep-learning/">#deep-learning</a> </p> </header> <a class="companion-callout companion" href="/blog/where-does-a-weight-live/" data-astro-cid-x4o4rwnl><span class="cc-icon" aria-hidden="true" data-astro-cid-x4o4rwnl>📖</span><span class="cc-body" data-astro-cid-x4o4rwnl><span class="cc-eyebrow" data-astro-cid-x4o4rwnl>Explainer companion</span><span class="cc-title" data-astro-cid-x4o4rwnl>Where Does a Weight Live?</span><span class="cc-lead" data-astro-cid-x4o4rwnl>Want the full intuition first? This is the runnable companion to the explainer.</span></span><span class="cc-cta" data-astro-cid-x4o4rwnl>Read the explainer<span aria-hidden="true" data-astro-cid-x4o4rwnl>→</span></span></a>  <p><em>The <a href="/blog/where-does-a-weight-live/">explainer</a> argued that a standard weight is a direction in a space apart from the data, and that a reproducing kernel Hilbert space repairs that by giving the weight an address among the data: the optimal weight is a combination of the data’s own kernel bumps. This is the implementation. A kernel in a few lines of JAX, the Gram matrix, one linear solve for the coefficients, and the weight comes out as <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mo>∑</mo><mi>i</mi></msub><msub><mi>α</mi><mi>i</mi></msub><mtext> </mtext><mi>k</mi><mo stretchy="false">(</mo><msub><mi>x</mi><mi>i</mi></msub><mo separator="true">,</mo><mo>⋅</mo><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\sum_i \alpha_i\, k(x_i, \cdot)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0497em;vertical-align:-0.2997em"></span><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:0em">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.162em"><span style="top:-2.4003em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2997em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0037em">α</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.0037em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0315em">k</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord">⋅</span><span class="mclose">)</span></span></span></span>. Then two demonstrations of why the shared space matters. Every number is from a real run; the script is <code>scripts/render_weight_lives_gifs.py</code>.</em></p>
+<h2 id="the-kernel-and-the-space-it-builds">The kernel, and the space it builds<a class="heading-anchor-link" aria-label="Link to heading" href="#the-kernel-and-the-space-it-builds"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>A reproducing kernel is any positive-definite similarity, and the whole RKHS hangs off it. We use the radial basis kernel, a bump that is largest when two points coincide and decays with their distance. In JAX it is one expression, and it gives the inner product <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">⟨</mo><mi>ϕ</mi><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mo separator="true">,</mo><mi>ϕ</mi><mo stretchy="false">(</mo><mi>y</mi><mo stretchy="false">)</mo><mo stretchy="false">⟩</mo></mrow><annotation encoding="application/x-tex">\langle \phi(x), \phi(y)\rangle</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mopen">⟨</span><span class="mord mathnormal">ϕ</span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal">ϕ</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0359em">y</span><span class="mclose">)⟩</span></span></span></span> without ever forming <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ϕ</mi></mrow><annotation encoding="application/x-tex">\phi</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em"></span><span class="mord mathnormal">ϕ</span></span></span></span>.</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">import</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jax, jax.numpy </span><span style="color:#D73A49;--shiki-dark:#F47067">as</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">SIG</span><span style="color:#D73A49;--shiki-dark:#F47067"> =</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 0.5</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6F42C1;--shiki-dark:#DCBDFB">@jax.jit</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> gram</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(X, Y):                                        </span><span style="color:#6A737D;--shiki-dark:#768390"># k(xᵢ, yⱼ) for every pair</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    d2 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> ((X[:, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">None</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, :] </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> Y[</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">None</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, :, :]) </span><span style="color:#D73A49;--shiki-dark:#F47067">**</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">).sum(</span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.exp(</span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7">d2 </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">2</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> SIG</span><span style="color:#D73A49;--shiki-dark:#F47067"> **</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">))</span></span></code></pre>
+<p>That <code>gram(X, X)</code> is the entire geometry of the data in the RKHS: entry <code>(i, j)</code> is how close points <code>i</code> and <code>j</code> sit once lifted by <code>φ</code>. Nothing about the weight yet, only the space the weight will live in.</p>
+<h2 id="the-weight-is-a-solve-not-a-search">The weight is a solve, not a search<a class="heading-anchor-link" aria-label="Link to heading" href="#the-weight-is-a-solve-not-a-search"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The representer theorem promises the optimal weight is <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>f</mi><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mo>=</mo><msub><mo>∑</mo><mi>i</mi></msub><msub><mi>α</mi><mi>i</mi></msub><mtext> </mtext><mi>k</mi><mo stretchy="false">(</mo><msub><mi>x</mi><mi>i</mi></msub><mo separator="true">,</mo><mi>x</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">f(x) = \sum_i \alpha_i\, k(x_i, x)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord mathnormal" style="margin-right:0.1076em">f</span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1.0497em;vertical-align:-0.2997em"></span><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:0em">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.162em"><span style="top:-2.4003em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2997em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0037em">α</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.0037em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0315em">k</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal">x</span><span class="mclose">)</span></span></span></span>, a combination of the data. So fitting the weight is not a gradient descent through some separate weight space; it is solving for the coefficients <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>α</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">\alpha_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0037em">α</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.0037em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span></span></span></span> that make the combination match the labels. With a ridge penalty that is a single linear system, <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mi>G</mi><mo>+</mo><mi>λ</mi><mi>I</mi><mo stretchy="false">)</mo><mtext> </mtext><mi>α</mi><mo>=</mo><mi>y</mi></mrow><annotation encoding="application/x-tex">(G + \lambda I)\,\alpha = y</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mopen">(</span><span class="mord mathnormal">G</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord mathnormal">λ</span><span class="mord mathnormal" style="margin-right:0.0785em">I</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0037em">α</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em"></span><span class="mord mathnormal" style="margin-right:0.0359em">y</span></span></span></span>.</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> kernel_ridge</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(X, y, lam</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0.4</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):                       </span><span style="color:#6A737D;--shiki-dark:#768390"># the representer coefficients</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    G </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> gram(X, X)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.linalg.solve(G </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> lam </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.eye(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">len</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(X)), y)</span></span></code></pre>
+<p>The vector <code>alpha</code> that comes back <em>is</em> the weight, expressed in the only basis the RKHS gives you for free: the data points themselves. Each <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>α</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">\alpha_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0037em">α</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.0037em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span></span></span></span> is the charge on point <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>x</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">x_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span></span></span></span>. To evaluate the weight anywhere you weigh the kernels by <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi></mrow><annotation encoding="application/x-tex">\alpha</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em"></span><span class="mord mathnormal" style="margin-right:0.0037em">α</span></span></span></span>, which is <code>gram(grid, X) @ alpha</code>. Watch it assemble: the heaviest coefficients first, each adding its own bump, the decision boundary forming out of the data.</p>
+<figure class="jax-fig"><img src="/blog/weight-lives-representer.gif" alt="A two-moons dataset where the kernel-ridge decision surface builds up term by term as data points are added, the boundary forming, reaching 99 percent" loading="lazy" width="600" height="560"/><figcaption>The weight assembling from the data. Each frame adds one more term <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>α</mi><mi>i</mi></msub><mtext> </mtext><mi>k</mi><mo stretchy="false">(</mo><msub><mi>x</mi><mi>i</mi></msub><mo separator="true">,</mo><mo>⋅</mo><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\alpha_i\, k(x_i, \cdot)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0037em">α</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.0037em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0315em">k</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord">⋅</span><span class="mclose">)</span></span></span></span> of the real kernel-ridge solution, heaviest first; the field is their running sum and the black line is where it crosses zero. The weight is never anything but a combination of the points, and the full sum reads the two moons at 99%. Rendered by <code>scripts/render_weight_lives_gifs.py</code>.</figcaption></figure>
+<h2 id="why-the-shared-space-is-worth-it">Why the shared space is worth it<a class="heading-anchor-link" aria-label="Link to heading" href="#why-the-shared-space-is-worth-it"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>A weight that lives among the data, rather than off in a space of directions, can do something a direction cannot: bend around nested classes. Two concentric rings are the cleanest case. The best linear weight is a single direction with a threshold, and <code>sklearn</code>’s logistic regression finds it, but no direction separates an inner disk from an outer ring, so it sits at chance. The kernel weight, the same <code>α</code> solve, wraps a closed boundary around the inner ring.</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">from</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> sklearn.datasets </span><span style="color:#D73A49;--shiki-dark:#F47067">import</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> make_circles</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">from</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> sklearn.linear_model </span><span style="color:#D73A49;--shiki-dark:#F47067">import</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> LogisticRegression</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">X, y </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> make_circles(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">260</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">noise</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0.07</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">factor</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0.4</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">random_state</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">ys </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.where(jnp.asarray(y) </span><span style="color:#D73A49;--shiki-dark:#F47067">==</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1.0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1.0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">lin </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> LogisticRegression().fit(X, y)                   </span><span style="color:#6A737D;--shiki-dark:#768390"># a direction</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">alpha </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> kernel_ridge(jnp.asarray(X), ys, </span><span style="color:#E36209;--shiki-dark:#F69D50">lam</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0.2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)      </span><span style="color:#6A737D;--shiki-dark:#768390"># a placed combination</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">k_pred </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.sign(gram(jnp.asarray(X), jnp.asarray(X)) </span><span style="color:#D73A49;--shiki-dark:#F47067">@</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> alpha)</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">print</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(</span><span style="color:#D73A49;--shiki-dark:#F47067">f</span><span style="color:#032F62;--shiki-dark:#96D0FF">&quot;line: </span><span style="color:#005CC5;--shiki-dark:#F47067">{</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">100</span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7">lin.score(X, y)</span><span style="color:#D73A49;--shiki-dark:#F47067">:.0f</span><span style="color:#005CC5;--shiki-dark:#F47067">}</span><span style="color:#032F62;--shiki-dark:#96D0FF">%   kernel: </span><span style="color:#005CC5;--shiki-dark:#F47067">{</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">100</span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(k_pred </span><span style="color:#D73A49;--shiki-dark:#F47067">==</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> ys).mean()</span><span style="color:#D73A49;--shiki-dark:#F47067">:.0f</span><span style="color:#005CC5;--shiki-dark:#F47067">}</span><span style="color:#032F62;--shiki-dark:#96D0FF">%&quot;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#6A737D;--shiki-dark:#768390"># line: 50%   kernel: 100%</span></span></code></pre>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/weight-lives-rings.gif" alt="Two panels on nested rings: the best linear weight reaches 50 percent while the placed kernel weight reaches 100 percent, its circular boundary forming" loading="lazy" width="946" height="517"/><figcaption>The same rings, two weights. On the left the best linear weight, a direction, lands at 50%: no angle separates classes that are nested rather than side by side. On the right the kernel weight, a combination placed among the data, closes a boundary around the inner ring and reaches 100%. Both accuracies are from the run above. Rendered by <code>scripts/render_weight_lives_gifs.py</code>.</figcaption></figure>
+<h2 id="how-the-placed-weight-reads-a-point">How the placed weight reads a point<a class="heading-anchor-link" aria-label="Link to heading" href="#how-the-placed-weight-reads-a-point"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Notice what the rings demo never did: it never built a single new coordinate. There is no explicit feature vector anywhere in this code, no lifted space we construct by hand. The prediction at a query is the reproducing property made literal, <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>f</mi><mo stretchy="false">(</mo><mi>q</mi><mo stretchy="false">)</mo><mo>=</mo><mo stretchy="false">⟨</mo><mi>f</mi><mo separator="true">,</mo><mi>ϕ</mi><mo stretchy="false">(</mo><mi>q</mi><mo stretchy="false">)</mo><mo stretchy="false">⟩</mo><mo>=</mo><msub><mo>∑</mo><mi>i</mi></msub><msub><mi>α</mi><mi>i</mi></msub><mtext> </mtext><mi>k</mi><mo stretchy="false">(</mo><msub><mi>x</mi><mi>i</mi></msub><mo separator="true">,</mo><mi>q</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">f(q) = \langle f, \phi(q)\rangle = \sum_i \alpha_i\, k(x_i, q)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord mathnormal" style="margin-right:0.1076em">f</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0359em">q</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mopen">⟨</span><span class="mord mathnormal" style="margin-right:0.1076em">f</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal">ϕ</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0359em">q</span><span class="mclose">)⟩</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1.0497em;vertical-align:-0.2997em"></span><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:0em">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.162em"><span style="top:-2.4003em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2997em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0037em">α</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.0037em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0315em">k</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0359em">q</span><span class="mclose">)</span></span></span></span>: the query is compared to each data point by the kernel, those similarities are scaled by the coefficients, and the signed sum is the score. The feature map <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ϕ</mi></mrow><annotation encoding="application/x-tex">\phi</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em"></span><span class="mord mathnormal">ϕ</span></span></span></span> exists in the theory, but the code only ever touches it through <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi></mrow><annotation encoding="application/x-tex">k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em"></span><span class="mord mathnormal" style="margin-right:0.0315em">k</span></span></span></span>.</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">q </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.array([</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1.7</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0.35</span><span style="color:#24292E;--shiki-dark:#ADBAC7">])</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">kq </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.exp(</span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7">((jnp.asarray(X) </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> q) </span><span style="color:#D73A49;--shiki-dark:#F47067">**</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">).sum(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">2</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> SIG</span><span style="color:#D73A49;--shiki-dark:#F47067"> **</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">))   </span><span style="color:#6A737D;--shiki-dark:#768390"># k(xᵢ, q)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">fq </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (alpha </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> kq).sum()                                             </span><span style="color:#6A737D;--shiki-dark:#768390"># f(q) = Σ αᵢ k(xᵢ, q)</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">print</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(</span><span style="color:#D73A49;--shiki-dark:#F47067">f</span><span style="color:#032F62;--shiki-dark:#96D0FF">&quot;f(q) = </span><span style="color:#005CC5;--shiki-dark:#F47067">{</span><span style="color:#24292E;--shiki-dark:#ADBAC7">fq</span><span style="color:#D73A49;--shiki-dark:#F47067">:+.2f</span><span style="color:#005CC5;--shiki-dark:#F47067">}</span><span style="color:#032F62;--shiki-dark:#96D0FF">  -&gt;  </span><span style="color:#005CC5;--shiki-dark:#F47067">{</span><span style="color:#032F62;--shiki-dark:#96D0FF">&#39;orange&#39;</span><span style="color:#D73A49;--shiki-dark:#F47067"> if</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> fq </span><span style="color:#D73A49;--shiki-dark:#F47067">&gt;=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 0</span><span style="color:#D73A49;--shiki-dark:#F47067"> else</span><span style="color:#032F62;--shiki-dark:#96D0FF"> &#39;blue&#39;</span><span style="color:#005CC5;--shiki-dark:#F47067">}</span><span style="color:#032F62;--shiki-dark:#96D0FF"> class&quot;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span></code></pre>
+<figure class="jax-fig"><img src="/blog/weight-lives-vote.gif" alt="A query point moving through two moons; at each position it links to its most-similar data points and the signed kernel-weighted sum decides its class" loading="lazy" width="624" height="592"/><figcaption>Every prediction is a similarity-weighted vote. The query (the star) is read by its kernel similarity <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi><mo stretchy="false">(</mo><msub><mi>x</mi><mi>i</mi></msub><mo separator="true">,</mo><mi>q</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">k(x_i, q)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord mathnormal" style="margin-right:0.0315em">k</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0359em">q</span><span class="mclose">)</span></span></span></span> to each data point; the links show the points that vote loudest, their width set by that similarity and their color by the sign of their contribution <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>α</mi><mi>i</mi></msub><mtext> </mtext><mi>k</mi><mo stretchy="false">(</mo><msub><mi>x</mi><mi>i</mi></msub><mo separator="true">,</mo><mi>q</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\alpha_i\, k(x_i, q)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0037em">α</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:-0.0037em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0315em">k</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0359em">q</span><span class="mclose">)</span></span></span></span>. The signed sum <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>f</mi><mo stretchy="false">(</mo><mi>q</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">f(q)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord mathnormal" style="margin-right:0.1076em">f</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0359em">q</span><span class="mclose">)</span></span></span></span> decides the class. No coordinates are built and nothing is lifted; the weight is read purely through the kernel, exactly the code above. Rendered by <code>scripts/render_weight_lives_gifs.py</code>.</figcaption></figure>
+<p>The weight never left the data. It is a list of coefficients on the points you already have, solved in one shot, read by similarity. That is the whole of what it means to have a reproducing kernel Hilbert space: the weight and the data finally share a space, and the weight is just the data, recombined.</p>
+<hr/>
+<p><em>The RKHS is <a href="https://doi.org/10.1090/S0002-9947-1950-0051437-7">Aronszajn (1950)</a>; the representer theorem is <a href="https://link.springer.com/chapter/10.1007/3-540-44581-1_27">Schölkopf, Herbrich and Smola (2001)</a>; the textbook is <a href="https://mitpress.mit.edu/9780262536578/learning-with-kernels/">Schölkopf and Smola (2002)</a>; the input-space-center kernel is <a href="https://arxiv.org/abs/2605.03262">Bouhsine (2026)</a>. The conceptual companion is <a href="/blog/where-does-a-weight-live/">Where Does a Weight Live?</a>.</em></p>
+<section class="cite-as" aria-labelledby="cite-where-does-a-weight-live-jax-flax-nnx" data-astro-cid-p234urri> <h2 id="cite-where-does-a-weight-live-jax-flax-nnx" data-astro-cid-p234urri>Cite as</h2> <p class="cite-line" data-astro-cid-p234urri>
+Bouhsine, T. (<time datetime="2026-06-25T17:00:00.000Z" data-astro-cid-p234urri>2026, June 25</time>).
+<em data-astro-cid-p234urri>Where a Weight Lives, in JAX/Flax NNX</em>. Records of the !mmortal Data Scientist.
+<a href="https://tahabouhsine.com/blog/where-does-a-weight-live-jax-flax-nnx/" data-astro-cid-p234urri>https://tahabouhsine.com/blog/where-does-a-weight-live-jax-flax-nnx/</a> </p> <details class="cite-bib" data-astro-cid-p234urri> <summary data-astro-cid-p234urri>BibTeX</summary> <pre data-astro-cid-p234urri><code class="bibtex" data-astro-cid-p234urri>@misc{bouhsine2026wheredoesaweightlivejaxflaxnnx,
+  author       = {Bouhsine, Taha},
+  title        = {Where a Weight Lives, in JAX/Flax NNX},
+  year         = {2026},
+  month        = {jun},
+  howpublished = {\url{https://tahabouhsine.com/blog/where-does-a-weight-live-jax-flax-nnx/}},
+  note         = {Blog post, Records of the !mmortal Data Scientist}
+}</code></pre> <button type="button" class="cite-copy" data-copy="@misc{bouhsine2026wheredoesaweightlivejaxflaxnnx,
+  author       = {Bouhsine, Taha},
+  title        = {Where a Weight Lives, in JAX/Flax NNX},
+  year         = {2026},
+  month        = {jun},
+  howpublished = {\url{https://tahabouhsine.com/blog/where-does-a-weight-live-jax-flax-nnx/}},
+  note         = {Blog post, Records of the !mmortal Data Scientist}
+}" aria-label="Copy BibTeX" data-astro-cid-p234urri>copy</button> </details>  </section>  <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('.cite-copy').forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(btn.dataset.copy || '');
+            const original = btn.textContent;
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = original;
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>
+<style>
+.jax-fig { margin: 1.8rem auto; text-align: center; }
+.jax-fig img { max-width: 520px; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; background: #fbf8f1; }
+.jax-fig-wide img { max-width: 880px; }
+.jax-fig figcaption { margin-top: 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--fg-muted); max-width: 64ch; margin-left: auto; margin-right: auto; }
+</style>  <section class="references" aria-labelledby="references-heading" data-astro-cid-rn7nvbl4><h2 id="references-heading" data-astro-cid-rn7nvbl4>References</h2><ol data-astro-cid-rn7nvbl4><li id="ref-1" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Aronszajn, N.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(1950)</span>. <span class="ref-title" data-astro-cid-rn7nvbl4>Theory of Reproducing Kernels</span>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>Transactions of the American Mathematical Society</span>.</li><li id="ref-2" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Schölkopf, B., Herbrich, R., Smola, A. J.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2001)</span>. <span class="ref-title" data-astro-cid-rn7nvbl4>A Generalized Representer Theorem</span>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>COLT 2001</span>.</li><li id="ref-3" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Schölkopf, B., Smola, A. J.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2002)</span>. <span class="ref-title" data-astro-cid-rn7nvbl4>Learning with Kernels</span>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>MIT Press</span>.</li><li id="ref-4" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Bouhsine, T.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2026)</span>. <a class="ref-title" href="https://arxiv.org/abs/2605.03262" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance</a>.
+<a class="ref-ext" href="https://arxiv.org/abs/2605.03262" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:2605.03262</a></li></ol></section> </article> <script>(function(){const payload = {"post_title":"Where a Weight Lives, in JAX/Flax NNX","post_slug":"where-does-a-weight-live-jax-flax-nnx","post_path":"/blog/where-does-a-weight-live-jax-flax-nnx/","post_tags":"ml,kernels,rkhs,representer-theorem,jax,flax,nnx,implementation,yat,deep-learning","word_count":1157,"reading_time_minutes":6,"is_draft":false};
+
+  (() => {
+    const thresholds = [25, 50, 75, 90, 100];
+    const state = { viewed: false, sent: new Set() };
+
+    const track = (name, params = {}) => {
+      if (typeof window.__trackGA === 'function') {
+        window.__trackGA(name, {
+          ...payload,
+          ...params,
+          non_interaction: name === 'blog_post_view',
+        });
+      }
+    };
+
+    const init = () => {
+      const article = document.querySelector('[data-blog-post]');
+      if (!article) return;
+
+      if (!state.viewed) {
+        state.viewed = true;
+        track('blog_post_view');
+      }
+
+      const progress = () => {
+        const rect = article.getBoundingClientRect();
+        const articleTop = window.scrollY + rect.top;
+        const articleHeight = Math.max(1, article.offsetHeight);
+        const viewportBottom = window.scrollY + window.innerHeight;
+        return Math.max(0, Math.min(100, ((viewportBottom - articleTop) / articleHeight) * 100));
+      };
+
+      const update = () => {
+        const pct = progress();
+        thresholds.forEach((threshold) => {
+          if (pct >= threshold && !state.sent.has(threshold)) {
+            state.sent.add(threshold);
+            track('blog_post_read_depth', { read_percent: threshold });
+            if (threshold === 90) {
+              track('blog_post_read', { read_percent: threshold });
+            }
+          }
+        });
+      };
+
+      if (window.__postAnalyticsCleanup) window.__postAnalyticsCleanup();
+
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => {
+          update();
+          ticking = false;
+        });
+      };
+
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+      window.__postAnalyticsCleanup = () => {
+        window.removeEventListener('scroll', onScroll);
+        window.removeEventListener('resize', onScroll);
+      };
+      update();
+    };
+
+    init();
+    document.addEventListener('astro:page-load', init, { once: true });
+  })();
+})();</script> <aside class="related" aria-labelledby="related-heading" data-astro-cid-dpgbfi7r><h2 id="related-heading" data-astro-cid-dpgbfi7r>Related posts</h2><ul data-astro-cid-dpgbfi7r><li data-astro-cid-dpgbfi7r><a href="/blog/yat-mlp-jax-flax-nnx/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>The Yat-Kernel MLP in JAX/Flax NNX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion to What a Finite Kernel Buys an MLP: build a layer whose unit is the Yat kernel instead of a linear map plus an activation, assert it is positive definite and nonnegative, write down its exact finite feature map, train it end-to-end on two moons with no activation function, and measure the lazy-loading sparsity, the bounded off-distribution response, the RKHS capacity, and the force field that pulls each prototype onto its data.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-06-18T17:00:00.000Z" data-astro-cid-dpgbfi7r>Jun 18, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/what-can-a-weight-be-jax-flax-nnx/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>What a Weight Can Be, in JAX/Flax NNX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion: compute the price list of a kernel in JAX. The eigenvalues are the kernel&#39;s spectral density, found with an FFT; the RKHS norm of a weight is a sum over them. A corner is affordable only under a Sobolev kernel, and the same numbers place the Yat kernel honestly: universal and smooth, roomier than a Gaussian but not a Sobolev space.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-06-26T17:00:00.000Z" data-astro-cid-dpgbfi7r>Jun 26, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/handbuilt-features-jax-flax-nnx/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>The Hand-Built Network, in JAX/Flax NNX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion: build the training-free image classifier from the post in JAX. The feature extractor is pure JAX (Sobel gradients, orientation binning, patch pooling); the classifier is a Flax NNX module holding k-means prototypes that votes with the Yat kernel. Nothing is trained, and it reproduces the 83.3% on Fashion-MNIST.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-06-24T17:00:00.000Z" data-astro-cid-dpgbfi7r>Jun 24, 2026</time></span></a></li></ul></aside> <nav class="post-nav" aria-label="Adjacent posts"><a href="/blog/where-does-a-weight-live/" class="prev" rel="prev"><div class="label">← Previous</div><div class="title">Where Does a Weight Live?</div></a><a href="/blog/what-can-a-weight-be/" class="next" rel="next"><div class="label">Next →</div><div class="title">What Can a Weight Be?</div></a></nav> <section aria-label="Comments" id="giscus-mount" style="margin-top:3rem" data-giscus="{&#34;repo&#34;:&#34;mlnomadpy/blog&#34;,&#34;repoId&#34;:&#34;MDEwOlJlcG9zaXRvcnk0MDQ4MzY2NDU=&#34;,&#34;category&#34;:&#34;Announcements&#34;,&#34;categoryId&#34;:&#34;DIC_kwDOGCFRJc4C9EiR&#34;,&#34;mapping&#34;:&#34;pathname&#34;,&#34;reactionsEnabled&#34;:&#34;1&#34;,&#34;emitMetadata&#34;:&#34;0&#34;,&#34;inputPosition&#34;:&#34;top&#34;,&#34;theme&#34;:&#34;preferred_color_scheme&#34;,&#34;lang&#34;:&#34;en&#34;}"></section><script>
+    (() => {
+      const load = () => {
+        const mount = document.getElementById('giscus-mount');
+        if (!mount || mount.dataset.loaded === '1') return;
+        const cfg = JSON.parse(mount.dataset.giscus);
+        const theme = document.documentElement.getAttribute('data-theme')
+          || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        const s = document.createElement('script');
+        s.src = 'https://giscus.app/client.js';
+        s.async = true;
+        s.crossOrigin = 'anonymous';
+        const attrs = {
+          'data-repo': cfg.repo,
+          'data-repo-id': cfg.repoId,
+          'data-category': cfg.category,
+          'data-category-id': cfg.categoryId,
+          'data-mapping': cfg.mapping,
+          'data-strict': '0',
+          'data-reactions-enabled': cfg.reactionsEnabled,
+          'data-emit-metadata': cfg.emitMetadata,
+          'data-input-position': cfg.inputPosition,
+          'data-theme': theme,
+          'data-lang': cfg.lang,
+          'data-loading': 'lazy',
+        };
+        for (const k in attrs) s.setAttribute(k, attrs[k]);
+        mount.appendChild(s);
+        mount.dataset.loaded = '1';
+      };
+      load();
+      document.addEventListener('astro:page-load', load);
+      document.addEventListener('astro:after-swap', load);
+    })();
+  </script> <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('pre').forEach((pre) => {
+        if (pre.dataset.copyEnhanced) return;
+        pre.dataset.copyEnhanced = '1';
+        const btn = document.createElement('button');
+        btn.className = 'code-copy';
+        btn.type = 'button';
+        btn.textContent = 'copy';
+        btn.setAttribute('aria-label', 'Copy code');
+        btn.addEventListener('click', async () => {
+          const code = pre.querySelector('code');
+          const text = (code ? code.innerText : pre.innerText) || '';
+          try {
+            await navigator.clipboard.writeText(text);
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = 'copy';
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+        pre.appendChild(btn);
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>  </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span class="site-footer__links"> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> <a class="site-footer__support" href="https://buymeacoffee.com/mlnomadpy" target="_blank" rel="noopener noreferrer" aria-label="Support this blog on Buy Me a Coffee">
+buy me a coffee
+</a> </span> </footer> <div id="consent-banner" class="consent-banner" role="dialog" aria-live="polite" aria-label="Analytics consent" hidden><p class="consent-text">
+I use Google Analytics to see which posts get read. It sets cookies only
+      if you accept. No ads, no selling data.
+</p><div class="consent-actions"><button type="button" id="consent-decline" class="consent-btn consent-decline">Decline</button><button type="button" id="consent-accept" class="consent-btn consent-accept">Accept</button></div></div>
+
+  <script>
+    (() => {
+      const KEY = 'analytics-consent';
+      const setup = () => {
+        const banner = document.getElementById('consent-banner');
+        if (!banner) return;
+        let choice = null;
+        try { choice = localStorage.getItem(KEY); } catch (e) {}
+        // Already decided → keep hidden.
+        if (choice === 'granted' || choice === 'denied') { banner.hidden = true; return; }
+        banner.hidden = false;
+
+        const decide = (value) => {
+          try { localStorage.setItem(KEY, value); } catch (e) {}
+          banner.hidden = true;
+          if (value === 'granted' && typeof window.__loadGA === 'function') window.__loadGA();
+        };
+        const accept = document.getElementById('consent-accept');
+        const decline = document.getElementById('consent-decline');
+        if (accept && !accept.dataset.bound) {
+          accept.dataset.bound = '1';
+          accept.addEventListener('click', () => decide('granted'));
+        }
+        if (decline && !decline.dataset.bound) {
+          decline.dataset.bound = '1';
+          decline.addEventListener('click', () => decide('denied'));
+        }
+      };
+      setup();
+      document.addEventListener('astro:page-load', setup);
+    })();
+  </script>
+
+  <style>
+    /* Author `display:flex` below would otherwise override the UA [hidden]
+       rule, leaving the banner visible after a choice. This wins on specificity. */
+    .consent-banner[hidden] { display: none !important; }
+    .consent-banner {
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      right: 1rem;
+      max-width: 30rem;
+      margin-left: auto;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+      padding: 0.95rem 1.1rem;
+      background: var(--bg-elev, #fff);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      font-family: var(--sans);
+    }
+    .consent-text {
+      margin: 0;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: var(--fg-muted);
+    }
+    .consent-actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+    }
+    .consent-btn {
+      font-family: var(--sans);
+      font-size: 0.82rem;
+      padding: 0.4rem 0.95rem;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    }
+    .consent-decline {
+      background: transparent;
+      color: var(--fg-muted);
+    }
+    .consent-decline:hover { color: var(--fg); border-color: var(--fg-faint); }
+    .consent-accept {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg);
+      font-weight: 600;
+    }
+    .consent-accept:hover { filter: brightness(1.05); }
+    @media (max-width: 520px) {
+      .consent-banner { left: 0.6rem; right: 0.6rem; bottom: 0.6rem; }
+    }
+  </style> <script>
+      // Inject a fullscreen toggle button onto every .viz figure on the page.
+      (() => {
+        const ENTER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10V4h6"/><path d="M20 10V4h-6"/><path d="M4 14v6h6"/><path d="M20 14v6h-6"/></svg>';
+        const EXIT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H4v6"/><path d="M14 4h6v6"/><path d="M10 20H4v-6"/><path d="M14 20h6v-6"/></svg>';
+        const inFs = () => document.fullscreenElement || document.webkitFullscreenElement;
+        const enhance = () => {
+          document.querySelectorAll('.viz').forEach((fig) => {
+            if (fig.dataset.fsReady) return;
+            fig.dataset.fsReady = '1';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'viz-fs-btn';
+            btn.setAttribute('aria-label', 'Toggle fullscreen');
+            btn.innerHTML = ENTER_SVG + '<span>fullscreen</span>';
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              try {
+                if (inFs() === fig) {
+                  await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen?.());
+                } else if (fig.requestFullscreen) {
+                  await fig.requestFullscreen();
+                } else if (fig.webkitRequestFullscreen) {
+                  await fig.webkitRequestFullscreen();
+                }
+              } catch (_) {}
+            });
+            fig.appendChild(btn);
+          });
+          const sync = () => {
+            document.querySelectorAll('.viz-fs-btn').forEach((b) => {
+              const fig = b.parentElement;
+              const open = inFs() === fig;
+              b.innerHTML = (open ? EXIT_SVG : ENTER_SVG) + '<span>' + (open ? 'exit' : 'fullscreen') + '</span>';
+            });
+          };
+          document.addEventListener('fullscreenchange', sync);
+          document.addEventListener('webkitfullscreenchange', sync);
+        };
+        enhance();
+        document.addEventListener('astro:page-load', enhance);
+        document.addEventListener('astro:after-swap', enhance);
+      })();
+    </script> </body> </html>
