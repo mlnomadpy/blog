@@ -36,7 +36,8 @@ const CSS = `
 .vk-range-name{white-space:nowrap;}
 .vk-controls input[type=range]{accent-color:var(--accent);width:100%;min-width:86px;}
 .vk-controls input[type=checkbox]{accent-color:var(--accent);}
-.vk-controls select,.vk-controls input[type=number]{background:var(--bg-elev,#fff);color:var(--fg);border:1px solid var(--border);border-radius:5px;padding:3px 5px;font-size:12px;font-family:inherit;}
+.vk-controls select,.vk-controls input[type=number],.vk-controls input[type=text]{background:var(--bg-elev,#fff);color:var(--fg);border:1px solid var(--border);border-radius:5px;padding:3px 5px;font-size:12px;font-family:inherit;}
+.vk-text input[type=text]:focus{outline:none;border-color:var(--accent);}
 .vk-val{font-family:ui-monospace,monospace;font-size:11px;color:var(--fg-muted);min-width:30px;text-align:right;font-variant-numeric:tabular-nums;}
 .vk-readout{margin-left:auto;font-family:ui-monospace,monospace;font-size:11px;color:var(--fg-muted);white-space:nowrap;font-variant-numeric:tabular-nums;}
 .vk-tools{display:inline-flex;align-items:center;gap:4px;margin-left:4px;}
@@ -219,6 +220,12 @@ function mountOne(root, specOrFactory) {
       const inp = document.createElement('input'); inp.type = 'number'; if (c.min != null) inp.min = c.min; if (c.max != null) inp.max = c.max; inp.value = c.value; inp.style.width = (c.width || 54) + 'px'; vals[c.name] = +c.value;
       controlEls[c.name] = { input: inp, cast: v => +v };
       inp.onchange = () => { vals[c.name] = +inp.value; spec.onControl && spec.onControl(c.name, vals[c.name], api); if (c.reset !== false) doReset(); else if (!playing) render(); }; lab.appendChild(inp); row.appendChild(lab); }
+    else if (c.type === 'text') { const lab = document.createElement('label'); lab.className = 'vk-text'; if (c.label) lab.append((c.label) + ' ');
+      const inp = document.createElement('input'); inp.type = 'text'; inp.value = c.value != null ? c.value : ''; if (c.placeholder) inp.placeholder = c.placeholder; inp.style.width = (c.width || 200) + 'px';
+      if (c.maxLength) inp.maxLength = c.maxLength; inp.setAttribute('aria-label', c.label || c.name); vals[c.name] = inp.value;
+      controlEls[c.name] = { input: inp, cast: v => '' + v };
+      let deb; inp.oninput = () => { vals[c.name] = inp.value; clearTimeout(deb); deb = setTimeout(() => { spec.onControl && spec.onControl(c.name, vals[c.name], api); if (!playing) render(); }, c.debounce ?? 120); };
+      lab.appendChild(inp); row.appendChild(lab); }
     else if (c.type === 'toggle') { const lab = document.createElement('label'); const inp = document.createElement('input'); inp.type = 'checkbox'; inp.checked = !!c.value; vals[c.name] = !!c.value;
       inp.onchange = () => { vals[c.name] = inp.checked; if (!playing) render(); }; lab.appendChild(inp); lab.append(' ' + (c.label || c.name)); row.appendChild(lab); }
     else if (c.type === 'button') { const b = document.createElement('button'); b.className = 'vk-btn'; b.textContent = c.label || c.name;

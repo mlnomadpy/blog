@@ -1,0 +1,76 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 330 } = Astro.props;
+---
+<figure class="viz abstain" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The Yat kernel is local and bounded, so a character the memory has never learned
+// fires no slot and the block writes almost nothing. Type a prompt and each character
+// is tinted by its real peak memory weight, max_u k(W_u, x): bright where the memory
+// recognizes the input, dark where it is out of its depth. Real Shakespeare glows; type
+// gibberish and it goes dark. The abstention is not bolted on, it is the kernel.
+import { defineViz } from './engine/vizkit.js';
+import { gate, loadingText, T, rgba, parseColor } from './engine/draw.js';
+import { loadModel, encode, forward } from './mlprep.js';
+
+const REF = 2.6, THRESH = 1.3;   // in-distribution peak weight averages ~2.1
+const show = (c) => (c === '\n' ? '⏎' : c === ' ' ? ' ' : c);
+
+defineViz('abstain', {
+  title: 'When the memory is out of its depth, it goes dark',
+  height: 330,
+  controls: [
+    { type: 'text', name: 'prompt', label: 'prompt', value: 'To be, or not to be, that is the question', width: 300, maxLength: 120 },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) { api.state = { cache: new Map() }; gate(api, loadModel, (api, m) => { api.state.m = m; }); },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H; if (W === 0 || !st) return;
+    ctx.clearRect(0, 0, W, H);
+    if (!st.ready) { loadingText(api, 'loading the trained model…'); return; }
+    const m = st.m, prompt = (api.get('prompt') || '').slice(-120);
+    const ids = encode(m, prompt);
+    const pad = 14;
+    T(ctx, colors, 'small', { color: colors.muted }); ctx.fillText('each character tinted by its real peak memory weight, maxᵤ k(Wᵤ, x)', pad, pad);
+    if (ids.length === 0) { T(ctx, colors, 'label', { color: colors.muted }); ctx.fillText('type a prompt above (try real words, then gibberish)', pad, 48); return; }
+    let r = st.cache.get(prompt);
+    if (!r) { r = forward(m, ids); st.cache.set(prompt, r); }
+    const peak = r.peak, acc = parseColor(colors.accent);
+
+    // lay the characters out in a wrapped grid of tinted cells
+    const cw = 17, chh = 26, top = pad + 24, maxCols = Math.floor((W - pad * 2) / cw);
+    let col = 0, row = 0;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (let t = 0; t < ids.length; t++) {
+      const ch = m.meta.itos[ids[t]];
+      if (ch === '\n') { col = 0; row++; continue; }
+      if (col >= maxCols) { col = 0; row++; }
+      const x = pad + col * cw, y = top + row * chh;
+      const f = Math.min(1, peak[t] / REF);
+      ctx.fillStyle = rgba(acc, 0.05 + 0.92 * f * f);
+      ctx.fillRect(x + 0.5, y + 0.5, cw - 1, chh - 2);
+      ctx.fillStyle = f > 0.45 ? colors.bg : rgba(parseColor(colors.fg), 0.8);
+      ctx.font = '13px ui-monospace, monospace';
+      ctx.fillText(show(ch), x + cw / 2, y + chh / 2);
+      col++;
+    }
+
+    // verdict + mean
+    const mean = peak.reduce((s, v) => s + v, 0) / peak.length;
+    const lit = mean >= THRESH;
+    const by = H - pad - 16;
+    T(ctx, colors, 'value', { weight: 'b', color: lit ? '#7bbf5a' : '#4a7fb3', align: 'left', baseline: 'middle' });
+    ctx.fillText(lit ? 'the memory recognizes this' : 'the memory is out of its depth', pad, by);
+    api.readout('rd', `mean peak weight ${mean.toFixed(2)} (in-distribution ≈ 2.1) · bright = a slot fires · dark = the block writes ~nothing`);
+  },
+});
+</script>

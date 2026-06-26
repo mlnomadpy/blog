@@ -1,0 +1,96 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 460 } = Astro.props;
+---
+<figure class="viz repattr" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Type a prompt; the real trained transformer runs live in your browser, and its
+// feed-forward block shows its work. The block's output is exactly Σ_u k(W_u,x) v_u,
+// a vote over learned memory slots, so we decompose the predicted next character into
+// the slots that wrote it: each row is a real slot, the tokens it writes (decoded by
+// the unembedding), how strongly the input fires it (k), and its signed push toward
+// the answer. The reconstruction is exact because the decomposition IS the arithmetic.
+import { defineViz } from './engine/vizkit.js';
+import { gate, loadingText, softPanel, T, rgba, parseColor } from './engine/draw.js';
+import { loadModel, encode, attribution } from './mlprep.js';
+
+const POS = '#b3661b', NEG = '#4a7fb3', NROWS = 7, MAXCTX = 64;
+const show = (c) => (c === '\n' ? '\\n' : c === ' ' ? '␣' : c);
+
+defineViz('repattr', {
+  title: 'The FFN output is a representer vote:  out = Σᵤ k(Wᵤ, x) vᵤ',
+  height: 460,
+  controls: [
+    { type: 'text', name: 'prompt', label: 'prompt', value: 'To be, or not to b', width: 240, maxLength: 80 },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) { api.state = { cache: new Map() }; gate(api, loadModel, (api, m) => { api.state.m = m; }); },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H; if (W === 0 || !st) return;
+    ctx.clearRect(0, 0, W, H);
+    if (!st.ready) { loadingText(api, 'loading the trained model…'); return; }
+    const m = st.m, prompt = (api.get('prompt') || '').slice(-MAXCTX);
+    const ids = encode(m, prompt);
+    const pad = 12;
+    if (ids.length === 0) { T(ctx, colors, 'label', { color: colors.muted }); ctx.fillText('type a prompt above to run the model', pad, 40); return; }
+    let r = st.cache.get(prompt);
+    if (!r) { r = attribution(m, ids); st.cache.set(prompt, r); }
+    const itos = m.meta.itos, predC = itos[r.pred];
+
+    // ── the typed prompt + the predicted next character ──
+    let y = pad + 6;
+    T(ctx, colors, 'small', { color: colors.muted }); ctx.fillText('your prompt, run live; the block predicts the next character', pad, y);
+    y += 18;
+    ctx.font = '15px ui-monospace, SFMono-Regular, monospace'; ctx.textBaseline = 'top';
+    const tail = prompt.replace(/\n/g, '⏎').slice(-44);
+    ctx.fillStyle = colors.fg; ctx.fillText(tail, pad, y);
+    const tw = ctx.measureText(tail).width;
+    // boxed prediction
+    const bx = pad + tw + 6, bw = 22;
+    softPanel(ctx, bx, y - 3, bw, 24, colors, { r: 5, border: colors.accent });
+    ctx.fillStyle = colors.accent; ctx.textAlign = 'center'; ctx.fillText(show(predC), bx + bw / 2, y);
+    ctx.textAlign = 'left';
+    // top-5 next chars
+    const order = [...r.probs.keys()].sort((a, b) => r.probs[b] - r.probs[a]).slice(0, 5);
+    T(ctx, colors, 'small', { color: colors.faint }); ctx.fillText('also likely: ' + order.slice(1).map(i => `${show(itos[i])} ${(r.probs[i] * 100 | 0)}%`).join('   '), pad, y + 26);
+
+    // ── the representer decomposition ──
+    y += 54;
+    T(ctx, colors, 'label', { color: colors.fg }); ctx.fillText('which memory slots wrote that prediction', pad, y);
+    y += 8;
+    const panelY = y + 10, panelH = H - panelY - pad;
+    softPanel(ctx, pad, panelY, W - pad * 2, panelH, colors, { r: 10 });
+    const rows = r.rows.slice(0, NROWS);
+    const maxPush = Math.max(...rows.map(d => Math.abs(d.push)), 1e-6);
+    const labW = 92, midX = pad + 14 + labW + (W - pad * 2 - labW - 120) * 0.5, halfW = (W - pad * 2 - labW - 120) * 0.46;
+    const rowH = (panelH - 24) / NROWS;
+    // zero line
+    ctx.strokeStyle = rgba(parseColor(colors.border), 0.8); ctx.beginPath(); ctx.moveTo(midX, panelY + 12); ctx.lineTo(midX, panelY + panelH - 12); ctx.stroke();
+    rows.forEach((d, i) => {
+      const ry = panelY + 14 + i * rowH + rowH / 2;
+      // slot id + the tokens it writes
+      T(ctx, colors, 'small', { color: colors.muted, align: 'left', baseline: 'middle' });
+      ctx.fillText(`slot ${d.u}`, pad + 12, ry - 7);
+      ctx.font = '12px ui-monospace, monospace'; ctx.fillStyle = colors.fg;
+      ctx.fillText('writes ' + d.writes.slice(0, 4).map(show).join(' '), pad + 12, ry + 8);
+      // signed push bar
+      const bwd = (d.push / maxPush) * halfW, col = d.push >= 0 ? POS : NEG;
+      ctx.fillStyle = col; const x0 = d.push >= 0 ? midX : midX + bwd;
+      ctx.fillRect(x0, ry - rowH * 0.26, Math.abs(bwd), rowH * 0.52);
+      // k value at right
+      T(ctx, colors, 'small', { color: colors.faint, align: 'right', baseline: 'middle' });
+      ctx.fillText(`k=${d.k.toFixed(2)}`, W - pad - 14, ry);
+    });
+
+    api.readout('rd', `out = Σᵤ k(Wᵤ,x) vᵤ · reconstruction exact · the top slots all write “${show(predC)}” · type any prompt`);
+  },
+});

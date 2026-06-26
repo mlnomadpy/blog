@@ -28,7 +28,7 @@ const roughest = {
   matern: (x) => 1 - Math.abs(x),                                                 // a corner
   laplace: (x) => Math.exp(-Math.abs(x) / 0.33),                                  // a sharp cusp
   brownian: (x) => _walk[Math.min(79, Math.max(0, Math.round((x + 1) / 2 * 79)))],// a jagged path
-  yat: (x) => Math.max(0, 1 - Math.abs(x)) * 1.0,                                 // a corner (Sobolev grade)
+  yat: (x) => Math.exp(-(x * x) / (2 * 0.5 * 0.5)) * Math.cos(6 * x),            // a smooth, localized wave packet (no corner)
 };
 // x: 0 = Euclidean space, 1 = the sphere.  y: 0 = forbids roughness (top), 1 = allows it (bottom).
 const KERNELS = [
@@ -38,7 +38,7 @@ const KERNELS = [
   { id: 'laplace', name: 'Laplace', x: 0.30, y: 0.74, desc: 'the Matérn at ν = ½; a genuine Sobolev space with room for kinks.' },
   { id: 'band', name: 'bandlimited (sinc)', x: 0.50, y: 0.34, desc: 'a hard frequency cutoff: every mode below it is free, every mode above forbidden.' },
   { id: 'brownian', name: 'Brownian (min)', x: 0.20, y: 0.90, desc: 'eigenvalues decay so slowly the space holds genuinely jagged H¹ paths.' },
-  { id: 'yat', name: 'Yat', x: 0.84, y: 0.64, desc: 'squared alignment × inverse-multiquadric: a Sobolev-grade RKHS, on the sphere. Where this series lives.' },
+  { id: 'yat', name: 'Yat', x: 0.84, y: 0.30, desc: 'squared alignment × inverse-multiquadric: a universal, smooth RKHS (exponential decay), roomier than the Gaussian but not Sobolev. On the sphere; its gift is locality.' },
 ];
 
 defineViz('kernelzoo', {

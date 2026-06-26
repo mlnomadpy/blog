@@ -1,0 +1,180 @@
+---
+title: "What a Weight Can Be, in JAX/Flax NNX"
+seoTitle: "Kernel RKHS spectra and norms in JAX"
+description: "A runnable companion: compute the price list of a kernel in JAX. The eigenvalues are the kernel's spectral density, found with an FFT; the RKHS norm of a weight is a sum over them. A corner is affordable only under a Sobolev kernel, and the same numbers place the Yat kernel honestly: universal and smooth, roomier than a Gaussian but not a Sobolev space."
+seoDescription: "Compute kernel eigenvalues and RKHS norms in JAX. A corner is finite only under Sobolev; the Yat kernel's IMQ spectrum is exponential, not polynomial."
+pubDate: 2026-06-26T10:00:00-07:00
+draft: false
+tags: [ml, kernels, rkhs, sobolev, sphere, spectrum, jax, flax, nnx, implementation, yat, theory]
+references:
+  - authors: "Schoenberg, I. J."
+    year: 1942
+    title: "Positive Definite Functions on Spheres"
+    venue: "Duke Mathematical Journal"
+  - authors: "Wendland, H."
+    year: 2004
+    title: "Scattered Data Approximation"
+    venue: "Cambridge University Press"
+  - authors: "Steinwart, I., Christmann, A."
+    year: 2008
+    title: "Support Vector Machines"
+    venue: "Springer"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+keywords:
+  - kernel eigenvalues JAX
+  - RKHS norm computation
+  - Sobolev kernel spectral density
+  - inverse multiquadric eigenvalue decay
+  - kernel ridge corner fit JAX
+---
+import CiteAs from '../../components/CiteAs.astro';
+
+*The [explainer](/blog/what-can-a-weight-be/) said a kernel is a price list for roughness: its eigenvalues set a cost for every frequency, and the RKHS is the weights you can afford. This is that, in JAX. The eigenvalues are the kernel's spectral density, which a fast Fourier transform hands you for free; the RKHS norm of a weight is a single sum over them; and the same numbers settle, honestly, where the Yat kernel actually lives. Every number is from a real run; the script is `scripts/render_weight_be_gifs.py`.*
+
+## A kernel's eigenvalues are its spectral density
+
+On a periodic domain a translation-invariant kernel $k(x, y) = \kappa(x - y)$ is diagonal in the Fourier basis: its eigenfunctions are the modes $\cos(kx), \sin(kx)$, and its eigenvalues $\lambda_k$ are the Fourier transform of $\kappa$. So the whole price list is one FFT.
+
+```python
+import jax, jax.numpy as jnp
+
+N = 2048
+grid = jnp.linspace(-jnp.pi, jnp.pi, N, endpoint=False)
+
+@jax.jit
+def spectrum(kappa):                                   # λₖ, the kernel's eigenvalues
+    return jnp.fft.rfft(jnp.fft.ifftshift(kappa)).real
+```
+
+Feed it three kernels and the three personalities from the explainer fall straight out. The decays are known in closed form, and the FFT agrees with them down to floating-point precision:
+
+```python
+sig, eps = 0.35, 0.12
+lam_gauss = spectrum(jnp.exp(-grid**2 / (2*sig**2)))   # λₖ ∝ exp(−σ²k²/2)   super-exponential
+lam_sobol = spectrum(jnp.exp(-jnp.abs(grid) / sig))    # λₖ ∝ (1 + σ²k²)⁻¹    polynomial ~ k⁻²
+lam_imq   = spectrum(1.0 / (grid**2 + eps))            # λₖ ∝ exp(−√ε·k)      exponential
+```
+
+The Gaussian's eigenvalues fall off a cliff, so its space holds only the smoothest, analytic weights. The Sobolev kernel's fall like a gentle power, $\lambda_k \sim k^{-2}$, leaving room for rougher functions. The inverse-multiquadric, which is the Yat kernel's distance gate, falls off exponentially: faster than the Sobolev kernel, slower than the Gaussian, sitting squarely between them.
+
+<figure class="jax-fig">
+  <img src="/blog/weight-be-spectra.gif" alt="The eigenvalue decay of three kernels on a log scale, drawing themselves: Gaussian a steep cliff, Sobolev a gentle nearly-flat slope, inverse-multiquadric a straight line in between" loading="lazy" width="660" height="500" />
+  <figcaption>The three price lists. On a log scale a super-exponential decay (Gaussian) is a plunging parabola, a polynomial decay (Sobolev) is nearly flat, and an exponential decay (the inverse-multiquadric, the Yat denominator) is a straight line, sitting between the two. The decay is the whole personality of the kernel. Rendered by <code>scripts/render_weight_be_gifs.py</code>.</figcaption>
+</figure>
+
+## The bill: which weights are affordable
+
+A weight written in the modes, $f = \sum_k c_k\,\phi_k$, has the RKHS norm
+
+$$
+\lVert f \rVert_{\mathcal{H}}^2 = \sum_k \frac{c_k^2}{\lambda_k},
+$$
+
+one charge per mode. A corner is a triangle wave, whose energy decays as $c_k^2 \sim k^{-4}$. Sum the charges and watch the bill.
+
+```python
+import numpy as np
+k = jnp.arange(1, 91)
+ck2 = jnp.where(k % 2 == 1, (1.0 / k**2)**2, 0.0)      # a corner: cₖ² ~ 1/k⁴
+ck2 = ck2 / ck2.sum()
+
+def bill(lam_k):                                       # the running RKHS norm Σ cₖ²/λₖ
+    return jnp.cumsum(ck2 / lam_k)
+```
+
+Under the Sobolev price list the charges shrink like $k^{-4} \cdot k^{2} = k^{-2}$, so the bill converges: the corner is in the space. Under the Gaussian the charges explode like $k^{-4}\,e^{\sigma^2 k^2 / 2}$, so the bill runs to infinity fast. And under the inverse-multiquadric the charges grow like $k^{-4}\,e^{\sqrt{\varepsilon}\,k}$: the bill still diverges, just slowly. A corner is not in the Yat kernel's space either, only it takes many more modes to notice.
+
+<figure class="jax-fig">
+  <img src="/blog/weight-be-bill.gif" alt="A corner's running RKHS bill on a log scale: the Sobolev curve stays flat and finite, the Gaussian shoots to an unaffordable ceiling within about 20 modes, the inverse-multiquadric climbs slowly and crosses the ceiling near 90 modes" loading="lazy" width="660" height="500" />
+  <figcaption>A corner's bill, mode by mode. Only the Sobolev bill stays finite (the corner is admitted). The Gaussian's bill reaches the unaffordable ceiling within about twenty modes; the Yat / inverse-multiquadric bill climbs slowly and crosses it near ninety. A corner is too rough for both, but the Yat space is far roomier than the Gaussian's. Rendered by <code>scripts/render_weight_be_gifs.py</code>.</figcaption>
+</figure>
+
+## The same corner, fit in two homes
+
+You can feel the difference without any spectra. Fit a tent by kernel ridge, with a Gaussian, a Yat (inverse-multiquadric), and a Sobolev (Laplace) kernel, and lower the penalty. The Sobolev fit sharpens into the corner; both smooth kernels, the Gaussian and the Yat, round it off forever, because a corner is in neither of their spaces at any price. The placed weight is the representer form, written here as a tiny Flax NNX module that holds the centers and coefficients and is never trained.
+
+```python
+from flax import nnx
+
+class KernelWeight(nnx.Module):
+    """A placed weight: centers X, coefficients α, read by the kernel. Nothing trained."""
+    def __init__(self, X, alpha, kfn):
+        self.X = nnx.Variable(X); self.alpha = nnx.Variable(alpha); self.kfn = kfn
+    def __call__(self, xq):
+        return self.kfn(xq[:, None], self.X.value[None, :]) @ self.alpha.value
+
+def ridge(X, y, kfn, lam):                             # solve (G + λI) α = y, the representer weight
+    G = kfn(X[:, None], X[None, :])
+    alpha = jnp.linalg.solve(G + lam * jnp.eye(len(X)), y)
+    return KernelWeight(X, alpha, kfn)
+
+gauss = lambda a, b: jnp.exp(-((a - b)**2) / (2 * 0.14**2))
+sobol = lambda a, b: jnp.exp(-jnp.abs(a - b) / 0.14)   # Laplace = H¹
+yat   = lambda a, b: 1.0 / ((a - b)**2 + 0.03)         # inverse-multiquadric gate
+```
+
+<figure class="jax-fig">
+  <img src="/blog/weight-be-corner.gif" alt="A tent signal fit by kernel ridge with a Gaussian, a Yat, and a Sobolev kernel as the penalty is lowered; both the Gaussian and the Yat fit round the apex while only the Sobolev fit sharpens into the corner" loading="lazy" width="640" height="500" />
+  <figcaption>Lowering the penalty, only the Sobolev fit finds the corner. All three are real kernel-ridge solves on the same tent; as the penalty λ falls, the Sobolev (Laplace) fit turns the apex into a point, while both smooth kernels, the Gaussian and the Yat, keep rounding it, because neither space can hold a corner at any cost. Rendered by <code>scripts/render_weight_be_gifs.py</code>.</figcaption>
+</figure>
+
+## On the sphere, the modes are harmonics
+
+Normalized data lives on a sphere, where the natural kernels depend only on the angle, $k(x, y) = \kappa(\langle x, y\rangle)$. Their eigenfunctions are the spherical harmonics, graded by degree, and the eigenvalue of a whole degree is its Legendre coefficient (the Funk-Hecke theorem):
+
+$$
+b_k = \frac{2k + 1}{2} \int_{-1}^{1} \kappa(t)\, P_k(t)\, dt .
+$$
+
+```python
+def legendre(k, t):                                    # Pₖ by recurrence
+    p0, p1 = jnp.ones_like(t), t
+    for n in range(1, k):
+        p0, p1 = p1, ((2*n+1) * t * p1 - n * p0) / (n + 1)
+    return p1 if k > 0 else jnp.ones_like(t)
+
+t = jnp.linspace(-1, 1, 400)
+def degree_spectrum(kappa, K=10):                      # bₖ for a zonal kernel κ(t)
+    return jnp.array([(2*k+1)/2 * jnp.trapezoid(kappa(t) * legendre(k, t), t) for k in range(K+1)])
+```
+
+Sharpen the cap, $\kappa(t) = e^{s(t - 1)}$, and its high degrees grow cheaper, so the same weight (a sum of caps at a few prototypes) is allowed to ripple faster across the globe.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/weight-be-sphere.gif" alt="A weight on a shaded sphere as a zonal kernel sharpens, the lobes tightening, alongside the kernel's real Legendre spectrum whose high-degree bars rise" loading="lazy" width="946" height="548" />
+  <figcaption>The weight on the globe, and the kernel's real Legendre spectrum beside it. As the kernel sharpens, the high harmonic degrees grow affordable and the same weight ripples finer. This is the home normalized features live on, and a Yat prototype is a point on it. Rendered by <code>scripts/render_weight_be_gifs.py</code>.</figcaption>
+</figure>
+
+## Where the Yat kernel actually sits
+
+So which home does this series' prototype move into? The Yat kernel is a squared alignment times an inverse-multiquadric distance gate, $k(x, W) = (\langle x, W\rangle + b)^2 / (\lVert x - W\rVert^2 + \varepsilon)$, and its smoothness is set by that gate. The numbers above are unambiguous: the inverse-multiquadric's eigenvalues decay *exponentially*, not like the Matern family's polynomial $k^{-2s}$. So the Yat kernel does not live in a Sobolev space, and a corner is not in its RKHS, the bill diverges, only slowly.
+
+What it is instead is the more useful thing for this series. Its eigenvalues fall slower than a Gaussian's, so its space is strictly larger, and it is universal for $\varepsilon > 0$: it can approximate any continuous target arbitrarily well. And on normalized inputs it is a zonal kernel of $\langle x, W\rangle$, so its weights are graded by spherical harmonics. The reason a Yat prototype can be a sharp, legible picture is not that its space is Sobolev-rough; it is that its denominator is a heavy inverse-square law in *space*, which is a different axis from frequency smoothness entirely: it buys locality, a bounded response, and a center that stays in input space. That locality, not roughness, is what makes the prototype a picture you can point at.
+
+```python
+# the three decays, side by side: super-exponential, polynomial, exponential
+for name, lam in [('Gaussian', lam_gauss), ('Sobolev', lam_sobol), ('Yat / IMQ', lam_imq)]:
+    l = np.asarray(lam); l = l / l[1]
+    print(f'{name:10s} λ₈={l[8]:.1e}  λ₁₆={l[16]:.1e}  λ₃₂={l[32]:.1e}')
+# Gaussian   λ₈=2.1e-02  λ₁₆=1.6e-07  λ₃₂=3.7e-33     (a cliff: analytic only)
+# Sobolev    λ₈=1.3e-01  λ₁₆=3.5e-02  λ₃₂=8.9e-03     (polynomial: corners allowed)
+# Yat / IMQ  λ₈=8.7e-02  λ₁₆=5.4e-03  λ₃₂=2.5e-06     (exponential: smooth, universal, between)
+```
+
+That is the honest answer to what a weight can be. It can be exactly as rough as the kernel's eigenvalues let it afford, on exactly the geometry the kernel is built around, and the Yat kernel chooses a smooth, universal, local home on the sphere, not a Sobolev one.
+
+---
+
+*Positive-definite kernels on the sphere are [Schoenberg (1942)](https://doi.org/10.1215/S0012-7094-42-00908-6); native spaces and the Sobolev correspondence are in [Wendland (2004)](https://www.cambridge.org/core/books/scattered-data-approximation/980EEC9DBC4CAA711D089187818135E3); the smallness of the Gaussian RKHS is in [Steinwart and Christmann (2008)](https://link.springer.com/book/10.1007/978-0-387-77242-4); the polynomial-alignment and IMQ construction is [Bouhsine (2026)](https://arxiv.org/abs/2605.03262). The conceptual companion is [What Can a Weight Be?](/blog/what-can-a-weight-be/).*
+
+<CiteAs slug="what-can-a-weight-be-jax-flax-nnx" title="What a Weight Can Be, in JAX/Flax NNX" pubDate="2026-06-26T10:00:00-07:00" />
+
+<style>{`
+.jax-fig { margin: 1.8rem auto; text-align: center; }
+.jax-fig img { max-width: 540px; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; background: #fbf8f1; }
+.jax-fig-wide img { max-width: 880px; }
+.jax-fig figcaption { margin-top: 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--fg-muted); max-width: 64ch; margin-left: auto; margin-right: auto; }
+`}</style>
