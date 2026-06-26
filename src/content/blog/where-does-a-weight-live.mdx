@@ -1,0 +1,103 @@
+---
+title: "Where Does a Weight Live?"
+seoTitle: "Where Does a Weight Live? RKHS, Made Visual"
+description: "A standard neuron's weight and its input never actually meet: one is a point you can see, the other an arrow off in its own space, joined only by a shadow. This is what a reproducing kernel Hilbert space fixes: it gives input and weight one shared address, where the optimal weight is built from the data itself and sits right next to it. Four interactive panels."
+seoDescription: "Input space and weight space are two separate worlds joined by a dot product. An RKHS makes them one space where the weight is a point among the data."
+pubDate: 2026-06-25
+draft: true
+tags: [ml, kernels, rkhs, representer-theorem, geometry, interpretability, yat, deep-learning, theory]
+companion: where-does-a-weight-live-jax-flax-nnx
+references:
+  - authors: "Aronszajn, N."
+    year: 1950
+    title: "Theory of Reproducing Kernels"
+    venue: "Transactions of the American Mathematical Society"
+  - authors: "Schölkopf, B., Herbrich, R., Smola, A. J."
+    year: 2001
+    title: "A Generalized Representer Theorem"
+    venue: "COLT 2001"
+  - authors: "Schölkopf, B., Smola, A. J."
+    year: 2002
+    title: "Learning with Kernels"
+    venue: "MIT Press"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+keywords:
+  - reproducing kernel Hilbert space explained
+  - input space vs weight space
+  - representer theorem visual
+  - kernel feature map intuition
+  - weight as a point in input space
+---
+import TwoReadingsWeight from '../../components/viz/TwoReadingsWeight.astro';
+import DirectionVsLocation from '../../components/viz/DirectionVsLocation.astro';
+import RepresenterBuild from '../../components/viz/RepresenterBuild.astro';
+import PlaceableWeightRings from '../../components/viz/PlaceableWeightRings.astro';
+
+A neuron writes down $w^\top x$ and we read it as though the weight and the input are together, in the same place, doing something to each other. They are not. They are strangers from two different worlds, and the dot product is the only word they share.
+
+Look at what each one actually is. Your input $x$ is a point you can put on a map: an image, a location in the data cloud, a thing you can see and point at. The weight $w$ is none of those. It is an arrow, a direction, a rule that says "project onto me and read off the shadow." You cannot ask where $w$ sits among your images, because it does not sit anywhere among them. It lives in a different space entirely, the space of directions, and it only ever touches the data sideways, as a length cast onto a line.
+
+So here is the question this whole post is about. **Where does a weight live, and could you ever put it in the same space as your data, close enough to point at?** The answer is yes, and the thing that does it has an intimidating name, a reproducing kernel Hilbert space, but a very simple job: it gives the weight an address next to the data.
+
+## Two readings of the same handle
+
+Drag the weight and the test point below. In the first reading, the weight is what it is in an ordinary neuron: a direction. To use it on an input you drop the input's shadow onto the arrow, and the number you get out is `w · x`. Notice that the weight is off on its own, anchored to the origin, pointing; it is nowhere near the data, and "how far is the weight from this point" has no answer.
+
+<TwoReadingsWeight client:visible caption="Read the weight as a direction (top option) and the only thing connecting it to the input is the dashed shadow, the projection w·x. Read it as a place (second option) and the same weight becomes a point sitting in the data, joined to the input by an honest distance. Drag both handles; switch the reading." />
+
+Now switch the reading to "a place." The same handle is suddenly a point in the data cloud, and the way you compare it to an input is not a shadow but a distance: how close does $x$ sit to $w$? That second reading is the entire idea. Nothing about the data changed. We changed what kind of object the weight is allowed to be, from a direction you project onto into a location you can stand next to.
+
+## Why "separate spaces" is the real problem
+
+The discomfort is worth making precise, because it is the thing the kernel will repair. In the ordinary picture there are two spaces. There is **input space**, where your data lives: every image is a point, distances between images mean something, you can cluster them and look at them. And there is **weight space**, where `w` lives: a space not of points but of rules, each one a way of slicing input space with a hyperplane.
+
+These are genuinely different. A point and a hyperplane-normal are not the same kind of thing, and there is no built-in notion of distance between them. You can compute $w^\top x$, but you cannot compute "the distance from the weight to this image," and you certainly cannot ask "which training images is the weight near?" The weight has no neighbors in the data. It is a functional, not a point, and the dot product is a thin little bridge thrown across a gap between two worlds that otherwise never touch.
+
+That gap is why an ordinary weight is so hard to interpret. You want to ask of a learned `w`, "what does it look like, what is it near, what would I draw to show what it detects," and the geometry refuses the question, because the weight does not live where the pictures do.
+
+## The wish, and the one map that grants it
+
+What would it take to close the gap? You would need a single map that takes **both** the data and the weight and drops them into one common space, where comparison is a single operation and everything is the same kind of object. Put the points there, put the weight there, and now "how similar are they" is just "how close are they," asked once, for everyone.
+
+That map is what a positive-definite kernel quietly hands you. A kernel $k(x, y)$ always factors as an inner product of features, $k(x, y) = \langle \phi(x), \phi(y)\rangle$, for some map $\phi$ into a Hilbert space $\mathcal{H}$, the RKHS. You rarely write $\phi$ down, and it can be wildly high-dimensional, but you do not need it: the kernel computes the inner product for you. What matters is the consequence. Once $\phi$ exists, similarity is an inner product in $\mathcal{H}$, and an input and a candidate weight are now **the same kind of object**, both elements of $\mathcal{H}$. They finally share a space.
+
+The cleanest way to feel the difference is to ask, of a fixed query point, "where is the input most similar to me?" and watch the answer under the two notions of similarity.
+
+<DirectionVsLocation client:visible caption="Drag the query q. On the left, similarity is the dot product q·x: a ramp with no peak, so the most-similar place runs off the edge of the map, in q's direction. A dot-product weight is a direction, and you cannot point at it. On the right, similarity is a kernel k(q, x): a bump that peaks exactly at q, so the most-similar place is q itself, a point on the map. The kernel gives the weight a location." />
+
+Under the dot product the most-similar place is not a place at all; it sits at infinity, off the map, in the query's direction. That is the formal version of "the weight is a direction, not a point." Under the kernel the most-similar place is the query itself, sitting right there among the data. The kernel is what turns "which direction" into "which point."
+
+## The punchline: the weight is built from the data
+
+Here is the result that makes the shared space more than a nicety. When you actually fit a model in an RKHS, regularizing by the norm in $\mathcal{H}$, the optimal weight is not free to be any element of that huge space. The **representer theorem** says it must take the form
+
+$$
+f(x) = \sum_{i} \alpha_i\, k(x_i, x),
+$$
+
+a weighted sum over the training points. The best weight is a combination of the data's own kernel bumps. It does not float somewhere in an abstract space disconnected from your examples; it is anchored to them, built out of them, living in their span. The weight *is* the data, recombined.
+
+Build one yourself. Each point below carries a coefficient `αᵢ`; drag a point up or down to push its coefficient positive or negative, and the decision surface (its boundary in black) bends to match. The whole surface is nothing but a sum of bumps sitting on the data. Press "fit the labels" and a real solve picks the `αᵢ` that separate the two classes, the representer-optimal weight, assembled entirely from the six points.
+
+<RepresenterBuild client:visible caption="The weight as a recipe over the data. Each point's coefficient αᵢ (its fill color is the sign, its size is the magnitude) scales that point's kernel bump; the decision function is their sum and the boundary is where it crosses zero. Drag a point up or down to set its αᵢ by hand, or press 'fit the labels' for the representer-optimal solve. The weight never leaves the data's span." />
+
+This is the moment the two spaces become one. There is no longer a weight space sitting apart from input space, holding directions. There is one space, holding the data and, in their span, the weight. To read the weight you do not project; you ask $f(x) = \langle f, \phi(x)\rangle$, which is just $\sum_i \alpha_i\, k(x_i, x)$, the data voting on the query by similarity. Every evaluation of the weight is a similarity query against the points it was built from.
+
+If you want the physical picture the rest of this series runs on, it is exactly here: the centers $x_i$ are masses placed in the space, the coefficients $\alpha_i$ are their charges, and evaluating the weight at $x$ is reading the field those masses produce there. A direction has no location; a constellation of placed masses has nothing but location. We built one of those wells-and-masses landscapes by hand a few posts back, in [Your Network Is a List of Pictures](/blog/edit-a-network-by-hand/); what the RKHS adds is the guarantee that the *optimal* weight always has that form.
+
+## What the one space buys you
+
+Why go to the trouble? Because a weight that is allowed to be a place can solve problems that no direction can touch. Two nested rings, an inner disk inside an outer ring, are the standard example. No line separates them: rotate and slide a direction-weight as much as you like and you stay near a coin flip, because the classes are not side by side, they are one inside the other. Switch the weight to a place, drop a single point in the plane, classify by distance to it, and the problem falls apart the instant you put the point in the center.
+
+<PlaceableWeightRings client:visible caption="Two rings, nested not side by side. With the weight as a direction (a line) no angle separates them; the live accuracy hovers near chance however you aim. Switch the weight to a place (a prototype plus a radius), drag it to the center, and one well-placed point splits inner from outer almost perfectly. A location solves what a direction cannot." />
+
+That is the dividend of having an RKHS, stated as plainly as it goes. Not having one means your weights and your data live in two worlds joined by a single dot product, and the weight is a direction you cannot point at, cannot measure, cannot draw. Having one means they share an address: the weight is a point in the same space as the data, built from the data, read by its distance to the data.
+
+And our kernel takes the last step the generic story leaves out. For most kernels the shared space $\mathcal{H}$ is abstract, and the "point" the weight is built from is a function you cannot picture. The [Yat kernel](https://arxiv.org/abs/2605.03262) is built so that its center stays in input space itself, which is why, on images, a weight is not a vector in some Hilbert space you will never see, but a literal picture you can look at, sitting among the other pictures. That is the whole of [Your Neuron Is a Picture](/blog/your-neuron-is-a-picture/), and now you can see where the picture comes from: it is what a weight looks like once it is finally allowed to live in the same space as the data.
+
+---
+
+*The reproducing kernel Hilbert space is [Aronszajn (1950)](https://doi.org/10.1090/S0002-9947-1950-0051437-7); the representer theorem in its general form is [Schölkopf, Herbrich and Smola (2001)](https://link.springer.com/chapter/10.1007/3-540-44581-1_27); the standard reference is [Schölkopf and Smola (2002)](https://mitpress.mit.edu/9780262536578/learning-with-kernels/); the input-space-center kernel is [Bouhsine (2026)](https://arxiv.org/abs/2605.03262). The runnable companion builds the representer-theorem weight in JAX: [Where Does a Weight Live, in JAX/Flax NNX](/blog/where-does-a-weight-live-jax-flax-nnx/).*

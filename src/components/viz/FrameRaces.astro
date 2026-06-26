@@ -11,7 +11,7 @@ const { caption, height = 320 } = Astro.props;
 
 <script>
 import { defineViz } from './engine/vizkit.js';
-import { panel, text, PALETTE } from './engine/draw.js';
+import { panel, text, roundRect, PALETTE } from './engine/draw.js';
 
 // Benedetto & Fickus (2003): the frame potential has no bad local minima. Here
 // six independent random starts descend it at once. Their energy curves all dive
@@ -57,7 +57,22 @@ defineViz('frameraces', {
     const sy = (v) => py + ph - ((v - ymin) / (ymax - ymin)) * ph;
     // floor line
     ctx.strokeStyle = colors.green; ctx.setLineDash([5, 4]); ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(px, sy(floor)); ctx.lineTo(px + pw, sy(floor)); ctx.stroke(); ctx.setLineDash([]);
-    text(ctx, `Welch floor  C²/d − C = ${floor.toFixed(1)}`, px + pw - 4, sy(floor) - 4, colors, { align: 'right', baseline: 'bottom', size: 10, color: colors.green });
+    // floor label, on a semi-transparent rounded chip in the clear top-right corner,
+    // away from the floor line where all the converging curves pile up and run through text
+    {
+      const label = `Welch floor  C²/d − C = ${floor.toFixed(1)}`;
+      ctx.save();
+      ctx.font = '10px ui-monospace, monospace';
+      const tw = ctx.measureText(label).width;
+      const chw = tw + 12, chh = 16;
+      const chx = px + pw - chw, chy = py + 2;
+      ctx.globalAlpha = 0.9;
+      roundRect(ctx, chx, chy, chw, chh, 4); ctx.fillStyle = colors.cellBg; ctx.fill();
+      ctx.globalAlpha = 0.5; ctx.strokeStyle = colors.green; ctx.lineWidth = 1; ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.restore();
+      text(ctx, label, chx + 6, chy + chh / 2, colors, { align: 'left', baseline: 'middle', size: 10, color: colors.green });
+    }
     // axis labels
     text(ctx, 'frame potential', box.x + 8, box.y + 4, colors, { size: 11.5, color: colors.fg });
     text(ctx, 'gradient-descent steps →', px + pw / 2, box.y + box.h - 14, colors, { align: 'center', size: 10, color: colors.muted });

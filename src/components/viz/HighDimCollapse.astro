@@ -52,7 +52,7 @@ const id = `hdc-${Math.random().toString(36).slice(2, 9)}`;
       ctx.clearRect(0, 0, W, H);
       const { accent, muted, faint, border } = colors;
 
-      const padL = 38, padR = 14, padT = 16, padB = 32;
+      const padL = 52, padR = 14, padT = 16, padB = 32;
       const plotW = W - padL - padR;
       const plotH = H - padT - padB;
       const xMin = 1, xMax = 24, yMin = 0, yMax = 1.05;
@@ -90,7 +90,7 @@ const id = `hdc-${Math.random().toString(36).slice(2, 9)}`;
       ctx.fillStyle = muted;
       ctx.fillText('layer width n', padL + plotW / 2, H - padB + 18);
       ctx.save();
-      ctx.translate(10, padT + plotH / 2);
+      ctx.translate(12, padT + plotH / 2);
       ctx.rotate(-Math.PI / 2);
       ctx.fillText('P(≥ 1 zeroed)', 0, 0);
       ctx.restore();

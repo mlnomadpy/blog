@@ -151,7 +151,20 @@ function mountOne(root, specOrFactory) {
     const rect = canvas.getBoundingClientRect(); const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, spec.maxDpr || 2));
     api.size.W = rect.width; api.size.H = rect.height; canvas.width = Math.round(rect.width * dpr); canvas.height = Math.round(rect.height * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); };
   const render = () => { if (api.size.W === 0) fit(); ctx.setTransform(1, 0, 0, 1, 0, 0); const dpr = canvas.width / api.size.W; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, api.size.W, api.size.H); api.iter = iter; spec.draw(api); };
-  const doSetup = () => { api.state = {}; iter = 0; api.iter = 0; acc = 0; spec.setup && spec.setup(api); };
+  // ── transitions: api.tween(key, target, ms) eases a value toward target across
+  // control changes and drives re-renders until it settles; snapped on (re)setup.
+  let tweens = {}, tweenRaf = 0;
+  const tnow = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : 0);
+  const driveTweens = () => { if (tweenRaf) return; const step = () => { tweenRaf = 0; render(); let active = false; for (const k in tweens) if (tweens[k].p < 1) active = true; if (active) tweenRaf = requestAnimationFrame(step); }; tweenRaf = requestAnimationFrame(step); };
+  api.tween = (key, target, ms = 300) => {
+    if (!Number.isFinite(target)) { tweens[key] = { to: target, val: target, p: 1 }; return target; }
+    const now = tnow(); let t = tweens[key];
+    if (!t || !Number.isFinite(t.val)) { tweens[key] = { from: target, to: target, val: target, start: now, ms, p: 1 }; return target; }
+    if (t.to !== target) { t.from = t.val; t.to = target; t.start = now; t.ms = ms; t.p = 0; }
+    const p = t.ms > 0 ? Math.min(1, (now - t.start) / t.ms) : 1; t.p = p; const e = p * p * (3 - 2 * p);
+    t.val = t.from + (t.to - t.from) * e; if (p < 1) driveTweens(); return t.val;
+  };
+  const doSetup = () => { tweens = {}; api.state = {}; iter = 0; api.iter = 0; acc = 0; spec.setup && spec.setup(api); };
   const stepN = (k) => { for (let i = 0; i < k; i++) { spec.step(api); iter++; } api.iter = iter; };
   const stop = () => { playing = false; if (playBtn) playBtn.textContent = '▶ Play'; cancelAnimationFrame(raf); };
   // advance a timeline range by real elapsed time, snapping the slider to its value

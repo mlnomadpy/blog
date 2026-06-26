@@ -87,8 +87,11 @@ defineViz('mistakechord', {
     const struct = state.struct;
     const M = state.M;
 
-    const cx = box.x + box.w / 2, cy = box.y + box.h / 2 + 8;
-    const R = Math.min(box.w, box.h) * 0.40;
+    // reserve a clean band at the top (header/legend) and bottom (caption) so the
+    // chord and its rim/group labels never reach the caption text.
+    const bandTop = 40, bandBot = 40;
+    const cx = box.x + box.w / 2, cy = box.y + bandTop + (box.h - bandTop - bandBot) / 2;
+    const R = Math.min(box.w, box.h - bandTop - bandBot) * 0.38;
     const rim = R + 4;
 
     // angular layout: equal slot per class, small gaps between superclass arcs

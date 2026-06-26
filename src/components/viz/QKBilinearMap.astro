@@ -122,7 +122,7 @@ defineViz('qkbilinear', {
       : mode === 'shared'
         ? 'learned metric, still symmetric: one role for both sides'
         : 'learned bilinear compatibility: directional query/key roles';
-    text(ctx, verdict, box.x + 12, box.y + box.h - 20, colors, { size: 10.5, mono: true, color: colors.fg });
+    text(ctx, verdict, box.x + 12, box.y + box.h - 36, colors, { size: 10.5, mono: true, color: colors.fg });
     api.readout('rd', `max |Sij-Sji| = ${asym.toFixed(2)}`);
   },
 });

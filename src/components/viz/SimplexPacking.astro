@@ -145,10 +145,17 @@ const id = `sp-${Math.random().toString(36).slice(2, 9)}`;
         ctx.arc(px, py, 2.6, 0, Math.PI * 2);
         ctx.fill();
         if (kn === 2 || kn === 3 || kn === 10 || kn === 50) {
-          ctx.textAlign = 'left';
-          ctx.textBaseline = kn === 2 ? 'top' : 'bottom';
-          const offY = kn === 2 ? 8 : -6;
-          ctx.fillText('n=' + kn + ' (' + yy.toFixed(2) + ')', px + 6, py + offY);
+          // place each label off the curve so the rising accent line never runs through it
+          // n=2 sits in the bottom-left corner: label up-and-right, clear of the x-axis ticks
+          // n=10 sits near the top where the curve is steep: label up-and-left, well above the line
+          let lx, ly, halign, valign;
+          if (kn === 2) { lx = px + 7; ly = py - 7; halign = 'left'; valign = 'bottom'; }
+          else if (kn === 10) { lx = px - 7; ly = py - 10; halign = 'right'; valign = 'bottom'; }
+          else if (kn === 3) { lx = px + 7; ly = py - 6; halign = 'left'; valign = 'bottom'; }
+          else { lx = px + 7; ly = py - 6; halign = 'left'; valign = 'bottom'; }
+          ctx.textAlign = halign;
+          ctx.textBaseline = valign;
+          ctx.fillText('n=' + kn + ' (' + yy.toFixed(2) + ')', lx, ly);
         }
       });
 

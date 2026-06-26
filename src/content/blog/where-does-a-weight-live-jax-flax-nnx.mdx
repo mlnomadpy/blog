@@ -1,0 +1,123 @@
+---
+title: "Where a Weight Lives, in JAX/Flax NNX"
+seoTitle: "The Representer Weight in JAX/Flax NNX"
+description: "A runnable companion: build the representer-theorem weight in JAX. A positive-definite kernel, the Gram matrix, a single linear solve for the coefficients, and the weight comes out as a combination of the data, f = sum alpha_i k(x_i, .). A linear weight cannot separate nested rings; the placed kernel weight does, read purely through the kernel as a similarity-weighted vote of the data."
+seoDescription: "Build the representer-theorem weight in JAX: a kernel, a Gram solve, and the weight is a combination of the data. A line fails on rings; the placed weight does not."
+pubDate: 2026-06-25T10:00:00-07:00
+draft: true
+tags: [ml, kernels, rkhs, representer-theorem, jax, flax, nnx, implementation, yat, deep-learning]
+references:
+  - authors: "Aronszajn, N."
+    year: 1950
+    title: "Theory of Reproducing Kernels"
+    venue: "Transactions of the American Mathematical Society"
+  - authors: "Schölkopf, B., Herbrich, R., Smola, A. J."
+    year: 2001
+    title: "A Generalized Representer Theorem"
+    venue: "COLT 2001"
+  - authors: "Schölkopf, B., Smola, A. J."
+    year: 2002
+    title: "Learning with Kernels"
+    venue: "MIT Press"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+keywords:
+  - representer theorem JAX
+  - kernel ridge regression JAX
+  - reproducing kernel Hilbert space code
+  - Flax NNX kernel weight
+  - weight as combination of data
+---
+import CiteAs from '../../components/CiteAs.astro';
+
+*The [explainer](/blog/where-does-a-weight-live/) argued that a standard weight is a direction in a space apart from the data, and that a reproducing kernel Hilbert space repairs that by giving the weight an address among the data: the optimal weight is a combination of the data's own kernel bumps. This is the implementation. A kernel in a few lines of JAX, the Gram matrix, one linear solve for the coefficients, and the weight comes out as $\sum_i \alpha_i\, k(x_i, \cdot)$. Then two demonstrations of why the shared space matters. Every number is from a real run; the script is `scripts/render_weight_lives_gifs.py`.*
+
+## The kernel, and the space it builds
+
+A reproducing kernel is any positive-definite similarity, and the whole RKHS hangs off it. We use the radial basis kernel, a bump that is largest when two points coincide and decays with their distance. In JAX it is one expression, and it gives the inner product $\langle \phi(x), \phi(y)\rangle$ without ever forming $\phi$.
+
+```python
+import jax, jax.numpy as jnp
+
+SIG = 0.5
+
+@jax.jit
+def gram(X, Y):                                        # k(xᵢ, yⱼ) for every pair
+    d2 = ((X[:, None, :] - Y[None, :, :]) ** 2).sum(-1)
+    return jnp.exp(-d2 / (2 * SIG ** 2))
+```
+
+That `gram(X, X)` is the entire geometry of the data in the RKHS: entry `(i, j)` is how close points `i` and `j` sit once lifted by `φ`. Nothing about the weight yet, only the space the weight will live in.
+
+## The weight is a solve, not a search
+
+The representer theorem promises the optimal weight is $f(x) = \sum_i \alpha_i\, k(x_i, x)$, a combination of the data. So fitting the weight is not a gradient descent through some separate weight space; it is solving for the coefficients $\alpha_i$ that make the combination match the labels. With a ridge penalty that is a single linear system, $(G + \lambda I)\,\alpha = y$.
+
+```python
+def kernel_ridge(X, y, lam=0.4):                       # the representer coefficients
+    G = gram(X, X)
+    return jnp.linalg.solve(G + lam * jnp.eye(len(X)), y)
+```
+
+The vector `alpha` that comes back *is* the weight, expressed in the only basis the RKHS gives you for free: the data points themselves. Each $\alpha_i$ is the charge on point $x_i$. To evaluate the weight anywhere you weigh the kernels by $\alpha$, which is `gram(grid, X) @ alpha`. Watch it assemble: the heaviest coefficients first, each adding its own bump, the decision boundary forming out of the data.
+
+<figure class="jax-fig">
+  <img src="/blog/weight-lives-representer.gif" alt="A two-moons dataset where the kernel-ridge decision surface builds up term by term as data points are added, the boundary forming, reaching 99 percent" loading="lazy" width="600" height="560" />
+  <figcaption>The weight assembling from the data. Each frame adds one more term $\alpha_i\, k(x_i, \cdot)$ of the real kernel-ridge solution, heaviest first; the field is their running sum and the black line is where it crosses zero. The weight is never anything but a combination of the points, and the full sum reads the two moons at 99%. Rendered by <code>scripts/render_weight_lives_gifs.py</code>.</figcaption>
+</figure>
+
+## Why the shared space is worth it
+
+A weight that lives among the data, rather than off in a space of directions, can do something a direction cannot: bend around nested classes. Two concentric rings are the cleanest case. The best linear weight is a single direction with a threshold, and `sklearn`'s logistic regression finds it, but no direction separates an inner disk from an outer ring, so it sits at chance. The kernel weight, the same `α` solve, wraps a closed boundary around the inner ring.
+
+```python
+from sklearn.datasets import make_circles
+from sklearn.linear_model import LogisticRegression
+
+X, y = make_circles(260, noise=0.07, factor=0.4, random_state=0)
+ys = jnp.where(jnp.asarray(y) == 1, 1.0, -1.0)
+
+lin = LogisticRegression().fit(X, y)                   # a direction
+alpha = kernel_ridge(jnp.asarray(X), ys, lam=0.2)      # a placed combination
+k_pred = jnp.sign(gram(jnp.asarray(X), jnp.asarray(X)) @ alpha)
+print(f"line: {100*lin.score(X, y):.0f}%   kernel: {100*(k_pred == ys).mean():.0f}%")
+# line: 50%   kernel: 100%
+```
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/weight-lives-rings.gif" alt="Two panels on nested rings: the best linear weight reaches 50 percent while the placed kernel weight reaches 100 percent, its circular boundary forming" loading="lazy" width="946" height="517" />
+  <figcaption>The same rings, two weights. On the left the best linear weight, a direction, lands at 50%: no angle separates classes that are nested rather than side by side. On the right the kernel weight, a combination placed among the data, closes a boundary around the inner ring and reaches 100%. Both accuracies are from the run above. Rendered by <code>scripts/render_weight_lives_gifs.py</code>.</figcaption>
+</figure>
+
+## How the placed weight reads a point
+
+Notice what the rings demo never did: it never built a single new coordinate. There is no explicit feature vector anywhere in this code, no lifted space we construct by hand. The prediction at a query is the reproducing property made literal, $f(q) = \langle f, \phi(q)\rangle = \sum_i \alpha_i\, k(x_i, q)$: the query is compared to each data point by the kernel, those similarities are scaled by the coefficients, and the signed sum is the score. The feature map $\phi$ exists in the theory, but the code only ever touches it through $k$.
+
+```python
+q = jnp.array([1.7, -0.35])
+kq = jnp.exp(-((jnp.asarray(X) - q) ** 2).sum(1) / (2 * SIG ** 2))   # k(xᵢ, q)
+fq = (alpha * kq).sum()                                             # f(q) = Σ αᵢ k(xᵢ, q)
+print(f"f(q) = {fq:+.2f}  ->  {'orange' if fq >= 0 else 'blue'} class")
+```
+
+<figure class="jax-fig">
+  <img src="/blog/weight-lives-vote.gif" alt="A query point moving through two moons; at each position it links to its most-similar data points and the signed kernel-weighted sum decides its class" loading="lazy" width="624" height="592" />
+  <figcaption>Every prediction is a similarity-weighted vote. The query (the star) is read by its kernel similarity $k(x_i, q)$ to each data point; the links show the points that vote loudest, their width set by that similarity and their color by the sign of their contribution $\alpha_i\, k(x_i, q)$. The signed sum $f(q)$ decides the class. No coordinates are built and nothing is lifted; the weight is read purely through the kernel, exactly the code above. Rendered by <code>scripts/render_weight_lives_gifs.py</code>.</figcaption>
+</figure>
+
+The weight never left the data. It is a list of coefficients on the points you already have, solved in one shot, read by similarity. That is the whole of what it means to have a reproducing kernel Hilbert space: the weight and the data finally share a space, and the weight is just the data, recombined.
+
+---
+
+*The RKHS is [Aronszajn (1950)](https://doi.org/10.1090/S0002-9947-1950-0051437-7); the representer theorem is [Schölkopf, Herbrich and Smola (2001)](https://link.springer.com/chapter/10.1007/3-540-44581-1_27); the textbook is [Schölkopf and Smola (2002)](https://mitpress.mit.edu/9780262536578/learning-with-kernels/); the input-space-center kernel is [Bouhsine (2026)](https://arxiv.org/abs/2605.03262). The conceptual companion is [Where Does a Weight Live?](/blog/where-does-a-weight-live/).*
+
+<CiteAs slug="where-does-a-weight-live-jax-flax-nnx" title="Where a Weight Lives, in JAX/Flax NNX" pubDate="2026-06-25T10:00:00-07:00" />
+
+<style>{`
+.jax-fig { margin: 1.8rem auto; text-align: center; }
+.jax-fig img { max-width: 520px; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; background: #fbf8f1; }
+.jax-fig-wide img { max-width: 880px; }
+.jax-fig figcaption { margin-top: 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--fg-muted); max-width: 64ch; margin-left: auto; margin-right: auto; }
+`}</style>

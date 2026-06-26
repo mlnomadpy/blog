@@ -127,6 +127,50 @@ export function frame(ctx, colors, x, y, w, h) {
   ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
 }
 
+// ── polish kit: rounded panels, gradient bars, crisp type (a shared visual bar) ──
+
+// a rounded-rect path (no fill/stroke); r clamps to half the smaller side
+export function roundRect(ctx, x, y, w, h, r = 8) {
+  const rr = Math.max(0, Math.min(r, Math.min(w, h) / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y); ctx.arcTo(x + w, y, x + w, y + h, rr); ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr); ctx.arcTo(x, y, x + w, y, rr); ctx.closePath();
+}
+
+// a soft elevated panel: subtle fill, hairline border, rounded. `accent` tints the
+// border (e.g. a verdict color). Returns nothing; draw content on top.
+export function softPanel(ctx, x, y, w, h, colors, { r = 10, fill, border, lw = 1, glow } = {}) {
+  if (glow) { ctx.save(); ctx.shadowColor = glow; ctx.shadowBlur = 16; roundRect(ctx, x, y, w, h, r); ctx.fillStyle = fill || colors.cellBg; ctx.fill(); ctx.restore(); }
+  roundRect(ctx, x, y, w, h, r); ctx.fillStyle = fill || colors.cellBg; ctx.fill();
+  ctx.strokeStyle = border || colors.border; ctx.lineWidth = lw; roundRect(ctx, x + lw / 2, y + lw / 2, w - lw, h - lw, r); ctx.stroke();
+}
+
+// a vertical gradient bar with a rounded top, the default chart bar
+export function barGrad(ctx, x, y, w, h, top, bottomColor, topColor) {
+  if (h <= 0) return; const g = ctx.createLinearGradient(0, y, 0, y + h);
+  g.addColorStop(0, topColor); g.addColorStop(1, bottomColor);
+  ctx.fillStyle = g; roundRect(ctx, x, y, w, h, Math.min(w / 2, 4)); ctx.fill();
+}
+
+// a crisp filled-area curve under a series (for weight/function plots)
+export function areaCurve(ctx, pts, baseY, stroke, fill, lw = 2.4) {
+  if (pts.length < 2) return;
+  ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  if (fill) { ctx.save(); ctx.lineTo(pts[pts.length - 1][0], baseY); ctx.lineTo(pts[0][0], baseY); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); ctx.restore(); }
+  ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke();
+}
+
+// the type scale: one call sets font + color + alignment. sizes: title 15, label 11.5,
+// value 13 (tabular), kicker 10.5. weights: 'b' bold, '' regular.
+export function T(ctx, colors, role = 'label', { color, align = 'left', baseline = 'alphabetic', weight } = {}) {
+  const F = { title: ['b', 15], sub: ['', 12], label: ['', 11.5], value: ['', 13], kicker: ['', 10.5], small: ['', 10] }[role] || ['', 11.5];
+  const wt = (weight ?? F[0]) === 'b' ? '600 ' : '';
+  ctx.font = `${wt}${F[1]}px ui-sans-serif, system-ui, sans-serif`;
+  ctx.fillStyle = color || (role === 'title' ? colors.fg : role === 'kicker' || role === 'small' ? colors.faint : colors.muted);
+  ctx.textAlign = align; ctx.textBaseline = baseline;
+}
+
 // ── color + number utilities (deduped from nbody/storm and the bespoke panels) ──
 export const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 export const lerp = (a, b, t) => a + (b - a) * t;

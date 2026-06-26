@@ -1,0 +1,122 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 480 } = Astro.props;
+---
+<figure class="viz kernelzoo" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The zoo on two axes: the geometry a kernel is built around, and how rough it
+// lets the weight be. Each kernel is a point; click one to see its eigenvalue
+// decay, the price list that fixes its personality. The Gaussian sits where
+// roughness is forbidden; the polynomial keeps only finite degree; the Sobolev and
+// Matérn family fills the roomy middle; the Yat kernel sits where this series
+// lives, a Sobolev-grade smoothness, on the sphere.
+import { defineViz } from './engine/vizkit.js';
+import { softPanel, areaCurve, T, rgba, parseColor } from './engine/draw.js';
+
+// the roughest weight each kernel's RKHS still admits, as a curve on x ∈ [-1, 1]
+const _walk = (() => { const w = [0]; let s = 991; for (let i = 1; i < 80; i++) { s = (s * 16807) % 2147483647; w.push(w[i - 1] + (s / 2147483647 - 0.5) * 0.42); } return w; })();
+const roughest = {
+  gaussian: (x) => Math.exp(-(x * x) / (2 * 0.34 * 0.34)),                         // a smooth bump
+  poly: (x) => Math.cos(Math.PI * x),                                             // a low polynomial wave
+  band: (x) => Math.sin(Math.PI * x) + 0.42 * Math.sin(3 * Math.PI * x),          // a band-limited wiggle
+  matern: (x) => 1 - Math.abs(x),                                                 // a corner
+  laplace: (x) => Math.exp(-Math.abs(x) / 0.33),                                  // a sharp cusp
+  brownian: (x) => _walk[Math.min(79, Math.max(0, Math.round((x + 1) / 2 * 79)))],// a jagged path
+  yat: (x) => Math.max(0, 1 - Math.abs(x)) * 1.0,                                 // a corner (Sobolev grade)
+};
+// x: 0 = Euclidean space, 1 = the sphere.  y: 0 = forbids roughness (top), 1 = allows it (bottom).
+const KERNELS = [
+  { id: 'gaussian', name: 'Gaussian', x: 0.16, y: 0.10, desc: 'analytic functions only; a corner has infinite norm. The smallest home.' },
+  { id: 'poly', name: 'polynomial', x: 0.12, y: 0.40, desc: 'finite-dimensional: the weight is a polynomial of bounded degree, nothing finer.' },
+  { id: 'matern', name: 'Matérn / Sobolev', x: 0.34, y: 0.60, desc: 'polynomial eigenvalue decay; the RKHS is a Sobolev space Hˢ. Corners allowed.' },
+  { id: 'laplace', name: 'Laplace', x: 0.30, y: 0.74, desc: 'the Matérn at ν = ½; a genuine Sobolev space with room for kinks.' },
+  { id: 'band', name: 'bandlimited (sinc)', x: 0.50, y: 0.34, desc: 'a hard frequency cutoff: every mode below it is free, every mode above forbidden.' },
+  { id: 'brownian', name: 'Brownian (min)', x: 0.20, y: 0.90, desc: 'eigenvalues decay so slowly the space holds genuinely jagged H¹ paths.' },
+  { id: 'yat', name: 'Yat', x: 0.84, y: 0.64, desc: 'squared alignment × inverse-multiquadric: a Sobolev-grade RKHS, on the sphere. Where this series lives.' },
+];
+
+defineViz('kernelzoo', {
+  title: 'The RKHS zoo: geometry across, allowed roughness down',
+  height: 480,
+  controls: [{ type: 'readout', name: 'rd' }],
+
+  setup(api) { api.state = { sel: 'yat' }; bind(api); },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H; if (W === 0 || !st) return;
+    const ACC = colors.accent;
+    ctx.clearRect(0, 0, W, H);
+    const pad = 14, topH = 26;
+    const mapW = Math.min(W - pad * 2, (H - pad - topH) * 1.15), mapH = H - pad - topH - 30;
+    const x0 = pad, y0 = pad + topH;
+    const sx = (x) => x0 + 40 + x * (mapW - 56), sy = (y) => y0 + 8 + y * (mapH - 16);
+    st._g = { sx, sy };
+
+    T(ctx, colors, 'title'); ctx.fillText('Every kernel is a choice of geometry and of smoothness; click one to see what it allows', pad, pad + 13);
+
+    // frame + axis labels
+    softPanel(ctx, x0 + 40, y0, mapW - 56, mapH, colors, { r: 10 });
+    ctx.fillStyle = colors.faint; ctx.font = '10px ui-sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText('Euclidean space', sx(0) + 2, y0 + mapH + 5);
+    ctx.textAlign = 'right'; ctx.fillText('the sphere', sx(1) + 6, y0 + mapH + 5);
+    ctx.save(); ctx.translate(x0 + 12, y0 + 8); ctx.rotate(Math.PI / 2); ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; ctx.fillStyle = colors.faint;
+    ctx.fillText('forbids roughness', 0, 0); ctx.restore();
+    ctx.save(); ctx.translate(x0 + 12, y0 + mapH - 4); ctx.rotate(Math.PI / 2); ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.fillStyle = colors.faint;
+    ctx.fillText('allows a corner', 0, 0); ctx.restore();
+
+    // markers
+    for (const k of KERNELS) {
+      const X = sx(k.x), Y = sy(k.y), on = k.id === st.sel;
+      if (on) { ctx.fillStyle = ACC; ctx.globalAlpha = 0.18; ctx.beginPath(); ctx.arc(X, Y, 16, 0, 6.283); ctx.fill(); ctx.globalAlpha = 1; }
+      ctx.fillStyle = on ? ACC : colors.muted; ctx.beginPath(); ctx.arc(X, Y, on ? 7 : 5, 0, 6.283); ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = colors.bg; ctx.stroke();
+      ctx.fillStyle = on ? colors.fg : colors.muted; ctx.font = (on ? 'bold ' : '') + '11px ui-sans-serif, system-ui';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText(k.name, X, Y - 10);
+    }
+
+    // inset: the roughest weight the selected kernel allows (concrete, not a spectrum)
+    const sel = KERNELS.find((k) => k.id === st.sel);
+    const iw = Math.min(200, mapW * 0.44), ih = 92, ix = sx(1) - iw + 2, iy = y0 + 6;
+    softPanel(ctx, ix, iy, iw, ih, colors, { r: 9, border: rgba(parseColor(ACC), 0.4) });
+    T(ctx, colors, 'small', { align: 'left', baseline: 'top', color: colors.muted }); ctx.fillText('the roughest weight it allows', ix + 8, iy + 6);
+    const wf = roughest[sel.id]; const Np = 130; let wmax = 1e-6; const ws = [];
+    for (let j = 0; j < Np; j++) { const x = (j / (Np - 1)) * 2 - 1; const v = wf(x); ws.push(v); if (Math.abs(v) > wmax) wmax = Math.abs(v); }
+    const base = iy + 22 + (ih - 30) / 2;
+    const wpts = ws.map((v, j) => [ix + 10 + (j / (Np - 1)) * (iw - 20), base - (v / wmax) * ((ih - 30) / 2 - 2)]);
+    areaCurve(ctx, wpts, base + (ih - 30) / 2, ACC, rgba(parseColor(ACC), 0.14), 2.2);
+
+    // description below the map
+    ctx.fillStyle = colors.fg; ctx.font = 'bold 12px ui-sans-serif, system-ui'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText(sel.name + ':', pad, y0 + mapH + 18);
+    ctx.fillStyle = colors.muted; ctx.font = '11px ui-sans-serif, system-ui';
+    const firstX = pad + ctx.measureText(sel.name + ': ').width + 6;
+    wrap(ctx, sel.desc, firstX, pad, y0 + mapH + 18, W - pad * 2, 14);
+    api.readout('rd', 'click a kernel to read its decay and its smoothness class');
+  },
+});
+
+// wrap text: first line starts at firstX, continuation lines at contX
+function wrap(ctx, text, firstX, contX, y, rightEdge, lh) {
+  const words = text.split(' '); let line = '', x = firstX, yy = y;
+  for (const w of words) {
+    const test = line + w + ' ';
+    if (x + ctx.measureText(test).width > rightEdge && line) { ctx.fillText(line, x, yy); line = w + ' '; yy += lh; x = contX; }
+    else line = test;
+  }
+  ctx.fillText(line, x, yy);
+}
+function bind(api) {
+  if (api.canvas.dataset.kzBound) return; api.canvas.dataset.kzBound = '1'; api.canvas.style.cursor = 'pointer';
+  const at = (e) => { const rc = api.canvas.getBoundingClientRect(); return { px: (e.clientX - rc.left) * api.size.W / rc.width, py: (e.clientY - rc.top) * api.size.H / rc.height }; };
+  api.canvas.addEventListener('pointerdown', (e) => { const st = api.state, g = st && st._g; if (!g) return; const { px, py } = at(e);
+    let best = null, bd = 26; for (const k of KERNELS) { const d = Math.hypot(px - g.sx(k.x), py - g.sy(k.y)); if (d < bd) { bd = d; best = k.id; } }
+    if (best) { st.sel = best; api.render(); } });
+}
+</script>
