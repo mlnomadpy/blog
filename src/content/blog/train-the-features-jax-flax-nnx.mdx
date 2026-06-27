@@ -35,6 +35,9 @@ import CiteAs from '../../components/CiteAs.astro';
 
 *The [explainer](/blog/train-the-features/) split a network into a backbone that builds features and a head that classifies, trained only the backbone, and built the head by hand. This is the implementation in JAX. The backbone is a small [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html) convolutional network with a normal training loop; the head is a constructed Yat vote placed on the frozen features, with no gradient steps. The whole point is to run both and see how little the head needs. Every number is from a real run; the script is `scripts/jax_train_features.py`.*
 
+*Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/train-the-features-jax-flax-nnx): the same code, block by block, with the math written out and every figure reproduced from a real run.*
+
+
 ## The two stages, as two modules
 
 A network is a backbone and a head. The backbone is the part we train, two conv-and-pool blocks down to a 64-dimensional feature; the head is a plain linear layer for the trained baseline, and later a placed Yat vote for the constructed version.

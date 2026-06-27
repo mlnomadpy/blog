@@ -35,6 +35,9 @@ import CiteAs from '../../components/CiteAs.astro';
 
 *The [explainer](/blog/you-dont-have-to-train-the-features/) argued that you can build a whole image classifier by hand, features and all, and still reach 83.3% on Fashion-MNIST with nothing trained. This is the implementation. The feature extractor is pure JAX, a few lines of gradient and pooling; the classifier is a [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html) module that holds k-means prototypes and votes with the Yat kernel. There is no training loop in this post, because there is nothing to train. Every number is from a real run; the script is `scripts/jax_handbuilt.py`.*
 
+*Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/you-dont-have-to-train-the-features-jax-flax-nnx): the same code, block by block, with the math written out and every figure reproduced from a real run.*
+
+
 ## The detectors, as a convolution
 
 A hand-built feature starts as a gradient. Two Sobel kernels give the horizontal and vertical derivative of the image, and from those come the magnitude and angle of every edge. The only subtlety is the padding: we replicate the border (`mode='edge'`) so an edge at the image boundary is not invented out of zeros.

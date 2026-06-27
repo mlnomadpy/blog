@@ -40,6 +40,9 @@ import CiteAs from '../../components/CiteAs.astro';
 
 *The [explainer](/blog/why-attention-needs-qk-projections/) argued that $Q$ and $K$ projections turn a dot product into a learned, low-rank, role-aware bilinear form $s_{ij}=x_i^\top W_Q W_K^\top x_j$. This is the implementation companion: the Flax NNX attention module, the bilinear form pulled back out of it, its symmetric/antisymmetric split, a toy induction head, RoPE, and the two facts about the factorization you can check with a single `assert`: the rank budget and the gauge freedom.*
 
+*Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/why-attention-needs-qk-projections-jax): the same code, block by block, with the math written out and every figure reproduced from a real run.*
+
+
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/qk-bilinear-decomp.gif" alt="Animated decomposition of a bilinear score matrix into a symmetric metric part and an antisymmetric directed part, with the diagonal held fixed" loading="eager" width="1100" height="540" />
   <figcaption>The whole post in one loop, computed in JAX. A head's score is $s_{ij}=x_i^\top B\,x_j$ with $B = S + A$: a symmetric metric $S$ plus an antisymmetric directed part $A$. Dial $\alpha$ and the total score matrix slides from symmetric to visibly asymmetric, while the boxed diagonal (the self-scores) never moves, because $x^\top B x = x^\top S x$. Directionality is the off-diagonal part, and it is exactly what separate $Q$ and $K$ buy.</figcaption>

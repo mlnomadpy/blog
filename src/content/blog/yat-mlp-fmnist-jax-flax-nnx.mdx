@@ -35,6 +35,9 @@ import CiteAs from '../../components/CiteAs.astro';
 
 *The [explainer](/blog/your-neuron-is-a-picture/) argued that a neuron storing a direction can never be pointed at, while a neuron storing a prototype is a thing you can look at, and on images that thing is a picture. This is the implementation companion: build the prototype MLP in [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html), train it on Fashion-MNIST, and then actually look at the neurons. Every figure and number below is from a real run.*
 
+*Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/your-neuron-is-a-picture-jax-flax-nnx): the same code, block by block, with the math written out and every figure reproduced from a real run.*
+
+
 ## The network, with no activation function
 
 Everything the explainer promised has to survive contact with code, and the first surprise is how little code there is. The network has no activation function anywhere in it. A Yat unit measures the input against a learned prototype $W_u$ with the kernel $(W_u^\top x + b)^2 / (\lVert x - W_u\rVert^2 + \varepsilon)$, a layer is a bank of them, and that layer plus a linear readout is the whole model.

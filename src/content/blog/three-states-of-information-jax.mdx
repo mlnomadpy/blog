@@ -48,6 +48,9 @@ import CiteAs from '../../components/CiteAs.astro';
 
 *The [explainer](/blog/three-states-of-information/) named three states a representation passes through while training (**random**, **organized**, **structured**) and argued the loss plateaus are the transitions between them. This is the implementation companion: four tiny JAX runs that **measure** each state directly. The spectrum's effective rank falling from `d` toward `C−1`; the simplicity bias that fits a near-linear boundary before it wraps the moons; the class-mean cosines locking onto the Welch value `−1/(C−1)`; and the contrastive loss splitting into two forces on two clocks. Each metric is an eigenvalue or a loss, nothing scripted.*
 
+*Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/three-states-of-information-jax): the same code, block by block, with the math written out and every figure reproduced from a real run.*
+
+
 Everything below is plain JAX on tiny synthetic data (a few hundred points, a two-layer MLP), so the training loop and the linear algebra both fit on screen. A shared step function does the work:
 
 ```python

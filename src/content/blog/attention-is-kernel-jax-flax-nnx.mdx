@@ -49,6 +49,9 @@ import CiteAs from '../../components/CiteAs.astro';
 
 *The [explainer](/blog/attention-is-a-kernel/) argued that self-attention is a Nadaraya–Watson kernel smoother that has learned its kernel and its targets end-to-end, and that this single fact, not "the matrix is plottable", is what makes attention heads readable. This is the implementation companion: build attention from scratch in [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html), turn each prose claim into an `assert`, and watch the one caveat (the kernel is not symmetric, so not Mercer in the strict sense) fall out of the numbers. The dimensions are tiny so every array is legible.*
 
+*Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/attention-is-a-kernel-jax-flax-nnx): the same code, block by block, with the math written out and every figure reproduced from a real run.*
+
+
 ## Scaled dot-product attention, by hand
 
 A single attention head is three learned projections and a softmax. In `nnx.Linear` the kernel maps the last axis, so the module reads the same whether `x` is one token or a sequence.
