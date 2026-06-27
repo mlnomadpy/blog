@@ -34,6 +34,8 @@ import CiteAs from '../../components/CiteAs.astro';
 
 *The [explainer](/blog/mlp-block-is-a-representer-theorem/) argued that a transformer's feed-forward block, with a kernel in place of its activation, becomes a representer-theorem vote: `out(x) = Σ_u k(W_u, x) v_u`, a sum over learned (key, value) slots, the same equation as the attention beside it but over a fixed learned memory. That is not just elegant, it is a **white box**. This companion builds it in Flax NNX, trains it on tinyshakespeare, and then does four things to the FFN that are impossible when it is an opaque slab of ReLU. Every number is from a real run; the script is `scripts/yat_ffn_whitebox.py`.*
 
+*Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/a-white-box-ffn-representer-theorem-jax): the same code, block by block, with the math written out, training the transformer live and reproducing every result above (it lands at the same val loss, 1.80).*
+
 ## The feed-forward block, rewritten as a memory
 
 A transformer FFN maps a token's residual vector `x ∈ ℝ^d` to a vector it adds back to the stream, `out(x) = W_2\,\sigma(W_1 x)`. Replace the activation with the [Yat kernel](/blog/what-a-finite-kernel-buys-an-mlp/) and the block stops being a slab. Each row of `W_1` becomes a **key** `W_u`, a prototype direction; each column of `W_2` becomes a **value** `v_u`, a vector written into the residual stream; and the output is a similarity-weighted sum of values:

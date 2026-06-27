@@ -34,6 +34,8 @@ import CiteAs from '../../components/CiteAs.astro';
 
 *The [explainer](/blog/what-can-a-weight-be/) said a kernel is a price list for roughness: its eigenvalues set a cost for every frequency, and the RKHS is the weights you can afford. This is that, in JAX. The eigenvalues are the kernel's spectral density, which a fast Fourier transform hands you for free; the RKHS norm of a weight is a single sum over them; and the same numbers settle, honestly, where the Yat kernel actually lives. Every number is from a real run; the script is `scripts/render_weight_be_gifs.py`.*
 
+*Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/what-can-a-weight-be-jax-flax-nnx): the same code, block by block, with the math written out and every figure reproduced from a real run.*
+
 ## A kernel's eigenvalues are its spectral density
 
 On a periodic domain a translation-invariant kernel $k(x, y) = \kappa(x - y)$ is diagonal in the Fourier basis: its eigenfunctions are the modes $\cos(kx), \sin(kx)$, and its eigenvalues $\lambda_k$ are the Fourier transform of $\kappa$. So the whole price list is one FFT.

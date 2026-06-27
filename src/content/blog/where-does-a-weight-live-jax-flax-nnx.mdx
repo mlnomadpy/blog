@@ -34,6 +34,8 @@ import CiteAs from '../../components/CiteAs.astro';
 
 *The [explainer](/blog/where-does-a-weight-live/) argued that a standard weight is a direction in a space apart from the data, and that a reproducing kernel Hilbert space repairs that by giving the weight an address among the data: the optimal weight is a combination of the data's own kernel bumps. This is the implementation. A kernel in a few lines of JAX, the Gram matrix, one linear solve for the coefficients, and the weight comes out as $\sum_i \alpha_i\, k(x_i, \cdot)$. Then two demonstrations of why the shared space matters. Every number is from a real run; the script is `scripts/render_weight_lives_gifs.py`.*
 
+*Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/where-does-a-weight-live-jax-flax-nnx): the same code, block by block, with the math written out and every figure reproduced from a real run.*
+
 ## The kernel, and the space it builds
 
 A reproducing kernel is any positive-definite similarity, and the whole RKHS hangs off it. We use the radial basis kernel, a bump that is largest when two points coincide and decays with their distance. In JAX it is one expression, and it gives the inner product $\langle \phi(x), \phi(y)\rangle$ without ever forming $\phi$.
