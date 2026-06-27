@@ -42,6 +42,9 @@ import CiteAs from '../../components/CiteAs.astro';
 
 *The [explainer](/blog/latent-on-the-spectrum/) reframed a codebook as the spectral embedding of a label-similarity kernel: diagonalise the kernel, keep its strongest modes, and the geometry follows the spectrum. This is the implementation companion: the classical-MDS embedding in JAX (with the square-root scaling done right), the flat→simplex and graded→horseshoe morph, kernel-target alignment, and the split of a trained representation into its prototype frame and its information spectrum, all as runnable `jnp.linalg.eigh`.*
 
+*Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/latent-on-the-spectrum-jax): the same code, block by block, with the math written out and every figure reproduced from a real run.*
+
+
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/spectral-codebook.gif" alt="Animated spectral embedding of a label kernel morphing from an even ring to a horseshoe as the kernel spectrum goes from flat to peaked" loading="eager" width="1100" height="520" />
   <figcaption>A codebook is the spectral embedding of a label kernel, computed live in JAX. As the kernel goes from flat (structureless) to graded (similarity falls off with class distance), its eigenspectrum peaks and the top two modes morph the codebook from an even ring (the simplex) into the horseshoe of classical MDS. The embedding and the spectrum are both `jnp.linalg.eigh`.</figcaption>

@@ -36,6 +36,9 @@ import CiteAs from '../../components/CiteAs.astro';
 
 *The [explainer](/blog/edit-a-network-by-hand/) argued that a Yat-kernel network is a list of prototype pictures, so you can teach it a class by adding pictures and make it forget one by deleting them, with no training. This is the implementation: build the network in [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html), then watch teaching reduce to a `jnp.concatenate` and forgetting to a boolean mask. Every figure and number below is from a real run; the script is `scripts/yat_editable_fmnist.py`.*
 
+*Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/edit-a-network-by-hand-jax-flax-nnx): the same code, block by block, with the math written out and every figure reproduced from a real run.*
+
+
 ## The layer, and what its rows are
 
 If teaching and forgetting are going to be array edits, the array has to be shaped for it: one prototype to a row, and nothing about a class smeared anywhere else. A Yat unit scores an input against a prototype $W_u$ with the kernel $(W_u^\top x + b)^2 / (\lVert x - W_u\rVert^2 + \varepsilon)$, a layer is a bank of them, and the readout lets each prototype vote for a class. The prototypes are the rows of `W`, each row's vote a row of the readout, and editing the network will turn out to be nothing more than editing those rows.

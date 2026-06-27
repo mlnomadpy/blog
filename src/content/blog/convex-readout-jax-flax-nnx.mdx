@@ -34,6 +34,9 @@ import CiteAs from '../../components/CiteAs.astro';
 
 *The [explainer](/blog/readout-as-convex-combination/) reframed the MLP readout $W_\text{out}\,a(x)=\sum_u a_u(x)\,r_u$ as a mixture over output prototypes, whose geometry (convex, conic, affine, or linear) is set by two constraints on the coefficients: are they nonnegative, and do they sum to one? This is the implementation companion: pull the prototypes out of an NNX `Linear`, measure which regime each activation lands in, and build a kernel readout that is convex by construction, with the correctness checks that the explainer's claims rest on written as `assert`s.*
 
+*Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/the-readout-as-a-convex-combination-jax): the same code, block by block, with the math written out and every figure reproduced from a real run.*
+
+
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/convex-readout-field.gif" alt="Animated kernel readout: a query roams the input space while the readout traces the interior of the output prototype hull" loading="eager" width="1100" height="560" />
   <figcaption>The kernel readout, computed in JAX. As the query $x$ roams the input space (left), its normalized Gaussian similarities to the input prototypes become convex coefficients that mix the output prototypes (right). The readout $y=\sum_u a_u r_u$ traces the interior of the output hull and never leaves it, because $\sum_u a_u = 1$ with every $a_u \ge 0$ by construction, not by a check after the fact.</figcaption>
