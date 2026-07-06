@@ -33,7 +33,7 @@ keywords:
 ---
 import CiteAs from '../../components/CiteAs.astro';
 
-*The [explainer](/blog/your-neuron-is-a-picture/) argued that a neuron storing a direction can never be pointed at, while a neuron storing a prototype is a thing you can look at, and on images that thing is a picture. This is the implementation companion: build the prototype MLP in [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html), train it on Fashion-MNIST, and then actually look at the neurons. Every figure and number below is from a real run.*
+*The [explainer](/blog/your-neuron-is-a-picture/) argued that a neuron storing a direction can never be pointed at, while a neuron storing a prototype is a thing you can look at, and on images that thing is a picture. This is the implementation companion: build the prototype MLP in [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html), train it on Fashion-MNIST, and then actually look at the neurons. Every figure and number below is from a real run; `scripts/yat_fmnist_export.py` reruns the code on this page and prints every accuracy it quotes.*
 
 *Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/your-neuron-is-a-picture-jax-flax-nnx): the same code, block by block, with the math written out and every figure reproduced from a real run.*
 
@@ -114,10 +114,10 @@ def yat_kernel(W, x, b=0.5, eps=0.05):                    # activations, inputs 
 
 W, A, lab = build_by_hand(per_class=20)
 votes = yat_kernel(W, jnp.asarray(Xte)) @ A              # linear readout = sum of class votes
-print("zero-training accuracy:", round(float((votes.argmax(-1) == yte).mean()) * 100, 1))   # ~68%
+print("zero-training accuracy:", round(float((votes.argmax(-1) == yte).mean()) * 100, 1))   # 67.5
 ```
 
-Sixty-eight percent on Fashion-MNIST, no optimizer, no backprop. (The linear readout can only *sum* the votes, which the Yat kernel's non-decaying tail caps around 68%; replacing the sum with a nearest-prototype `max` reaches ~79%, but a linear layer cannot express a max.) The point stands: classification is not something training installs in a black box. It is what the architecture is, and a good engineered selection of prototypes makes it work on its own. Clean centroids beat quantity here, fifty centroids outscore two thousand random exemplars.
+Two thirds of the test set labelled correctly, no optimizer, no backprop. (The linear readout can only *sum* the votes, which caps this build at 67.5%; replacing the sum with a nearest-prototype `max` reaches 78.2%, but a linear layer cannot express a max. Built from the full training set instead of this 20k subset, the same recipe lands at 68.5% and 79.4%, the pair the explainer's panel shows; `scripts/yat_fmnist_export.py` prints all four.) The point stands: classification is not something training installs in a black box. It is what the architecture is, and a good engineered selection of prototypes makes it work on its own.
 
 Add the prototypes one at a time and you can watch the classifier resolve, with no training at any point.
 

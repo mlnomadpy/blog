@@ -168,7 +168,7 @@ defineViz('spectrummanifold', {
     text(ctx, mode === 'independent' ? 'flat, no preferred direction' : `top mode holds ${(100 * peaked).toFixed(0)}%`,
       sb.x + 8, sb.y + sb.h - 16, colors, { size: 9.5, mono: true, color: colors.muted });
 
-    api.readout('rd', `${mode} · structure ${api.get('structure').toFixed(2)} · jax-js`);
+    api.readout('rd', `${mode} · structure ${api.get('structure').toFixed(2)}`);
   },
 });
 </script>

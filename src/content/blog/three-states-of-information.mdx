@@ -2,7 +2,7 @@
 title: 'The Three States of Information'
 description: 'Representations learned by a network pass through three states, like matter: random (high-entropy, no structure), organized (clusters, local order), and structured (a maximally-separated simplex, global order). The transitions between them are exactly the loss plateaus you see when training: the flat stretch is where the representation reorganizes before that reorganization shows up in the loss. Built from live in-browser training runs.'
 seoDescription: "Representations pass through three states while training (random, organized, structured), and the transitions are the loss plateaus. With live training viz."
-pubDate: 2026-06-07T12:00:00-07:00
+pubDate: 2026-06-07T12:30:00-07:00
 draft: false
 companion: three-states-of-information-jax
 tags: [ml, training-dynamics, representation-learning, neural-collapse, loss-landscape, phase-transitions, contrastive, simplex, information]
@@ -67,6 +67,11 @@ references:
     title: "The Developmental Landscape of In-Context Learning"
     venue: "arXiv preprint"
     arxiv: "2402.02364"
+  - authors: "Nam, Y., Lee, S. H., Domine, C. C. J., Park, Y., London, C., Choi, W., Goring, N., Lee, S."
+    year: 2025
+    title: "Position: Solve Layerwise Linear Models First to Understand Neural Dynamical Phenomena (Neural Collapse, Emergence, Lazy/Rich Regime, and Grokking)"
+    venue: "ICML 2025"
+    arxiv: "2502.21009"
 keywords:
   - three states of information
   - loss plateaus
@@ -87,47 +92,53 @@ Watch a network train for long enough and the loss curve stops looking like a sm
 
 The cleanest way to see why is to stop watching the loss and watch the *representation*, the geometry of the activations the network is shaping. That geometry moves through three states, and the move from one to the next is exactly the plateau.
 
-By "information" here I mean label-relevant structure in representation space: not Shannon information in the abstract, but the geometry that makes classes recoverable.
-
 <StateMorph caption="The three states on a loop: a real 2-D force system, integrated live. Satellites are pulled toward their class leader (clustering); leaders repel each other and seek a ring (spreading). From a random scatter the system passes through RANDOM → ORGANIZED → STRUCTURED and then re-randomizes. The badge reads the state off the geometry; nothing about the labels is scripted." />
 
 ## Three states, like matter
 
-Borrow the picture from phases of matter. It is an old analogy in the statistical mechanics of learning, where training is read as an ordering process with its own order parameters and a falling representation entropy. None of the three states below is a new phenomenon; the contribution here is to name them cleanly and let you *watch* the transitions.
+A pot of steam, a glass of water, a cube of ice: the same molecules, three degrees of order. Training runs that movie in reverse for a representation, from disorder to order, and the analogy is older than it looks: the statistical mechanics of learning has long read training as an ordering process, with order parameters and a falling representation entropy. None of the three states below is a new phenomenon; the contribution here is to name them cleanly and let you *watch* the transitions.
+
+What is the thing that freezes? By "information" here I mean label-relevant structure in representation space: not Shannon information in the abstract, but the geometry that makes classes recoverable.
 
 **Random**: the gas. At initialization the representation is high-entropy and isotropic: points spread with no relation to their class, pairwise similarities look like noise. There is information in the labels, but none of it is in the geometry yet.
 
 **Organized**: the liquid. Partway through training, same-class points pull together into clusters. There is now *local* order (you can tell which points belong together), but the clusters themselves are not yet arranged. They can sit at arbitrary, even overlapping, angles. The representation has organized *within* classes without organizing *between* them. This "low-order structure first" is the **distributional simplicity bias**: networks fit the mean and covariance of the data before its higher-order correlations, a bias documented from small CNNs to ImageNet models and LLMs (Refinetti et al., 2023; Belrose et al., 2024).
 
-**Structured**: the crystal. At convergence the clusters settle into a globally ordered arrangement: maximally separated, equiangular, a simplex. This is the **neural collapse** regime (Papyan, Han & Donoho, 2020), where class means converge to a simplex equiangular tight frame, the same maximally-spread configuration the [Welch bound](/blog/welch-bound-good-latent-space/) describes. Global order, minimal redundancy.
+**Structured**: the crystal. At convergence the clusters settle into a globally ordered arrangement: maximally separated, equiangular, a simplex. This is the **neural collapse** endpoint the [Welch-bound post](/blog/welch-bound-good-latent-space/) built up in detail (Papyan, Han & Donoho, 2020). Global order, minimal redundancy.
 
-The figure below is a supervised contrastive encoder trained live in your browser. Press play and watch the representation pass through all three (scattered, then clustered, then crystallized into a simplex) while a structure metric climbs alongside the loss.
+The correspondence is not decoration; each state has an order parameter you can measure on a real run:
 
-<InformationStates caption="A live contrastive training run, on the nanograd autodiff engine. Points are class blobs mapped onto the circle; the badge reads the current state from the geometry. RANDOM: scattered, no class structure. ORGANIZED: same-class points cluster, but the clusters are bunched, not spread. STRUCTURED: the clusters settle into a maximally-separated simplex (min class-pair cosine → −1/(K−1)). Notice that the structure curve (green) rises through the slow stretch of the loss (orange): the reorganization happens during the plateau, then the loss falls." />
+| state | phase | order parameter |
+| --- | --- | --- |
+| random | gas | within-class variance ≈ total variance; class-mean cosines look like noise |
+| organized | liquid | within-class variance small (local order); class means still bunched |
+| structured | crystal | class-mean cosines lock onto $-1/(C-1)$, the simplex (global order) |
 
-That two-step mirrors the standard decomposition of contrastive learning into alignment and uniformity. Wang & Isola (2020) show the contrastive loss splits into **alignment**, pulling positive pairs together (the organized state), and **uniformity**, spreading features evenly on the sphere (the structured state). That decomposition is about which two properties the loss optimizes, not a guaranteed training-time order; but in the run above you can watch alignment resolve first, then uniformity slowly break the symmetry into a simplex.
+The figure below is a supervised contrastive encoder trained live in your browser. Press play and watch the representation crystallize, clusters gathering and then spreading into a simplex, while a structure metric climbs alongside the loss. (A random projection already preserves some of the blobs' structure, so depending on the roll the run may open partway into the story.)
+
+<InformationStates caption="A live contrastive training run, computed in your browser as you watch. Points are class blobs mapped onto the circle; the badge reads the current state from the geometry. RANDOM: scattered, no class structure. ORGANIZED: same-class points cluster, but the clusters are bunched, not spread. STRUCTURED: the clusters settle into a maximally-separated simplex (min class-pair cosine → −1/(K−1)). Notice that the structure curve (green) rises through the slow stretch of the loss (orange): the reorganization happens during the plateau, then the loss falls." />
+
+That two-step mirrors the [alignment and uniformity](/blog/welch-bound-good-latent-space/) decomposition of contrastive learning (Wang & Isola, 2020): alignment builds the local order of the organized state, uniformity the global order of the structured one. But the decomposition names two properties, not a schedule. In the run above alignment wins the race, so the states arrive in their canonical gas-liquid-crystal order: clusters first, then the slow symmetry-breaking into the simplex. Nothing forces that order. The [companion](/blog/three-states-of-information-jax/) trains the same two forces under strong augmentations and watches the race flip: the spread resolves fast while the spreading flings positive pairs apart, and local order arrives last. The states are geometries, not a fixed itinerary; what every route shares is the endpoint, uniform and aligned at once.
 
 ## The plateau is the phase transition
 
-Here is the part that connects the two pictures, in the feature-learning regimes this post is about. The representation does not move between states at a constant rate. It stalls near *saddle points* of the loss: configurations that are flat in most directions, where the gradient is tiny. The network creeps along until some symmetry breaks and it falls toward the next state. That creep is the plateau; the symmetry-breaking is the drop.
+Why would a *reorganization* read as a flat line in the loss? Because the representation does not move between states at a constant rate. It stalls near *saddle points* of the loss: configurations that are flat in most directions, where the gradient is tiny. The network creeps along until some symmetry breaks and it falls toward the next state. That creep is the plateau; the symmetry-breaking is the drop.
 
 <SaddleDescent caption="The mechanism, in miniature: real gradient descent on a surface with a saddle at the origin (a minimum along one axis, a maximum along the other). The trajectory drops fast in the steep direction, then creeps across the flat saddle where the gradient is nearly zero (that creep is the plateau) before the instability takes over and it falls into a basin. The loss trace on the right shows the same flat-then-drop." />
 
 This shows up most starkly in the simplest possible model, a deep *linear* network, where the dynamics can be solved exactly (Saxe, McClelland & Ganguli, 2013). Such a network learns the structure of its target one **mode** at a time, strongest first, and each mode switches on only after a delay spent near a saddle. The result is a loss that falls in clean steps: one plateau, one drop, per mode.
 
-<LossStaircase caption="A two-layer linear network learning a diagonal target diag(s₁>s₂>…) from a whitened input, trained live with nanograd. Left: the loss falls in steps. Right: the recovered gains climb one at a time, and each plateau on the left lines up with a bar reaching its target on the right. With small initialization the network sits near a saddle, learns the largest mode, plateaus again at the next saddle, and so on. The staircase is not an artifact; it is the structure being assembled piece by piece." />
+<LossStaircase caption="A two-layer linear network learning a diagonal target diag(s₁>s₂>…) from a whitened input, trained live in your browser. Left: the loss falls in steps. Right: the recovered gains climb one at a time, and each plateau on the left lines up with a bar reaching its target on the right. With small initialization the network sits near a saddle, learns the largest mode, plateaus again at the next saddle, and so on. The staircase is not an artifact; it is the structure being assembled piece by piece." />
 
-The same shape recurs across very different settings, which is the tell that it is a property of *learning*, not of any one architecture:
+Is that staircase a quirk of linear toys? Chase the shape into other settings and it keeps turning up, which is the tell that it belongs to *learning*, not to any one architecture. From small initialization, linear and near-linear networks exhibit **saddle-to-saddle dynamics**: training hops between saddles of increasing rank, each hop adding one direction of structure, and in the vanishing-init limit the trajectory becomes literally piecewise-constant (Saxe et al., 2013; Pesme & Flammarion, 2023). The **information bottleneck** tells a similar two-phase story, a fast *fitting* phase followed by a slow phase often described as *compression*, though whether that second phase is a genuine information-theoretic effect is contested (Shwartz-Ziv & Tishby, 2017; Saxe et al., 2018), so take it as a suggestive picture rather than a law.
 
-- **Saddle-to-saddle dynamics** in linear and small networks: from small initialization, training hops between saddles of increasing rank, each hop adding one direction of structure. In the vanishing-init limit the trajectory becomes literally piecewise-constant, jumping from saddle to saddle (Saxe et al., 2013; Pesme & Flammarion, 2023).
-- **The information bottleneck's two phases** (Shwartz-Ziv & Tishby, 2017): a fast *fitting* phase, then a slow phase often described as *compression*. Whether that second phase is a genuine information-theoretic effect is contested (Saxe et al., 2018), so take it as a suggestive picture, not a law.
-- **Grokking** (Power et al., 2022): the extreme case, where the plateau lasts so long the model looks merely memorized, then a late transition snaps it into a generalizing solution. Mechanistically the structure forms *gradually* underneath the flat curve, and a final cleanup removes the memorizing part (Nanda et al., 2023).
+And then there is the case that stretches the plateau to absurdity. Train a small transformer on modular arithmetic and it memorizes the training set almost immediately, while test accuracy sits at chance. And sits there. For thousands of steps the curve flatlines, long enough that any reasonable person would kill the run as a memorizer that will never generalize. Wait instead, and the curve snaps upward: the model abruptly generalizes, long after it looked finished. That is **grokking** (Power et al., 2022), and the mechanistic post-mortem found exactly what the three-states picture predicts: the generalizing structure had been forming *gradually* under the flat curve the whole time, with a final cleanup phase removing the memorizing circuit (Nanda et al., 2023).
 
-In every one, the flat stretch is not idle time. It is the representation doing the slow work of reorganizing, work that is invisible in the loss until the new structure is complete enough to pay off all at once.
+In every one of these, the flat stretch is not idle time. It is the representation doing the slow work of reorganizing, work that is invisible in the loss until the new structure is complete enough to pay off all at once.
 
 Two honest caveats. First, this clean three-stage path is **regime-dependent**: it is vivid when the network actually learns features (the "rich" regime, typically from small initialization) and nearly absent in the "lazy" regime, where the representation barely moves and the model behaves like a fixed kernel. Second, **not every plateau is a saddle**: a flat stretch can also be a low-curvature valley, a vanishing gradient from saturated units, or simply an interval where the active-neuron pattern stops changing (Ainsworth & Shin, 2021). "Near a saddle" is the cleanest mechanism, not the only one.
 
-The "study the phases through the linear case" move is more than a teaching device. A recent line of work argues that layerwise-linear models already reproduce neural collapse, the lazy/rich split, emergence, and grokking, and should be solved first to understand them. And a parallel program, **developmental interpretability**, built on singular learning theory, makes the stages precise: it detects the discrete phase transitions of training from the geometry of the loss landscape via the *local learning coefficient* (Hoogland et al., 2024). The three states are the cartoon; these are the instruments.
+The "study the phases through the linear case" move is more than a teaching device. A recent position paper argues that layerwise-linear models already reproduce neural collapse, the lazy/rich split, emergence, and grokking, and should be solved first to understand them (Nam et al., 2025). And a parallel program, **developmental interpretability**, built on singular learning theory, makes the stages precise: it detects the discrete phase transitions of training from the geometry of the loss landscape via the *local learning coefficient* (Hoogland et al., 2024). The three states are the cartoon; these are the instruments.
 
 ## Reading a training curve
 
@@ -146,5 +157,5 @@ Training is not a smooth descent; it is a sequence of reorganizations. Informati
 <CiteAs
   slug="three-states-of-information"
   title="The Three States of Information"
-  pubDate="2026-06-07T12:00:00-07:00"
+  pubDate="2026-06-07T12:30:00-07:00"
 />

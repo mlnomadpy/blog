@@ -1,0 +1,121 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 340 } = Astro.props;
+---
+<figure class="viz jassembly" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Two layer-1 edge responses combining live into one named layer-2 junction
+// detector. Pick a garment and a pair of orientations: the two hand-built edge
+// channels are computed from the raw image (Sobel + orientation binning, the C4
+// recipe), pooled to the 14x14 cell grid, and their pointwise minimum is the
+// junction map, an AND that fires only where both orientations are present.
+// Every map is the same arithmetic as scripts/handbuilt_depth.py, run live.
+import { defineViz } from './engine/vizkit.js';
+import { loadDepth, samplesImg, l1maps, toCells, l2map, tileFromSprite, mapToCanvas, parseHex, CHAN_COL, KIND_COL } from './depthfeat.js';
+import { gate, loadingText, T } from './engine/draw.js';
+
+defineViz('jassembly', {
+  title: 'Two edges in, one junction out',
+  height: 340,
+  controls: [
+    { type: 'range', name: 'sample', label: 'garment', min: 0, max: 59, step: 1, value: 3, int: true, reset: false, fmt: (v) => v },
+    { type: 'select', name: 'pair', label: 'junction', reset: false, value: '2', options: [] },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    api.state._cache = new Map();
+    gate(api, () => Promise.all([loadDepth(), samplesImg()]), (api, [d, spr]) => {
+      api.state.d = d; api.state.spr = spr;
+      // fill the junction select from the exported spec list
+      const sel = api.canvas.closest('.viz')?.querySelector('select');
+      if (sel && !sel.options.length) {
+        d.specsL2.forEach((s, i) => {
+          if (s.kind !== 'junction') return;
+          const o = document.createElement('option'); o.value = String(i); o.textContent = s.short; sel.appendChild(o);
+        });
+        api.setControl('pair', '2');   // 0°+90°, the classic corner
+      }
+    });
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    if (!st.ready) { loadingText(api, 'computing in your browser…'); return; }
+    const d = st.d, k = api.get('sample'), si = +api.get('pair') || 0;
+    const spec = d.specsL2[si];
+    const key = k + ':' + si;
+    let r = st._cache.get(key);
+    if (!r) {
+      const im = tileFromSprite(st.spr, k);
+      const maps = l1maps(im, d);
+      const cells = maps.map(toCells);
+      const j = l2map(cells, spec, d);
+      r = { im, a: cells[spec.b1], b: cells[spec.b2], j };
+      if (st._cache.size > 40) st._cache.clear();
+      st._cache.set(key, r);
+    }
+
+    const pad = 14, top = 30;
+    T(ctx, colors, 'label'); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('a garment, its two edge channels on the cell grid, and their AND. all computed live.', pad, 18);
+
+    // four tiles: garment | edge b1 | edge b2 | junction, with + and = between
+    const n = 4, gap = 34;
+    const tile = Math.max(10, Math.min(H - top - 56, (W - pad * 2 - gap * (n - 1)) / n));
+    const x0 = pad + Math.max(0, (W - pad * 2 - (tile * n + gap * (n - 1))) / 2);
+    const y = top + Math.max(0, (H - top - 44 - tile) / 2);
+    const cA = CHAN_COL[spec.b1], cB = CHAN_COL[spec.b2], cJ = KIND_COL.junction;
+
+    const tiles = [
+      { cv: null, label: 'garment (' + d.classes[d.samples[k].label] + ')', col: colors.muted },
+      { cv: mapToCanvas(r.a, 14, parseHex(cA)), label: `edge ${d.centersDeg[spec.b1]}°  (layer 1)`, col: cA },
+      { cv: mapToCanvas(r.b, 14, parseHex(cB)), label: `edge ${d.centersDeg[spec.b2]}°  (layer 1)`, col: cB },
+      { cv: mapToCanvas(r.j, 14, parseHex(cJ)), label: spec.short + '  (layer 2)', col: cJ },
+    ];
+    ctx.imageSmoothingEnabled = false;
+    tiles.forEach((t, i) => {
+      const x = x0 + i * (tile + gap);
+      if (i === 0) {
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(st.spr, (k % 10) * 28, ((k / 10) | 0) * 28, 28, 28, x, y, tile, tile);
+        ctx.imageSmoothingEnabled = false;
+      } else {
+        ctx.drawImage(t.cv, x, y, tile, tile);
+      }
+      ctx.strokeStyle = i === 3 ? t.col : colors.border; ctx.lineWidth = i === 3 ? 2 : 1;
+      ctx.strokeRect(x + 0.5, y + 0.5, tile - 1, tile - 1);
+      T(ctx, colors, 'small', { color: t.col, align: 'center', baseline: 'top' });
+      wrapText(ctx, t.label, x + tile / 2, y + tile + 7, tile + gap - 8, 12);
+      // connector glyphs
+      if (i > 0) {
+        const gx = x - gap / 2, gy = y + tile / 2;
+        ctx.fillStyle = colors.muted; ctx.font = 'bold 15px ui-sans-serif, system-ui';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(i === 1 ? '→' : i === 2 ? '+' : '=', gx, gy);
+        if (i === 3) { T(ctx, colors, 'small', { align: 'center', baseline: 'top' }); ctx.fillText('min', gx, gy + 12); }
+      }
+    });
+
+    api.readout('rd', `“${spec.name}” · computed live`);
+  },
+});
+
+function wrapText(ctx, str, cx, y, maxW, lh) {
+  const words = str.split(' '); let line = '', yy = y;
+  for (const w of words) {
+    const t = line ? line + ' ' + w : w;
+    if (ctx.measureText(t).width > maxW && line) { ctx.fillText(line, cx, yy); line = w; yy += lh; }
+    else line = t;
+  }
+  if (line) ctx.fillText(line, cx, yy);
+}
+</script>

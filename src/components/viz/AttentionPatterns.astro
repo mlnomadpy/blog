@@ -88,7 +88,7 @@ defineViz('attentionpatterns', (root) => {
         heatmap(ctx, { x: bx, y: head, w: cw, h: H - head }, state.mats[k], N, colors, { activeRow: state.qi });
       });
       const tau = api.get('tau');
-      api.readout('ro', `query t${state.qi} · τ ${(+tau).toFixed(2)} · ${N}×${N} causal · jax-js`);
+      api.readout('ro', `query t${state.qi} · τ ${(+tau).toFixed(2)} · ${N}×${N} causal · live`);
     },
   };
 });

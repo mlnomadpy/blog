@@ -2,7 +2,7 @@
 title: "Cheap Attention: Linear-Time Kernel Approximation"
 description: "A 128K-token context creates billions of pairwise questions per attention head. But the N×N matrix is not the essence of attention; it is the receipt for an infinite feature map we never wrote down. Approximate that feature map with random features, reassociate the sum, and softmax attention becomes linear-time kernel attention. The whole argument is built from live in-browser visualizations."
 seoDescription: "Softmax attention is a kernel; approximate its feature map with random features and the N×N matrix becomes an O(N) shared state. Linear attention with live viz."
-pubDate: 2026-05-31T12:00:00-07:00
+pubDate: 2026-05-31
 draft: false
 companion: linear-attention-jax-flax-nnx
 tags: [ml, attention, kernels, performer, linear-attention, transformers, random-features, efficient-transformers, rkhs, self-attention]
@@ -76,13 +76,13 @@ A 128K-token prompt sounds like a lot of text. Inside a transformer, it is also 
 
 That ledger is useful, but it is not sacred. The softmax score is a kernel, which means it is secretly an inner product in a feature space. The reason exact attention looks quadratic is that the exact feature space is infinite-dimensional, so the implementation falls back to evaluating every pair by hand. Give the kernel a finite approximate feature map, move the parentheses, and the ledger disappears.
 
-That is linear attention: keys and values write once into a shared feature-space state, and each query reads from that state. We will build the idea first through a gravity analogy, all-pairs forces versus a shared field, then derive the same bookkeeping change from the softmax kernel itself. Every figure here runs live in your browser.
+That is linear attention: keys and values write once into a shared feature-space state, and each query reads from that state. We will build the idea first through a gravity analogy, all-pairs forces versus a shared field, then derive the same bookkeeping change from the softmax kernel itself. The quantitative figures run live in your browser, every kernel value and error bar computed as you drag; a few of the bookkeeping diagrams are schematics of the data flow, and their captions say so.
 
 ---
 
-<BookkeepingFour caption="One bargain, two domains. Left column, the all-pairs ledger, O(N²): direct Newtonian gravity sums every pairwise force, and exact softmax attention scores every query-key pair. Right column, the shared state, O(N): a particle-mesh field solves ∇²Φ = 4πGρ once and bodies read −∇Φ, while linear attention pours keys and values into the feature state φ(K)ᵀV that every query reads. Gravity runs a live jax-js Poisson solve, and the same N drives all four panels. The right column is approximate, but its work grows like N instead of N². The rest of the post is why the attention row works and what it costs." />
+<BookkeepingFour caption="One bargain, two domains. Left column, the all-pairs ledger, O(N²): direct Newtonian gravity sums every pairwise force, and exact softmax attention scores every query-key pair. Right column, the shared state, O(N): a particle-mesh field solves ∇²Φ = 4πGρ once and bodies read −∇Φ, while linear attention pours keys and values into the feature state φ(K)ᵀV that every query reads. The gravity field panel solves its Poisson equation live in your browser, and the same N drives all four panels. The right column is approximate, but its work grows like N instead of N². The rest of the post is why the attention row works and what it costs." />
 
-Start away from transformers for a moment, because gravity makes the bargain obvious. Take $N$ bodies pulling on one another. The direct way is a ledger: for each body, sum the pull of every other body, $N(N-1)$ interactions, quadratic before the simulation has done anything interesting. The field way changes what you store: the bodies write their mass into a shared gravitational potential, you solve for that field once, and each body reads its local pull from it. The per-body work stops growing with the number of *other* bodies; it grows only with the cost of maintaining one shared object.
+Why open with planets? Because gravity ran into this exact bookkeeping problem first, and it makes the bargain obvious. Take $N$ bodies pulling on one another. The direct way is a ledger: for each body, sum the pull of every other body, $N(N-1)$ interactions, quadratic before the simulation has done anything interesting. The field way changes what you store: the bodies write their mass into a shared gravitational potential, you solve for that field once, and each body reads its local pull from it. The per-body work stops growing with the number of *other* bodies; it grows only with the cost of maintaining one shared object.
 
 That contrast, *all pairs* versus *one shared object, written once and read many times*, is the entire idea, and it is the split you just saw: the left column is the ledger, the right column is the field. We are borrowing only that bookkeeping shape; the field method is an approximation, and we are not claiming attention is secretly gravity.
 
@@ -119,7 +119,7 @@ From here the argument has four moves:
 
 ## The matrix is a symptom
 
-Start with the smallest object in the story: one token asking what it should read from the rest of the sequence. Token by token, scaled dot-product attention is
+What is the smallest object in this story? One token, asking what it should read from the rest of the sequence. Token by token, scaled dot-product attention is
 
 $$
 y_i = \sum_j \frac{\kappa(q_i, k_j)}{\sum_{l} \kappa(q_i, k_l)}\, v_j,
@@ -153,9 +153,9 @@ That diagnosis changes the problem. We no longer need to make pairwise compariso
 
 ## Sketch the hidden features
 
-Set attention aside for a section. This trick is older and more general than transformers. Any positive-semidefinite kernel $K(x,y)$ is an inner product of *features*, a map $\phi$ into some, possibly infinite-dimensional, space with $K(x,y) = \langle \phi(x), \phi(y)\rangle$. "Similarity" is literally "alignment after a feature lift." For the Gaussian kernel $K(x,y) = \exp(-\|x-y\|^2/2\sigma^2)$ that lifted space is infinite-dimensional, but a finite random sketch already shows the structure.
+So where do usable coordinates for an infinite feature map come from? The trick is older and more general than transformers, so attention can sit out this section. Any positive-semidefinite kernel $K(x,y)$ is an inner product of *features*, a map $\phi$ into some, possibly infinite-dimensional, space with $K(x,y) = \langle \phi(x), \phi(y)\rangle$. "Similarity" is literally "alignment after a feature lift." For the Gaussian kernel $K(x,y) = \exp(-\|x-y\|^2/2\sigma^2)$ that lifted space is infinite-dimensional, but a finite random sketch already shows the structure.
 
-<FeatureLift caption="A kernel is an inner product of features, made literal, live on jax-js. With m random Fourier features φ(t) = √(2/m)·[cos(wᵢt+bᵢ)], the RBF kernel exp(−(x−y)²/2σ²) is the plain dot product φ(0)·φ(y). Top bars: the feature vector of the fixed anchor a=0. Lower bars: the feature vector of the point y. Drag horizontally to move y, when y≈0 the two vectors match sign-for-sign and their dot product (orange dot, bottom curve) sits at the top of the bell; pull y away and the signs decorrelate and the dot product slides down the curve. Lower m to watch the estimate get noisy: finitely many features approximate, infinitely many would be exact." />
+<FeatureLift caption="A kernel is an inner product of features, made literal and computed live in your browser. With m random Fourier features φ(t) = √(2/m)·[cos(wᵢt+bᵢ)], the RBF kernel exp(−(x−y)²/2σ²) is the plain dot product φ(0)·φ(y). Top bars: the feature vector of the fixed anchor a=0. Lower bars: the feature vector of the point y. Drag horizontally to move y, when y≈0 the two vectors match sign-for-sign and their dot product (orange dot, bottom curve) sits at the top of the bell; pull y away and the signs decorrelate and the dot product slides down the curve. Lower m to watch the estimate get noisy: finitely many features approximate, infinitely many would be exact." />
 
 The escape route is to stop asking for the whole feature map. [Rahimi and Recht (2007)](https://people.eecs.berkeley.edu/~brecht/papers/07.rah.rec.nips.pdf) observed that many kernels can be written as an **expectation** of a simple random feature, $K(x,y) = \mathbb{E}_w[\psi_w(x)\,\psi_w(y)]$, so a Monte-Carlo average over $m$ draws,
 
@@ -171,19 +171,19 @@ The intuition is mundane: instead of measuring the whole infinite object, throw 
 
 For the Gaussian kernel the recipe has a closed form, due to Bochner: a shift-invariant kernel is the Fourier transform of a non-negative spectral density, so $K(\delta) = \mathbb{E}_{w\sim p}[\cos(w\,\delta)]$ with the frequencies $w$ drawn from that density (a Gaussian, for the RBF). Each random feature is one cosine wave at one random frequency. Average enough waves and the smooth bell curve assembles itself.
 
-<RandomFourierBuild caption="Building the RBF kernel by averaging random cosines, Bochner's theorem, computed live on jax-js. The kernel exp(−δ²/2σ²) over the gap δ=x−y (blue) is the expectation of cos(wδ) for frequencies w sampled from the kernel's Gaussian spectral density. Each step draws one frequency and folds its cosine (top strip) into the running average (orange). Press play: the jagged mean of a few cosines smooths into the bell as features accumulate, RMSE falling like 1/√m. The bandwidth σ reshapes both the target bell and the spread of sampled frequencies." />
+<RandomFourierBuild caption="Building the RBF kernel by averaging random cosines, Bochner's theorem, computed live as you watch. The kernel exp(−δ²/2σ²) over the gap δ=x−y (blue) is the expectation of cos(wδ) for frequencies w sampled from the kernel's Gaussian spectral density. Each step draws one frequency and folds its cosine (top strip) into the running average (orange). Press play: the jagged mean of a few cosines smooths into the bell as features accumulate, RMSE falling like 1/√m. The bandwidth σ reshapes both the target bell and the spread of sampled frequencies." />
 
 This has an immediate consequence for cost. Evaluating a kernel on $n$ points usually means building the $n\times n$ **Gram matrix** $K_{ij} = K(x_i,x_j)$, the $O(n^2)$ object at the heart of every kernel method. Replace the kernel by $m$ explicit features and that matrix becomes $K \approx \Phi\Phi^\top$ with $\Phi \in \mathbb{R}^{n\times m}$: a rank-$m$ factorization you need never expand.
 
 The Gram matrix is the full ledger again: every point compared against every other point. The feature matrix $\Phi$ is a compressed dossier: each point gets $m$ coordinates, and any relationship can be reconstructed by taking a dot product. If you only need sums of relationships, expanding the whole chart is wasted motion.
 
-<GramReconstruction caption="The n×n Gram matrix is the O(n²) object; random features make it low-rank. Left: the exact RBF Gram K on 30 points along a line, a smooth diagonal band. Right: the rank-m approximation K̂ = ΦΦᵀ from m random Fourier features, accumulated one rank-1 update per step on jax-js. Press play and watch K̂ sharpen into K, the relative Frobenius error falling like 1/√m. This is the general picture, the attention figure later is the same low-rank trick, aimed at the softmax kernel." />
+<GramReconstruction caption="The n×n Gram matrix is the O(n²) object; random features make it low-rank. Left: the exact RBF Gram K on 30 points along a line, a smooth diagonal band. Right: the rank-m approximation K̂ = ΦΦᵀ from m random Fourier features, accumulated live, one rank-1 update per step. Press play and watch K̂ sharpen into K, the relative Frobenius error falling like 1/√m. This is the general picture, the attention figure later is the same low-rank trick, aimed at the softmax kernel." />
 
 That factorization is the lever. Anywhere a computation sums a kernel over many points, explicit features let you regroup the sum and skip the full matrix. Attention is exactly such a computation. But before we spend the sketch, there is one attention-specific constraint: the sketch has to survive normalization.
 
 ## The sketch must stay positive
 
-The softmax kernel is a Gaussian kernel up to the per-vector norm factors we completed the square on, so the same random-feature recipe applies. But attention is less forgiving than a generic kernel method. The estimate is not just a number in a loss; it becomes a weight in a normalized average. If that weight is negative, noisy, or occasionally enormous in the wrong place, the whole layer feels it.
+But attention is less forgiving than a generic kernel method, and the difference decides which sketch survives. The softmax kernel is a Gaussian kernel up to the per-vector norm factors we completed the square on, so the recipe from the last section applies in principle. The catch is what the estimate becomes: not a number sitting in a loss, but a weight in a normalized average. If that weight is negative, noisy, or occasionally enormous in the wrong place, the whole layer feels it.
 
 That is why the Performer's [FAVOR+](https://arxiv.org/abs/2009.14794) uses **positive** random features. Draw $w_1,\dots,w_m \sim \mathcal N(0, I_d)$ and set
 
@@ -195,7 +195,7 @@ A one-line Gaussian-integral computation gives $\mathbb{E}\big[\phi^{+}(q)\cdot\
 
 There is an older, more obvious choice that *also* works in expectation and yet fails in practice. The Gaussian factor invites the random Fourier features from the section above, the **trigonometric** map $\phi^{\text{trig}}(x) \propto \exp(\|x\|^2/2)\,[\sin(w_i^\top x),\cos(w_i^\top x)]$, the same cosines that built the bell. These are unbiased too. On paper, that sounds enough. Inside attention, it is not.
 
-<RandomFeatureKernel caption="The softmax kernel exp(q·k) (blue) against m-feature random estimates, computed live on jax-js. Fix ‖q‖=‖k‖=r and sweep the angle θ between them, so q·k = r²cosθ ranges from aligned (θ=0) to opposed (θ=π). Each faint orange line is one independent random-feature draw; the bold orange is their mean. Positive (FAVOR+) features hug the curve and never leave ℝ₊. Switch to trigonometric features: in the tail where the true kernel is tiny, exactly the entries a softmax should suppress, the estimate has enormous variance and routinely goes negative. A negative 'attention weight' is meaningless, and the normalizing denominator can vanish. This is why Performers use positive features." />
+<RandomFeatureKernel caption="The softmax kernel exp(q·k) (blue) against m-feature random estimates, computed live in your browser. Fix ‖q‖=‖k‖=r and sweep the angle θ between them, so q·k = r²cosθ ranges from aligned (θ=0) to opposed (θ=π). Each faint orange line is one independent random-feature draw; the bold orange is their mean. Positive (FAVOR+) features hug the curve and never leave ℝ₊. Switch to trigonometric features: in the tail where the true kernel is tiny, exactly the entries a softmax should suppress, the estimate has enormous variance and routinely goes negative. A negative 'attention weight' is meaningless, and the normalizing denominator can vanish. This is why Performers use positive features." />
 
 The positive-feature estimate stays close to the true kernel and, crucially, never goes negative. The trigonometric estimate is unbiased but its variance explodes precisely where the kernel is small, the far tail, the token pairs a good softmax wants to ignore. There it produces negative kernel values, which are nonsensical as attention weights, and it can drive the per-row normalizer toward zero, which makes the whole layer blow up.
 
@@ -207,7 +207,7 @@ Now the ingredients are in place: a finite feature map, a stable positive estima
 
 ## Spend the sketch
 
-Now spend the approximation. Replace the exact kernel with the inner product of features, $\exp(q_i \cdot k_j) \approx \phi(q_i) \cdot \phi(k_j)$, and look at what happens to a single output. This is the moment where the story changes from "compare everything with everything" to "summarize the keys and values once, then let each query read from the summary":
+So what happens when the sketch finally meets attention? Replace the exact kernel with the inner product of features, $\exp(q_i \cdot k_j) \approx \phi(q_i) \cdot \phi(k_j)$, and look at what happens to a single output. This is the moment where the story changes from "compare everything with everything" to "summarize the keys and values once, then let each query read from the summary":
 
 $$
 y_i \;\approx\; \frac{\sum_j \big(\phi(q_i)^\top \phi(k_j)\big)\, v_j^\top}{\sum_j \phi(q_i)^\top \phi(k_j)}
@@ -233,11 +233,11 @@ $$
 
 and the parenthesization is the entire point: compute $\phi(K)^\top V$ first (an $m \times d$ matrix), and the $N \times N$ object never forms. Softmax forces $(QK^\top)V$, with the $N\times N$ matrix in the middle; random features permit $\phi(Q)(\phi(K)^\top V)$, with only $m \times d$ in the middle. Same associative product, different order of operations, quadratically different cost.
 
-<ParenthesesSwitch caption="The parenthesis switch. On the exact path, QKᵀ fills an N×N score matrix before multiplying by V. On the linear path, φ(K)ᵀV is accumulated once into a small feature-space state, then φ(Q) reads from that state. The algebra is the same kind of weighted sum; the difference is whether the pairwise table ever exists." />
+<ParenthesesSwitch caption="The parenthesis switch. On the exact path, QKᵀ fills an N×N score matrix before multiplying by V. On the linear path, φ(K)ᵀV is accumulated once into a small feature-space state, then φ(Q) reads from that state. The algebra is the same kind of weighted sum; the difference is whether the pairwise table ever exists. This panel is a schematic of the bookkeeping: the matrix band and the state cells are illustrative patterns, not computed scores." />
 
 And there is the whole story in one line: it is the same matrix you would have built, just never built. The $N \times N$ object was not the computation you wanted; it was the *expanded ledger* you were forced to keep because $\phi$ had no finite form. Give $\phi$ coordinates and the same sum reassociates around it. Instead of writing down every pairwise debt and adding the columns later, you keep running totals in feature space from the start. The viz below forms the forbidden matrix anyway, on both sides, so you can watch the approximation close.
 
-<LinearAttentionApprox caption="Left: the exact softmax attention matrix A = softmax(QKᵀ/√d) for a 28-token sequence. Right: the matrix Â = D⁻¹φ(Q)φ(K)ᵀ implied by m random features, the object a real Performer is careful never to materialize, drawn here so you can see it converge. Both computed live on jax-js. The readout reports the relative error of the actual linear-time output Ŷ = D⁻¹φ(Q)(φ(K)ᵀV) against the exact Y = AV. Raise m and the right panel sharpens into the left and the error falls. Switch to trigonometric features and watch the error stay stubbornly high, and the denominator occasionally collapse, at the same m where positive features are already accurate." />
+<LinearAttentionApprox caption="Left: the exact softmax attention matrix A = softmax(QKᵀ/√d) for a 28-token sequence. Right: the matrix Â = D⁻¹φ(Q)φ(K)ᵀ implied by m random features, the object a real Performer is careful never to materialize, drawn here so you can see it converge. Both computed live in your browser. The readout reports the relative error of the actual linear-time output Ŷ = D⁻¹φ(Q)(φ(K)ᵀV) against the exact Y = AV. Raise m and the right panel sharpens into the left and the error falls. Switch to trigonometric features and watch the error stay stubbornly high, and the denominator occasionally collapse, at the same m where positive features are already accurate." />
 
 For autoregressive models the same factorization survives causal masking, and arguably gets prettier. The causal output only sums over $j \le i$, so define running prefix sums $S_i = \sum_{j\le i}\phi(k_j)v_j^\top$ and $z_i = \sum_{j\le i}\phi(k_j)$; then $y_i = \phi(q_i)^\top S_i / \phi(q_i)^\top z_i$, a linear recurrence in $i$.
 
@@ -271,7 +271,7 @@ The bargain also reframes what softmax *is*. It is not the only way to do attent
 
 That means a feature map is not just an implementation detail. It decides what the model means by "near," "aligned," and "worth attending to." Change the feature map and you change the geometry the layer sees. One way to make that visible is to fix a handful of key vectors and color each point of the plane by which key wins its attention. The result is a map of the kernel's territory: which regions belong to which keys, and what kind of boundaries the similarity function draws.
 
-<KernelPartition caption="Which key dominates where. A few fixed key vectors (stars); every point x in the plane is colored by argmaxⱼ φ(x)·φ(kⱼ), the key it attends to most under the chosen feature map. All score fields are computed on jax-js. (a) The exact softmax/dot-product kernel gives cones radiating from the origin: similarity is angular. (b) FAVOR+ random features approximate those cones, at small m the boundaries are ragged with Monte-Carlo noise; raise m (or resample) and they sharpen onto the exact partition. (c) The elu+1 feature map of Katharopoulos et al. is a different, cheaper kernel with shifted, curved boundaries, linear attention, but not an approximation of softmax. Same stars throughout, only the kernel changes." />
+<KernelPartition caption="Which key dominates where. A few fixed key vectors (stars); every point x in the plane is colored by argmaxⱼ φ(x)·φ(kⱼ), the key it attends to most under the chosen feature map. All score fields are computed live. (a) The exact softmax/dot-product kernel gives cones radiating from the origin: similarity is angular. (b) FAVOR+ random features approximate those cones, at small m the boundaries are ragged with Monte-Carlo noise; raise m (or resample) and they sharpen onto the exact partition. (c) The elu+1 feature map of Katharopoulos et al. is a different, cheaper kernel with shifted, curved boundaries, linear attention, but not an approximation of softmax. Same stars throughout, only the kernel changes." />
 
 Two things are worth pulling out of this picture. First, **FAVOR+ is genuinely an approximation of softmax**: its partition converges to the exact dot-product cones as you add features. That is the sense in which a Performer is "doing attention" rather than merely doing something attention-shaped.
 
@@ -285,7 +285,7 @@ Step back and the unifying statement is almost embarrassingly simple. **Every li
 
 Once attention becomes "pick a feature map and reassociate," softmax is one option in a design space, not the destination. Softmax's cones make similarity purely angular; other kernels can be built to decay with *distance*, to prefer locality, or to expose a structure you want the model to use. The quadratic cost was never intrinsic to attention. It was the price of evaluating an infinite feature map pairwise instead of approximating it and reassociating.
 
-The companion post argued that attention is explainable because it is a kernel. The same sentence, read for cost, says attention is *linearizable* because it is a kernel. A kernel is an inner product of features. Inner products factor. The long-context trick is to stop worshiping the matrix and start choosing the feature map.
+[An earlier post](/blog/attention-is-a-kernel/) argued that attention is *explainable* because it is a kernel. The same sentence, read for cost, says attention is *linearizable* because it is a kernel. A kernel is an inner product of features. Inner products factor. The long-context trick is to stop worshiping the matrix and start choosing the feature map.
 
 ---
 

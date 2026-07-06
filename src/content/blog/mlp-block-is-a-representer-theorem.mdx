@@ -48,13 +48,13 @@ If you watched the [3Blue1Brown attention video](https://www.3blue1brown.com/les
 
 Then the same series reaches the other half, the MLP block, and the tone changes. This is where the network stores what it knows, and the honest answer for how it stores it is that nobody is quite sure. The neurons are polysemantic, the features are superposed, the block is a wall of numbers with no handle on it. So you finish the series able to read one half of the machine and staring at the other. **Why is attention the readable half and the MLP the black box?**
 
-## Attention reads because it is a kernel
+## What makes attention readable?
 
 The asymmetry is not about depth or width; it is about the primitive. Attention is built from a similarity. Each token forms a query, every other token a key, and the output is a weighted average of values where the weights are how similar the query is to each key. That is a kernel, and a vote by similarity is something you can always read: the weights *are* the explanation, one number per source token, all of them adding to one. We made this exact in [Attention Is Explainable Because It Is a Kernel](/blog/attention-is-a-kernel/). The legibility was never a happy accident of attention; it is what any kernel gives you, because a kernel says "here is how much each reference counts," out loud.
 
 So the real question sharpens. The MLP is opaque, but is its opacity fundamental, or is it just that the MLP was built from the wrong primitive?
 
-## The MLP is opaque because its primitive has no reference
+## And what makes the MLP opaque?
 
 It is the wrong primitive. A standard hidden unit computes $\sigma(\langle w, x\rangle + b)$, and the weight $w$ in there is not a reference you can point at; it is a direction, a hyperplane normal, and the unit fires across an entire half-space of inputs. There is no center, no "this is what I am looking for," nothing to put your finger on, which is exactly [where a weight cannot live](/blog/where-does-a-weight-live/): off in a space of directions, joined to the data only by a shadow. Superposition and polysemanticity are downstream of that one fact. The primitive carries no geometry, so the block it builds carries none either, and there is nothing for an explanation to grab.
 
@@ -62,7 +62,7 @@ Attention got a metric for free, because a similarity has one built in. The MLP 
 
 ## Replace the activation with a kernel
 
-Swap the activation for the [Yat kernel](/blog/what-a-finite-kernel-buys-an-mlp/) and the hidden unit stops being a direction and becomes a similarity to a learned center $W_u$:
+Concretely, the swap is one move: the [Yat kernel](/blog/what-a-finite-kernel-buys-an-mlp/) in place of the activation turns the hidden unit from a direction into a similarity to a learned center $W_u$:
 
 $$
 \mathrm{yat}(x;\, W_u) = \frac{(\langle x, W_u\rangle + b)^2}{\lVert x - W_u\rVert^2 + \varepsilon} .
@@ -70,11 +70,13 @@ $$
 
 Now the unit has a reference, the center $W_u$, a point in the same space as the input, and it fires when the input is near and aligned with it. The hidden layer is no longer a wall of numbers; it is a vector of similarities to a handful of named prototypes. The same swap that makes attention's weights readable has been applied to the other half of the block.
 
+None of what follows is a diagram: the panels on this page replay a real trained model, a small transformer with a Yat feed-forward block trained on Shakespeare by `scripts/yat_ffn_whitebox.py`, whose exported weights run live in your browser.
+
 <MemoryMap client:visible caption="The real feed-forward memory of a small transformer trained on Shakespeare, running live in your browser. Every cell is one slot, decoded to the token it writes into the stream. Type a prompt and the slots fire: a cell brightens with its real kernel weight k(Wᵤ, x) at your last character. The block is no longer a slab of numbers, it is a memory you can read." />
 
 ## The block is a representer theorem
 
-Here is the part that turns "more readable" into "completely readable." The MLP block does not stop at the hidden layer; it applies a linear projection on top, $y = W_2 \,\mathrm{yat}(x)$. Write that sum out, with $\alpha_{u} = (W_2)_{:,u}$ the output row for unit $u$, and the whole block collapses to
+But a hidden layer you can read is only half the block; the linear projection stacked on top, $y = W_2 \,\mathrm{yat}(x)$, could still scramble whatever the kernel made legible. It does the opposite. Write that sum out, with $\alpha_{u} = (W_2)_{:,u}$ the output row for unit $u$, and the whole block collapses to
 
 $$
 y = \sum_{u} \alpha_{u}\, k(W_u,\, x) ,
@@ -88,11 +90,11 @@ It is worth being exact about the difference, because the difference is the poin
 
 ## Both halves, one principle
 
-Set the two halves of the transformer side by side and they are the same equation. Attention produces a token's output as $\sum_j a_j\, v_j$, a vote over the other tokens' values with weights $a_j$ that are similarities. The Yat MLP produces its output as $\sum_u \alpha_u\, k(W_u, x)$, a vote over learned prototypes with weights that are similarities. One votes over the tokens present in the context, the other over concepts the model has stored, but both are kernels, and both wear their explanation on the outside: a list of references and how much each one counted.
+So what happened to the asymmetry we started with? Side by side, the two halves of the transformer are now the same equation. Attention produces a token's output as $\sum_j a_j\, v_j$, a vote over the other tokens' values with weights $a_j$ that are similarities. The Yat MLP produces its output as $\sum_u \alpha_u\, k(W_u, x)$, a vote over learned prototypes with weights that are similarities. One votes over the tokens present in the context, the other over concepts the model has stored, but both are kernels, and both wear their explanation on the outside: a list of references and how much each one counted.
 
 ## What a white box buys you
 
-Legible is not the end of it; legible is the beginning. Once the block is $\sum_u k(W_u, x)\, v_u$, with $v_u = (W_2)_{:,u}$ the vector it writes into the residual stream, the feed-forward layer is a **key-value memory**: keys $W_u$ you can locate, values $v_u$ you can decode, weights that say how much each one fired. That is the same picture researchers reached for the FFN the hard way, calling its rows key-value memories and probing them with statistics; the kernel makes it exact rather than a useful approximation. And an exact memory is one you can operate on.
+Legible is not the end of it; legible is the beginning. Once the block is $\sum_u k(W_u, x)\, v_u$, with $v_u = (W_2)_{:,u}$ the vector it writes into the residual stream, the feed-forward layer is a **key-value memory**, the Geva et al. reading that [the readout post](/blog/readout-as-convex-combination/) traced through trained language models, made exact here rather than statistical. And an exact memory is one you can operate on.
 
 You can **read** a slot: decode its value $v_u$ through the unembedding and it tells you, in tokens, what it writes ("this one ends lines," "this one starts capitals"). You can **attribute** an output: since it is a sum, you split any FFN output into the slots that produced it, with no gradients and no saliency guesswork, because the decomposition is the arithmetic. That is what the memory map and the attribution panel above already showed, on the real model.
 
@@ -100,13 +102,13 @@ The next two go further, from reading the memory to operating on it. You can **e
 
 <EditKnob client:visible caption="White-box surgery on the real model. Pick a readable slot (the one that writes newlines, say), turn its gain up, and the model generates live with that one value vector amplified. The left side is untouched; on the right, the amplified slot floods the stream with exactly the token it was decoded to write. One slot, one knob, a predictable effect, run live in your browser." />
 
-And you can **tell when the memory is out of its depth**: the Yat kernel is local, so an input near nothing it has stored lights up no slot and the block writes almost nothing, an abstention signal you read straight off the weights.
+And you can **tell when the memory is out of its depth**: the Yat kernel is local, so an input near nothing it has stored lights up no slot and the block writes almost nothing, the abstention signal [Your Neuron Is a Picture](/blog/your-neuron-is-a-picture/) read off image prototypes, now in a transformer.
 
 <AbstainMeter client:visible caption="The same model, with each character tinted by its real peak memory weight, maxᵤ k(Wᵤ, x). Real Shakespeare glows: the memory recognizes it. Type gibberish and the characters go dark: no slot fires, the block writes nothing, and the model is telling you, in the kernel weights themselves, that it is out of its depth. Try it both ways." />
 
 None of that is available when the primitive is a direction with no reference. All of it falls out the moment the primitive is a kernel.
 
-That is the whole argument. The MLP was never doomed to be a black box; it was built from a primitive with no metric, and the opacity followed from that and nothing else. Give it a kernel and the block becomes a representer-theorem vote over prototypes, a key-value memory you can read, attribute through, edit, and trust to abstain, as legible as the attention beside it. The thing that made half the transformer readable, a similarity to a reference you can name, was available for the other half all along.
+That is the whole argument. The MLP was never doomed to be a black box; it was built from a primitive with no metric, and the opacity followed from that and nothing else. Give it a kernel and the block becomes a representer-theorem vote over prototypes, a key-value memory you can read, attribute through, edit, and trust to abstain, as legible as the attention beside it. And to keep the ledger honest: the panels on this page are the feed-forward half of "the whole transformer explains itself"; the attention half was made exact in [Attention Is Explainable Because It Is a Kernel](/blog/attention-is-a-kernel/). Between the two posts, both halves now read, by the same principle: a similarity to a reference you can name was available for the whole machine all along.
 
 ---
 

@@ -1,0 +1,117 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 400 } = Astro.props;
+---
+<figure class="viz abstainstrangers" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// A risk model should know a stranger when it sees one. The Yat field's kernel-max
+// is a resemblance meter: high when a patient looks like the training population,
+// low when they do not. Drag a real patient's covariates off the manifold and the
+// meter falls, the model can abstain. The two histograms show the separation the
+// exported run measured between real and out-of-distribution patients.
+// Data: scripts/yat_deepsurv.py -> ood.json + prototypes.json.
+import { defineViz } from './engine/vizkit.js';
+import { gate, loadingText, axes, T as Ty, fmt } from './engine/draw.js';
+import { yatFeatures } from './deepsurv.js';
+
+defineViz('abstainstrangers', {
+  title: 'The field goes quiet for strangers.',
+  height: 400,
+  controls: [
+    { type: 'range', name: 'push', label: 'push patient off-distribution (σ)', min: 0, max: 4, step: 0.1, value: 0, fmt: (v) => v.toFixed(1) },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    gate(api, () => Promise.all([
+      import('./deepsurv.js').then((m) => m.loadOod()),
+      import('./deepsurv.js').then((m) => m.loadProto()),
+    ]).then(([ood, proto]) => ({ ood, proto })), (api, both) => {
+      api.state.ood = both.ood; api.state.proto = both.proto;
+      api.state.W = both.proto.prototypes.map((p) => p.covariates_norm);
+      // a real, high-resemblance base patient: sit near a prototype so push=0 is
+      // squarely in-distribution (its kernel-max is high), then walk it out.
+      const D = api.state.W[0].length;
+      api.state.base = api.state.W[0].slice();
+      // fixed random push direction so the slider is deterministic
+      let s = 12345; const rnd = () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+      api.state.dir = api.state.base.map(() => (rnd() < 0.5 ? -1 : 1) * (0.6 + rnd()));
+    });
+  },
+
+  onControl(name, value, api) { api.render(); },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    if (!st.ready) { loadingText(api); return; }
+    const b = st.proto.b, eps = st.proto.eps;
+
+    // the moving patient's kernel-max
+    const push = api.get('push');
+    const x = st.base.map((v, j) => v + push * st.dir[j]);
+    const phi = yatFeatures(st.W, x, b, eps);
+    let kmax = 0; for (const v of phi) if (v > kmax) kmax = v;
+
+    const inK = st.ood.kmax_in, outK = st.ood.kmax_out;
+    // clip for display
+    const CAP = 30;
+    const clip = (v) => Math.min(v, CAP);
+    const pad = 16, top = 30, bottom = 40;
+    const bx = pad, by = top, bw = W - 2 * pad, bh = H - top - bottom;
+
+    // two overlaid histograms of kernel-max: in-distribution vs OOD
+    const NB = 28;
+    const inH = new Array(NB).fill(0), outH = new Array(NB).fill(0);
+    for (const v of inK) inH[Math.min(NB - 1, Math.floor(clip(v) / CAP * NB))]++;
+    for (const v of outK) outH[Math.min(NB - 1, Math.floor(clip(v) / CAP * NB))]++;
+    const ymax = Math.max(...inH, ...outH);
+    const A = axes(ctx, { x: bx, y: by, w: bw, h: bh }, {
+      xMin: 0, xMax: CAP, yMin: 0, yMax: ymax,
+      xTicks: [0, 10, 20, 30], yTicks: [], fmtX: (v) => v.toFixed(0), border: true,
+    }, colors);
+    const hbw = bw / NB;
+    for (let i = 0; i < NB; i++) {
+      const x0 = bx + i * hbw;
+      const oH = (outH[i] / ymax) * bh, iH = (inH[i] / ymax) * bh;
+      ctx.fillStyle = colors.muted; ctx.globalAlpha = 0.4;
+      ctx.fillRect(x0 + 0.5, by + bh - oH, hbw - 1, oH);
+      ctx.fillStyle = colors.blue; ctx.globalAlpha = 0.55;
+      ctx.fillRect(x0 + 0.5, by + bh - iH, hbw - 1, iH);
+      ctx.globalAlpha = 1;
+    }
+
+    // the moving patient marker
+    const mx = A.sx(clip(kmax));
+    ctx.strokeStyle = colors.accent; ctx.lineWidth = 2.4;
+    ctx.beginPath(); ctx.moveTo(mx, by); ctx.lineTo(mx, by + bh); ctx.stroke();
+    ctx.fillStyle = colors.accent;
+    ctx.beginPath(); ctx.arc(mx, by + 10, 5, 0, 7); ctx.fill();
+
+    const quiet = kmax < 4.0;   // rough abstain threshold from the exported medians
+    Ty(ctx, colors, 'label', { color: colors.accent, weight: 'b', align: 'center' });
+    ctx.fillText(`this patient: kernel-max ${fmt(kmax, 1)}${quiet ? '  (abstain)' : ''}`, mx, by + 24);
+
+    Ty(ctx, colors, 'small', { color: colors.blue });
+    ctx.fillText('■ real patients', bx + 8, by + bh - 14);
+    Ty(ctx, colors, 'small', { color: colors.muted });
+    ctx.fillText('■ out-of-distribution', bx + 90, by + bh - 14);
+    Ty(ctx, colors, 'small', { align: 'center', color: colors.muted });
+    ctx.fillText('kernel-max resemblance score', bx + bw / 2, by + bh + 26);
+
+    const medIn = median(inK), medOut = median(outK);
+    api.readout('rd', quiet
+      ? `pushed ${push.toFixed(1)}σ off the data: kernel-max fell to ${fmt(kmax, 1)}, below the real-patient range (median ${fmt(medIn, 1)}). The model can decline to score. A black box would answer anyway.`
+      : `in-distribution patient: kernel-max ${fmt(kmax, 1)} (real median ${fmt(medIn, 1)}, OOD median ${fmt(medOut, 1)}). Drag the slider to walk it off the manifold.`);
+  },
+});
+
+function median(a) { const s = [...a].sort((x, y) => x - y); return s[s.length >> 1]; }
+</script>

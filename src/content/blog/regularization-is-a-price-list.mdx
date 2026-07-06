@@ -1,0 +1,113 @@
+---
+title: "Why Regularization Is a Price List"
+seoTitle: "Why Regularization Is a Price List"
+description: "The representer theorem says the optimal weight is a sum over prototypes, but it does not explain why that sum generalizes. The answer is the RKHS norm: a price list that charges each prototype by its eigenvalue, and regularization is just tightening the budget. Four panels show the knob turning."
+seoDescription: "The representer theorem says the optimal weight is a sum over prototypes. The RKHS norm explains why it generalizes: regularization tightens the price list."
+pubDate: 2026-07-02
+draft: false
+tags: [ml, kernels, rkhs, representer-theorem, regularization, generalization, eigenvalues, bias-variance, deep-learning, theory]
+references:
+  - authors: "Schölkopf, B., Herbrich, R., Smola, A. J."
+    year: 2001
+    title: "A Generalized Representer Theorem"
+    venue: "COLT 2001"
+  - authors: "Steinwart, I., Christmann, A."
+    year: 2008
+    title: "Support Vector Machines"
+    venue: "Springer"
+  - authors: "Bartlett, P. L., Mendelson, S."
+    year: 2002
+    title: "Rademacher and Gaussian Complexities: Risk Bounds and Structural Results"
+    venue: "JMLR"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+keywords:
+  - representer theorem generalization
+  - RKHS norm regularization
+  - eigenvalue decay bias variance
+  - kernel ridge regression
+  - effective dimension
+  - support vector selection
+---
+import RegularizationSweep from '../../components/viz/RegularizationSweep.astro';
+import EigenvalueCascade from '../../components/viz/EigenvalueCascade.astro';
+import AssemblyOrder from '../../components/viz/AssemblyOrder.astro';
+import SupportVectorShrink from '../../components/viz/SupportVectorShrink.astro';
+
+The representer theorem told us *what* the optimal weight looks like: a sum of kernel bumps centered on the data, $f(x) = \sum_i \alpha_i\, k(x_i, x)$. The weight lives in the data's span, right next to the points, built from them. That was the payoff of [Where Does a Weight Live?](/blog/where-does-a-weight-live/) and the engine behind [The MLP Block Is a Representer Theorem](/blog/mlp-block-is-a-representer-theorem/).
+
+But the theorem left one question unanswered. It says the optimum *takes that form*; it does not say why that optimum would *generalize* to new data. A sum over the training points could perfectly memorize them and fail on everything else. Something must be holding the sum back, and whatever it is, it must be the thing that makes a kernel machine more than an interpolation engine.
+
+## The worry you should already feel
+
+Here is the problem in miniature. You have six points, two classes, and a Gaussian kernel. The representer theorem guarantees that the best separator is $\sum_i \alpha_i\, k(x_i, x)$. But there are many such sums. One set of $\alpha_i$ fits the six training points perfectly and wiggles ferociously between them. Another set fits them loosely and draws a smooth boundary. Both are representer-theorem weights. Both live in the data's span. The theorem does not choose between them.
+
+So what chooses? Whatever it is, it cannot be read off the representer form, because both candidates wear that form perfectly. It has to be something that can look at two sums over the same six points and call one of them expensive.
+
+## The bill you pay for a weight
+
+"Expensive" turns out to be the exact word. [What Can a Weight Be?](/blog/what-can-a-weight-be/) ended on a price list: every kernel splits into modes $\phi_j$ priced by eigenvalues $\lambda_j$, and a weight $f = \sum_j c_j \phi_j$ pays $c_j^2/\lambda_j$ for each mode it uses, so the smooth modes are cheap and the wiggly ones are ruinous. But that list prices a weight one *mode* at a time, and the representer theorem hands us a weight written one *point* at a time. Before the price list can judge our two six-point sums, the two currencies have to be exchanged.
+
+Here is the exchange. A kernel bump $k(x_i, \cdot)$ does not walk into the store empty-handed. It arrives already holding a fixed shopping list of modes,
+
+$$
+k(x_i, \cdot) = \sum_j \lambda_j\, \phi_j(x_i)\, \phi_j,
+$$
+
+a little of every mode, in proportions pinned down by where $x_i$ sits. Choosing the $\alpha_i$ is choosing how many copies of each point's list to buy. Buy them in the combination $f = \sum_i \alpha_i\, k(x_i, \cdot)$ and the purchases add up mode by mode, $c_j = \lambda_j \sum_i \alpha_i\, \phi_j(x_i)$, and the total bill collapses into a formula you can evaluate with nothing but the kernel:
+
+$$
+\lVert f \rVert_{\mathcal{H}}^2 = \sum_{i,\ell} \alpha_i\, \alpha_\ell\, k(x_i, x_\ell).
+$$
+
+That exchange rate, $\alpha$'s over points on one side, $c$'s over modes on the other, the same weight priced in both currencies, is the one new idea this post runs on. It answers the miniature immediately: the ferocious fit needs large amounts of the high-frequency modes, the expensive lines on every list, so its bill is enormous; the smooth fit buys mostly cheap modes and stays affordable.
+
+Regularization is the act of capping that bill. Instead of minimizing the training error alone, you minimize
+
+$$
+\text{loss} + \lambda\, \lVert f \rVert_{\mathcal{H}}^2,
+$$
+
+and $\lambda$ is how tight the budget is. A large $\lambda$ says "you can only use the cheap modes," which forces smoothness. A small $\lambda$ says "spend what you like," which lets the weight wiggle. The knob is not mysterious. It is literally the spending limit.
+
+## Turn the knob and watch
+
+So can you watch the budget choose between the ferocious fit and the smooth one? Below are the six points from the miniature, one Gaussian kernel, and a slider for $\lambda$. Drag it from left to right and watch three things change simultaneously: the decision boundary smooths, the $\alpha_i$ coefficients shrink toward zero, and the effective number of prototypes drops. The weight is the same sum over the same points at every value of $\lambda$; only the budget changes.
+
+<RegularizationSweep client:visible caption="Six training points, one Gaussian kernel, one knob. Drag the regularization slider left (loose budget, wiggly boundary, large αᵢ) to right (tight budget, smooth boundary, small αᵢ). The weight is always f(x) = Σ αᵢ k(xᵢ, x); only the spending limit changes." />
+
+## How the eigenvalues decide everything
+
+The price list is not equally strict in every direction. The eigenvalues of the kernel determine *which* modes get cut first, and that is where the real structure lives. A Gaussian kernel has eigenvalues that fall off faster than any polynomial, so the high-frequency modes are not merely expensive, they are astronomically expensive. A Sobolev kernel has eigenvalues that fall off like a polynomial, so the high modes are expensive but not impossible. The same regularization strength kills different modes in different kernels.
+
+How many modes actually survive a given budget? On the left below is the eigenvalue spectrum: bars whose height is $\lambda_k$, the price of each mode. On the right is a gauge showing the effective dimension, $d_{\text{eff}} = \sum_k \lambda_k / (\lambda_k + \lambda)$, the number of modes that survive the budget. As you drag $\lambda$, the gauge moves: tight budget, low effective dimension; loose budget, high effective dimension.
+
+<EigenvalueCascade client:visible caption="Left: the eigenvalue spectrum of the Gaussian kernel, each bar's height is λₖ, the price of mode k. Right: the effective dimension d_eff = Σ λₖ/(λₖ + λ), the number of modes that survive the regularization budget. Drag λ and watch the modes vanish from the tail first." />
+
+## If the budget is one number, why do some points survive it?
+
+But a puzzle hides in that gauge. The budget is a single cap on the whole bill, one number, and yet when you solve for the $\alpha_i$ under it, the six points come out wildly unequal: a few carry large coefficients and hold the boundary in place, the rest end up contributing almost nothing. Press play below and watch the solved boundary reassemble one prototype at a time, largest coefficient first. The first few bumps carve the boundary; the last ones barely shift it.
+
+<AssemblyOrder client:visible caption="One prototype at a time, most important first. Press play and watch the representer sum build: f_n(x) = Σᵢ₌₁ⁿ αᵢ k(xᵢ, x), the points added in order of the |αᵢ| the ridge solve assigned them. The first few carve the boundary; the last ones barely shift it." />
+
+The shopping lists explain the inequality. Every bump carries the full catalog of modes, but in proportions fixed by where its point sits. A point deep in a crowd of same-class neighbors holds nearly the same list they do, so the cheapest way to buy the boundary is one generous copy of the shared list and token amounts of the duplicates. A point that alone covers a stretch of the boundary holds the only affordable route to the modes needed there, and the solver has no choice but to buy its list in bulk. Large $\alpha_i$ marks a list that cannot be substituted; small $\alpha_i$ marks a redundant one. The budget is one number, but it is spent through six different lists, and the spending concentrates where the lists are irreplaceable.
+
+One honest note before the last panel, because the phrase "support vector" usually belongs to a different machine. The solver behind every panel here is kernel ridge: it solves $(K + \lambda I)\,\alpha = y$, and unlike a hinge-loss SVM it never sets a coefficient exactly to zero. Tightening $\lambda$ shrinks every $\alpha_i$ smoothly, just at very different rates, so what emerges is not a hard roster of survivors but a graded hierarchy in which a few coefficients dominate and the rest fade toward irrelevance. The dashed threshold in the bar chart below is a reading aid, not a mechanism: a bar above it still carries the boundary, a bar below it has shrunk until deleting its point barely moves the surface. Drag $\lambda$ from loose to tight and the bars all sink together, but not at the same rate: the redundant points slip under the line first, one by one, until only the few bumps the boundary cannot do without still show above it.
+
+<SupportVectorShrink client:visible caption="Every bar is |αᵢ|, the coefficient of one training point in the ridge solution. Bars above the dashed threshold carry the boundary; bars below it have shrunk until deleting the point barely moves it. Ridge never zeroes a coefficient exactly, so drag λ and watch the bars sink smoothly, the redundant points slipping under the line first." />
+
+## But why would smooth generalize?
+
+The phrase "regularization makes things smooth" is true but shallow. The real story is about *capacity*. The effective dimension $d_{\text{eff}} = \sum_k \lambda_k / (\lambda_k + \lambda)$ counts how many independent directions the weight is allowed to use. A weight with small $d_{\text{eff}}$ lives in a low-dimensional subspace of the full RKHS, and a low-dimensional subspace has less room to overfit. The bound is not hand-waving: Bartlett and Mendelson (2002) show that the Rademacher complexity of an RKHS ball of radius $R$ is $R \sqrt{d_{\text{eff}} / n}$, so the generalization gap shrinks as $d_{\text{eff}}$ drops.
+
+That is why the knob works. Tightening $\lambda$ does not just smooth the boundary. It lowers the effective dimension, which lowers the complexity of the function class, which shrinks the gap between training and test error. The price list is not a metaphor for generalization. It *is* the mechanism.
+
+And the Yat kernel, the one this series builds on, sits in a particular spot on that spectrum. Its eigenvalues decay exponentially, faster than Sobolev but slower than the Gaussian, so its effective dimension drops fast but not instantaneously. It is universal (can approximate any continuous target) and local (the kernel bump stays in input space), which means the modes it keeps are the ones that correspond to real, picture-able prototypes. The price list is steep enough to regularize, but the modes it lets through are the ones you can point at.
+
+That is the whole answer to why a representer-theorem weight generalizes. It is not a free combination of the data. It is a combination the price list can afford, and regularization is how you set the budget. The eigenvalues decide which modes survive, the budget decides how many, and the effective dimension counts what is left. The weight is the data, recombined, and the price list is the reason that recombination works.
+
+---
+
+*The representer theorem is [Schölkopf, Herbrich and Smola (2001)](https://link.springer.com/chapter/10.1007/3-540-44581-1_27); the eigenvalue-price-list framing is the standard RKHS theory in [Steinwart and Christmann (2008)](https://link.springer.com/book/10.1007/978-0-387-77242-4); the Rademacher complexity bound is from [Bartlett and Mendelson (2002)](https://jmlr.org/papers/v3/bartlett02a.html). The interactive panels run the real kernel-ridge solve in your browser. The conceptual predecessors are [Where Does a Weight Live?](/blog/where-does-a-weight-live/) and [What Can a Weight Be?](/blog/what-can-a-weight-be/).*

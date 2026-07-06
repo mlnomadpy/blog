@@ -189,7 +189,7 @@ const CONFIG = {
   siglip:    { name: 'SigLIP (pairwise sigmoid)', param: 'target', paramName: 'negatives target cos θ', step: stepSigLIP, paramRange: [-1.0, 0.0], paramDefault: -0.3, paramStep: 0.02, onSphere: true, lr: 0.01 },
   supcon:    { name: 'Supervised Contrastive (SupCon)', param: 'tau', paramName: 'temperature τ', step: stepSupCon, paramRange: [0.05, 1.5], paramDefault: 0.2, paramStep: 0.01, onSphere: true, lr: 0.05 },
   alignunif: { name: 'Alignment + Uniformity', param: 'lambda', paramName: 'λ (uniformity weight)', step: stepAlignUnif, paramRange: [0.0, 10.0], paramDefault: 1.0, paramStep: 0.1, onSphere: true, lr: 0.04 },
-  orthog:    { name: 'Cosine→0 (orthogonality)', param: 'unused', paramName: '—', step: stepOrthog, paramRange: [0, 1], paramDefault: 0, paramStep: 1, onSphere: true, lr: 0.08 },
+  orthog:    { name: 'Cosine→0 (orthogonality)', param: 'unused', paramName: '', step: stepOrthog, paramRange: [0, 1], paramDefault: 0, paramStep: 1, onSphere: true, lr: 0.08 },
 };
 
 const PRESETS = {

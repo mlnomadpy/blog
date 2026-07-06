@@ -1,0 +1,171 @@
+---
+title: "A Risk Model That Names Its Reasons"
+seoTitle: "A White-Box Survival Model That Names Its Reasons"
+description: "A survival model tells an oncologist a patient is high-risk, and she has to act on the number without being able to ask why. What would it take for the risk score to name its reasons? We build a Yat-kernel DeepSurv on breast-cancer survival, match a standard DeepSurv on concordance, and get a risk score that decomposes exactly into the prototype patients this one resembles, a model you can read, audit, and edit."
+seoDescription: "A Yat-kernel DeepSurv on METABRIC matches a standard DeepSurv on the C-index while every risk score decomposes into the prototype patients it resembles."
+pubDate: 2026-07-05
+draft: false
+companion: a-risk-model-that-names-its-reasons-jax-flax-nnx
+tags: [survival-analysis, deepsurv, cox, kernels, interpretability, yat, healthcare-ml, prototypes]
+references:
+  - authors: "Katzman, J. L., Shaham, U., Cloninger, A., Bates, J., Jiang, T., Kluger, Y."
+    year: 2018
+    title: "DeepSurv: Personalized Treatment Recommender System Using a Cox Proportional Hazards Deep Neural Network"
+    venue: "BMC Medical Research Methodology 18(1), 24"
+    arxiv: "1606.00931"
+  - authors: "Cox, D. R."
+    year: 1972
+    title: "Regression Models and Life-Tables"
+    venue: "Journal of the Royal Statistical Society, Series B 34(2), 187–220"
+  - authors: "Harrell, F. E., Califf, R. M., Pryor, D. B., Lee, K. L., Rosati, R. A."
+    year: 1982
+    title: "Evaluating the Yield of Medical Tests"
+    venue: "JAMA 247(18), 2543–2546"
+  - authors: "Curtis, C., et al."
+    year: 2012
+    title: "The Genomic and Transcriptomic Architecture of 2,000 Breast Tumours Reveals Novel Subgroups (METABRIC)"
+    venue: "Nature 486, 346–352"
+  - authors: "Graf, E., Schmoor, C., Sauerbrei, W., Schumacher, M."
+    year: 1999
+    title: "Assessment and Comparison of Prognostic Classification Schemes for Survival Data"
+    venue: "Statistics in Medicine 18(17–18), 2529–2545"
+  - authors: "Nadaraya, E. A."
+    year: 1964
+    title: "On Estimating Regression"
+    venue: "Theory of Probability & Its Applications 9(1), 141–142"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+keywords:
+  - survival analysis
+  - DeepSurv
+  - Cox proportional hazards
+  - concordance index
+  - interpretable risk model
+  - Yat kernel
+  - prototype patient
+  - machine unlearning healthcare
+  - kernel survival model
+  - METABRIC breast cancer
+---
+import CiteAs from '../../components/CiteAs.astro';
+import PatientPrototypes from '../../components/viz/PatientPrototypes.astro';
+import WhoDoYouLookLike from '../../components/viz/WhoDoYouLookLike.astro';
+import RiskLandscape from '../../components/viz/RiskLandscape.astro';
+import SurvivalCurveFromNeighbors from '../../components/viz/SurvivalCurveFromNeighbors.astro';
+import ForgetACohort from '../../components/viz/ForgetACohort.astro';
+import AbstainOnStrangers from '../../components/viz/AbstainOnStrangers.astro';
+
+*A model on a screen says this patient is high-risk. An oncologist has to decide what to do about it: change the regimen, book the extra scan, have the hard conversation now instead of in six months. She would like to ask the model one question before she acts. Not "how sure are you," a number it will happily give, but "why." Which of this woman's numbers made you say that, and who does she look like that you have seen die? The model has no answer. It is a Cox network, a stack of weights that turned nine covariates into one log-risk, and what it knows is smeared across all of them at once. It can rank her against every other patient, and it cannot point at a single reason.*
+
+*This post is about closing that gap without giving up the ranking. We build the risk model so that its answer arrives with its reasons already attached, and pay for it in the only currency that matters here: does it still tell the high-risk patients from the low-risk ones as well as the black box? A note before anything else: this is a research illustration of interpretable survival modeling, not a clinical tool, and no number in it should touch a real decision.*
+
+## What a survival model is actually doing
+
+Why is a risk model so hard to read in the first place? The trouble starts before the network, in what the task even asks for. A survival model does not predict a label; it predicts an *ordering in time* under a peculiar kind of missing data. You follow a cohort of patients, and for each one you record how long you watched them and whether the event (here, death) happened while you did. Most of the time it did not: the study ended, or the patient moved, or they were simply still alive at the last visit. That patient is **censored**, and all you know is that their true survival time is *longer* than what you saw. Almost half of the breast-cancer cohort we use is censored this way. You cannot throw those patients out, and you cannot pretend they died at their last visit either.
+
+Cox (1972) found the move that makes this tractable, and it is worth seeing because it is the thing the network is trained to do. Forget absolute times; ask only about *order*. At the moment a patient dies, look at everyone still alive and at risk right then, the **risk set**, and ask: among these, how much of the "blame" for a death happening now falls on the one who actually died? A good risk score puts the patient who died at the top of that set. String this together over every observed death and you get the **Cox partial likelihood**, a quantity that only ever compares who-outranks-whom inside a risk set, so censored patients still count (they sit in the risk sets of everyone who died before them) without your ever having to invent a death date for them.
+
+DeepSurv (Katzman et al., 2018) is the neural version, and it is almost aggressively simple: let a network read the covariates $x$ and output a single scalar, the **log-risk** $h(x)$, and train it to maximize exactly that partial likelihood. No survival curves in the loss, no time bins, just one number per patient whose *ranking* is everything. The whole model is
+
+$$
+\mathcal{L}(\theta) \;=\; -\sum_{i:\, e_i=1} \left[\, h_\theta(x_i) \;-\; \log\!\!\sum_{j:\, t_j \ge t_i} e^{\,h_\theta(x_j)} \right],
+$$
+
+the sum running over observed events $i$, the inner sum over that event's risk set. Minimize it and $h_\theta$ learns to score the soon-to-fail above the durable. And here is the source of the opacity: that $h_\theta$ can be any network at all, and in the standard recipe it is a plain multilayer perceptron. The output is one number with no parts. You can ask it *how high*, never *why*.
+
+## The one change that grows reasons
+
+So where would a reason even live? It cannot live in a direction. A standard neuron computes $\sigma(w^\top x + b)$, and its weight $w$ is a direction in covariate space, a thing you cannot point at or hand a clinician. Nine of those feeding one more, and the log-risk is a tangle with no landmarks in it.
+
+The [Yat kernel](/blog/what-a-finite-kernel-buys-an-mlp/) changes what a hidden unit *is*. Replace the activation with
+
+$$
+\phi_u(x) \;=\; \frac{(w_u^\top x + b)^2}{\lVert x - w_u\rVert^2 + \varepsilon},
+$$
+
+and the unit stops being a half-space and becomes a **similarity to a point**. The point $w_u$ lives in the same space as the patients, so it *is* a patient: a full covariate vector, a synthetic profile in real clinical units. The unit fires when the incoming patient looks like $w_u$ and falls quiet when they do not, a softened inverse-square well around a prototype, the [attractor-field picture](/blog/edit-a-network-by-hand/) this series has leaned on throughout. It is a genuine positive-definite kernel, so everything that follows is [kernel theory, not a bolt-on](/blog/your-neuron-is-a-picture/): Bouhsine (2026) shows it is Mercer and universal.
+
+Build a DeepSurv whose trunk is a bank of these, and read the log-risk straight off them:
+
+$$
+h(x) \;=\; \sum_{u=1}^{K} a_u\, \phi_u(x).
+$$
+
+Now the log-risk has parts. Every unit $u$ is a prototype patient $w_u$, and its readout weight $a_u$ says what resembling that prototype *does* to your risk: a positive $a_u$ raises it, a negative one protects. A patient's score is no longer a tangle; it is a sum over the prototypes they look like, weighted by how much each one moves risk. That is the reason the oncologist wanted, and it was in the architecture the whole time.
+
+Here are the prototypes the model actually learned, on real data. Each unit is a synthetic breast-cancer patient; click one to read its chart and see whether resembling it raises risk or protects. Every number here is from the trained model in `scripts/yat_deepsurv.py`.
+
+<PatientPrototypes caption="The 24 hidden units of the trained Yat DeepSurv, each a synthetic patient. Click a unit to read its covariate profile in clinical units (gene expression, treatments, age) and its readout weight. Orange units raise risk when a patient resembles them; blue units protect. Computed live from the exported model." />
+
+The bank splits into 19 risk-raising prototypes and 5 protective ones, and they read the way an oncologist would hope. The most protective prototype (#20, readout $-0.21$) is a young, strongly ER-positive profile; the most risk-raising (#14, readout $+0.29$) is an older patient. The model did not have these categories handed to it. It grew them out of the partial likelihood, and because each one is a point in patient space, we can just read them off.
+
+## The bet: does legibility cost accuracy?
+
+None of that matters if the legible model cannot rank. So we ran the honest comparison: a standard DeepSurv (a ReLU MLP into one log-risk) against the Yat DeepSurv, at *matched capacity* (24 hidden units each) and an *identical* training setup, on the same data, across three seeds. The dataset is **METABRIC** (Curtis et al., 2012), 1,904 breast-cancer patients, nine covariates (four gene-expression markers and five clinical variables including age and treatments), 42% censored, median follow-up 115 months. The scoreboard is Harrell's concordance index (the fraction of comparable patient pairs the model ranks correctly, chance is 0.5), a time-dependent AUC, the integrated Brier score, and the held-out Cox likelihood.
+
+I expected a tax. Legible models usually give something up, and [this series has watched it happen](/blog/calibration-of-a-bounded-net/). Here is what actually came back, every figure from `scripts/yat_deepsurv.py`:
+
+| metric | Yat DeepSurv | standard DeepSurv |
+| --- | --- | --- |
+| **C-index** (higher better) | **0.627 ± 0.033** | 0.623 ± 0.011 |
+| time-dependent AUC | 0.653 ± 0.049 | 0.652 ± 0.016 |
+| integrated Brier (lower better) | **0.199 ± 0.014** | 0.225 ± 0.008 |
+| Cox partial NLL (lower better) | **5.64 ± 0.19** | 6.84 ± 0.40 |
+
+There is no tax. On discrimination the two are a statistical tie: 0.627 against 0.623 on the concordance index, and the time-dependent AUCs sit on top of each other. Where they differ, the legible model is slightly *ahead*: a lower integrated Brier score and a clearly lower Cox likelihood, meaning its predicted survival probabilities track the observed outcomes a little better, not worse. This is the surprise worth naming. The version of the model that can tell you *why* it ranked a patient where it did ranks them just as well as the version that cannot, and calibrates a touch better while it is at it. Legibility here is not bought with accuracy. It comes free.
+
+So we can spend the rest of the post on what the reasons are good for.
+
+## Who do you look like?
+
+Take one held-out patient and ask the model to defend its number. Because $h(x) = \sum_u a_u \phi_u(x)$ is an exact sum, the defense is not an approximation or a saliency heuristic: it is the score itself, split into the contribution of each prototype. Rank those contributions and you get a sentence: *your risk is this high because you resemble prototypes #11 and #14, and it would be higher still except that you also look a little like the protective #20.* The contributions sum back to the log-risk to within $2\times10^{-6}$, so nothing is hidden in a remainder.
+
+Pick a patient below and watch the score assemble from the patients they resemble.
+
+<WhoDoYouLookLike caption="A held-out patient's log-risk, decomposed into the exact contributions of the prototypes they resemble. Each bar is a signed term a_u φ_u(x): orange raises risk, blue lowers it. The bars sum to the log-risk exactly. Choose patients from the lowest-risk to the highest-risk in the test set. Computed live from the exported attributions." />
+
+The highest-risk patient in the test set (log-risk 3.07, who died at 67 months) is a clean case: one prototype, #11, supplies 2.96 of the 3.07, and it is a risk-raising unit. The model is not being coy about why it flagged her. The lowest-risk patient (log-risk $-2.63$, still, remarkably, an eventual death at 112 months) leans almost entirely on a single strongly protective prototype. In both cases the reason is one or two named synthetic patients, and you can pull up their charts and see what "looks like #11" means. A saliency map over the covariates would have told you *which inputs*; this tells you *which patients*, which is the object a clinician actually reasons with.
+
+## The map the reasons live on
+
+If every patient's risk is a blend of resemblances, the patients must sit somewhere relative to each other, and that somewhere is a landscape. Project the kernel features to two dimensions and each held-out patient lands at a place fixed entirely by which prototypes they resemble; color that place by predicted risk and the cohort spreads into a legible terrain, with the risk-raising prototypes marking the high ground. You [cannot picture nine dimensions](/blog/what-a-finite-kernel-buys-an-mlp/), but a landscape of basins you can, and this one is a real projection (it keeps 67% of the feature variance), not a decoration.
+
+<RiskLandscape caption="A 2D shadow of the kernel feature space. Each dot is a held-out patient, placed by kernel similarity and colored by predicted log-risk (blue low, orange high). Rings are the prototypes: orange rings raise risk, blue rings protect. Hover any patient. A projection of a nine-dimensional space, but the structure is real. Computed live from the exported embedding." />
+
+This is the [attractor field](/blog/edit-a-network-by-hand/) again, moved from Fashion-MNIST to a clinic. A cohort is a basin; a patient's risk is the height of the ground they stand on; the prototypes are the masses that shape it. And because the terrain is made of nameable patients rather than opaque directions, moving around it means something. Which brings us to survival curves.
+
+## A survival curve you can read
+
+An oncologist rarely wants a single risk number; she wants a curve, the probability this patient is still alive at one year, two, five. DeepSurv gives one by multiplying the whole cohort's baseline survival by $e^{h(x)}$, which is honest but opaque: the shape comes from the population and only the *steepness* is personal. The kernel offers something better. If a patient is a blend of the prototypes they resemble, their survival curve can be the *same blend* of those prototypes' own survival curves, a [Nadaraya-Watson](/blog/attention-is-a-kernel/) average weighted by resemblance. The curve is then assembled from a handful of named neighbor-patients, and you can see exactly which ones and how much each contributes.
+
+<SurvivalCurveFromNeighbors caption="A patient's survival curve built as the resemblance-weighted blend of the survival curves of the prototypes they most resemble (bold orange), against the standard Cox baseline curve (dashed blue). The faint curves are the neighbor prototypes, thicker where they carry more weight. Nadaraya-Watson, made clinical. Computed live from the exported curves." />
+
+The blended curve and the black-box Cox curve mostly agree, which is the point: the kernel is not buying its readability by predicting something different, it is predicting the same thing *out of visible parts*. When they diverge, the divergence is itself legible, you can see which neighbor pulled the curve up or down.
+
+## Control: forgetting a cohort
+
+Reading a model is half of what a clinic needs; the other half is being able to *change* it under a rule. Suppose a subgroup of patients invokes a right to be forgotten, or a data-governance review orders their contribution removed. In an ordinary Cox network there is no such operation short of retraining from scratch, because [the subgroup's imprint is smeared across every weight](/blog/edit-a-network-by-hand/). Here it is localized: find the prototype a subgroup is built around and delete its readout weight.
+
+What happens to everyone else? This is where survival modeling forces an honesty the Fashion-MNIST version could dodge. On sparse image data, deleting a prototype changed *only* the images near it, and the rest were provably untouched. On dense clinical covariates every patient activates every prototype a little, so deleting one moves *everyone* by some amount. The change is still exact, though, and it is a closed form: each patient's log-risk shifts by precisely $-a_u\, \phi_u(x)$ for the deleted prototype $u$, no retraining, no gradient noise, a quantity you can compute and audit per patient. And it lands where the kernel says it should. We pick the prototype whose resemblance mass is most concentrated in a subgroup (prototype #12, a chemotherapy-treated, ER-negative profile, 69% of its total contribution falling on the 28 patients it is the nearest match for) and delete it. Those 28 patients move by 1.02 in log-risk on average; everyone else moves by 0.024, with 89% of them shifting by less than 0.05. The change to any patient is exactly their own resemblance to #12, which for a patient who looks nothing like #12 is provably almost nothing.
+
+<ForgetACohort caption="Deleting the prototype a cohort is built around (right-to-be-forgotten). The top strip is every held-out patient's risk, ordered; toggle the delete and watch the cohort (orange) re-route while the rest (blue) barely move. The histogram below shows how far each patient shifted: the change is the exact closed form Δh = − a_u φ_u(x), concentrated on the cohort. Computed live from the exported edit." />
+
+So the honest claim is not "provably zero change for everyone else," which would be false on this kind of data; it is "an exact, auditable, closed-form change equal to each patient's own resemblance to the deleted prototype, which the kernel keeps concentrated on the cohort." That is a weaker guarantee than the image case and a much stronger one than any dense network offers, and saying which is which is the whole discipline here. (The mirror operation works too: appending a single new prototype from an emerging patient subtype, with no retraining, raises the risk of patients who resemble it, up to +20 in log-risk for the nearest ones, the [teach-by-example move](/blog/edit-a-network-by-hand/) applied to survival.)
+
+## Knowing a stranger
+
+One last thing a risk model should do and almost none do: recognize a patient it has no business scoring. A black-box Cox network extrapolates confidently onto anyone, including a patient whose covariates land nowhere near its training population. The Yat field cannot, and that is a feature. Because each unit is a bounded bump that decays away from its prototype, the largest kernel activation any patient produces, the **kernel-max**, is a resemblance meter: high when the patient looks like someone the model trained on, low when they are a stranger. It is the [OOD-abstention property](/blog/your-neuron-is-a-picture/) this series established, now a clinical safeguard.
+
+<AbstainOnStrangers caption="The kernel-max resemblance score separates real patients (blue) from out-of-distribution ones (grey). Drag a real patient's covariates off the data manifold and its meter (orange line) falls into the region where the model should decline to score. Real patients sit at a median kernel-max of 7.1; pushed-out patients at 3.7. Computed live from the exported field." />
+
+The separation is real: on held-out data the kernel-max sits at a median of 7.1 for genuine patients and 3.7 for synthetic out-of-distribution ones, and 58% of the strangers fall below a threshold that catches only 19% of real patients. A model that can abstain is not a smarter model; it is a more honest one. It has a way of saying *this person is not like anyone I learned from,* which is exactly when a clinician should stop trusting the number and a black box keeps handing one over.
+
+## What the reasons were worth
+
+Start again from the oncologist and her one question. The Yat DeepSurv answers it, and the answer is not a story we told after the fact; it is the arithmetic of the score. The patient is high-risk because she resembles these specific prototype patients by these amounts, the number reassembles from those parts exactly, the parts sit on a map you can walk, the survival curve is a blend of nameable neighbors, the model can be made to forget a cohort by a closed-form edit, and it goes quiet on a patient it never learned to judge. All of that, and it ranks patients as well as the black box it replaces, a touch better calibrated. The reasons were not a tax on the model. They were sitting inside a design choice we usually make without thinking: what a hidden unit is allowed to be.
+
+*Thanks to [Sandra Dening](https://www.linkedin.com/in/sandra-dening-3b609521a/) for the discussion that shaped this post.*
+
+<CiteAs slug="a-risk-model-that-names-its-reasons" title="A Risk Model That Names Its Reasons" pubDate="2026-07-05" />

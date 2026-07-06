@@ -2,7 +2,7 @@
 title: 'Organizing Randomness: Contrastive Learning in JAX'
 description: A block-by-block JAX + Optax implementation of six contrastive losses, each watched as a real animated GIF turning random 2D points into organized embeddings. The runnable companion to "Untangling the Moons."
 seoDescription: "Six contrastive losses in JAX and Optax, each an animated GIF turning random 2D points into organized embeddings. Companion to Untangling the Moons."
-pubDate: 2026-05-29
+pubDate: 2026-05-26T12:00:00-07:00
 tags: [ml, contrastive, jax, optax, embeddings, contrastive-learning, infonce, supcon, siglip, triplet-loss, implementation, representation-learning, self-supervised-learning]
 references:
   - authors: "Hadsell, R., Chopra, S., LeCun, Y."
@@ -71,7 +71,7 @@ import CiteAs from '../../components/CiteAs.astro';
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/jax-contrastive/grid-six.gif" alt="Six contrastive losses organizing the same random 2D points side by side: pair, triplet, InfoNCE, SupCon, SigLIP, cosine-to-zero" loading="eager" width="900" height="600" />
-  <figcaption>Where we're headed: six contrastive losses, the same random start, the same step counter. Every loss below is the ~15 lines of JAX that produces one of these panels. (Full walkthrough in <a href="#the-race">the race</a>.)</figcaption>
+  <figcaption>Where we're headed: six contrastive losses, each handed a random cloud with no spatial signal and left to impose its own geometry, with a live accuracy readout in every panel. Every loss below is the ~15 lines of JAX that produces one of these panels. (Full walkthrough in <a href="#the-race">the race</a>.)</figcaption>
 </figure>
 
 ---
@@ -84,7 +84,8 @@ the actual JAX code that moves the points, and the same chaos-to-order
 trajectory rendered as a real GIF you can regenerate yourself.
 
 The setup is the same trick that made the visualisations legible. Skip the
-encoder entirely. Take 60 points in 2D, assign them **random labels**, and
+encoder entirely. Take 60 points in 2D (40 for the orthogonality loss, for a
+reason its section owns up to), assign them **random labels**, and
 treat the positions themselves as the embeddings. Then run gradient descent on
 a contrastive loss and watch the points organize. Random labels on random
 positions means there is no spatial signal at the start, the loss has to
@@ -99,9 +100,9 @@ in the repo.
 
 ## The shared scaffolding
 
-Everything that *isn't* the loss is identical across all six. Start with the
-data: uniform points, balanced labels, then a shuffle so position tells you
-nothing about class.
+Everything that *isn't* the loss is identical across all six, and it begins
+with the data: uniform points, balanced labels, then a shuffle so position
+tells you nothing about class.
 
 ```python
 import numpy as np
@@ -217,9 +218,9 @@ points in a couple hundred steps.
 
 ## 2. Triplet, FaceNet, 2015
 
-Make the comparison relative. For each anchor, sample one positive and one
-negative; require the negative to sit at least a margin farther than the
-positive. Only violating triplets contribute.
+What if the comparison were relative instead of global? For each anchor,
+sample one positive and one negative; require the negative to sit at least a
+margin farther than the positive. Only violating triplets contribute.
 
 $$
 \mathcal{L}_{\text{trip}}(a,p,n) = \bigl[\,\|z_a - z_p\|^2 - \|z_a - z_n\|^2 + m\,\bigr]_+
@@ -252,8 +253,9 @@ disallowed entries to `-1e9` makes them unreachable. This is the idiom for
 
 ## 3. InfoNCE / NT-Xent, van den Oord 2018, SimCLR 2020
 
-Replace the hard margin with a softmax over cosine similarities. Every other
-point is a negative; the gradient never fully vanishes.
+What do you use once the hard margin keeps going silent? A softmax over
+cosine similarities. Every other point is a negative; the gradient never
+fully vanishes.
 
 $$
 \mathcal{L}_{\text{InfoNCE}}(a) = -\log \frac{\exp(\text{sim}(z_a, z_p)/\tau)}{\sum_{k \neq a} \exp(\text{sim}(z_a, z_k)/\tau)}
@@ -314,8 +316,9 @@ classification; brutal to any within-class variation you might have cared about.
 
 ## 5. SigLIP, Zhai et al., 2023
 
-Drop the softmax entirely. Score each pair independently with a sigmoid, and,
-crucially, put a *bias* on it so you choose where different-class pairs stop
+What if the loss let you say where the pushing should stop? SigLIP drops the
+softmax entirely, scores each pair independently with a sigmoid, and,
+crucially, puts a *bias* on it so you choose where different-class pairs stop
 being pushed apart.
 
 $$
@@ -383,28 +386,30 @@ start, this loss can stall at a symmetric configuration, each class smeared
 uniformly around the circle, where same-class attraction and different-class
 repulsion cancel. The softmax losses break that symmetry through their sampled
 positive or their normalization; bare orthogonality has nothing to break it
-with. The fix in the generator is mundane, a slightly smaller point count and
+with. The fix in the generator is mundane, 40 points instead of 60 and
 a seed that isn't perfectly symmetric, but it is a real lesson: an objective
 can be *correct at its minimum* and still need help escaping a saddle.
 
 ## The two we skipped
 
-For brevity this guide builds six of the eight losses from the prior post.
+Two of the eight losses from the explainer never got a code block above, and
+that is deliberate: neither would teach you a new line of JAX.
 **CLIP** is symmetrized InfoNCE, run `loss_infonce` in both directions
 (anchor→positive and positive→anchor) and average; the geometry is identical.
 **Alignment + Uniformity** (Wang & Isola, 2020) splits InfoNCE into an explicit
 pull-positives-together term and a spread-everyone-out term; both are a few more
-lines in the same style. Both are explored in
+lines in the same style. If you want to watch them move, both run live in
 [*Untangling the Moons*](/blog/untangling-the-moons/).
 
 ## The race
 
-Same losses, same random initialization, same step counter, the six panels
-side by side, which is where the disagreements become obvious.
+The six panels side by side, each loss running on its own random cloud with
+its accuracy readout ticking up, which is where the disagreements become
+obvious.
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/jax-contrastive/grid-six.gif" alt="Six contrastive losses organizing the same random points side by side: pair, triplet, InfoNCE, SupCon, SigLIP, cosine-to-zero" loading="lazy" width="900" height="600" />
-  <figcaption>All six on the same random start. Pair and triplet (Euclidean) collapse to points and freeze; InfoNCE and SigLIP fan into arcs; SupCon condenses four classes to four clusters; cosine→0 lands two classes on perpendicular axes. The margin family stops early, the softmax family keeps fine-tuning, and SigLIP and cosine→0 stop at the geometrically correct place.</figcaption>
+  <figcaption>All six from random clouds with no spatial signal, each panel reporting its own accuracy as it organizes. Pair and triplet (Euclidean) collapse to points and freeze; InfoNCE and SigLIP fan into arcs; SupCon condenses four classes to four clusters; cosine→0 lands two classes on perpendicular axes. The margin family stops early, the softmax family keeps fine-tuning, and SigLIP and cosine→0 stop at the geometrically correct place.</figcaption>
 </figure>
 
 The pattern is the one from the interactive version, now in committed,

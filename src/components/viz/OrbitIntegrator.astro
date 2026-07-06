@@ -1,0 +1,160 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 460 } = Astro.props;
+---
+<figure class="viz orbitintegrator" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The physics fact, computed live: the same two-body problem (GM = 1, one
+// planet on an elliptical orbit) integrated with forward Euler on the left and
+// leapfrog on the right, at the same step size. Euler updates position and
+// velocity from the same stale state and pumps energy in; the orbit spirals
+// out and eventually unbinds. Leapfrog interleaves the two updates (kick,
+// drift, kick) and its energy error stays bounded forever. Every number on
+// screen is integrated in this tab; nothing is prerecorded.
+import { defineViz } from './engine/vizkit.js';
+import { grid, panel, dot, text, T, frame, fmt } from './engine/draw.js';
+
+const E0V = 0.9;                       // launch speed at r = (1, 0)
+const E0 = 0.5 * E0V * E0V - 1.0;      // orbital energy, -0.595
+const A_SEMI = -1 / (2 * E0);
+const PERIOD = 2 * Math.PI * Math.pow(A_SEMI, 1.5);
+const TRAIL = 700, EHIST = 900;
+
+function freshBody() { return { r: [1, 0], v: [0, E0V], trail: [[1, 0]], eHist: [0], escaped: false }; }
+const accel = (r) => { const d = Math.hypot(r[0], r[1]); const c = -1 / (d * d * d); return [c * r[0], c * r[1]]; };
+const energy = (b) => 0.5 * (b.v[0] * b.v[0] + b.v[1] * b.v[1]) - 1 / Math.hypot(b.r[0], b.r[1]);
+
+function advance(b, dt, method, subs) {
+  for (let s = 0; s < subs; s++) {
+    if (method === 'euler') {
+      const a = accel(b.r);
+      b.r = [b.r[0] + dt * b.v[0], b.r[1] + dt * b.v[1]];
+      b.v = [b.v[0] + dt * a[0], b.v[1] + dt * a[1]];
+    } else {
+      const a0 = accel(b.r);
+      b.v = [b.v[0] + 0.5 * dt * a0[0], b.v[1] + 0.5 * dt * a0[1]];   // kick
+      b.r = [b.r[0] + dt * b.v[0], b.r[1] + dt * b.v[1]];             // drift
+      const a1 = accel(b.r);
+      b.v = [b.v[0] + 0.5 * dt * a1[0], b.v[1] + 0.5 * dt * a1[1]];   // kick
+    }
+  }
+  b.trail.push([b.r[0], b.r[1]]);
+  if (b.trail.length > TRAIL) b.trail.shift();
+  const rel = (energy(b) - E0) / Math.abs(E0);
+  b.eHist.push(rel);
+  if (b.eHist.length > EHIST) b.eHist = b.eHist.filter((_, i) => i % 2 === 0);
+  if (energy(b) >= 0) b.escaped = true;
+}
+
+defineViz('orbitintegrator', {
+  title: 'One planet, one step size, two update rules',
+  height: 460,
+  autoplay: false,
+  controls: [
+    { type: 'play' }, { type: 'reset' }, { type: 'speed' },
+    { type: 'range', name: 'dt', label: 'step size dt', min: 0.005, max: 0.06, step: 0.005, value: 0.02, reset: true, fmt: (v) => v.toFixed(3) },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) {
+    api.state = { euler: freshBody(), leap: freshBody(), t: 0 };
+    // pre-roll five orbits at the current step size so the very first frame
+    // already shows the divergence (same integration, just run at load)
+    const dt = (api.get && api.get('dt')) || 0.02, subs = 4;
+    const pre = Math.round((5 * PERIOD) / (dt * subs));
+    for (let i = 0; i < pre; i++) {
+      advance(api.state.euler, dt, 'euler', subs);
+      advance(api.state.leap, dt, 'leap', subs);
+      api.state.t += dt * subs;
+    }
+  },
+  step(api) {
+    const st = api.state, dt = api.get('dt'), subs = 4;
+    advance(st.euler, dt, 'euler', subs);
+    advance(st.leap, dt, 'leap', subs);
+    st.t += dt * subs;
+  },
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (!st.euler) return;
+    const stripH = 108;
+    const cells = grid(W, H - stripH, 2, 1, 10);
+    const orbits = st.t / PERIOD;
+    const names = [['forward Euler', st.euler, colors.accent], ['leapfrog', st.leap, colors.blue]];
+
+    names.forEach(([name, b, col], i) => {
+      const m = panel(ctx, cells[i], colors, { header: 24 });
+      T(ctx, colors, 'label', { color: colors.fg, weight: 'b' });
+      ctx.fillText(name, cells[i].x + 10, cells[i].y + 16);
+      const eRel = b.eHist[b.eHist.length - 1];
+      T(ctx, colors, 'label', { color: b.escaped ? '#c2553a' : colors.muted, align: 'right' });
+      ctx.fillText(b.escaped ? 'unbound: E ≥ 0' : `dE/|E₀| = ${(eRel >= 0 ? '+' : '') + (100 * eRel).toFixed(2)}%`, cells[i].x + cells[i].w - 10, cells[i].y + 16);
+
+      const S = m.R / 1.9;   // world -> px (view radius 1.9)
+      const px = (p) => [m.cx + p[0] * S, m.cy - p[1] * S];
+      // the sun
+      ctx.save(); ctx.shadowColor = '#e5a33b'; ctx.shadowBlur = 10;
+      dot(ctx, m.cx, m.cy, 5.5, '#e5a33b'); ctx.restore();
+      // true orbit for reference (ellipse, focus at sun): r(th) = p/(1+e cos th)
+      const ecc = Math.sqrt(1 + 2 * E0 * E0V * E0V), p = E0V * E0V;
+      ctx.strokeStyle = colors.border; ctx.setLineDash([3, 4]); ctx.beginPath();
+      for (let k = 0; k <= 120; k++) {
+        const th = (k / 120) * 2 * Math.PI, rr = p / (1 + ecc * Math.cos(th));
+        const pt = px([rr * Math.cos(th), rr * Math.sin(th)]);
+        k ? ctx.lineTo(pt[0], pt[1]) : ctx.moveTo(pt[0], pt[1]);
+      }
+      ctx.stroke(); ctx.setLineDash([]);
+      // trail, fading
+      const n = b.trail.length;
+      for (let k = 1; k < n; k++) {
+        const a0 = px(b.trail[k - 1]), a1 = px(b.trail[k]);
+        ctx.globalAlpha = 0.08 + 0.72 * (k / n);
+        ctx.strokeStyle = col; ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.moveTo(a0[0], a0[1]); ctx.lineTo(a1[0], a1[1]); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      const cur = px(b.r);
+      const inside = Math.abs(b.r[0]) < 1.9 && Math.abs(b.r[1]) < 1.9;
+      if (inside) dot(ctx, cur[0], cur[1], 4.5, col);
+      else { T(ctx, colors, 'small', { color: '#c2553a', align: 'center' }); ctx.fillText('left the frame', m.cx, m.cy + m.R + 2); }
+    });
+
+    // energy strip: relative energy error of both methods over the run
+    const eb = { x: 8, y: H - stripH + 12, w: W - 16, h: stripH - 26 };
+    ctx.fillStyle = colors.cellBg; ctx.fillRect(eb.x, eb.y, eb.w, eb.h);
+    frame(ctx, colors, eb.x, eb.y, eb.w, eb.h);
+    const eu = st.euler.eHist, lp = st.leap.eHist;
+    let lo = 0, hi = 0;
+    for (const v of eu) { if (v < lo) lo = v; if (v > hi) hi = v; }
+    for (const v of lp) { if (v < lo) lo = v; if (v > hi) hi = v; }
+    const span = Math.max(0.01, hi - lo, Math.abs(hi), Math.abs(lo)) * 1.15;
+    const sy = (v) => eb.y + eb.h / 2 - (v / span) * (eb.h / 2 - 6);
+    ctx.strokeStyle = colors.faint; ctx.setLineDash([2, 4]);
+    ctx.beginPath(); ctx.moveTo(eb.x, sy(0)); ctx.lineTo(eb.x + eb.w, sy(0)); ctx.stroke(); ctx.setLineDash([]);
+    const line = (arr, col) => {
+      if (arr.length < 2) return;
+      ctx.strokeStyle = col; ctx.lineWidth = 1.8; ctx.beginPath();
+      for (let i = 0; i < arr.length; i++) {
+        const x = eb.x + (i / (arr.length - 1)) * eb.w, y = Math.max(eb.y + 2, Math.min(eb.y + eb.h - 2, sy(arr[i])));
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.stroke();
+    };
+    line(eu, colors.accent); line(lp, colors.blue);
+    T(ctx, colors, 'small', { color: colors.muted });
+    ctx.fillText('energy error (E - E₀)/|E₀| over the run · dashed = exact conservation', eb.x + 8, eb.y + 12);
+    T(ctx, colors, 'small', { color: colors.accent, align: 'right' });
+    ctx.fillText('Euler', eb.x + eb.w - 58, eb.y + 12);
+    T(ctx, colors, 'small', { color: colors.blue, align: 'right' });
+    ctx.fillText('leapfrog', eb.x + eb.w - 8, eb.y + 12);
+
+    api.readout('rd', `t = ${fmt(st.t, 1)} (${fmt(orbits, 1)} orbits) · dE/|E₀|: Euler ${(100 * eu[eu.length - 1]).toFixed(2)}%, leapfrog ${(100 * lp[lp.length - 1]).toFixed(3)}%`);
+  },
+});
+</script>

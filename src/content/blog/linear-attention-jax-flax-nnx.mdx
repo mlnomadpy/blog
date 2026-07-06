@@ -70,9 +70,9 @@ so the middle object is no longer token-by-token. It is a feature-space state.
   <figcaption>The implementation path. Each token writes $\phi(k_i)v_i^\top$ into the running state $S_i$ and $\phi(k_i)$ into the normalizer $z_i$. The query reads $\phi(q_i)^\top S_i / \phi(q_i)^\top z_i$.</figcaption>
 </figure>
 
-## The Feature Map
+## The feature map
 
-For the Performer-style approximation, use positive random features:
+Everything hinges on one choice: which $\phi$ stands in for the softmax kernel's infinite one? The Performer's answer is positive random features:
 
 $$
 \phi^+(x)
@@ -110,9 +110,58 @@ def head_features(x, omega):
     return jnp.exp(proj - norm) / jnp.sqrt(omega.shape[1])
 ```
 
-## The NNX Module
+## Check it against exact attention
 
-[Flax NNX modules](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html) are ordinary Python objects that subclass `nnx.Module`; submodules like `nnx.Linear` are assigned as attributes in `__init__`. Randomness is handled with [`nnx.Rngs`](https://flax.readthedocs.io/en/stable/guides/randomness.html), which is passed at initialization to create parameters.
+Does the reassociated product actually compute attention, or just something attention-shaped? Both versions are a few lines, so verify instead of trusting: build one set of queries, keys, and values, compute exact softmax attention, then compute the linear version at increasing $m$ and watch the error fall.
+
+```python
+def exact_attention(q, k, v):
+    return jax.nn.softmax(jnp.einsum("id,jd->ij", q, k), axis=-1) @ v
+
+
+def linear_attention(q, k, v, omega):
+    phi_q, phi_k = positive_features(q, omega), positive_features(k, omega)
+    kv = jnp.einsum("tm,td->md", phi_k, v)     # the shared state, [m, d]
+    z = phi_k.sum(axis=0)                      # the shared normalizer, [m]
+    return jnp.einsum("tm,md->td", phi_q, kv) / (phi_q @ z)[:, None]
+
+
+N, d = 64, 16
+kq, kk, kv, ko = jax.random.split(jax.random.key(0), 4)
+q = jax.random.normal(kq, (N, d)) / jnp.sqrt(d)   # unit-ish norms, like trained q/k
+k = jax.random.normal(kk, (N, d)) / jnp.sqrt(d)
+v = jax.random.normal(kv, (N, d))
+
+y = exact_attention(q, k, v)
+for m in (16, 64, 256, 1024):
+    errs = []
+    for s in range(20):   # 20 independent feature draws
+        omega = jax.random.normal(jax.random.fold_in(jax.random.fold_in(ko, m), s), (m, d))
+        y_hat = linear_attention(q, k, v, omega)
+        errs.append(jnp.linalg.norm(y_hat - y) / jnp.linalg.norm(y))
+    errs = jnp.stack(errs)
+    print(f"m = {m:4d}   relative error {errs.mean():.3f}   (worst draw {errs.max():.3f})")
+```
+
+A real run of this block prints:
+
+```text
+m =   16   relative error 0.480   (worst draw 0.611)
+m =   64   relative error 0.295   (worst draw 0.480)
+m =  256   relative error 0.183   (worst draw 0.259)
+m = 1024   relative error 0.099   (worst draw 0.134)
+```
+
+Each 4x in features roughly halves the error: the $1/\sqrt m$ of a Monte-Carlo estimate, visible in the digits. One honest caveat rides along. These are unit-norm queries and keys; the positive-feature estimator's variance grows like $e^{\|q+k\|^2}$, so vectors with much larger norms need far more features (or the orthogonal-feature tricks a production Performer adds).
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/linear-attention-error.gif" alt="Animated convergence of linear attention: the exact softmax attention matrix, the matrix implied by m positive random features sharpening as m grows, and the relative output error falling along a one-over-square-root-of-m line" loading="lazy" width="1100" height="460" />
+  <figcaption>The same check, animated. Left: the exact attention matrix for a 28-token sequence whose tokens sit on a latent circle, so exact attention is a wrapping band. Middle: the matrix implied by the first $m$ rows of one growing bank of positive random features, an object a real Performer never materializes, formed here so you can watch it converge. Right: the relative error of the actual linear-time output falling as $m$ grows, tracking the dashed $1/\sqrt m$ line down to 0.041 at $m=512$. Every frame is a real JAX computation. Rendered by <code>scripts/render_linear_attention_error_gif.py</code>.</figcaption>
+</figure>
+
+## The NNX module
+
+So where does the verified feature map live in a real model? In an ordinary [Flax NNX module](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html): a plain Python object that subclasses `nnx.Module`, with submodules like `nnx.Linear` assigned as attributes in `__init__`. Randomness is handled with [`nnx.Rngs`](https://flax.readthedocs.io/en/stable/guides/randomness.html), which is passed at initialization to create parameters.
 
 Here is a compact non-causal linear-attention layer. It is the direct translation of the algebra above.
 
@@ -177,7 +226,7 @@ class LinearAttention(nnx.Module):
 
 The important shape is `kv: [batch, heads, m, d_head]`. It does not contain a token-token axis. Exact attention's middle object is `[batch, heads, tokens, tokens]`; linear attention's middle object is `[batch, heads, features, head_dim]`.
 
-## Causal Decoding
+## Causal decoding
 
 For autoregressive decoding, the recurrence is even more explicit. At step $i$:
 
@@ -223,47 +272,67 @@ def decode_step(phi_q_i, phi_k_i, v_i, state, eps=1e-6):
 
 That is the recurrent-network view: the cache is no longer all past keys and values. It is a fixed feature state.
 
-## Training Loop
+## Train it on a routing task
 
-The layer is an `nnx.Module`, so it fits into the normal NNX training pattern. With current NNX, `nnx.Optimizer` is constructed with `wrt=nnx.Param`, and `update` receives both the model and the gradients:
+Approximation error is one question; the sharper one is whether gradients can learn *through* the approximation. A tiny task settles it. Each training sequence is 48 random vectors, one of which is marked by a flag channel, and the target is for **every** position to output the marked token's content. Solving it means routing one token's content to all the others, which is precisely the job attention exists to do.
+
+The layer is an ordinary `nnx.Module`, so it drops into the standard NNX loop (with current NNX, `nnx.Optimizer` takes `wrt=nnx.Param`, and `update` receives both the model and the gradients):
 
 ```python
 import optax
 
-model = LinearAttention(
-    d_model=512,
-    n_heads=8,
-    n_features=128,
-    rngs=nnx.Rngs(0),
-)
-optimizer = nnx.Optimizer(
-    model,
-    optax.adamw(3e-4),
-    wrt=nnx.Param,
-)
+d_model, N = 32, 48
+
+def routing_batch(key, batch=64):
+    kx, km = jax.random.split(key)
+    x = jax.random.normal(kx, (batch, N, d_model))
+    marked = jax.random.randint(km, (batch,), 0, N)
+    x = x.at[jnp.arange(batch), marked, 0].set(4.0)          # the flag channel
+    target = jnp.repeat(x[jnp.arange(batch), marked][:, None, :], N, axis=1)
+    return x, target
+
+model = LinearAttention(d_model=d_model, n_heads=2, n_features=64, rngs=nnx.Rngs(0))
+optimizer = nnx.Optimizer(model, optax.adamw(1e-3), wrt=nnx.Param)
 
 @nnx.jit
 def train_step(model, optimizer, batch):
     x, target = batch
 
     def loss_fn(model):
-        pred = model(x)
-        return jnp.mean((pred - target) ** 2)
+        return jnp.mean((model(x) - target) ** 2)
 
     loss, grads = nnx.value_and_grad(loss_fn)(model)
     optimizer.update(model, grads)
     return loss
+
+key = jax.random.key(42)
+for step in range(1001):
+    key, sub = jax.random.split(key)
+    loss = train_step(model, optimizer, routing_batch(sub))
+    if step % 250 == 0:
+        print(f"step {step:4d}   loss {loss:.3f}")
 ```
 
-The implementation choice to watch is not `jit`; it is the tensor you permit yourself to create. If your forward pass forms `scores = q @ k.T`, you are back in the ledger world. If it forms `kv = phi_k.T @ v`, you have crossed into the shared-state world.
+A real run of this loop prints:
 
-## Rendering The GIFs
+```text
+step    0   loss 1.790
+step  250   loss 0.989
+step  500   loss 0.519
+step  750   loss 0.059
+step 1000   loss 0.003
+```
 
-Both GIFs in this post are generated with Python, JAX, and matplotlib:
+The layer learns to find the flag and broadcast the marked content, and nothing about the loop knows it is training an approximation: the gradient just flows through $\phi$, through the shared state, through the ratio. The implementation choice to watch is not `jit`; it is the tensor you permit yourself to create. If your forward pass forms `scores = q @ k.T`, you are back in the ledger world. If it forms `kv = phi_k.T @ v`, you have crossed into the shared-state world.
+
+## Rendering the GIFs
+
+All three GIFs in this post are generated with Python, JAX, and matplotlib:
 
 ```bash
 python scripts/render_gravity_attention_gif.py
 python scripts/render_linear_attention_pipeline_gif.py
+python scripts/render_linear_attention_error_gif.py
 ```
 
 The first renderer computes:
@@ -273,9 +342,9 @@ The first renderer computes:
 - exact attention scores,
 - and a finite-feature attention state.
 
-The second renderer follows the causal linear-attention recurrence token by token. It is deliberately small: the point is not a benchmark, but a visual audit of the shapes. If the GIF cannot show where the $N\times N$ object disappeared, the implementation is probably not explaining itself.
+The second renderer follows the causal linear-attention recurrence token by token, and the third recomputes the exact and implied attention matrices at every feature count $m$. They are deliberately small: the point is not a benchmark, but a visual audit of the shapes. If the GIF cannot show where the $N\times N$ object disappeared, the implementation is probably not explaining itself.
 
-## What This Leaves Out
+## What this leaves out
 
 This is a teaching implementation, not a production kernel. A production version would care about:
 
@@ -291,4 +360,11 @@ Those choices matter. But they are second-order to the core idea. Linear attenti
 
 *References: Flax NNX [Module API](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html) and [randomness guide](https://flax.readthedocs.io/en/stable/guides/randomness.html); Performer / FAVOR+ from [Choromanski et al. (2021)](https://arxiv.org/abs/2009.14794); linear-transformer recurrence from [Katharopoulos et al. (2020)](https://arxiv.org/abs/2006.16236).*
 
-<CiteAs slug="linear-attention-jax-flax-nnx" title="Cheap Attention in JAX/Flax NNX" pubDate="2026-06-01" />
+<CiteAs slug="linear-attention-jax-flax-nnx" title="Cheap Attention in JAX/Flax NNX" pubDate="2026-05-31" />
+
+<style>{`
+.jax-fig { margin: 1.8rem auto; text-align: center; }
+.jax-fig img { max-width: 520px; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; background: #fbf8f1; }
+.jax-fig-wide img { max-width: 900px; }
+.jax-fig figcaption { margin-top: 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--fg-muted); max-width: 64ch; margin-left: auto; margin-right: auto; }
+`}</style>

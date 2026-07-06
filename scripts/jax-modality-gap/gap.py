@@ -18,7 +18,8 @@ Outputs to ../../public/modality-gap/:
   gap.json          - per-frame 2-D coordinates for the interactive viz
   results_gap.npz   - raw snapshots + metric trajectory
 
-Run:  python gap.py
+Run:  python gap.py            # the main run (learnable logit scale, init 2.0)
+      python gap.py --sweep    # fixed-sharpness sweep: what temperature buys
 """
 
 from __future__ import annotations
@@ -180,6 +181,68 @@ def main():
     print("saved -> results_gap.npz  (interactive gap viz runs live in-browser)")
 
 
+def sweep():
+    """What does temperature actually buy? Train the same matched-init towers
+    with a FIXED (untrained) logit scale at several sharpness values and report
+    the final gap and the matched-vs-shuffled cosine margin.
+
+    Finding (seed 0): the gap opens at EVERY sharpness. Soft temperatures open
+    it widest (fully antipodal, gap -> 2) but lose the ranking entirely
+    (matched == random == -1); sharpness is what preserves the matched-above-
+    random margin while the cones separate.
+
+        fixed 1/tau = 0.5   final gap 2.00   matched -1.00   random -1.00
+        fixed 1/tau = 1.0   final gap 2.00   matched -1.00   random -1.00
+        fixed 1/tau = 2.0   final gap 1.99   matched -0.99   random -0.99
+        fixed 1/tau = 4.0   final gap 1.95   matched -0.93   random -0.95
+        fixed 1/tau = 8.0   final gap 1.65   matched -0.49   random -0.66
+    """
+    xA, xB, c, tA, tB = generate(N, SEED)
+
+    def whiten(x):
+        mu, sd = x.mean(0), x.std(0) + 1e-6
+        return ((x - mu) / sd).astype(np.float32)
+    xA, xB = whiten(xA), whiten(xB)
+
+    for scale in [0.5, 1.0, 2.0, 4.0, 8.0]:
+        key0 = jax.random.key(1)
+        params = {"A": tower_init(key0), "B": tower_init(key0),
+                  "bias": jnp.asarray(-1.0, jnp.float32)}
+
+        def loss(p, xa, xb):
+            zA, zB = encode(p["A"], xa), encode(p["B"], xb)
+            logits = scale * (zA @ zB.T) + p["bias"]
+            n = zA.shape[0]
+            labels = 2.0 * jnp.eye(n) - 1.0
+            return jnp.mean(jax.nn.softplus(-labels * logits))
+
+        opt = optax.adam(LR)
+        state = opt.init(params)
+
+        @jax.jit
+        def step(p, s, xa, xb):
+            l, g = jax.value_and_grad(loss)(p, xa, xb)
+            upd, s = opt.update(g, s)
+            return optax.apply_updates(p, upd), s, l
+
+        key = jax.random.key(SEED)
+        for t in range(STEPS):
+            key, sub = jax.random.split(key)
+            idx = jax.random.randint(sub, (BATCH,), 0, N)
+            params, state, l = step(params, state,
+                                    jnp.asarray(xA)[idx], jnp.asarray(xB)[idx])
+
+        zA = np.asarray(encode(params["A"], jnp.asarray(xA[:NVIZ])))
+        zB = np.asarray(encode(params["B"], jnp.asarray(xB[:NVIZ])))
+        matched = float(np.mean(np.sum(zA * zB, axis=1)))
+        rng = np.random.default_rng(0)
+        rnd = float(np.mean(np.sum(zA * zB[rng.permutation(len(zB))], axis=1)))
+        g = float(np.linalg.norm(zA.mean(0) - zB.mean(0)))
+        print(f"fixed 1/tau = {scale:4.1f}   final gap {g:.2f}"
+              f"   matched {matched:+.2f}   random {rnd:+.2f}")
+
+
 if __name__ == "__main__":
+    import sys
     os.environ.setdefault("JAX_PLATFORMS", "cpu")
-    main()
+    sweep() if "--sweep" in sys.argv[1:] else main()

@@ -2,7 +2,7 @@
 title: "Constructing the Head on Learned Features, in JAX/Flax NNX"
 seoTitle: "Constructed Head on Learned Features in JAX"
 description: "A runnable companion: train a small conv backbone in Flax NNX, then on its frozen features build a constructed Yat head with no gradient steps and compare. The constructed head lands within a couple of points of the trained one, and even a random backbone's features sort at 73% while its trained head is at chance."
-seoDescription: "Train a Flax NNX conv backbone, build a constructed Yat head on its features with no training: 85.9% vs 87.7%, and 73% on a random backbone whose trained head is at chance."
+seoDescription: "Train a Flax NNX conv backbone, then build a Yat head on its frozen features with no training: 85.9% vs 87.7%, and 73% from a random backbone."
 pubDate: 2026-06-22T17:00:00-07:00
 draft: false
 tags: [ml, kernels, representation-learning, transfer-learning, jax, flax, nnx, implementation, prototypes, yat, deep-learning]
@@ -40,7 +40,7 @@ import CiteAs from '../../components/CiteAs.astro';
 
 ## The two stages, as two modules
 
-A network is a backbone and a head. The backbone is the part we train, two conv-and-pool blocks down to a 64-dimensional feature; the head is a plain linear layer for the trained baseline, and later a placed Yat vote for the constructed version.
+Where does the explainer's split land in code? In two modules. The backbone is the part we train, two conv-and-pool blocks down to a 64-dimensional feature; the head is a plain linear layer for the trained baseline, and later a placed Yat vote for the constructed version.
 
 ```python
 import jax, jax.numpy as jnp, optax
@@ -89,7 +89,7 @@ def build_head(Ftr, ytr, Fte, per=20):
 
 ## The surprise, before any training
 
-Here is the cleanest version of the claim. Take a backbone with **random** weights, never trained, and build the head on the garbage features that come out. You would expect nothing, and the trained linear head on those features confirms it: it sits at chance. But the constructed head sorts them anyway.
+What happens if the backbone never trains at all? That is the cleanest version of the claim, so run it first. Take a backbone with **random** weights, never trained, and build the head on the garbage features that come out. You would expect nothing, and the trained linear head on those features confirms it: it sits at chance. But the constructed head sorts them anyway.
 
 ```python
 rnd = Net(nnx.Rngs(0))
@@ -130,7 +130,7 @@ trained = accuracy(net, Xte, yte)                       # 87.7%
 con = accuracy(build_head(feats(net, Xtr), ytr, feats(net, Xte)), yte)   # 85.9%
 ```
 
-So the curve runs from 72.7% on random features to 85.9% on trained ones, all read by a head that was never trained, always a point or two under the trained head and never more. (The explainer quotes a reference PyTorch run, 74 / 83.2 / 85.7; the story is identical, the last digits move with the framework and the seed.) The accuracy lives in the representation. The classifier, and its edits, are furniture you place.
+So the curve runs from 72.7% on random features to 85.9% on trained ones, all read by a head that was never trained, always a point or two under the trained head and never more. (The explainer's 74 / 83.2 / 85.7 are from its reference run, the PyTorch pipeline in `scripts/construct_vs_optimize.py`; the numbers on this page are this post's own JAX run. The story is identical, the last digits move with the framework and the seed.) The accuracy lives in the representation. The classifier, and its edits, are furniture you place.
 
 <figure class="jax-fig">
   <img src="/blog/train-crystallize.gif" alt="A 2D cloud of Fashion-MNIST test features condensing smoothly from a tangle into separated class droplets as the backbone trains, with a thermometer showing the built head's accuracy climbing" loading="lazy" width="672" height="684" />

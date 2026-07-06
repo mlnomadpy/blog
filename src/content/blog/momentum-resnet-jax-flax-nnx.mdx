@@ -1,0 +1,255 @@
+---
+title: "Skip Connections With Inertia, in JAX/Flax NNX"
+seoTitle: "Momentum ResNets in JAX/Flax NNX"
+description: "A runnable companion: the residual block as a forward-Euler step, then the momentum residual network as a Flax NNX module with one extra state, a velocity the blocks write into. Train both on the rings task the non-crossing theorem forbids, watch the training crystallize, and run the trained network exactly backward until floating point, amplified by 1/mu per layer, steals the past."
+seoDescription: "Build a momentum ResNet in JAX/Flax NNX: the residual block as an Euler step, a velocity ledger, training on rings, and an exact rewind of the whole network."
+pubDate: 2026-07-04T10:00:00-07:00
+draft: false
+tags: [ml, resnet, momentum-resnet, neural-ode, jax, flax, nnx, implementation, dynamical-systems, symplectic-integrators, deep-learning]
+references:
+  - authors: "Sander, M. E., Ablin, P., Blondel, M., Peyré, G."
+    year: 2021
+    title: "Momentum Residual Neural Networks"
+    venue: "ICML 2021"
+    arxiv: "2102.07870"
+  - authors: "Chen, R. T. Q., Rubanova, Y., Bettencourt, J., Duvenaud, D."
+    year: 2018
+    title: "Neural Ordinary Differential Equations"
+    venue: "NeurIPS 2018"
+    arxiv: "1806.07366"
+  - authors: "Dupont, E., Doucet, A., Teh, Y. W."
+    year: 2019
+    title: "Augmented Neural ODEs"
+    venue: "NeurIPS 2019"
+    arxiv: "1904.01681"
+  - authors: "Hairer, E., Lubich, C., Wanner, G."
+    year: 2006
+    title: "Geometric Numerical Integration: Structure-Preserving Algorithms for Ordinary Differential Equations"
+    venue: "Springer, 2nd ed."
+    url: "https://link.springer.com/book/10.1007/3-540-30666-8"
+keywords:
+  - momentum resnet JAX
+  - residual network forward Euler
+  - flax nnx residual block
+  - invertible network JAX
+  - leapfrog integrator
+  - velocity state resnet
+  - exact rewind neural network
+---
+import CiteAs from '../../components/CiteAs.astro';
+
+*The [explainer](/blog/skip-connections-are-half-of-newton/) read a residual block $x + F(x)$ as one forward-Euler step and asked what the missing half of Newton's law, a velocity state, buys a trained network. This is the implementation: the two integrators in eight lines of the same code, the momentum residual network as a [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html) module with one extra line of state, the training runs on the task a first-order flow cannot get exactly right, and the rewind that reconstructs the input from the output until arithmetic runs out. The published numbers are from `scripts/momentum_resnet.py`; every code block below runs as written in `scripts/momentum_nnx_check.py`, and every figure is rendered from real runs by `scripts/render_momentum_gifs.py`.*
+
+*Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/momentum-resnet-jax-flax-nnx): the same code, block by block, with the math written out and every figure reproduced from a real run.*
+
+## Two integrators, eight lines apart
+
+Before any network, the physics fact the whole post leans on, in code small enough to trust. A second-order system carries two states, position and velocity. Forward Euler updates both from the *stale* state; leapfrog interleaves them, half a velocity kick, a position drift with the fresh velocity, half a kick to finish. Same force, same step size, same cost:
+
+```python
+def accel(r):                                  # Kepler, GM = 1
+    return -r / np.linalg.norm(r) ** 3
+
+def euler(r, v, dt):
+    a = accel(r)
+    return r + dt * v, v + dt * a              # both updates from the stale state
+
+def leapfrog(r, v, dt):
+    v = v + 0.5 * dt * accel(r)                # half kick
+    r = r + dt * v                             # drift with the FRESH velocity
+    return r, v + 0.5 * dt * accel(r)          # half kick
+```
+
+Launch the same planet with both, $\Delta t = 0.02$, twenty orbits, and print the damage:
+
+```python
+Euler:    energy drift +68.3% over 20 orbits, farthest reach 3.37
+leapfrog: max energy deviation 0.016%
+```
+
+Euler injects a sliver of energy on the outside of every curve, and twenty orbits later the ellipse with apoapsis $1.0$ reaches out to $3.37$ and is still swelling. Leapfrog's error breathes but never accumulates. Nothing about the force changed; only *where the update is written down*.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/momentum-orbits.gif" alt="Forward Euler and leapfrog integrating the same Kepler orbit side by side; the Euler planet spirals outward, gaining 68.3 percent energy over 20 orbits, while the leapfrog orbit stays closed with 0.016 percent maximum deviation; energy curves draw below" loading="lazy" width="880" height="580" />
+  <figcaption>The code above, run: one planet, one launch, one step size, twenty orbits of a real two-body problem integrated in float64. The dashed curve is the true ellipse. Euler moves the position with a stale velocity and pays +68.3% of its energy for it; leapfrog's deviation never exceeds 0.016%. This is the cost of collapsing two ledgers into one, and it is the exact defect a plain residual network inherits. Rendered by <code>scripts/render_momentum_gifs.py</code>.</figcaption>
+</figure>
+
+## One module, one dial
+
+What does it take to give a residual network the second ledger? One line of state. The momentum residual network of Sander et al. (2021) writes the block's output into a velocity, damped by a friction $\mu$, and lets the velocity move the state:
+
+$$
+v_{l+1} = \mu\, v_l + (1-\mu)\, F_l(x_l), \qquad x_{l+1} = x_l + h\, v_{l+1}.
+$$
+
+At $\mu = 0$ the ledger forgets instantly and this *is* the plain residual network $x_{l+1} = x_l + h\,F_l(x_l)$, forward Euler on the field $F$. One module covers both architectures, at identical parameter count, because $\mu$ is a fixed scalar, not a weight:
+
+```python
+class MomentumResNet(nnx.Module):
+    """v' = mu v + (1 - mu) F_l(x);  x' = x + h v'.  At mu = 0 this IS the
+    plain residual network x' = x + h F_l(x): one dial from Euler to Newton."""
+
+    def __init__(self, L=32, width=2, hidden=16, mu=0.9, T=8.0, *, rngs):
+        gain1 = nnx.initializers.normal(1.0 / math.sqrt(width))
+        gain2 = nnx.initializers.normal(1.0 / math.sqrt(hidden))
+        self.blocks = [(nnx.Linear(width, hidden, kernel_init=gain1, rngs=rngs),
+                        nnx.Linear(hidden, width, kernel_init=gain2, rngs=rngs))
+                       for _ in range(L)]
+        self.readout = nnx.Linear(width, 2, kernel_init=gain1, rngs=rngs)
+        self.mu, self.h = mu, T / L
+
+    def __call__(self, x, return_state=False):
+        v = jnp.zeros_like(x)
+        for lin1, lin2 in self.blocks:
+            f = lin2(jnp.tanh(lin1(x)))            # the vector field F_l(x)
+            v = self.mu * v + (1 - self.mu) * f    # the block writes to the LEDGER
+            x = x + self.h * v                     # the ledger moves the state
+        return (self.readout(x), x, v) if return_state else self.readout(x)
+```
+
+Two decisions in the constructor matter for everything downstream. The residual stream is **width 2**, so the hidden state is a literal point in a plane and every trajectory in this post is the state itself, not a projection. And the total integration time is fixed at $T = L\,h = 8$, so depth refines the *same* flow: $L = 32$ means steps of $h = 0.25$. The blocks are per-layer (untied), a tiny $2 \to 16 \to 2$ tanh MLP each, exactly the explainer's setup.
+
+## Training on the task the theorem forbids
+
+The interesting dataset is the one the physics singled out: a disk of one class walled in by an annulus of the other. A first-order planar flow is a homeomorphism, its trajectories cannot cross, so it can never pull the inside class out *exactly*; a network with a velocity state doubles the state to $(x, v)$ and crosses freely in the position shadow. Rings are ten lines:
+
+```python
+def make_rings(n, rng, noise=0.04):
+    """Class 0 is a disk; class 1 is an annulus that walls it in at every angle."""
+    n2 = n // 2
+    th, r_in = rng.uniform(0, 2 * np.pi, n2), 0.6 * np.sqrt(rng.uniform(0, 1, n2))
+    th2, r_out = rng.uniform(0, 2 * np.pi, n2), rng.uniform(1.3, 1.8, n2)
+    X = np.concatenate([np.stack([r_in * np.cos(th), r_in * np.sin(th)], 1),
+                        np.stack([r_out * np.cos(th2), r_out * np.sin(th2)], 1)])
+    X += rng.normal(0, noise, X.shape)
+    y = np.repeat(np.arange(2), n2).astype(np.int32)
+    return X.astype(np.float32), y
+```
+
+The training loop is standard NNX, full-batch Adam, 4000 steps, a linear readout on the final 2-D state:
+
+```python
+def train(mu, seed=0, steps=4000):
+    rng = np.random.default_rng(1000 + seed)
+    Xtr, ytr = map(jnp.asarray, make_rings(1024, rng))
+    Xte, yte = map(jnp.asarray, make_rings(2048, rng))
+    model = MomentumResNet(mu=mu, rngs=nnx.Rngs(seed))
+    opt = nnx.Optimizer(model, optax.adam(3e-3), wrt=nnx.Param)
+
+    @nnx.jit
+    def step(model, opt):
+        def loss_fn(m):
+            return optax.softmax_cross_entropy_with_integer_labels(m(Xtr), ytr).mean()
+        loss, grads = nnx.value_and_grad(loss_fn)(model)
+        opt.update(model, grads)
+        return loss
+
+    for _ in range(steps):
+        loss = step(model, opt)
+    acc = (model(Xte).argmax(1) == yte).mean()
+    return model, Xte, float(acc)
+```
+
+```python
+rings, L=32, mu=0.0: test accuracy 99.80%
+rings, L=32, mu=0.9: test accuracy 100.00%
+```
+
+Watch that training happen rather than take the two numbers. The run below is the momentum net's, dumped every 50 steps: the decision field over the input plane, the hidden trajectories, and the loss, all at the same moment. The striking part is the timing. Accuracy pins at 100% within the first 50 steps, and then the network spends 3,950 more steps *reorganizing anyway*: the boundary hardens, the probability mass polarizes, the hidden flow straightens. The scoreboard stopped watching long before the dynamics stopped moving.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/momentum-crystallize.gif" alt="Training telemetry of the momentum net on rings: the decision-probability field over the input plane organizing from undecided smoke to a hard closed contour, hidden trajectories straightening, and the training loss drawing itself down six orders of magnitude over 4000 real Adam steps" loading="lazy" width="945" height="514" />
+  <figcaption>The real training run, 4000 Adam steps with a snapshot every 50: left, the class-probability field over the input plane with the decision contour; middle, the hidden trajectories of 16 test points; right, the training loss on a log axis. Test accuracy reaches 100% before step 50 and the loss still falls another five decades while the field crystallizes. Telemetry dumped by <code>scripts/momentum_gif_data.py</code> (the identical training, rerun with dense logging); rendered by <code>scripts/render_momentum_gifs.py</code>.</figcaption>
+</figure>
+
+## The ceiling, drawn honestly
+
+Two training runs is not a result. The 99.80% against 100.00% above is one seed at one depth, and before reading anything into a fifth of a point, two questions have to survive the full sweep in `scripts/momentum_resnet.py`: does the gap hold across three seeds and three depths, and does a plain net that is deep enough to be a true flow ever touch the 100% line at all? The sweep's first answer is a null. There is **no cliff** anywhere in it: on two moons both rules sit between 99.85% and 100% everywhere, and even on rings the plain net at depth 128 posts 99.85% on average.
+
+What the theorem forbids is *exactness*, and exactness is the one line in the figure that matters: watch which dots ever touch the dashed 100% line.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/momentum-ceiling.gif" alt="Test accuracy versus depth on the rings task, three seeds per point, drawing itself: the plain residual net's seed band touches the dashed 100 percent exact-separation line only at depth 8, and never again at depths 32 and 128, while the momentum net's dots sit on the line" loading="lazy" width="882" height="546" />
+  <figcaption>Every seed of the rings sweep from <code>scripts/momentum_resnet.py</code>, drawn against the line that matters: 100% is exact separation, the thing a first-order planar flow can never achieve on an enclosed class. The plain net (orange) touches the line only at depth 8, where h = 1 is too coarse to be a flow; once it becomes one, its band hangs just below, at 99.76% and 99.95% best-seed, in all 6 runs. The momentum net (teal) sits on the line in every seed at L = 8 and 32. Rendered by <code>scripts/render_momentum_gifs.py</code>.</figcaption>
+</figure>
+
+The seed accounting behind the dots: at depth 8 the plain net is not yet a flow (steps of $h = 1$ can jump the wall) and it hits 100.0% in two seeds of three; at depths 32 and 128, where it refines into an honest flow, it never touches 100% again in any of its six runs, its best seeds stalling at 99.76% and 99.95%, while the momentum net pins 100.0% in every seed at depths 8 and 32. On spirals the same ledger shows up as reliability rather than a ceiling: the plain net's three depth-128 seeds spread from 92.9% to 98.3%, the momentum net's sit within six tenths of a point of each other.
+
+The 1890s uniqueness theorem did not predict a collapse; it predicted a *ceiling*, and the ceiling is exactly where the runs put it. A homeomorphism cornered by topology squeezes the surrounding class into a thin filament, hides its mistakes inside it, and pays a stray handful of test points as rent, forever.
+
+## Watching the state instead of the scoreboard
+
+Two networks separated by a tenth of a point on the scoreboard are doing violently different things underneath, and with a width-2 stream we can just look. The exported hidden trajectories of the two trained depth-32 rings nets (from `public/momentum-resnet/trajectories.json`, the same states the explainer's panels integrate) play out below, block by block.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/momentum-depth-lapse.gif" alt="The literal width-2 hidden states of 32 test points flowing through the plain net and the momentum net side by side, layer by layer: the plain net's paths kink at every block, the momentum net's coast on smooth crossing curves; path-length and turning-angle readouts accumulate" loading="lazy" width="924" height="556" />
+  <figcaption>Depth as a time-lapse: the same test points carried through the two trained depth-32 rings nets, drawn in the network's own 2-D hidden space (no projection exists to hide anything). The readouts accumulate as the layers pass: over the full test set the run measures a mean turn of 52.9 degrees per layer for the plain net against 9.6 for the momentum net, at nearly identical total path lengths, 15.9 versus 14.7 stream units. Same journey, no shortcut; the difference is inertia. Data from <code>scripts/momentum_resnet.py</code>; rendered by <code>scripts/render_momentum_gifs.py</code>.</figcaption>
+</figure>
+
+That is Prediction 1 of the explainer on real weights: Euler trajectories turn as sharply as the local field because every step forgets the last one; momentum trajectories coast through turns, overshoot slightly, and curve back, the way things with mass move.
+
+## The ledger, made visible
+
+The velocity state itself is worth seeing, because it is the whole mechanism and it never appears on any scoreboard. Run the trained $\mu = 0.9$ net forward, keep the ledger's value at every block, and draw $v_l$ as an arrow on every point:
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/momentum-velocity-ledger.gif" alt="Test points moving through the trained momentum net with their real velocity vectors attached, arrows growing as the ledger fills; below, the mean kinetic energy per layer draws itself, staying near zero for the first half of depth and then climbing to 16 as the classes separate" loading="lazy" width="903" height="588" />
+  <figcaption>The second ledger at work in the trained rings net: each arrow is the real velocity state v carried by a test point, and the strip below is the mean kinetic energy of the shown points per layer. The ledger fills slowly from v = 0, carries the enclosed class out across the ring on smooth crossing paths through mid-depth, then funds the final sprint to the readout, where the mean kinetic energy climbs to 16. The block never moves the state; it deposits into v, and v moves the state. Forward pass of the exported weights in <code>public/momentum-resnet/inertia.json</code>; rendered by <code>scripts/render_momentum_gifs.py</code>.</figcaption>
+</figure>
+
+## Running the whole network backward
+
+Now the strangest property, and the reason Sander et al. built these networks in the first place. The update rule is algebraically invertible: given the *final* $(x, v)$, each block can solve for its own past, no stored activations anywhere:
+
+```python
+def rewind(model, xL, vL):
+    """From the final (x, v) alone, solve every block for its own past."""
+    x, v = xL, vL
+    for lin1, lin2 in reversed(model.blocks):
+        x = x - model.h * v                        # undo the drift
+        f = lin2(jnp.tanh(lin1(x)))
+        v = (v - (1 - model.mu) * f) / model.mu    # undo the deposit: divide by mu
+    return x, v
+```
+
+Try to write this for the plain block and you can't: $x + F(x)$ overwrote its own input, and recovering it means solving a nonlinear equation with no uniqueness guarantee. The velocity is the receipt that makes the computation un-doable.
+
+Run it on the trained net, in double precision, and the receipt is honored to the last digit:
+
+```python
+rewind mu=0.9 float64: max |x0_rec - x0| = 5.8e-13
+```
+
+Sixty-four test points pushed through thirty-two blocks and pulled back out, reconstructed to $10^{-13}$. But run the same loop in single precision, and then turn the friction up, and something far more instructive happens:
+
+```python
+rewind mu=0.9 float32: max |x0_rec - x0| = 3.3e-04
+rewind mu=0.6 float32: max |x0_rec - x0| = 1.7e+02
+rewind mu=0.3 float32: max |x0_rec - x0| = 9.7e+09
+```
+
+Nothing is wrong with the formula. Look at the last line of `rewind`: every backward step **divides by $\mu$**, so whatever rounding noise the forward pass left behind is amplified by $(1/\mu)$ per layer. At $\mu = 0.9$ that is a factor of $29$ across 32 layers, gentle enough that single precision still comes home to $10^{-4}$. At $\mu = 0.3$ it is a factor of $5 \times 10^{16}$, and the past is simply gone. The explainer's canonical run (`scripts/momentum_resnet.py`) measures the same law on its single-precision forward pass: $3.7 \times 10^{-4}$ at $\mu = 0.9$, $54$ at $\mu = 0.6$, $3.7 \times 10^{10}$ at $\mu = 0.3$. The friction dial is a memory dial: a lightly damped dynamics can be rewound, a heavily damped one has burned its own history, and floating point is just the messenger.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/momentum-rewind.gif" alt="Three acts: test points flow forward through the trained momentum net; hollow markers then retrace the exact path home from only the final position and velocity, with the float64 error curve flat near 1e-13; then the float32 rewind errors at mu 0.9, 0.6 and 0.3 rise along dotted one-over-mu-to-the-k prediction lines on a log axis, reaching 1e10" loading="lazy" width="945" height="525" />
+  <figcaption>The rewind, run on the exported trained weights. First the forward pass (float64); then the backward pass is handed only the final (x, v) of each point and retraces every layer, the hollow rings landing back on the forward path with a worst error near 1e-13. Then the same rewind in float32 at three frictions: each curve is the measured reconstruction error against layers rewound, and each dotted line is the pure (1/mu)^k prediction. This render measures 2.7e-4, 3.2e+1 and 1.3e+10 at mu = 0.9, 0.6, 0.3; the canonical script's single-precision pass lands at 3.7e-4, 54 and 3.7e+10, the same amplification law on a different noise floor. Friction is the thief of memory. Rendered by <code>scripts/render_momentum_gifs.py</code>.</figcaption>
+</figure>
+
+This is not a party trick. A network you can run backward is a network you can train **without caching activations**: recompute each block's input from its output during the backward pass, and the memory cost of depth almost vanishes. That is the engineering payoff Sander et al. (2021) built Momentum ResNets around, and it falls out of the same physics that keeps the leapfrog planet on its ellipse: time-reversible integrators conserve the information the rewind needs, and $\mu$ is the dial that decides how much of it survives arithmetic.
+
+## What carried over
+
+Every claim the explainer made on physics grounds survived contact with real trained weights, in about a hundred lines of NNX. The plain residual block is forward Euler, and it kinks (52.9 degrees per layer) where the momentum block coasts (9.6). The missing second state is one line of module code, costs zero parameters, and buys crossing trajectories where topology forbids a flow to go: the plain net never touches 100% on rings once it is deep enough to be an honest flow, and the momentum net pins it. At every scale the scoreboard was blind to the ledger: across architectures, across $\mu$, and inside a single run, where accuracy pinned at step 50 and the dynamics kept crystallizing for 3,950 more. And the ledger's damping is exactly friction, right down to which networks can remember their own past. Architecture choices are integrator choices; the numerical-analysis shelf is full of integrators nobody has read as networks yet.
+
+---
+
+*The momentum residual network is from [Sander et al. (2021)](https://arxiv.org/abs/2102.07870); depth-as-time from [Chen et al. (2018)](https://arxiv.org/abs/1806.07366); the non-crossing obstruction as a network ceiling from [Dupont et al. (2019)](https://arxiv.org/abs/1904.01681); the geometry of why leapfrog holds its orbit from [Hairer, Lubich and Wanner (2006)](https://link.springer.com/book/10.1007/3-540-30666-8). The conceptual companion is [Your Skip Connection Is Half of Newton](/blog/skip-connections-are-half-of-newton/).*
+
+<CiteAs slug="momentum-resnet-jax-flax-nnx" title="Skip Connections With Inertia, in JAX/Flax NNX" pubDate="2026-07-04T10:00:00-07:00" />
+
+<style>{`
+.jax-fig { margin: 1.8rem auto; text-align: center; }
+.jax-fig img { max-width: 520px; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; background: #fbf8f1; }
+.jax-fig-wide img { max-width: 880px; }
+.jax-fig figcaption { margin-top: 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--fg-muted); max-width: 64ch; margin-left: auto; margin-right: auto; }
+`}</style>

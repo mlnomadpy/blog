@@ -1,0 +1,106 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 420 } = Astro.props;
+---
+<figure class="viz stabilitycliff" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Test accuracy of the plain residual net (mu = 0) and the momentum net
+// (mu = 0.9) at depths 8, 32 and 128 with the total integration time held
+// fixed (h = T/L), three seeds each, from scripts/momentum_resnet.py. The
+// honest result: no cliff, the two rules tie to within a point on every task.
+// The fine print of the non-crossing theorem survives at the ceiling: once
+// the plain net is deep enough to approximate a flow (L = 32, 128) it never
+// reaches 100% on the rings task in any seed, while the momentum net does.
+// The y axis zooms to where each task's data lives, or nothing is visible.
+import { defineViz } from './engine/vizkit.js';
+import { T, fmt, axes, gate, loadingText } from './engine/draw.js';
+import { loadCliff } from './momres.js';
+
+const DS_LABEL = { moons: 'two moons', spirals: 'interleaved spirals', rings: 'concentric rings' };
+
+defineViz('stabilitycliff', {
+  title: 'Accuracy vs depth, with and without a velocity state',
+  height: 420,
+  controls: [
+    { type: 'select', name: 'ds', label: 'task', reset: false, options: [
+      { value: 'rings', label: 'concentric rings' },
+      { value: 'spirals', label: 'interleaved spirals' },
+      { value: 'moons', label: 'two moons' }], value: 'rings' },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) { gate(api, loadCliff, (api, d) => { api.state.d = d; }); },
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    if (!st || !st.ready) { loadingText(api, 'loading the depth sweep…'); return; }
+    const ds = api.get('ds'), d = st.d, depths = d.depths;
+    const rows = d.datasets[ds];
+    const W = size.W, H = size.H;
+    const box = { x: 56, y: 30, w: W - 76, h: H - 86 };
+    // zoom the y axis to this task's data: the differences are fractions of a
+    // point on rings and moons, invisible on a 0-100 axis
+    let lo = 100;
+    for (const mu of ['0.0', '0.9']) for (const v of rows[mu].acc_min) lo = Math.min(lo, 100 * v);
+    const span = Math.max(0.6, 100 - lo);
+    const yMin = lo - 0.35 * span, yMax = 100 + 0.18 * span;
+    const stepY = span > 4 ? 2 : span > 1.5 ? 0.5 : 0.2;
+    const yTicks = [];
+    for (let v = Math.ceil(yMin / stepY) * stepY; v <= yMax + 1e-9; v += stepY) yTicks.push(+v.toFixed(2));
+    const xs = depths.map((L) => Math.log2(L));
+    const { sx, sy } = axes(ctx, box, {
+      xMin: xs[0] - 0.4, xMax: xs[xs.length - 1] + 0.4, yMin, yMax,
+      yTicks, fmtY: (v) => v.toFixed(stepY < 1 ? 1 : 0) + '%', grid: true,
+    }, colors);
+    // the ceiling the theorem is actually about
+    ctx.strokeStyle = colors.faint; ctx.setLineDash([3, 4]);
+    ctx.beginPath(); ctx.moveTo(box.x, sy(100)); ctx.lineTo(box.x + box.w, sy(100)); ctx.stroke();
+    ctx.setLineDash([]);
+    T(ctx, colors, 'small', { color: colors.muted, align: 'right' });
+    ctx.fillText('100% = exact separation', box.x + box.w - 6, sy(100) - 5);
+    // x tick labels at the real depths
+    T(ctx, colors, 'small', { color: colors.faint, align: 'center' });
+    depths.forEach((L, i) => ctx.fillText(String(L), sx(xs[i]), box.y + box.h + 6));
+    T(ctx, colors, 'label', { color: colors.muted, align: 'center' });
+    ctx.fillText('depth L (blocks), total time T = L·h fixed', box.x + box.w / 2, box.y + box.h + 24);
+    ctx.save(); ctx.translate(16, box.y + box.h / 2); ctx.rotate(-Math.PI / 2);
+    T(ctx, colors, 'label', { color: colors.muted, align: 'center' });
+    ctx.fillText('test accuracy (3 seeds)', 0, 0); ctx.restore();
+
+    const variants = [['0.0', colors.accent, 'no velocity (mu = 0)'], ['0.9', colors.blue, 'momentum (mu = 0.9)']];
+    variants.forEach(([mu, col, label]) => {
+      const r = rows[mu];
+      // min-max band across seeds
+      ctx.fillStyle = col + '2e'; ctx.beginPath();
+      depths.forEach((L, i) => { const x = sx(xs[i]), y = sy(100 * r.acc_max[i]); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+      for (let i = depths.length - 1; i >= 0; i--) ctx.lineTo(sx(xs[i]), sy(100 * r.acc_min[i]));
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = col; ctx.lineWidth = 2.4; ctx.beginPath();
+      depths.forEach((L, i) => { const x = sx(xs[i]), y = sy(100 * r.acc_mean[i]); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+      ctx.stroke();
+      depths.forEach((L, i) => {
+        const x = sx(xs[i]), y = sy(100 * r.acc_mean[i]);
+        ctx.fillStyle = col; ctx.beginPath();
+        ctx.arc(x, y, 4, 0, 6.283); ctx.fill();
+        const above = mu === '0.9';
+        let tx = x, ty = y + (above ? -10 : 16), align = 'center';
+        // dodge the legend block in the top-left corner
+        if (ty < box.y + 42 && x < box.x + 185) { align = 'left'; tx = x + 9; ty = y + 13; }
+        ty = Math.max(box.y + 12, Math.min(box.y + box.h - 4, ty));
+        T(ctx, colors, 'small', { color: col, align });
+        ctx.fillText((100 * r.acc_mean[i]).toFixed(2), tx, ty);
+      });
+    });
+    // legend
+    T(ctx, colors, 'label', { color: colors.accent }); ctx.fillText('— no velocity (mu = 0)', box.x + 10, box.y + 14);
+    T(ctx, colors, 'label', { color: colors.blue }); ctx.fillText('— momentum (mu = 0.9)', box.x + 10, box.y + 30);
+
+    const gap = 100 * (rows['0.9'].acc_mean[2] - rows['0.0'].acc_mean[2]);
+    api.readout('rd', `${DS_LABEL[ds]}: L = 128 mean gap ${gap >= 0 ? '+' : ''}${gap.toFixed(1)} pts · best seed at L = 32: ${(100 * rows['0.0'].acc_max[1]).toFixed(2)}% vs ${(100 * rows['0.9'].acc_max[1]).toFixed(2)}%`);
+  },
+});
+</script>

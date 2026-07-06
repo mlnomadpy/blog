@@ -78,7 +78,7 @@ defineViz('dimbudget', {
     const pct = tot > 0 ? (100 * capt / tot) : 100;
     text(ctx, `${pct.toFixed(0)}%`, box.x + box.w / 2, box.y + box.h - 46, colors, { align: 'center', size: 30, color: colors.accent, weight: '700' });
     text(ctx, 'of the kernel captured', box.x + box.w / 2, box.y + box.h - 16, colors, { align: 'center', size: 10, color: colors.muted });
-    api.readout('rd', api.get('flat') ? `flat kernel · ${d}-D keeps ${pct.toFixed(0)}% (no dominant mode) · jax-js` : `structured · ${d}-D keeps ${pct.toFixed(0)}% · jax-js`);
+    api.readout('rd', api.get('flat') ? `flat kernel · ${d}-D keeps ${pct.toFixed(0)}% (no dominant mode)` : `structured · ${d}-D keeps ${pct.toFixed(0)}%`);
   },
 });
 </script>

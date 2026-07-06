@@ -130,7 +130,7 @@ defineViz('randomfeaturekernel', {
     ctx.fillStyle = muted; ctx.fillText(`${K_DRAWS} estimates + mean`, lx + 24, ly + 16);
 
     const rmse = Math.sqrt(sse / cnt);
-    api.readout('ro', `m ${m} · RMSE ${rmse.toFixed(rmse < 1 ? 3 : 2)}${neg ? ' · ⚠ went negative' : ' · stays ≥ 0'} · jax-js`);
+    api.readout('ro', `m ${m} · RMSE ${rmse.toFixed(rmse < 1 ? 3 : 2)}${neg ? ' · ⚠ went negative' : ' · stays ≥ 0'} · live`);
   },
 });
 </script>

@@ -41,7 +41,7 @@ import CiteAs from '../../components/CiteAs.astro';
 
 ## The layer, and what its rows are
 
-If teaching and forgetting are going to be array edits, the array has to be shaped for it: one prototype to a row, and nothing about a class smeared anywhere else. A Yat unit scores an input against a prototype $W_u$ with the kernel $(W_u^\top x + b)^2 / (\lVert x - W_u\rVert^2 + \varepsilon)$, a layer is a bank of them, and the readout lets each prototype vote for a class. The prototypes are the rows of `W`, each row's vote a row of the readout, and editing the network will turn out to be nothing more than editing those rows.
+If teaching and forgetting are going to be array edits, the array has to be shaped for it: one prototype to a row, and nothing about a class smeared anywhere else. A Yat unit scores an input against a prototype $W_u$ with the kernel $(W_u^\top x + b)^2 / (\lVert x - W_u\rVert^2 + \varepsilon)$, a layer is a bank of them, and the readout rows record which class each prototype speaks for. The prototypes are the rows of `W`, each row's class a row of `A`, and editing the network will turn out to be nothing more than editing those rows.
 
 ```python
 import jax, jax.numpy as jnp
@@ -49,10 +49,10 @@ from flax import nnx
 
 
 class YatEdit(nnx.Module):
-    """A bank of prototype rows W and their class votes A. No activation function."""
+    """A bank of prototype rows W and their class assignments A. No activation function."""
     def __init__(self, W, A, *, b=0.5, eps=0.05):
         self.W = nnx.Param(jnp.asarray(W))            # [K, 784]  prototype pictures
-        self.A = nnx.Param(jnp.asarray(A))            # [K, 10]   each row votes for a class
+        self.A = nnx.Param(jnp.asarray(A))            # [K, 10]   one-hot: row u's class
         self.b, self.eps = b, eps
 
     def kernel(self, x):                              # [n, K] resemblance of each input to each prototype
@@ -60,11 +60,13 @@ class YatEdit(nnx.Module):
         d2 = (x ** 2).sum(-1, keepdims=True) + (self.W.value ** 2).sum(-1) - 2 * dot
         return (dot + self.b) ** 2 / (d2 + self.eps)
 
-    def __call__(self, x):
-        return self.kernel(x) @ self.A.value          # kernel votes -> class scores
+    def __call__(self, x):                            # [n, 10] class scores
+        k = self.kernel(x)                            # [n, K]
+        per_class = jnp.where(self.A.value.T[None] > 0, k[:, None, :], -jnp.inf)
+        return per_class.max(-1)                      # nearest prototype within each class
 ```
 
-There is no `nnx.Linear`, no nonlinearity, and crucially no entanglement: prototype $u$ lives entirely in row $u$ of `W` and row $u$ of `A`. In symbols the forward pass is $s(x) = A^\top \phi(x)$ with $\phi(x) \in \mathbb{R}^K_{\ge 0}$ the kernel activations, and because the rows of $A$ are one-hot, the per-class score is a sum over only that class's units, $s_c(x) = \sum_{u\,:\,\text{class}(u)=c} \phi_u(x)$. Every edit below is a consequence of that sum: appending rows adds terms, masking rows removes them, and a term for class $c$ never appears in any other class's score.
+There is no `nnx.Linear`, no nonlinearity, and crucially no entanglement: prototype $u$ lives entirely in row $u$ of `W` and row $u$ of `A`. The decision rule is nearest-prototype within each class: class $c$ is scored by its best-matching row, $s_c(x) = \max_{u\,:\,\text{class}(u)=c} \phi_u(x)$, the `mode='max'` readout in `scripts/yat_editable_fmnist.py` and the rule behind every number in this post. The [explainer](/blog/edit-a-network-by-hand/) writes the same structure as a pure linear readout, $s(x) = A^\top \phi(x)$, a sum over each class's rows instead of a max; that view is worth keeping (it is what a linear layer can express, and it is where the field-superposition picture comes from), but it scores a few points lower, 68% against 79% at this scale. What every edit below actually rides on is shared by both readouts: class $c$'s score is computed from class $c$'s rows and no others, so appending rows extends one class and masking rows removes one, with zero cross-talk.
 
 ## Build it by hand
 
@@ -93,7 +95,7 @@ def build(classes, per=20):
 
 model = build(range(10))
 acc = float((jnp.argmax(model(jnp.asarray(Xte)), -1) == yte).mean())
-print("zero-training accuracy:", round(acc * 100, 1))  # ~79% with a nearest-prototype readout
+print("zero-training accuracy:", round(acc * 100, 1))  # 79.4
 ```
 
 The network classifies before any training, because it is a kernel machine from the first step. Geometrically, as the [explainer](/blog/edit-a-network-by-hand/) frames it, the kernel's $1/(\lVert x - W_u\rVert^2 + \varepsilon)$ is a softened inverse-square pull, so each prototype is a mass and classifying a point is letting it fall into the deepest basin it feels.
@@ -133,7 +135,7 @@ print("all 10:", round(float((jnp.argmax(eight(jnp.asarray(Xte)), -1) == yte).me
 print("from scratch:", round(float((jnp.argmax(build(range(10))(jnp.asarray(Xte)), -1) == yte).mean()) * 100, 1))  # 79.4
 ```
 
-The two classes it had never encountered are recognized at **95%** and **94%** the moment their rows are appended, and the classes it already knew barely move. The reason is one line of the algebra: the appended rows are one-hot at the new class $c$, so for every other class $c' \ne c$ their contribution to $s_{c'}$ is zero and $s_{c'}(x)$ is left exactly as it was, while $s_c(x) \mapsto s_c(x) + \sum_{u \in \text{new}} \phi_u(x)$ gains the new terms. Old-class scores are invariant under the `concatenate`. The headline is the last two lines: the network taught incrementally and the network built on all ten at once reach the **same 79.4%**, because $s_c$ is a sum and a sum does not remember the order its terms arrived in. There is no penalty for incrementality, and no rehearsal buffer in sight.
+The two classes it had never encountered are recognized at **95%** and **94%** the moment their rows are appended, and the classes it already knew barely move. The reason is one line of the algebra: the appended rows are one-hot at the new class $c$, so no other class's score ever reads them. For every $c' \ne c$, $s_{c'}(x)$ is still the max (or the sum) over exactly the rows it had before, unchanged, while $s_c(x)$ alone gains the new candidates. Old-class scores are invariant under the `concatenate`. The headline is the last two lines: the network taught incrementally and the network built on all ten at once reach the **same 79.4%**, because a max, like a sum, does not remember the order its arguments arrived in. There is no penalty for incrementality, and no rehearsal buffer in sight.
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/edit-teach.gif" alt="A 2D map of Fashion-MNIST where basins of attraction grow in one class at a time as their prototype masses fade into the landscape, with no training" loading="lazy" width="440" height="422" />
@@ -142,24 +144,33 @@ The two classes it had never encountered are recognized at **95%** and **94%** t
 
 ## Forgetting a class is a mask
 
-Unlearning is the same move in reverse. Find the rows that vote for the class, drop them. Because class $c$ lives only in the rows whose readout is one-hot at $c$, the deletion is exact.
+Unlearning is the same move in reverse. Find the rows assigned to the class, drop them. Because class $c$ lives only in the rows whose readout is one-hot at $c$, the deletion is exact, and this time we can hold the explainer to its promise: it said you could *diff the weights afterward to prove nothing else moved*, so snapshot them before the edit and check.
 
 ```python
 def forget_class(model, c):
-    keep = np.asarray(model.A.value.argmax(-1)) != c   # rows NOT voting for class c
+    keep = np.asarray(model.A.value.argmax(-1)) != c   # rows NOT assigned to class c
     model.W = nnx.Param(model.W.value[keep])
     model.A = nnx.Param(model.A.value[keep])
     return model
 
 m = build(range(10))
-others = [c for c in range(10) if c != 5]
-before = np.mean([recall(m, c) for c in others])
+others = np.isin(yte, [c for c in range(10) if c != 5])
+def acc_others(m):
+    return round(float((jnp.argmax(m(jnp.asarray(Xte[others])), -1) == yte[others]).mean()) * 100, 1)
+
+W0, A0 = np.asarray(m.W.value), np.asarray(m.A.value)  # snapshot before the edit
+before = acc_others(m)
+kept = A0.argmax(-1) != 5
 forget_class(m, 5)                                     # forget Sandal
+
 print("Sandal recall:", recall(m, 5))                  # 0
-print("other 9 recall:", round(before, 1), "->", round(np.mean([recall(m, c) for c in others]), 1))  # 81.1 -> 81.3
+print("other 9 classes:", before, "->", acc_others(m)) # 81.1 -> 81.3
+assert (np.asarray(m.W.value) == W0[kept]).all()       # surviving rows: bit-for-bit identical
+assert (np.asarray(m.A.value) == A0[kept]).all()
+print("weight diff over surviving rows:", float(np.abs(np.asarray(m.W.value) - W0[kept]).max()))  # 0.0
 ```
 
-Sandal recall goes to **0**: nothing in the network resembles a sandal anymore, so nothing can be labelled one. The other nine classes go from **81.1%** to **81.3%**, untouched, a hair better because the deleted rows are no longer around to occasionally steal a neighbour's test image. The forgetting is exact and the same identity proves it: for $c' \ne 5$, $s_{c'}(x) = \sum_{u \in c'} \phi_u(x)$ never indexed a Sandal row, so masking those rows out is a no-op on it, and every surviving entry of `W` and `A` is bit-for-bit identical to before. This is the line between exact unlearning and the approximate kind: not "we reduced its influence and hope," but "the rows are not in the matrix, check."
+Sandal recall goes to **0**: nothing in the network resembles a sandal anymore, so nothing can be labelled one. The other nine classes go from **81.1%** to **81.3%**, untouched, a hair better because the deleted rows are no longer around to occasionally steal a neighbour's test image. And the two asserts are the unlearning proof, delivered: every surviving row of `W` and `A` is equal, bit for bit, to the row it was before the edit, a weight diff of exactly `0.0`. The structural identity behind it: for $c' \ne 5$, $s_{c'}(x)$ is computed from class $c'$'s rows alone, whether you take their max or their sum, and never indexed a Sandal row, so masking those rows out is a no-op on it. This is the line between exact unlearning and the approximate kind: not "we reduced its influence and hope," but "the rows are not in the matrix, check."
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/edit-forget.gif" alt="A 2D map of Fashion-MNIST where the Sandal basin collapses as its prototype masses fade to zero and neighbouring basins flood in to reclaim the territory, the rest unchanged" loading="lazy" width="440" height="422" />

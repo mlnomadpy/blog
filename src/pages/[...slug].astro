@@ -3,11 +3,42 @@ import { getCollection, render } from 'astro:content';
 import readingTime from 'reading-time';
 import PostLayout from '../layouts/PostLayout.astro';
 import { postFilter, buildPairs, pairFor } from '../utils/posts';
+import { seriesForSlug } from '../data/series';
 
 export async function getStaticPaths() {
   const posts = (await getCollection('blog', postFilter))
     .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
   const pairs = buildPairs(posts);
+
+  // Series navigation. Series are declared over explainer slugs; a companion
+  // inherits its explainer's spot. Only visible (draft-filtered) posts count,
+  // so part numbers always match what is actually published.
+  const stripId = (s: string) => s.replace(/\.(md|mdx)$/, '');
+  const bySlug = new Map(posts.map((p) => [stripId(p.id), p]));
+  const seriesFor = (post: (typeof posts)[number]) => {
+    const id = stripId(post.id);
+    const pr = pairFor(post, pairs);
+    // Anchor = the explainer whose series position this page occupies.
+    const anchor = seriesForSlug(id) ? id
+      : pr?.role === 'companion' ? stripId(pr.other.id)
+      : undefined;
+    const def = anchor ? seriesForSlug(anchor) : undefined;
+    if (!def || !anchor) return undefined;
+    const visible = def.slugs.filter((s) => bySlug.has(s));
+    const part = visible.indexOf(anchor) + 1;
+    if (part === 0) return undefined;
+    return {
+      title: def.title,
+      part,
+      total: visible.length,
+      items: visible.map((s) => ({
+        slug: bySlug.get(s)!.id,
+        title: bySlug.get(s)!.data.title,
+        current: s === id,
+        explainerOfCurrent: s !== id && s === anchor,
+      })),
+    };
+  };
 
   return posts.map((post, i) => {
     // Score every other post by tag overlap with this one, then prefer the
@@ -46,12 +77,13 @@ export async function getStaticPaths() {
         prev: i < posts.length - 1 ? { slug: posts[i + 1].id, title: posts[i + 1].data.title } : undefined,
         related,
         pair,
+        series: seriesFor(post),
       },
     };
   });
 }
 
-const { post, prev, next, related, pair } = Astro.props;
+const { post, prev, next, related, pair, series } = Astro.props;
 const { Content } = await render(post);
 const stats = readingTime(post.body ?? '');
 ---
@@ -61,6 +93,7 @@ const stats = readingTime(post.body ?? '');
   description={post.data.seoDescription ?? post.data.description}
   draft={post.data.draft}
   pair={pair}
+  series={series}
   references={post.data.references}
   pubDate={post.data.pubDate}
   updatedDate={post.data.updatedDate}

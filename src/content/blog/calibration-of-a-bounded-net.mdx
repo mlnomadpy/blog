@@ -1,0 +1,141 @@
+---
+title: "When 80% Should Mean 80%"
+seoTitle: "When 80% Should Mean 80%: Calibrating a Kernel MLP"
+description: "A network hands you a probability with every answer, and the number is the part you act on. So when this series' bounded, self-explaining kernel network says 80%, is that a measurement or a mood? Five posts of evidence say it should be the honest one. This post puts that reputation through a lie-detector test, reliability diagrams, expected calibration error and temperature scaling against a matched ReLU MLP on Fashion-MNIST, and what the test found is the post."
+seoDescription: "Reliability diagrams, ECE and temperature scaling put a Yat-kernel MLP's confidence on trial against a ReLU MLP on Fashion-MNIST. The verdict is the post."
+pubDate: 2026-07-04
+draft: false
+tags: [ml, kernels, calibration, uncertainty, yat, prototypes, ood, deep-learning]
+references:
+  - authors: "Guo, C., Pleiss, G., Sun, Y., Weinberger, K. Q."
+    year: 2017
+    title: "On Calibration of Modern Neural Networks"
+    venue: "ICML 2017"
+    arxiv: "1706.04599"
+  - authors: "Naeini, M. P., Cooper, G. F., Hauskrecht, M."
+    year: 2015
+    title: "Obtaining Well Calibrated Probabilities Using Bayesian Binning"
+    venue: "AAAI 2015"
+  - authors: "Brier, G. W."
+    year: 1950
+    title: "Verification of Forecasts Expressed in Terms of Probability"
+    venue: "Monthly Weather Review 78, 1–3"
+  - authors: "Hendrycks, D., Gimpel, K."
+    year: 2017
+    title: "A Baseline for Detecting Misclassified and Out-of-Distribution Examples in Neural Networks"
+    venue: "ICLR 2017"
+    arxiv: "1610.02136"
+  - authors: "Liu, W., Wang, X., Owens, J., Li, Y."
+    year: 2020
+    title: "Energy-based Out-of-distribution Detection"
+    venue: "NeurIPS 2020"
+    arxiv: "2010.03759"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+keywords:
+  - neural network calibration
+  - expected calibration error
+  - reliability diagram
+  - temperature scaling
+  - softmax overconfidence
+  - out-of-distribution confidence
+  - Yat kernel
+  - prototype network calibration
+---
+import ReliabilityStaircase from '../../components/viz/ReliabilityStaircase.astro';
+import TemperatureDial from '../../components/viz/TemperatureDial.astro';
+import ConfidenceLedger from '../../components/viz/ConfidenceLedger.astro';
+import FieldVsSoftmax from '../../components/viz/FieldVsSoftmax.astro';
+import CostOfOverconfidence from '../../components/viz/CostOfOverconfidence.astro';
+
+A classifier never just answers. It hands you a number with the answer: *pullover, 99%*. And the number is the part you act on. Above 95%, ship it without review; below, send it to a human. The class name decides what the model thinks; the percentage decides what *you do*. So it is worth asking a question that sounds almost too naive to ask: when this network says 80%, is it right 80% of the time?
+
+For the network this series has been building, I expected the answer to be yes, and I would have bet on it. Five posts of evidence say the Yat-kernel MLP is the honest one: [every neuron is a picture you can read](/blog/your-neuron-is-a-picture/), every prediction decomposes into resemblances, and off its training distribution the kernel field goes quiet instead of extrapolating a confident guess. A network built from bounded, local similarity scores should surely also be the network whose probabilities you can trust.
+
+So I measured it. Same twins as before, trained the same way on Fashion-MNIST, with the same softmax head on both so that confidence means exactly the same thing for each; three seeds, and every number below is printed by `scripts/yat_calibration.py`.
+
+The bet loses. It loses in an instructive way, and the way it loses is this post.
+
+## The forecaster's test
+
+What does it even mean for 80% to be honest? Forget networks for a second and think of a weather forecaster. She says "80% chance of rain" on many different days. You cannot grade any single day; rain or no rain, 80% allowed for both. But collect *all* the days she said 80%, and now she is exposed: if it rained on 62 of those 100 days, her number was not a probability, it was a brag.
+
+That collect-and-check is the whole measurement. Sort a network's 10,000 test predictions into bins by claimed confidence, and for each bin compare the claim against the delivered accuracy. Plotted, that is a **reliability diagram**: honesty is the diagonal, and the vertical gap in each bin is the lie. Averaging the gaps, weighted by how many predictions live in each bin, gives one number, the **expected calibration error**:
+
+$$
+\mathrm{ECE} \;=\; \sum_{b=1}^{15} \frac{n_b}{N}\,\bigl|\,\mathrm{acc}(b) - \mathrm{conf}(b)\,\bigr|,
+$$
+
+with 15 equal-width confidence bins here, following the standard recipe (Naeini et al., 2015; Guo et al., 2017). The two forecasters taking the test are the twins from the earlier posts, a one-hidden-layer Yat MLP, $784 \to 50 \to 10$, prototypes seeded from training images, against a ReLU MLP of the same shape, and to keep the test fair, *confidence* is read identically from both: take the ten class scores the final linear layer produces, softmax them, report the largest probability. Only the layer underneath differs.
+
+And before the diagram loads, let the series make its prediction out loud. Bounded wells, local similarity scores, a field that hushes on anything foreign: everything in five posts says the Yat staircase should hug the diagonal while the black box sags below it. Both networks are binned live from their actual test logits. Hover any bin: it tells you how many predictions it holds, what they claimed, and what they delivered.
+
+<ReliabilityStaircase caption="Reliability diagrams for the Yat MLP (left) and the matched ReLU MLP (right), computed live from 4000 exported test logits of the seed-0 run: softmax, take the max, drop into 15 equal-width bins. The bar is delivered accuracy, the tick is claimed confidence, and the shaded strip between them is the overconfidence gap. The dashed diagonal is a perfectly honest forecaster." />
+
+Here is how the bet loses, and it is not close. The ReLU MLP, the black box this series keeps beating up, walks the diagonal: ECE **1.76% ± 0.22** across seeds. The Yat MLP sags below it almost everywhere: ECE **6.20% ± 1.13**, between three and four times worse. In the seed-0 run, take the bin of predictions where the Yat net claimed 83% on average. It was right **66.2%** of the time. The ReLU net's same bin claims 83.5% and delivers 82.3%.
+
+The interpretable network, the one whose every activation you can trace to a picture, is the one whose confidence lies. The proper scoring rules agree and are not close: negative log-likelihood 0.577 vs 0.360, Brier score 0.244 vs 0.181, means over three seeds (the Yat net also gives up accuracy here, 84.3% ± 0.6 vs 87.5% ± 0.2 on the full test set, consistent with [C1's](/blog/your-neuron-is-a-picture/) gap). Legibility bought us nothing at the softmax. Why?
+
+## Why the bounded net brags
+
+The clue is in how big the numbers under the softmax are. A Yat unit is a kernel against a prototype, and near its prototype the score is enormous: on its own test data, the median strongest match is around **207** in the seed-0 run. The linear readout inherits that dynamic range wholesale. The median *top logit* of the Yat net on test images is **28.9**. The ReLU net's is **7.2**.
+
+And the softmax does not read logits; it reads *gaps* between logits, exponentiated. A lead of a few units already pins the winner near probability one, so a network whose features naturally produce leads of ten or twenty units lives in the saturated zone of the softmax, where every answer comes out sounding certain. In the seed-0 run, **56.8%** of the Yat net's test predictions carry a confidence above 0.99 (the ReLU net: 47.8%), while its actual accuracy is 83.7%. Nothing in training pushes back: cross-entropy is perfectly happy with saturated confidence on the examples it gets right, and it gets the training examples right.
+
+So the overconfidence is not a moral failure of the kernel; it is a unit mismatch. The kernel speaks in similarities that range over orders of magnitude, and we piped those raw units into a function that treats a gap of 20 as metaphysical certainty. Which suggests the fix should be embarrassingly simple: rescale.
+
+## One knob, fit on data the training never saw
+
+If the failure is a unit mismatch, one unit conversion should fix it. That is temperature scaling (Guo et al., 2017), the bluntest instrument in the calibration toolbox: divide every logit by a single scalar $T$ before the softmax, $p = \mathrm{softmax}(z/T)$, and choose $T$ on a held-out split (5,000 training images the optimizer never saw) by minimizing NLL. $T$ does not change the argmax, so accuracy is untouched; it only changes how loudly the network states what it already decided. $T > 1$ means the raw network was overconfident and needed softening.
+
+That gives our question its sharpest form, and it is the question I originally wanted this post to answer: *does the prototype network at least need less correction?* Is its dishonesty shallower, $T$ closer to 1?
+
+<TemperatureDial caption="Both reliability curves recomputed live from the exported logits as you turn one dial: every logit is divided by T, re-softmaxed, re-binned. The buttons snap to each net's fitted temperature, the T that minimized held-out NLL in scripts/yat_calibration.py. Watch which curve needs the bigger turn to reach the diagonal, and what happens to the other curve when it gets it." />
+
+No. The opposite, decisively. The ReLU net's fitted temperature is **1.17 ± 0.02** across seeds, a nudge. The Yat net needs **1.68 ± 0.29**, and on seed 0 fully **2.07**: its claims have to be softened twice over before they mean anything. Worse, the correction does not close the gap. After scaling, the ReLU net sits at ECE **0.82%**; the Yat net improves to **3.11%** and stays three to four times worse, because its miscalibration is not pure scale. Its reliability curve is *bent*, overconfident in the middle bins and mildly underconfident at the very top, and no single knob unbends a curve. Notice also the spread: the Yat net's temperature swings from 1.37 to 2.07 across three seeds, while the ReLU net's barely moves. Even its dishonesty is inconsistent.
+
+Verdict, in-distribution, stated plainly so there is no doubt about what the experiment said: **the bounded kernel does not buy calibrated probabilities.** Calibration lives in the probability head, and both networks have the same head; the Yat layer just feeds it wilder numbers.
+
+## Off the diet
+
+But C1 made its "knows when it doesn't know" case off-distribution, so before conceding the story, feed both networks something neither has ever seen: MNIST digits, handwriting shown to a garment classifier. Every answer is now meaningless, so every confident answer is a lie. Who lies?
+
+<ConfidenceLedger caption="Max-confidence histograms computed live from the exported logits: each net's claims on 4000 Fashion-MNIST test images (filled) against 2000 MNIST digits it has never seen (outlined step). The dashed line marks 90% confidence. In distribution both nets pile against the right wall; off distribution the question is how much of the pile refuses to move." />
+
+Here the Yat net finally behaves more like the C1 story: in the histograms above its median claim on digits drops to **0.45** (the ReLU net's: 0.65), and averaged over seeds it calls a digit with more than 90% confidence **12.5%** of the time against the ReLU net's **21.2%**. Saner, clearly. But honesty about the honesty: it is *saner, not silent*, and it is fragile. On seed 2 the Yat net's above-90% rate on digits is 22.6%, as bad as a typical ReLU run. A net that abstained would put nearly nothing past that line; this one merely puts less, on average, with a bad day in three.
+
+That looks like a retreat from C1's near-clean separation, until you notice what C1 actually measured. It never asked the softmax anything. It read the **kernel scores themselves** and thresholded their maximum. Different number. Very different number.
+
+## The number the softmax throws away
+
+Softmax has a blind spot, and it is exactly where the Yat net keeps its honesty. Add the same constant to every logit and the softmax does not move: $\mathrm{softmax}(z + c) = \mathrm{softmax}(z)$. Scale all the scores down together and the output barely changes. The softmax is a *contrast* reader; absolute level is invisible to it.
+
+But absolute level is precisely how a bounded kernel says "I recognize nothing here." Off-distribution, the input sits far from every prototype, every well in the field is shallow, and all ten class scores sink *together*, which is the one movement the softmax is built to ignore. In the seed-0 run, the Yat net's strongest kernel match has median **207** on Fashion test images and **27** on MNIST digits. The field screams that the digits are foreign, at a volume the probability head structurally cannot hear, because normalization deleted the signal before the probability was born.
+
+So ask the same network the same question twice, once before the softmax and once after:
+
+<FieldVsSoftmax caption="One Yat net, two readings of the same forward pass, computed live from the exported runs. Top: the raw field magnitude, the strongest kernel match, on a log axis. Bottom: the softmax confidence built from those same scores. The gate keeps a chosen fraction of Fashion and the label reports how much MNIST slips past it in each channel; the AUROC in each corner is the channel's overall Fashion-vs-MNIST separation. Switch the training seed: the softmax channel's separation swings between 0.81 and 0.92 run to run, the field channel holds between 0.90 and 0.92 every time." />
+
+Across the three seeds, the field magnitude separates Fashion from MNIST at AUROC **0.916 ± 0.008**. Before the field takes a bow, the literature demands a check, because reading pre-softmax magnitude helps the ReLU net too: its max logit separates the same two datasets at AUROC **0.935 ± 0.005**, a touch better, the well-known max-logit and energy-score effect (Hendrycks and Gimpel, 2017; Liu et al., 2020). Magnitude as an OOD signal is not the kernel's invention, and the numbers will not let this post pretend it is.
+
+So what did the field actually win? Two different contests, and they should not be blurred into one. Within the Yat net, the contest is the field against its own softmax, and there the field wins on the property a deployed rule needs most: stability. The softmax channel manages **0.882 ± 0.051**, sometimes fine, sometimes (seed 2, 0.810) barely better than the ReLU baseline; the field holds 0.916 ± 0.008 through every retraining (on seed 0 the two roughly tie, but the field never has the bad day). Across nets, the contest is the field against the max logit, and the field's edge is not the third decimal of AUROC. It is that a kernel's magnitude has a *meaning* you can state before running any OOD benchmark: the top match is a resemblance to a specific stored picture, so a score of 207 means "about as close to a prototype as training data usually is" and a score of 27 means "in the empty space between wells". A ReLU logit's scale is an accident of that run's weights, a number you calibrate a benchmark to discover; a kernel score of 27 versus a typical 200 is a sentence you can say out loud. That is C1's abstention rule, now with its error bars measured: a narrower crown than I set out to award, and a real one.
+
+## What a lying number costs
+
+Does any of this matter, or is ECE an aesthetic complaint? Make the number do its actual job: gate a decision. Answer only when confidence clears a threshold, abstain otherwise, which turns each network into a selective classifier with a coverage-versus-error tradeoff.
+
+<CostOfOverconfidence caption="Selective prediction, computed live from the exported test logits: each curve traces coverage against error among kept answers as the confidence threshold sweeps; the dots mark your current gate. The legend also reports how many MNIST digits, none of which deserve an answer, clear the same gate. Move the threshold and watch the two halves of the verdict trade places." />
+
+Set the gate at 90% and the split verdict of this whole post is sitting in one legend (the panel bins its live subsample, so its legend lands within a point of the full-run numbers here). On the full test set the ReLU net keeps answering on 69% of Fashion inputs and is wrong on only **2.7%** of those answers; the Yat net keeps 74% but errs on **7.9%** of them, because its 90%-club is full of members who bragged their way in. In distribution, the ReLU net's confidence is the better gatekeeper, exactly as the reliability diagram promised. But hold the same gate up to MNIST and it inverts: **21.1%** of digits walk straight past the ReLU net's 90% gate, versus **6.3%** past the Yat net's. One network lies to you about things it half-knows; the other lies about things it has never seen. Which lie is expensive depends on what walks into your deployment, and that is not a rhetorical flourish, it is the actual operating decision these curves let you make.
+
+## The verdict
+
+I wanted this post to crown the Yat net twice, and the data said no. So here is the honest scoreboard from `scripts/yat_calibration.py`, three seeds, nothing cherry-picked. In-distribution calibration: the ReLU net wins outright, ECE 1.76% against 6.20%, temperature 1.17 against 1.68, and it stays ahead after both are corrected. The kernel's huge dynamic range, the very thing that makes its activations mean something, saturates the softmax and makes the raw probabilities *worse*. Off-distribution: the Yat net's softmax is meaningfully saner but only fragilely so, while the signal C1 celebrated turns out to live where softmax cannot see it, in the absolute magnitude of the field, steady at AUROC 0.92 ± 0.01 across every retraining while the softmax channel wobbles.
+
+The lesson is sharper than the one I went looking for. Calibration is a property of the probability head, not of the feature geometry; you do not get honest percentages by making honest features, and a softmax bolted onto a kernel will happily launder similarity scores into false certainty. If you deploy this network, the recipe follows directly: temperature-scale it (it needs the correction more than the black box does), and route the "is this even my world?" question around the softmax entirely, to the field magnitude that was never normalized. A trustworthy number turned out to need two instruments, a thermometer and a seismograph, and the mistake this post cured me of was asking one of them to be both.
+
+---
+
+*Calibration of modern networks and temperature scaling are [Guo et al. (2017)](https://arxiv.org/abs/1706.04599); the binned ECE is [Naeini et al. (2015)](https://ojs.aaai.org/index.php/AAAI/article/view/9602); the Brier score is [Brier (1950)](https://journals.ametsoc.org/view/journals/mwre/78/1/1520-0493_1950_078_0001_vofeit_2_0_co_2.xml); max-softmax and energy/logit OOD scores are [Hendrycks and Gimpel (2017)](https://arxiv.org/abs/1610.02136) and [Liu et al. (2020)](https://arxiv.org/abs/2010.03759); the Yat kernel is [Bouhsine (2026)](https://arxiv.org/abs/2605.03262). The abstention story this post quantifies is [Your Neuron Is a Picture](/blog/your-neuron-is-a-picture/). Every number is printed by `scripts/yat_calibration.py`.*

@@ -1,0 +1,128 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 340 } = Astro.props;
+---
+<figure class="viz vocabwall" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The combinatorial wall. X counts nameable detectors on a log scale; the curve
+// is measured test accuracy as the hand-built vocabulary grows (7 -> 40 names,
+// each point a full constructed network from scripts/handbuilt_depth.py). Beyond
+// the curve, dashed markers show the 224 possible pairwise types and the ~4,630
+// three-way types, while the fully trained 85.7% floats above the whole curve.
+import { defineViz } from './engine/vizkit.js';
+import { loadDepth } from './depthfeat.js';
+import { gate, loadingText, T, dot } from './engine/draw.js';
+import { localPoint, hitTest } from './engine/pointer.js';
+
+defineViz('vocabwall', {
+  title: 'Names explode, accuracy stands still',
+  height: 340,
+  controls: [{ type: 'readout', name: 'rd' }],
+
+  setup(api) {
+    api.state.hover = -1;
+    gate(api, loadDepth, (api, d) => { api.state.d = d; bind(api); });
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    if (!st.ready) { loadingText(api); return; }
+    const d = st.d, curve = d.vocab.curve, BLU = colors.blue, ACC = colors.accent;
+    const pairs = d.vocab.pairsPossible + 7, triples = d.vocab.triplesPossible;
+
+    const pad = 16, top = 30, bot = 34, left = 46, right = 16;
+    const bx = { x: left, y: top, w: W - left - right, h: H - top - bot };
+    const lgLo = Math.log10(6), lgHi = Math.log10(8000);
+    const sx = (n) => bx.x + ((Math.log10(n) - lgLo) / (lgHi - lgLo)) * bx.w;
+    const yLo = 74, yHi = 88;
+    const sy = (a) => bx.y + bx.h - ((a - yLo) / (yHi - yLo)) * bx.h;
+
+    T(ctx, colors, 'label'); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('accuracy vs how many named detectors the hand-built network has (log scale)', pad, 17);
+
+    // frame + ticks
+    ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.strokeRect(bx.x + 0.5, bx.y + 0.5, bx.w - 1, bx.h - 1);
+    for (const t of [76, 80, 84, 88]) {
+      ctx.strokeStyle = colors.border; ctx.globalAlpha = 0.4;
+      ctx.beginPath(); ctx.moveTo(bx.x, sy(t)); ctx.lineTo(bx.x + bx.w, sy(t)); ctx.stroke(); ctx.globalAlpha = 1;
+      T(ctx, colors, 'small', { align: 'right', baseline: 'middle', color: colors.faint });
+      ctx.fillText(t + '%', bx.x - 5, sy(t));
+    }
+    for (const n of [10, 100, 1000]) {
+      T(ctx, colors, 'small', { align: 'center', baseline: 'top', color: colors.faint });
+      ctx.fillText(String(n), sx(n), bx.y + bx.h + 5);
+    }
+    T(ctx, colors, 'small', { align: 'center', baseline: 'top', color: colors.faint });
+    ctx.fillText('named detectors', bx.x + bx.w / 2, bx.y + bx.h + 18);
+
+    // shaded "beyond curation" zone from the last measured point outward
+    const lastN = curve[curve.length - 1].names;
+    ctx.fillStyle = colors.border; ctx.globalAlpha = 0.18;
+    ctx.fillRect(sx(lastN), bx.y, bx.x + bx.w - sx(lastN), bx.h); ctx.globalAlpha = 1;
+
+    // fully-trained reference line
+    ctx.strokeStyle = ACC; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(bx.x, sy(d.ladder.trainedHead)); ctx.lineTo(bx.x + bx.w, sy(d.ladder.trainedHead)); ctx.stroke(); ctx.setLineDash([]);
+    T(ctx, colors, 'small', { align: 'left', baseline: 'bottom', color: ACC });
+    ctx.fillText(`fully trained network: ${d.ladder.trainedHead}%`, bx.x + 8, sy(d.ladder.trainedHead) - 3);
+
+    // the two wall markers
+    for (const [n, label] of [[pairs, `all ${d.vocab.pairsPossible} pairwise types, named`], [triples, `all 3-way types: ~${triples.toLocaleString('en-US')}`]]) {
+      ctx.strokeStyle = colors.muted; ctx.setLineDash([2, 3]); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(sx(n), bx.y + 4); ctx.lineTo(sx(n), bx.y + bx.h); ctx.stroke(); ctx.setLineDash([]);
+      ctx.save();
+      ctx.translate(sx(n) - 4, bx.y + 10); ctx.rotate(Math.PI / 2);
+      T(ctx, colors, 'small', { align: 'left', baseline: 'middle', color: colors.muted });
+      ctx.fillText(label, 0, 0);
+      ctx.restore();
+    }
+
+    // the measured curve
+    ctx.strokeStyle = BLU; ctx.lineWidth = 2; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    curve.forEach((p, i) => { const x = sx(p.names), y = sy(p.acc); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+    ctx.stroke();
+    st._hits = [];
+    curve.forEach((p, i) => {
+      const x = sx(p.names), y = sy(p.acc), focus = st.hover < 0 || st.hover === i;
+      ctx.globalAlpha = focus ? 1 : 0.45;
+      dot(ctx, x, y, st.hover === i ? 5.5 : 4, BLU);
+      if (i === 0) { ctx.strokeStyle = colors.fg; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.arc(x, y, 7, 0, 6.283); ctx.stroke(); }
+      const below = i > 0 && i % 2 === 0;   // stagger the clustered labels
+      T(ctx, colors, 'small', { align: 'center', baseline: below ? 'top' : 'bottom', color: focus ? colors.fg : colors.faint });
+      ctx.fillText(p.acc.toFixed(1), x, below ? y + 8 : y - 8);
+      ctx.globalAlpha = 1;
+      st._hits.push({ x: x - 12, y: y - 20, w: 24, h: 34, i });
+    });
+    T(ctx, colors, 'small', { align: 'left', baseline: 'top', color: colors.muted });
+    ctx.fillText('layer 1: 7 names', sx(7) - 4, sy(curve[0].acc) + 10);
+
+    api.readout('rd', st.hover < 0
+      ? `hand-curated growth: 7 to ${lastN} names moved accuracy by ${(Math.max(...curve.map(p => p.acc)) - curve[0].acc).toFixed(1)} at best; the nameable space keeps going to ~${triples.toLocaleString('en-US')}`
+      : hitText(curve[st.hover]));
+  },
+});
+
+function hitText(p) {
+  return `${p.stage}: ${p.names} named detector types, ${p.dims} dimensions, ${p.acc}% test accuracy`;
+}
+
+function bind(api) {
+  if (api.canvas.dataset.vwBound) return; api.canvas.dataset.vwBound = '1';
+  api.canvas.addEventListener('pointermove', (e) => {
+    const st = api.state; if (!st || !st._hits) return;
+    const h = hitTest(localPoint(api.canvas, e), st._hits);
+    const i = h < 0 ? -1 : st._hits[h].i;
+    if (i !== st.hover) { st.hover = i; api.render(); }
+  });
+  api.canvas.addEventListener('pointerleave', () => { if (api.state) { api.state.hover = -1; api.render(); } });
+}
+</script>

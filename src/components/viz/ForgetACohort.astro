@@ -1,0 +1,116 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 430 } = Astro.props;
+---
+<figure class="viz forgetcohort" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Right-to-be-forgotten, made auditable. Delete the prototypes a cohort relies on
+// and every patient's risk changes by the exact closed form h -> h - a_u phi_u(x),
+// no retraining. The change lands where the kernel says it should: on the patients
+// who actually resembled the deleted prototypes. Each patient is a bar; deleting
+// the prototypes sweeps the bars, and the histogram shows the cohort moves while
+// the rest barely does. Data: scripts/yat_deepsurv.py -> edit.json.
+import { defineViz } from './engine/vizkit.js';
+import { gate, loadingText, axes, frame, T as Ty, fmt } from './engine/draw.js';
+
+defineViz('forgetcohort', {
+  title: 'Forget a cohort. Watch who moves.',
+  height: 430,
+  controls: [
+    { type: 'toggle', name: 'deleted', label: 'delete the prototypes', value: false },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    gate(api, () => import('./deepsurv.js').then((m) => m.loadEdit()), (api, d) => {
+      api.state.d = d;
+      // sort patients by risk-before for a stable ordering
+      const idx = Array.from({ length: d.risk_before.length }, (_, i) => i);
+      idx.sort((a, b) => d.risk_before[a] - d.risk_before[b]);
+      api.state.order = idx;
+    });
+  },
+
+  onControl(name, value, api) { api.tween('mix', api.get('deleted') ? 1 : 0, 500); api.render(); },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    if (!st.ready) { loadingText(api); return; }
+    const d = st.d;
+    const mix = api.tween('mix', api.get('deleted') ? 1 : 0, 500);
+    const N = d.risk_before.length;
+
+    const pad = 16, top = 30, bottom = 40;
+    // top strip: per-patient risk, ordered; bottom: the change histogram
+    const stripH = (H - top - bottom) * 0.5, gap = 30;
+    const bx = pad, by = top, bw = W - 2 * pad;
+
+    // risk range
+    const all = d.risk_before.concat(d.risk_after);
+    const rlo = Math.min(...all), rhi = Math.max(...all);
+    frame(ctx, colors, bx, by, bw, stripH);
+    Ty(ctx, colors, 'label', { weight: 'b' });
+    ctx.fillText('every held-out patient, ordered by risk', bx, by - 12);
+    const bwidth = bw / N;
+    st.order.forEach((i, k) => {
+      const r = d.risk_before[i] * (1 - mix) + d.risk_after[i] * mix;
+      const t = (r - rlo) / (rhi - rlo + 1e-9);
+      const cohort = d.cohort_mask[i] === 1;
+      const x = bx + k * bwidth;
+      const barH = t * stripH;
+      ctx.fillStyle = cohort ? colors.accent : colors.blue;
+      ctx.globalAlpha = cohort ? 0.85 : 0.45;
+      ctx.fillRect(x, by + stripH - barH, Math.max(0.6, bwidth - 0.3), barH);
+      ctx.globalAlpha = 1;
+    });
+    Ty(ctx, colors, 'small', { color: colors.accent });
+    ctx.fillText(`■ cohort (n=${d.cohort_idx.length})`, bx, by + stripH + 12);
+    Ty(ctx, colors, 'small', { color: colors.blue });
+    ctx.fillText('■ everyone else', bx + 130, by + stripH + 12);
+
+    // bottom: histogram of |delta log-risk|, cohort vs rest
+    const hy = by + stripH + gap + 10, hh = H - hy - bottom;
+    const deltas = d.delta.map(Math.abs);
+    const dmax = Math.max(...deltas);
+    const NB = 22;
+    const cohortHist = new Array(NB).fill(0), restHist = new Array(NB).fill(0);
+    for (let i = 0; i < N; i++) {
+      const b = Math.min(NB - 1, Math.floor((deltas[i] / (dmax + 1e-9)) * NB));
+      if (d.cohort_mask[i] === 1) cohortHist[b]++; else restHist[b]++;
+    }
+    const A = axes(ctx, { x: bx, y: hy, w: bw, h: hh }, {
+      xMin: 0, xMax: dmax, yMin: 0, yMax: Math.max(...restHist, ...cohortHist),
+      xTicks: [0, dmax / 2, dmax], yTicks: [], fmtX: (v) => v.toFixed(1), border: true,
+    }, colors);
+    Ty(ctx, colors, 'label', { weight: 'b' });
+    ctx.fillText('how much each patient moved  |Δ log-risk|', bx, hy - 12);
+    const hbw = bw / NB;
+    const yMaxH = Math.max(...restHist, ...cohortHist);
+    for (let b = 0; b < NB; b++) {
+      const x = bx + b * hbw;
+      const rH = (restHist[b] / (yMaxH + 1e-9)) * hh, cH = (cohortHist[b] / (yMaxH + 1e-9)) * hh;
+      ctx.fillStyle = colors.blue; ctx.globalAlpha = 0.5;
+      ctx.fillRect(x + 0.5, hy + hh - rH, hbw - 1, rH);
+      ctx.fillStyle = colors.accent; ctx.globalAlpha = 0.85;
+      ctx.fillRect(x + 0.5, hy + hh - rH - cH, hbw - 1, cH);
+      ctx.globalAlpha = 1;
+    }
+    Ty(ctx, colors, 'small', { align: 'center', color: colors.muted });
+    ctx.fillText('the change is the exact closed form  Δh = − a_u φ_u(x)', bx + bw / 2, hy + hh + 26);
+
+    if (mix < 0.02) {
+      api.readout('rd', `${d.cohort_idx.length} patients are built around prototype #${d.delete_protos.join(', #')}. Toggle to delete it; the risk model updates with no retraining.`);
+    } else {
+      api.readout('rd', `deleted prototype #${d.delete_protos.join(', #')}: its cohort moved by ${fmt(d.cohort_mean_abs_delta, 2)} on average, everyone else by ${fmt(d.untouched_mean_abs_delta, 2)}. The effect is concentrated on the patients who resembled it.`);
+    }
+  },
+});
+</script>

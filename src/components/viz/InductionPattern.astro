@@ -105,7 +105,7 @@ defineViz('inductionpattern', {
 
     text(ctx, 'query “b” matches positions whose previous token is “b”, then copies what came next, the induction stripe one step below the diagonal',
       box.x + 14, box.y + box.h - 14, colors, { size: 10, mono: true, color: colors.muted });
-    api.readout('rd', `position ${qi} “${SEQ[qi]}” → predict “${VOCAB[pred[qi]]}” · jax-js`);
+    api.readout('rd', `position ${qi} “${SEQ[qi]}” → predict “${VOCAB[pred[qi]]}” · live`);
   },
 });
 </script>

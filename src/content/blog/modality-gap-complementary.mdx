@@ -1,5 +1,6 @@
 ---
 title: 'Separate or Represent: The Modality Gap Is a Choice, Not a Bug'
+seoTitle: 'Separate or Represent: The Modality Gap Is a Choice'
 description: 'A latent space can separate concepts or represent them, never both at once, and the modality gap is just the readout of which one you chose. Every figure here is a live in-browser simulation: watch contrastive training discard within-class detail, pry two modalities into separate cones, and decide which job your space is really for, separate or represent, classify or retrieve.'
 seoDescription: "A latent space can separate concepts or represent them, not both, and the modality gap is the readout of which you chose. Separate or represent, with live viz."
 pubDate: 2026-05-30
@@ -60,7 +61,7 @@ import CiteAs from '../../components/CiteAs.astro';
 
 *What is your latent space actually for, and a page of live, in-browser simulations that show why the question decides everything. Every plot below is real gradient descent running in your browser, not a recording.*
 
-<ModalityGapLive caption="The whole puzzle in one widget. Two modalities of the same signal, two encoders started from the same place, so at step 0 they overlap and there is no gap. Hit train: a SigLIP contrastive objective pries them into two separated cones and the modality gap shoots open (watch the sparkline). Colour is the modality, shape is the class (○ / ✕). By the end of this post the gap is not a bug to fix, it is the signature of having asked the space to separate. We will build up to exactly why." />
+<ModalityGapLive caption="The whole puzzle in one widget. Two modalities of the same signal, two encoders started from the same place, so at step 0 they overlap and there is no gap. Hit train: a SigLIP contrastive objective pries them into two separated cones and the modality gap shoots open (watch the sparkline). Colour is the modality, shape is the class (○ / ✕). Nothing in this loss says 'push the modalities apart', so why do they fly apart, and should you care? Hold that question; the post builds to it." />
 
 You have two modalities of the same thing, a waveform and its spectrogram, an
 image and its caption, a scan and its report, and you want one space that holds
@@ -100,31 +101,17 @@ These are not two ends of a dial you can set halfway. The information you discar
 to separate cleanly is exactly the information you need to represent faithfully.
 A space optimized to forget cannot also remember. You pick one.
 
-## Classify or retrieve
-
-Here is the same axis in the words of someone deciding what to *do* with a vector
-database. You will use the space for one of two things.
-
-**Classification** is separation. You want the category, and you want it robust to
-everything that isn't the category. The latent space earns its keep by discarding
-exactly the variation that would make the boundary fuzzy. Forgetting is the
-feature.
-
-**Retrieval** is representation. You want to find *this* item, the one record
-that differs from its neighbours in the way that matters. That means keeping the
-fine, within-category detail that classification is paid to destroy. Two
-documents in the same class, two faces of the same person, two X-rays of the same
-condition: a classifier wants them identical; retrieval needs them distinct.
-
-The trap is that one word, *retrieval*, hides both jobs. CLIP-style cross-modal
-**matching**, "find the caption that goes with this image", is not really
-retrieval in the representing sense. It is classification wearing a retrieval
-costume: you only ever wanted the shared concept, so discarding everything else is
-fine, and contrastive is exactly right. But the moment retrieval means
-*discriminate within a concept*, rank the near-duplicates, find the one that's
-subtly different, you are representing, and a separating space has already thrown
-away the only information that could rank them. Same nominal task, opposite sides
-of the axis.
+The trap, on the day you have to ship something, say pick the embedding model
+for a vector database, is that task names hide which one you picked, and
+*retrieval* is the worst offender, because the one word covers both jobs.
+CLIP-style cross-modal **matching**, "find the caption that goes with this
+image", is not really retrieval in the representing sense. It is classification
+wearing a retrieval costume: you only ever wanted the shared concept, so
+discarding everything else is fine, and contrastive is exactly right. But the
+moment retrieval means *discriminate within a concept*, rank the near-duplicates,
+find the one that's subtly different, you are representing, and a separating
+space has already thrown away the only information that could rank them. Same
+nominal task, opposite sides of the axis.
 
 So the deciding question is never the modality, and never even the task name. It
 is the job: separate or represent.
@@ -155,7 +142,9 @@ class (the separable slice) and recover $t$ (the representable whole).
 The widget below *is* the experiment. It generates the four distributions once,
 computes the representing space in closed form, and trains the separating space by
 **real gradient descent, Adam on a SigLIP loss, the gradients hand-derived and
-checked against finite differences, live, no server**. Hit train and watch the
+checked against finite differences, live, no server**
+([`toy.py`](https://github.com/mlnomadpy/blog/tree/master/scripts/jax-modality-gap)
+is the reference JAX run these numbers come from). Hit train and watch the
 separating space tighten each class to a point (recover-t R² → 0) while the
 representing space keeps its spread (R² ≈ 0.97). Both still **classify** at 100%,
 that is the one job a separating space is built for. Flip the colour control to
@@ -179,49 +168,59 @@ up mostly aligned by class, only mildly apart. The famous *gap*, two modalities
 flung into separate cones, is a second thing the same objective can do, and to
 see it open in full we have to change the regime.
 
-## Contrastive is separation in multimodal clothing
+## Was that the toy, or the loss?
 
-This generalizes past the toy. **Contrastive learning is a classifier over pairs.**
-Pull matched together, push mismatched apart: formally it maximizes a bound on the
-mutual information between the modalities, $I(X_1; X_2)$, so it keeps only what the
-two views *agree* on and treats everything else as ambiguity to discard. It builds
-a space that separates. **Joint reconstruction**, a masked or denoising
-autoencoder over both modalities, has to model the joint $p(x, y)$: what the
-views share, what each carries alone, and the structure that only appears when you
-line them up. It cannot drop the ambiguous parts, because it has to put them back.
-It builds a space that represents.
+Before changing the regime, though, a fair doubt: how much of that collapse was
+an artifact of my four little blobs? None of it, because **contrastive learning
+is a classifier over pairs.** Pull matched together, push mismatched apart:
+formally it maximizes a bound on the mutual information between the modalities,
+$I(X_1; X_2)$, so whatever the dataset, it keeps only what the two views *agree*
+on and treats everything else as ambiguity to discard. **Joint reconstruction**,
+a masked or denoising autoencoder over both modalities, has to model the joint
+$p(x, y)$, including what each view carries alone, because it has to put all of
+it back. One objective separates and the other represents by construction; the
+toy just made the difference visible in two dimensions.
 
-The clean way to name the pieces is Partial Information Decomposition
-([Liang et al., 2023](https://arxiv.org/abs/2302.12247)). The information two
-modalities carry splits into three parts, not one: **redundancy** (what either
-view alone tells you, the part both agree on), **uniqueness** (what only one
-tells you), and **synergy** (what neither tells you alone, only the two together).
-A separating objective keeps redundancy and is blind to uniqueness and synergy,
-because those two are exactly the information that creates ambiguity at the
-agreement boundary. In the toy, the class is redundancy and $t$ is uniqueness,
-and you watched the separating space keep the first and destroy the second.
+## What opens the gap?
 
-## The gap is the signature of a separating space
+Opening the gap in full takes one ingredient the linear toy lacked: **depth**.
+Swap the single linear projector for **two small ReLU towers**, a couple of
+layers each, enough room for the
+[cone effect](/blog/welch-bound-good-latent-space/) to appear (that post has the
+demo: even a random, untrained network bunches its normalized outputs into a
+narrow angular wedge). Keep everything else: the same two-class, two-modality
+signal, SigLIP, and, the key move, **both towers start from the same
+initialization**, so at step 0 the two clouds sit exactly on top of each other.
+There is no gap to close, because there is none.
 
-Opening the gap in full takes two ingredients the linear toy lacked. Swap the
-single linear projector for **two small ReLU towers** (a couple of layers each,
-depth is what gives the "cone effect" room to appear), and use a **sharper
-temperature**. Keep everything else: the same two-class, two-modality signal,
-SigLIP, and, the key move, **both towers start from the same initialization**,
-so at step 0 the two clouds sit on top of each other. There is no gap to close,
-because there is none.
+That configuration is exactly the widget that opened this post, so here it is
+again, where the story can finally pay it off. Its sparkline tracks the two
+numbers that carry everything: the **gap** (the distance between the two
+modalities' mean embeddings) and the **matched-pair cosine**. Here is what to
+look for when it trains, with the reference numbers from
+[`gap.py`](https://github.com/mlnomadpy/blog/tree/master/scripts/jax-modality-gap),
+the JAX version of the same experiment (two 2-layer ReLU towers, SigLIP with a
+learnable sharpness initialized at 2, Adam for 1400 steps, seed 0). The gap
+explodes from 0.27 to about 1.9 inside the first hundred steps. Matched-pair
+cosine crosses zero by step 12 and keeps falling, ending at **−0.78**: the loss
+has pushed matched pairs apart *in absolute terms*. And yet nothing is broken,
+because shuffled pairs sit lower still, at −0.88, and that thin margin above
+random is all the ranking the objective ever asked for. (The panel backprops
+through the two towers with the same hand-written autodiff and Adam, live.)
 
-That is precisely the **simulation that opens this post**. Scroll back up and hit
-**restart** to run it again from a fresh init, and watch the sparkline: the gap
-climbs from ~0.2 to well over 1 in the first hundred steps, while matched-pair
-cosine *falls*, through zero and negative. And drag the **sharpness (1/τ)**
-slider: at a soft temperature (≈1) the two modalities simply align and the gap
-barely opens; the dramatic cones only appear once you sharpen it. The gap is a
-choice of regime, not an inevitability, which is the honest caveat to keep in
-mind before declaring any loss the winner. (The in-browser version backprops
-through the two towers with the same hand-written autodiff and Adam;
-[`gap.py`](https://github.com/mlnomadpy/blog/tree/master/scripts/jax-modality-gap)
-is the JAX version.)
+<ModalityGapLive caption="The same experiment as the opening panel, back where the story needs it. At step 0 the two clouds coincide and the gap reads 0. Hit train and read the sparkline with new eyes: the gap trace leaps in the first hundred steps while the matched-cosine trace crosses zero and keeps sinking, matched pairs pushed apart in absolute terms yet still ranked above shuffled ones. Colour is the modality, shape is the class (○ / ✕)." />
+
+My first guess was that this had to be a sharp-temperature artifact, soften the
+loss and the cones should merge. The run says the opposite. Freeze the sharpness
+instead of learning it (`gap.py --sweep`, 1/τ from 0.5 to 8) and the gap opens
+at **every** temperature, and it is the *softest* runs that open it widest, all
+the way to fully antipodal (gap 2.0), paying for it with the ranking itself:
+matched cosine equal to random at −1.00, matching abandoned entirely. Sharpen to
+1/τ = 8 and the gap eases to 1.65 while a real margin appears between matched
+(−0.49) and shuffled (−0.66). Temperature does not open the gap; it buys the
+ranking back while the gap opens anyway. The **sharpness** slider on the panel
+above is the same dial, and the sweep says what it tunes is the margin, not
+whether the cones separate.
 
 This reframes the gap completely. The classic finding is that CLIP settles image
 and text into two separated cones
@@ -231,12 +230,24 @@ defect dissolves. Two encoders meet only through an agreement gradient. An
 agreement gradient cares about one thing: that a matched pair scores higher than a
 mismatched one. It does **not** care where on the sphere the two modalities sit, or
 whether they sit together at all. So the objective is free to satisfy "matched
-beats random" while sliding the two clouds into opposite cones, and with a sharp
-temperature, that is exactly what it does. Matched-pair cosine ends up *negative*:
-the pairs are pushed apart in absolute terms, still ranked above random, the gap
-wide open.
+beats random" while sliding the two clouds into opposite cones, and given the
+room depth provides, that is exactly what it does. Matched-pair cosine ends up
+*negative*: the pairs are pushed apart in absolute terms, still ranked above
+random, the gap wide open.
 
-"Two cones" is worth making literal, because that geometry is the whole point.
+One honest complication before we make the cones literal. In real CLIP the gap
+has a second author: the same Liang et al. paper measures a gap already present
+**at initialization**, before a single gradient step, because two independently
+initialized encoders are born into different cones. Part of the real gap is
+inherited, not learned
+([the cross-entropy asymmetry post](/blog/not-all-infinities-are-equal/) weighs
+that init-born component against the loss-side readings of the gap). The toy
+here starts both towers from the same initialization *precisely to subtract that
+part out*: whatever gap you watch open is the loss's contribution alone. Real
+CLIP's gap is both at once, an offset the encoders were born with and an offset
+the objective, as you just saw, is perfectly happy to widen.
+
+But what is a "cone" here, literally? That geometry is the whole point.
 Embeddings are L2-normalized, so every point is a **unit vector, a direction**
 from the origin. Each modality's directions don't scatter over the whole sphere;
 they bundle into a narrow angular **wedge, a cone**. The modality gap is simply
@@ -249,7 +260,7 @@ apart from a single shared bundle to opposite sides.
 
 So the gap is not the disease. It is a symptom, and an honest one. In the linear
 toy the separating objective showed its hand as collapse (the within-class factor
-thrown away); with depth and temperature it shows up as geometry (two cones). Both
+thrown away); give it depth and it shows up as geometry (two cones). Both
 are the space telling you it was asked to separate. You can close the geometric gap
 with tricks, and it still will not build a representer, because closing the gap
 does not turn a separating space into a representing one. Joint reconstruction
@@ -268,6 +279,14 @@ It hurts when your task is a representation task wearing other clothes.
   medical fusion**, where the answer turns on what only one modality shows, or on
   what two modalities say jointly. The discriminating detail is exactly the
   ambiguity a separating space throws away.
+
+Those two cases even have formal names: Partial Information Decomposition
+([Liang et al., 2023](https://arxiv.org/abs/2302.12247)) splits what two
+modalities carry into **redundancy** (what either view alone tells you),
+**uniqueness** (what only one tells you), and **synergy** (what only the two
+together tell you), and a separating objective keeps the first while staying
+blind to the other two. In the toy, the class was redundancy and $t$ was
+uniqueness, and you watched which one survived.
 
 It is close to harmless when your task is genuinely a separation task.
 
@@ -302,6 +321,11 @@ The deciding variable is the job.
 |---|---|---|---|
 | **separate** / classify (forget the ambiguous) | the agreed-upon concept, the intersection | contrastive (CLIP, SigLIP) | zero-shot, coarse matching |
 | **represent** / retrieve (keep the ambiguous) | the whole signal, the union and the synergy | reconstruction (MAE, autoencoder) | denoising, fine retrieval, fusion |
+
+There is also a spectral way to read the same trade-off, where the separating
+frame is the top few eigenmodes of a representation and everything a representer
+keeps is the tail standing beneath them; that picture gets its own post in
+[Latent on the Spectrum](/blog/latent-on-the-spectrum/).
 
 We hit the wall of this rule on a real system, trying to denoise radio signals
 with three complementary views, where contrastive burned compute confirming the

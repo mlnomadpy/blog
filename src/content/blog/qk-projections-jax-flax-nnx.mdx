@@ -92,7 +92,7 @@ The one number worth pausing on is `scale`. The entries of $x_i^\top B x_j$ grow
 
 ## The bilinear form is hiding in the weights
 
-`nnx.Linear` computes $y = xK$ with kernel $K$ of shape `[in, out]`, so the query of token $i$ is $q_i = W_Q^\top x_i$ where $W_Q$ is the kernel. The per-head score is therefore
+Where is the bilinear form in that module? Nowhere as a stored array, but everywhere in the scores, and you can pull it out of the weights. `nnx.Linear` computes $y = xK$ with kernel $K$ of shape `[in, out]`, so the query of token $i$ is $q_i = W_Q^\top x_i$ where $W_Q$ is the kernel. The per-head score is therefore
 
 $$
 s_{ij}=q_i^\top k_j = x_i^\top \underbrace{W_Q^{(h)} {W_K^{(h)}}^\top}_{B_h}\, x_j,
@@ -177,7 +177,7 @@ In a real model `q` and `k` are not one-hot embeddings but the outputs of `W_Q` 
 
 ## Position lives inside the bilinear form: RoPE
 
-Rotary embeddings rotate $q$ and $k$ by their positions, so the score depends only on the relative offset. The implementation is a `rotate_half` and a pair of `cos`/`sin` tables.
+The induction relation was positional, yet nothing in `Attention` knows about position. How does position get into a score that only sees $q$ and $k$? Rotary embeddings put it *inside* the comparison: rotate $q$ and $k$ by their positions and the score comes to depend only on the relative offset. The implementation is a `rotate_half` and a pair of `cos`/`sin` tables.
 
 ```python
 def rotate_half(x):
@@ -212,6 +212,11 @@ print(jnp.allclose(jnp.diag(s, 5), jnp.diag(s, 5)[0], atol=1e-5))  # constant al
 
 Position is not added to the residual stream here; it is a rotation applied *inside* the bilinear form, modulating the relation $B$ itself.
 
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/qk-rope-diagonal.gif" alt="Animated score matrix organizing into constant diagonals as the RoPE rotation strength sweeps from zero to one, with one diagonal highlighted and its values plotted as a flat line" loading="lazy" width="1100" height="470" />
+  <figcaption>The <code>rope</code> function above, swept. One fixed content pair (q, k) is rotated by s·position as the strength s goes from 0 to 1: at s = 0 the matrix is a single constant (no position, every pair scores q·k), and as s rises the scores organize into constant diagonals. The highlighted diagonal Δ = 8 stays a flat line the whole way, its real max − min spread printed at 0.0000 every frame, because the score depends on the two positions only through i − j. Rendered by <code>scripts/render_qk_rope_gif.py</code>.</figcaption>
+</figure>
+
 ## Two facts about the factorization
 
 **It is rank-limited.** Because $B = W_Q W_K^\top$ with $W_Q, W_K \in \mathbb{R}^{d_\text{model}\times d_k}$, the rank of $B$ is at most $d_k$. The singular spectrum shows it: exactly $d_k$ nonzero values, the rest numerical dust.
@@ -239,30 +244,99 @@ print(jnp.allclose(Wq @ Wk.T, Wq2 @ Wk2.T, atol=1e-4))  # True: same bilinear fo
 
 So an individual query coordinate has no canonical meaning; what is identified is the relation $B$ and the query/key subspaces it pairs, not a basis inside them.
 
-## Training, briefly
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/qk-gauge-freedom.gif" alt="Animated gauge freedom: the two factor heatmaps churn as M(t) loops through invertible matrices while the product B and the attention pattern stay frozen, with the max difference from B(0) printed at machine zero" loading="lazy" width="1100" height="480" />
+  <figcaption>The gauge freedom, animated. M(t) loops through invertible matrices while the factor heatmaps W_Q M(t) and W_K M(t)⁻ᵀ churn; the product B and the attention pattern it produces never move, and the real max |B(t) − B(0)|, printed every frame, stays at machine zero (about 10⁻¹⁶) around the whole loop. The factors are a coordinate choice; the relation is the observable. Rendered by <code>scripts/render_qk_extra_gifs.py</code>.</figcaption>
+</figure>
 
-The head is an ordinary `nnx.Module`, so it drops into the standard NNX loop. With current NNX, `nnx.Optimizer` takes `wrt=nnx.Param` and `update` receives the model and the gradients.
+## Train the induction head for real
+
+The one-hot induction head above was wired by hand. Can gradient descent find the same directed relation on its own? Hand the model only the features and the task and see. Each sequence is a random 6-token pattern (distinct tokens from a vocabulary of 8) repeated four times; each position's features are `[current token ; previous token]`, one-hot; and the model must predict the next token. From the second repeat on, induction answers perfectly: find the position whose predecessor matches my token, and copy it.
+
+The head is an ordinary `nnx.Module`, so it drops into the standard NNX loop (with current NNX, `nnx.Optimizer` takes `wrt=nnx.Param` and `update` receives the model and the gradients).
 
 ```python
 import optax
 
-model = Attention(d_model=128, n_heads=8, rngs=nnx.Rngs(0))
-optimizer = nnx.Optimizer(model, optax.adamw(3e-4), wrt=nnx.Param)
+V, P = 8, 6          # vocab size; a P-token random pattern, repeated 4 times
 
+def induction_batch(key, batch=64):
+    keys = jax.random.split(key, batch)
+    pat = jax.vmap(lambda k: jax.random.permutation(k, V)[:P])(keys)
+    toks = jnp.tile(pat, (1, 4))                               # [batch, 24]
+    prev = jnp.pad(toks[:, :-1], ((0, 0), (1, 0)), constant_values=0)
+    x = jnp.concatenate([jax.nn.one_hot(toks, V), jax.nn.one_hot(prev, V)], -1)
+    return x, toks   # features: [current token ; previous token]
+
+class InductionLM(nnx.Module):
+    def __init__(self, *, rngs: nnx.Rngs):
+        self.attn = Attention(d_model=2 * V, n_heads=1, rngs=rngs)
+        self.readout = nnx.Linear(2 * V, V, rngs=rngs)
+
+    def __call__(self, x):
+        return self.readout(self.attn(x, causal=True))
+
+model = InductionLM(rngs=nnx.Rngs(0))
+optimizer = nnx.Optimizer(model, optax.adamw(3e-3), wrt=nnx.Param)
 
 @nnx.jit
 def train_step(model, optimizer, batch):
-    x, target = batch
+    x, toks = batch
 
     def loss_fn(model):
-        return jnp.mean((model(x) - target) ** 2)
+        logits = model(x)[:, P:-1]      # predict from the second repeat on
+        labels = toks[:, P + 1:]        # the next token
+        return optax.softmax_cross_entropy_with_integer_labels(logits, labels).mean()
 
     loss, grads = nnx.value_and_grad(loss_fn)(model)
     optimizer.update(model, grads)
     return loss
+
+key = jax.random.key(42)
+for step in range(2001):
+    key, sub = jax.random.split(key)
+    loss = train_step(model, optimizer, induction_batch(sub))
+    if step % 500 == 0:
+        print(f"step {step:4d}   loss {loss:.3f}")
+
+x, toks = induction_batch(jax.random.key(123), batch=512)
+pred = model(x)[:, P:-1].argmax(-1)
+acc = (pred == toks[:, P + 1:]).mean()
+print(f"held-out next-token accuracy: {acc:.3f}   (chance {1/V:.3f})")
 ```
 
-Nothing about the training loop knows that $W_Q$ and $W_K$ form a bilinear relation; the gradient just flows through the scaled dot product. The structure is in the *parameterization*, and the parameterization is the head's relational vocabulary.
+A real run of this block prints:
+
+```text
+step    0   loss 2.091
+step  500   loss 0.018
+step 1000   loss 0.018
+step 1500   loss 0.017
+step 2000   loss 0.013
+held-out next-token accuracy: 0.989   (chance 0.125)
+```
+
+And the trained weights contain exactly the directed relation this post has been about. Read $B = W_Q W_K^\top$ back out of the model (the `head_bilinear` trick from earlier) and compare its four $V \times V$ blocks:
+
+```python
+Wq, Wk = model.attn.q.kernel.value, model.attn.k.kernel.value
+B = Wq @ Wk.T                                          # [2V, 2V]
+for name, blk in [("cur->cur", B[:V, :V]), ("cur->prev", B[:V, V:]),
+                  ("prev->cur", B[V:, :V]), ("prev->prev", B[V:, V:])]:
+    print(f"{name:10s} block norm = {jnp.linalg.norm(blk):.1f}")
+d = B[:V, V:]
+print(f"cur->prev diagonal mean {jnp.diag(d).mean():+.1f}   off-diagonal mean {(d.sum() - jnp.diag(d).sum()) / (V*V - V):+.1f}")
+```
+
+```text
+cur->cur   block norm = 12.0
+cur->prev  block norm = 38.3
+prev->cur  block norm = 6.0
+prev->prev block norm = 7.4
+cur->prev diagonal mean +11.4   off-diagonal mean -1.6
+```
+
+The current-token-query against previous-token-key block carries three times the norm of any other block, and inside it the diagonal is strongly positive while everything else is mildly repelled: gradient descent rediscovered "ask for my identity, answer with your predecessor." Nothing about the training loop knows that $W_Q$ and $W_K$ form a bilinear relation; the gradient just flows through the scaled dot product. The structure is in the *parameterization*, and the parameterization is the head's relational vocabulary.
 
 ## Rendering the GIFs
 

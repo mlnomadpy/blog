@@ -1,0 +1,174 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 420 } = Astro.props;
+---
+<figure class="viz nameaxis2" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The complete layer-2 vocabulary, clickable. 33 hand-designed detectors (15
+// junctions, 6 continuations, 6 bends, 6 stripes), each drawn as a glyph; click
+// one and its response map on the chosen garment is computed live from the raw
+// image (layer-1 edges, then the named combination, then the 4x4 region pool).
+// Hover the map to read a single dimension off by name: a detector at a region.
+import { defineViz } from './engine/vizkit.js';
+import { loadDepth, samplesImg, l1maps, toCells, l2map, poolL2, tileFromSprite, mapToCanvas, parseHex, KIND_COL } from './depthfeat.js';
+import { gate, loadingText, T } from './engine/draw.js';
+import { localPoint, hitTest } from './engine/pointer.js';
+
+const REGION = [['top-left', 'top', 'top', 'top-right'], ['left', 'upper-middle', 'upper-middle', 'right'],
+                ['left', 'lower-middle', 'lower-middle', 'right'], ['bottom-left', 'bottom', 'bottom', 'bottom-right']];
+
+defineViz('nameaxis2', {
+  title: 'Layer 2, every axis still a sentence',
+  height: 420,
+  controls: [
+    { type: 'range', name: 'sample', label: 'garment', min: 0, max: 59, step: 1, value: 3, int: true, reset: false, fmt: (v) => v },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    api.state.sel = 2; api.state.hoverCell = -1; api.state._cache = new Map();
+    gate(api, () => Promise.all([loadDepth(), samplesImg()]), (api, [d, spr]) => {
+      Object.assign(api.state, { d, spr }); bind(api);
+    });
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    if (!st.ready) { loadingText(api, 'computing in your browser…'); return; }
+    const d = st.d, k = api.get('sample');
+    const spec = d.specsL2[st.sel];
+    const key = k + ':' + st.sel;
+    let r = st._cache.get(key);
+    if (!r) {
+      const im = tileFromSprite(st.spr, k);
+      const cells = l1maps(im, d).map(toCells);
+      const m = l2map(cells, spec, d);
+      r = { m, pooled: poolL2(m) };
+      if (st._cache.size > 60) st._cache.clear();
+      st._cache.set(key, r);
+    }
+
+    const pad = 14, top = 28;
+    T(ctx, colors, 'label'); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('click a detector (left); its live response map on the garment (right). hover the map for a dimension.', pad, 17);
+
+    // ── left: the 33 glyph tiles, grouped by kind in rows ──
+    const groups = [
+      { kind: 'junction', label: '15 junctions' },
+      { kind: 'continuation', label: '6 continuations' },
+      { kind: 'bend', label: '6 bends' },
+      { kind: 'stripe', label: '6 stripes' },
+    ];
+    const leftW = Math.min(W * 0.56, 8.6 * 44), gtile = Math.min(34, (leftW - pad - 70) / 8 - 4);
+    st._tiles = [];
+    let gy = top + 10;
+    for (const g of groups) {
+      const idxs = d.specsL2.map((s, i) => [s, i]).filter(([s]) => s.kind === g.kind);
+      T(ctx, colors, 'small', { color: KIND_COL[g.kind] }); ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.fillText(g.label, pad, gy);
+      gy += 13;
+      let gx = pad, rowN = 0;
+      for (const [s, i] of idxs) {
+        if (rowN === 8) { rowN = 0; gx = pad; gy += gtile + 6; }
+        const on = i === st.sel;
+        ctx.fillStyle = colors.cellBg; ctx.fillRect(gx, gy, gtile, gtile);
+        drawGlyph(ctx, gx, gy, gtile, s, d, KIND_COL[s.kind]);
+        ctx.strokeStyle = on ? colors.fg : colors.border; ctx.lineWidth = on ? 2 : 1;
+        ctx.strokeRect(gx + 0.5, gy + 0.5, gtile - 1, gtile - 1);
+        st._tiles.push({ x: gx, y: gy, w: gtile, h: gtile, i });
+        gx += gtile + 4; rowN++;
+      }
+      gy += gtile + 12;
+    }
+
+    // ── right: garment + live response map with the 4x4 region grid ──
+    const rx = leftW + 24, rw = W - rx - pad;
+    const mtile = Math.max(10, Math.min(rw - 60, H - top - 60));
+    const mx = rx + Math.max(0, (rw - mtile) / 2), my = top + 16;
+    const small = Math.min(54, mtile * 0.32);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(st.spr, (k % 10) * 28, ((k / 10) | 0) * 28, 28, 28, mx, my, small, small);
+    ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.strokeRect(mx + 0.5, my + 0.5, small, small);
+    T(ctx, colors, 'small', { align: 'left', baseline: 'middle' });
+    ctx.fillText(d.classes[d.samples[k].label] + '  →  ' + spec.short, mx + small + 8, my + small / 2);
+
+    const mapY = my + small + 10;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(mapToCanvas(r.m, 14, parseHex(KIND_COL[spec.kind])), mx, mapY, mtile, mtile);
+    ctx.strokeStyle = KIND_COL[spec.kind]; ctx.lineWidth = 1.6; ctx.strokeRect(mx + 0.5, mapY + 0.5, mtile - 1, mtile - 1);
+    // the 4x4 pooled regions (crop border cell, like the script's pool)
+    const cs = mtile / 14, px0 = mx + cs, py0 = mapY + cs, pside = 12 * cs;
+    ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.globalAlpha = 0.7;
+    for (let i = 0; i <= 4; i++) {
+      ctx.beginPath(); ctx.moveTo(px0 + i * pside / 4, py0); ctx.lineTo(px0 + i * pside / 4, py0 + pside); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(px0, py0 + i * pside / 4); ctx.lineTo(px0 + pside, py0 + i * pside / 4); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    st._map = { x: px0, y: py0, side: pside };
+    if (st.hoverCell >= 0) {
+      const cy = (st.hoverCell / 4) | 0, cx2 = st.hoverCell % 4;
+      ctx.strokeStyle = colors.fg; ctx.lineWidth = 2;
+      ctx.strokeRect(px0 + cx2 * pside / 4 + 1, py0 + cy * pside / 4 + 1, pside / 4 - 2, pside / 4 - 2);
+    }
+
+    if (st.hoverCell >= 0) {
+      const cy = (st.hoverCell / 4) | 0, cx2 = st.hoverCell % 4;
+      api.readout('rd', `dimension: “${spec.short} in the ${REGION[cy][cx2]} region” = ${r.pooled[st.hoverCell].toFixed(3)} · one of 528 named layer-2 dimensions`);
+    } else {
+      api.readout('rd', `“${spec.name}” · computed live`);
+    }
+  },
+});
+
+// small vector glyph for each detector kind: lines drawn along the CONTOUR
+// direction of each orientation (perpendicular to its gradient angle)
+function drawGlyph(ctx, x, y, s, spec, d, col) {
+  const cx = x + s / 2, cy = y + s / 2, L = s * 0.36;
+  const dir = (b) => { const t = d.centersDeg[b] * Math.PI / 180; return [-Math.sin(t), Math.cos(t)]; };
+  const seg = (ux, uy, ox = 0, oy = 0, l = L) => {
+    ctx.beginPath(); ctx.moveTo(cx + ox - ux * l, cy + oy - uy * l); ctx.lineTo(cx + ox + ux * l, cy + oy + uy * l); ctx.stroke();
+  };
+  ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.lineCap = 'round';
+  if (spec.kind === 'junction') {
+    const [ax, ay] = dir(spec.b1), [bx, by] = dir(spec.b2); seg(ax, ay); seg(bx, by);
+  } else if (spec.kind === 'continuation') {
+    const [ux, uy] = dir(spec.b1); seg(ux, uy, 0, 0, L * 1.25);
+  } else if (spec.kind === 'stripe') {
+    const [ux, uy] = dir(spec.b1); const t = d.centersDeg[spec.b1] * Math.PI / 180;
+    const nx = Math.cos(t) * s * 0.18, ny = Math.sin(t) * s * 0.18;
+    seg(ux, uy, -nx, -ny, L * 0.8); seg(ux, uy, nx, ny, L * 0.8);
+  } else { // bend: two half-segments meeting at 30 degrees
+    const t = d.centersDeg[spec.b1] * Math.PI / 180, t2 = t + Math.PI / 6;
+    const [ax, ay] = [-Math.sin(t), Math.cos(t)], [bx, by] = [-Math.sin(t2), Math.cos(t2)];
+    ctx.beginPath(); ctx.moveTo(cx - ax * L, cy - ay * L); ctx.lineTo(cx, cy); ctx.lineTo(cx + bx * L, cy + by * L); ctx.stroke();
+  }
+}
+
+function bind(api) {
+  if (api.canvas.dataset.na2Bound) return; api.canvas.dataset.na2Bound = '1';
+  api.canvas.addEventListener('pointerdown', (e) => {
+    const st = api.state; if (!st || !st._tiles) return;
+    const i = hitTest(localPoint(api.canvas, e), st._tiles);
+    if (i >= 0) { st.sel = st._tiles[i].i; api.render(); }
+  });
+  api.canvas.addEventListener('pointermove', (e) => {
+    const st = api.state; if (!st) return;
+    let cell = -1;
+    if (st._map) {
+      const p = localPoint(api.canvas, e), m = st._map;
+      if (p.x >= m.x && p.x < m.x + m.side && p.y >= m.y && p.y < m.y + m.side)
+        cell = Math.min(3, ((p.y - m.y) / (m.side / 4)) | 0) * 4 + Math.min(3, ((p.x - m.x) / (m.side / 4)) | 0);
+    }
+    if (cell !== st.hoverCell) { st.hoverCell = cell; api.render(); }
+  });
+  api.canvas.addEventListener('pointerleave', () => { if (api.state) { api.state.hoverCell = -1; api.render(); } });
+}
+</script>

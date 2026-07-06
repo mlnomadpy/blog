@@ -1,0 +1,119 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 400 } = Astro.props;
+---
+<figure class="viz certgauge" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The contraction certificate as a dial you can break. Every dot is one probe input's
+// measured local slope ‖J_F‖₂ at its equilibrium (power iteration on JᵀJ, run live with
+// the operator's exact Jacobian products). Turn up the gain of the pasted rows and the
+// slopes near the taught class slide right; past 1.0 the certificate is void and the
+// unique-fixed-point guarantee with it. The one knob that broke it restores it.
+import { defineViz } from './engine/vizkit.js';
+import { gate, loadingText, T, fmt } from './engine/draw.js';
+import { loadReady, compute, sigmaAsync, CLS } from './yatdeqedit.js';
+
+const XMAX = 1.5;
+
+defineViz('certgauge', {
+  title: 'The certificate, under the edit gain',
+  height: 400,
+  controls: [
+    { type: 'range', name: 'g', label: 'edit gain (× the raw paste)', min: 0, max: 1.6, step: 0.1, value: 0,
+      reset: false, fmt: (v) => v.toFixed(1), play: { period: 9000, loop: false } },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    gate(api, loadReady, (api, model) => {
+      const cmp = compute(model), Tt = model.test;
+      // stratified probe subsample: every 10th test input (keeps all four classes)
+      const px = [], pyc = [];
+      for (let i = 0; i < Tt.y.length; i += 10) { px.push(Tt.x[i]); pyc.push(Tt.y[i]); }
+      const jit = px.map(() => Math.random());
+      api.state.M = { cmp, model, px, pyc, jit, cache: new Map(), computing: false };
+    });
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0) return;
+    if (!st.ready || !st.M) { loadingText(api, 'preparing the probe set…'); return; }
+    const M = st.M, E = M.model.edit;
+    const g = Math.round(api.get('g') * 10) / 10;
+
+    // measure lazily off the main thread and cache per dial setting; the worker
+    // keeps the slider responsive while the ~10^9-op certificate runs in parallel
+    const key = g.toFixed(1);
+    if (!M.cache.has(key) && !M.computing) {
+      M.computing = true;
+      sigmaAsync(M.cmp, g * E.gamma_raw, M.px).then((slopes) => {
+        M.cache.set(key, slopes); M.computing = false;
+        if (api.state) api.render();
+      }).catch(() => { M.computing = false; });
+    }
+    const cur = M.cache.get(key), base = M.cache.get('0.0');
+
+    const pad = 16, x0 = pad + 30, x1 = W - pad - 8;
+    const sx = (s) => x0 + (Math.min(s, XMAX) / XMAX) * (x1 - x0);
+    const laneBase = { y: 62, h: 56 }, laneCur = { y: 150, h: 86 };
+
+    // axis + the two verdict lines
+    const axY = laneCur.y + laneCur.h + 26;
+    ctx.strokeStyle = colors.border; ctx.beginPath(); ctx.moveTo(x0, axY); ctx.lineTo(x1, axY); ctx.stroke();
+    for (const t of [0, 0.25, 0.5, 0.75, 1.0, 1.25]) {
+      T(ctx, colors, 'small', { align: 'center' });
+      ctx.fillText(t.toFixed(2), sx(t), axY + 12);
+      ctx.strokeStyle = colors.border; ctx.globalAlpha = 0.5;
+      ctx.beginPath(); ctx.moveTo(sx(t), 40); ctx.lineTo(sx(t), axY); ctx.stroke(); ctx.globalAlpha = 1;
+    }
+    T(ctx, colors, 'label', { align: 'center' });
+    ctx.fillText('measured local slope of F at each probe equilibrium (spectral norm of the Jacobian)', (x0 + x1) / 2, axY + 26);
+    // the line that does the arguing
+    ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(sx(1), 34); ctx.lineTo(sx(1), axY); ctx.stroke();
+    T(ctx, colors, 'label', { color: '#c0392b', align: 'center' });
+    ctx.fillText('slope 1: certificate void', sx(1), 30);
+
+    const drawLane = (lane, sig, label, ghost) => {
+      T(ctx, colors, 'kicker'); ctx.textAlign = 'left';
+      ctx.fillText(label, x0, lane.y - 6);
+      if (!sig) { T(ctx, colors, 'small', { color: colors.faint }); ctx.fillText('measuring…', x0, lane.y + lane.h / 2); return; }
+      for (let i = 0; i < sig.length; i++) {
+        const y = lane.y + 6 + M.jit[i] * (lane.h - 12);
+        ctx.globalAlpha = ghost ? 0.4 : 0.85;
+        ctx.fillStyle = ghost ? colors.muted : (M.pyc[i] === 3 ? CLS[3] : CLS[M.pyc[i]]);
+        ctx.beginPath(); ctx.arc(sx(sig[i]), y, ghost ? 2.4 : 3.1, 0, 6.283); ctx.fill();
+        if (!ghost && sig[i] >= 1) { ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 1.4; ctx.stroke(); }
+      }
+      ctx.globalAlpha = 1;
+      const mx = Math.max(...sig);
+      ctx.strokeStyle = ghost ? colors.muted : colors.fg; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(sx(mx), lane.y); ctx.lineTo(sx(mx), lane.y + lane.h); ctx.stroke(); ctx.setLineDash([]);
+      T(ctx, colors, 'small', { align: 'left', color: ghost ? colors.faint : colors.fg });
+      ctx.fillText('max ' + fmt(mx, 3), Math.min(sx(mx) + 4, x1 - 46), lane.y + 10);
+    };
+    drawLane(laneBase, base, 'before the edit (gain 0), every probe', true);
+    drawLane(laneCur, cur, 'with the pasted rows at gain ' + g.toFixed(1) + '  ·  taught-class probes in orange', false);
+
+    // marker: where the shipped, certificate-restoring gain sits on the dial
+    if (E.rescale > 0) {
+      T(ctx, colors, 'small', { color: colors.accent, align: 'left' });
+      ctx.fillText('shipped gain after the rescue: ' + E.rescale.toFixed(2) + '× the raw paste', x0, H - 8);
+    }
+
+    if (cur) {
+      const mean = cur.reduce((a, b) => a + b, 0) / cur.length, mx = Math.max(...cur);
+      const ok = mx < 1;
+      api.readout('rd', `mean ${fmt(mean, 3)}  max ${fmt(mx, 3)}  ·  ${ok ? 'contraction certified: one basin, one answer' : 'certificate BROKEN: uniqueness no longer guaranteed'}`);
+    } else api.readout('rd', 'measuring the slopes…');
+  },
+});
+</script>

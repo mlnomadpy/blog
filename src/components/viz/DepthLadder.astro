@@ -1,0 +1,139 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 360 } = Astro.props;
+---
+<figure class="viz depthladder" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The construction ladder, extended one rung down and magnified. All the
+// interesting numbers now live inside two points (82.9 to 85.7), so this panel
+// is a photo finish: a full 0-100 strip on top, and a zoomed strip below where
+// each network is a labelled marker. Blue is built by hand, orange is trained.
+// Every number from scripts/handbuilt_depth.py and scripts/construct_vs_optimize.py.
+import { defineViz } from './engine/vizkit.js';
+import { loadDepth } from './depthfeat.js';
+import { gate, loadingText, T, dot } from './engine/draw.js';
+import { localPoint, hitTest } from './engine/pointer.js';
+
+defineViz('depthladder', {
+  title: 'The ladder, one rung deeper: a photo finish',
+  height: 360,
+  controls: [{ type: 'readout', name: 'rd' }],
+
+  setup(api) {
+    api.state.hover = -1;
+    gate(api, loadDepth, (api, d) => { api.state.d = d; bind(api); });
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    if (!st.ready) { loadingText(api); return; }
+    const L = st.d.ladder, BLU = colors.blue, ACC = colors.accent;
+    const rungs = [
+      { acc: L.l2only, label: 'layer 2 alone', built: true, lvl: 1,
+        desc: `layer 2 alone: junctions, continuations, bends, stripes, the raw edges thrown away entirely: ${L.l2only}%, nearly the raw-pixel baseline` },
+      { acc: L.pixels, label: 'raw pixels', built: true, lvl: 2,
+        desc: `raw pixels into the built head: ${L.pixels}%, the no-feature floor` },
+      { acc: L.concat, label: 'layers 1+2, full', built: true, isNew: true, lvl: 1, leftLabel: true,
+        desc: `both hand-built layers, 40 names, 871 dimensions: ${L.concat}%, BELOW layer 1 alone` },
+      { acc: L.trainedConstructed, label: 'trained backbone', built: false, lvl: 2,
+        desc: `a trained CNN backbone with the built head: ${L.trainedConstructed}%` },
+      { acc: L.l1, label: 'hand-built layer 1', built: true, star: true, lvl: 3,
+        desc: `the last post's one hand-built layer: ${L.l1}%, nothing trained anywhere` },
+      { acc: L.bestConcat, label: 'layers 1+2, best of 6', built: true, isNew: true, lvl: 4,
+        desc: `the best of six layer-2 designs (junctions only): ${L.bestConcat}%, a +${(L.bestConcat - L.l1).toFixed(1)} move` },
+      { acc: L.trainedHead, label: 'fully trained', built: false, lvl: 1,
+        desc: `features and classifier both learned: ${L.trainedHead}%, the only rung construction never reaches` },
+    ];
+
+    const pad = 16;
+    T(ctx, colors, 'label'); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('blue is built by hand, orange is trained. top: the full scale. bottom: the zoom.', pad, 16);
+
+    // ── top strip: 0..100 ──
+    const tY = 40, x0 = pad + 30, x1 = W - pad - 10;
+    const sxT = (a) => x0 + (a / 100) * (x1 - x0);
+    ctx.strokeStyle = colors.border; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, tY); ctx.lineTo(x1, tY); ctx.stroke();
+    for (const t of [0, 25, 50, 75, 100]) {
+      ctx.beginPath(); ctx.moveTo(sxT(t), tY - 3); ctx.lineTo(sxT(t), tY + 3); ctx.stroke();
+      T(ctx, colors, 'small', { align: 'center', baseline: 'top', color: colors.faint });
+      ctx.fillText(t + '%', sxT(t), tY + 6);
+    }
+    T(ctx, colors, 'small', { align: 'right', baseline: 'middle', color: colors.faint });
+    ctx.fillText('chance', sxT(10) - 5, tY - 10);
+    ctx.strokeStyle = colors.faint; ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(sxT(10), tY - 6); ctx.lineTo(sxT(10), tY + 3); ctx.stroke(); ctx.setLineDash([]);
+    rungs.forEach((r) => dot(ctx, sxT(r.acc), tY, 3, r.built ? BLU : ACC));
+
+    // ── zoom trapezoid into [77.5, 87] ──
+    const zLo = 77.5, zHi = 87, zY = H - 42;
+    const sxZ = (a) => x0 + ((a - zLo) / (zHi - zLo)) * (x1 - x0);
+    ctx.fillStyle = colors.border; ctx.globalAlpha = 0.25;
+    ctx.beginPath(); ctx.moveTo(sxT(zLo), tY + 14); ctx.lineTo(sxT(zHi), tY + 14);
+    ctx.lineTo(x1, tY + 44); ctx.lineTo(x0, tY + 44); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1;
+    ctx.strokeStyle = colors.border;
+    ctx.strokeRect(sxT(zLo), tY + 8, sxT(zHi) - sxT(zLo), 6);
+
+    // zoom axis
+    ctx.strokeStyle = colors.border; ctx.beginPath(); ctx.moveTo(x0, zY); ctx.lineTo(x1, zY); ctx.stroke();
+    for (let t = 78; t <= 86; t++) {
+      ctx.beginPath(); ctx.moveTo(sxZ(t), zY - 3); ctx.lineTo(sxZ(t), zY + 3); ctx.stroke();
+      T(ctx, colors, 'small', { align: 'center', baseline: 'top', color: colors.faint });
+      ctx.fillText(t + '%', sxZ(t), zY + 7);
+    }
+
+    // "what training buys" brace between best hand-built and fully trained
+    const bx0 = sxZ(L.bestConcat), bx1 = sxZ(L.trainedHead), byy = zY + 24;
+    ctx.strokeStyle = colors.muted; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(bx0, byy); ctx.lineTo(bx0, byy + 4); ctx.lineTo(bx1, byy + 4); ctx.lineTo(bx1, byy); ctx.stroke();
+    T(ctx, colors, 'small', { align: 'center', baseline: 'top', color: colors.muted });
+    ctx.fillText(`what only training buys: ${(L.trainedHead - L.bestConcat).toFixed(1)} points`, (bx0 + bx1) / 2, byy + 7);
+
+    // markers with staggered stems + labels
+    st._hits = [];
+    rungs.forEach((r, i) => {
+      const x = sxZ(r.acc), col = r.built ? BLU : ACC;
+      const ly = zY - 26 - (r.lvl - 1) * 30;
+      const focus = st.hover < 0 || st.hover === i;
+      ctx.globalAlpha = focus ? 1 : 0.3;
+      ctx.strokeStyle = col; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(x, zY - 4); ctx.lineTo(x, ly + 12); ctx.stroke();
+      dot(ctx, x, zY, 4.5, col);
+      if (r.star) { ctx.strokeStyle = colors.fg; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(x, zY, 7, 0, 6.283); ctx.stroke(); }
+      const onLeft = r.leftLabel ?? (x > W * 0.6);
+      T(ctx, colors, 'small', { align: onLeft ? 'right' : 'left', baseline: 'alphabetic', color: focus ? colors.fg : colors.muted });
+      ctx.font = (r.isNew ? '600 ' : '') + '10.5px ui-sans-serif, system-ui';
+      ctx.fillText(`${r.label}`, x + (onLeft ? -6 : 6), ly);
+      T(ctx, colors, 'value', { align: onLeft ? 'right' : 'left', baseline: 'alphabetic', color: col });
+      ctx.font = '600 12px ui-sans-serif, system-ui';
+      ctx.fillText(`${r.acc.toFixed(1)}%${r.isNew ? '  ← new' : ''}`, x + (onLeft ? -6 : 6), ly + 13);
+      ctx.globalAlpha = 1;
+      const lw = 110;
+      st._hits.push({ x: onLeft ? x - lw : x - 6, y: ly - 12, w: lw + 12, h: 30, i });
+    });
+
+    api.readout('rd', st.hover < 0
+      ? `six hand designs for layer 2; the best moves layer 1 by +${(L.bestConcat - L.l1).toFixed(1)}, the fullest by ${(L.concat - L.l1).toFixed(1)}`
+      : rungs[st.hover].desc);
+  },
+});
+
+function bind(api) {
+  if (api.canvas.dataset.dlBound) return; api.canvas.dataset.dlBound = '1';
+  api.canvas.addEventListener('pointermove', (e) => {
+    const st = api.state; if (!st || !st._hits) return;
+    const h = hitTest(localPoint(api.canvas, e), st._hits);
+    const i = h < 0 ? -1 : st._hits[h].i;
+    if (i !== st.hover) { st.hover = i; api.render(); }
+  });
+  api.canvas.addEventListener('pointerleave', () => { if (api.state) { api.state.hover = -1; api.render(); } });
+}
+</script>

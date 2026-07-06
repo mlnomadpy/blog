@@ -40,7 +40,7 @@ import CiteAs from '../../components/CiteAs.astro';
 
 ## The detectors, as a convolution
 
-A hand-built feature starts as a gradient. Two Sobel kernels give the horizontal and vertical derivative of the image, and from those come the magnitude and angle of every edge. The only subtlety is the padding: we replicate the border (`mode='edge'`) so an edge at the image boundary is not invented out of zeros.
+Where does a hand-built feature start? As a gradient. Two Sobel kernels give the horizontal and vertical derivative of the image, and from those come the magnitude and angle of every edge. The only subtlety is the padding: we replicate the border (`mode='edge'`) so an edge at the image boundary is not invented out of zeros.
 
 ```python
 import jax, jax.numpy as jnp
@@ -101,7 +101,7 @@ The whole extractor is `@jax.jit` and has no state. It is a function from an ima
 
 ## The head, as a parameter-free NNX module
 
-The classifier is the constructed Yat head from the earlier posts, written as a Flax NNX module so it slots into the same code as a trained network. The difference is that its variables are placed, not learned: the rows of `W` are k-means centroids of the training features, and `A` is a one-hot table sending each prototype's vote to its class. The forward pass is the Yat kernel against every prototype, then the per-class maximum, then an argmax.
+What does a classifier nobody trains look like in a framework built for training? A perfectly ordinary module. The constructed Yat head from the earlier posts is written as Flax NNX so it slots into the same code as a trained network; the difference is that its variables are placed, not learned: the rows of `W` are k-means centroids of the training features, and `A` is a one-hot table sending each prototype's vote to its class. The forward pass is the Yat kernel against every prototype, then the per-class maximum, then an argmax.
 
 ```python
 from flax import nnx
@@ -130,7 +130,7 @@ There is no `nnx.Param` anywhere in it. `nnx.Variable` holds state that an optim
 
 ## Building it and running it
 
-The pieces assemble with no training step. Extract the features, z-score them, run k-means per class to get the prototypes, and hand them to the head.
+The pieces assemble with no training step. Extract the features, z-score them, run k-means per class to get the prototypes, set the softening ε from the data's own distance scale, and hand it all to the head. Even ε is placed, not learned: a tenth of the median squared feature-to-prototype distance, the knob the kernel-shape figure above turns.
 
 ```python
 Ftr, Fte = np.asarray(features(Xtr)), np.asarray(features(Xte))
@@ -141,8 +141,12 @@ PER = 20; W, vote = [], []
 for c in range(10):
     W += list(KMeans(PER, n_init=2, random_state=0).fit(Ftr[ytr == c][:2500]).cluster_centers_)
     vote += [c] * PER
+W = np.array(W, 'float32'); vote = np.array(vote)
 
-head = YatHead(np.array(W, 'float32'), np.array(vote))
+d2 = (Fte ** 2).sum(1, keepdims=True) + (W ** 2).sum(1) - 2 * Fte @ W.T
+eps = float(np.median(d2) * 0.1)                                   # placed, like everything else
+
+head = YatHead(W, vote, b=0.5, eps=eps)
 pred = np.asarray(head(jnp.asarray(Fte)))
 print(f"hand-built, no training anywhere: {100 * (pred == yte).mean():.1f}%")   # 83.3%
 ```
@@ -152,7 +156,12 @@ print(f"hand-built, no training anywhere: {100 * (pred == yte).mean():.1f}%")   
   <figcaption>The only step that even looks like learning. Inside each class's real feature cloud, k-means moves a handful of prototypes to the centres of nearby points, iteration by iteration, with no gradient and no labels beyond the class it runs within. The result is the rows of <code>W</code>: a few exemplars per class that the kernel votes against. Shown for three well-separated classes; the real head uses twenty per class. Rendered by <code>scripts/render_handbuilt_gifs.py</code>.</figcaption>
 </figure>
 
-It prints **83.3%**, the same number the explainer's interactive demo computes in the browser, because it is the same pipeline. The only place a fit happens at all is k-means, which is choosing where to place the prototypes, not learning a representation; swap it for one centroid per class (a plain class mean) and the same head still reaches about 75.6%.
+It prints **83.3%**, the same number the explainer's interactive demo computes in the browser, because it is the same pipeline. The only place a fit happens at all is k-means, which is choosing where to place the prototypes, not learning a representation. Drop even that and the floor is still high: one plain mean per class, nearest mean wins, is two lines and reaches **75.6%** (the check is in the explainer's `scripts/handbuilt_vision.py`).
+
+```python
+cen = np.stack([Ftr[ytr == c].mean(0) for c in range(10)])
+print(100 * (((Fte[:, None] - cen[None]) ** 2).sum(2).argmin(1) == yte).mean())   # 75.6%
+```
 
 <figure class="jax-fig">
   <img src="/blog/handbuilt-yat-well.gif" alt="Ten wells along the class axis, each well's depth set to the garment's real Yat score for that class, with the garment sitting in its deepest well" loading="lazy" width="780" height="520" />

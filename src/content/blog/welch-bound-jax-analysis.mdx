@@ -2,7 +2,7 @@
 title: 'Auditing Latent Space Geometry in JAX'
 description: 'A runnable companion to the Welch-bound latent-space post: generate GIFs and implement the JAX metrics that tell you whether embeddings are collapsing, wasting rank, forming a simplex, or pressing against the Welch floor.'
 seoDescription: "A runnable JAX companion to the Welch-bound post: metrics that tell you whether embeddings collapse, waste rank, form a simplex, or press the Welch floor."
-pubDate: 2026-06-02
+pubDate: 2026-06-02T12:00:00-07:00
 tags: [ml, jax, representation-learning, latent-space, welch-bound, frame-theory, neural-collapse, simplex-etf, embeddings, implementation]
 keywords:
   - JAX latent space analysis
@@ -47,14 +47,14 @@ claim was operational:
 > toward a simplex, and whether an overloaded codebook is close to the Welch
 > floor.
 
-This post is that checklist. We will make five small JAX experiments, each with
-one question:
+This post is that checklist: five audit metrics, each demonstrated on a small
+JAX scene built so you can watch the metric's needle move:
 
-1. Are same-class points tightening?
-2. Is the embedding using its dimensions?
-3. When the classes fit, are the class codes becoming a simplex?
-4. When they do not fit, how close is the worst crosstalk to Welch's floor?
-5. And can a plain optimizer even reach these targets, or is it luck?
+1. **Collapse ratio:** what it reads as same-class points tighten into their codes.
+2. **Effective rank:** what it catches when a spread-out cloud quietly loses a dimension.
+3. **Simplex error:** what it shows as class codes settle into the simplex, when they fit.
+4. **Welch gap:** how close the worst crosstalk gets to the floor, when they do not fit.
+5. **Reachability:** whether a plain optimizer finds these targets from any start, or only by luck.
 
 The generator that made every GIF here lives in
 `scripts/jax-welch-geometry/`. The code blocks below are the core math stripped
@@ -62,7 +62,7 @@ down to the pieces you would actually paste into a training loop.
 
 ## The Shared Scaffolding
 
-Everything starts with two arrays:
+What do all five audits have in common? They start from the same two arrays:
 
 ```python
 import jax
@@ -144,7 +144,7 @@ def collapse_ratio(z, y, c, eps=1e-8):
     return within / (total + eps)
 ```
 
-This number answers the first audit question. It does not tell you whether the
+This number is the first line of the report. It does not tell you whether the
 classes are arranged well; it only tells you whether each class is becoming a
 tight code. In neural collapse notation, this is the first thing that vanishes.
 
@@ -184,8 +184,9 @@ destroying representational capacity.
 
 ## 3. Simplex: When The Class Codes Fit
 
-Now reduce each class to one normalized mean. If `C` centered class codes fit in
-the dimension, the simplex target is one repeated off-diagonal cosine:
+Tight classes and healthy rank still say nothing about the *arrangement*. For
+that, reduce each class to one normalized mean: if `C` centered class codes fit
+in the dimension, the simplex target is one repeated off-diagonal cosine:
 
 $$
 \langle m_i, m_j\rangle = -\frac{1}{C-1}.
@@ -407,7 +408,7 @@ just the audit report made visible.
 <CiteAs
   slug="welch-bound-jax-analysis"
   title="Auditing Latent Space Geometry in JAX"
-  pubDate="2026-06-02"
+  pubDate="2026-06-02T12:00:00-07:00"
 />
 
 <style>{`

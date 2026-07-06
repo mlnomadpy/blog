@@ -61,20 +61,30 @@ defineViz('sphereharm', {
     st._g = { cx, cy, gR };
     const kap = (t) => Math.exp(sharp * (t - 1));
     const fAt = (p) => { let s = 0; for (const pr of st.protos) s += pr.a * kap(p[0] * pr.v[0] + p[1] * pr.v[1] + p[2] * pr.v[2]); return s; };
-    // render front hemisphere to an offscreen ImageData, then drawImage (DPR-safe)
-    const S = Math.round(gR * 2); const off = st.off; off.width = S; off.height = S;
-    const octx = off.getContext('2d'); const img = octx.createImageData(S, S);
-    const bg = hex(colors.cellBg || colors.bg), pos = hex(ACC), neg = hex('#4a7fb3');
-    // estimate scale from the prototypes' own peaks
-    let fmax = 1e-6; for (const pr of st.protos) fmax = Math.max(fmax, Math.abs(fAt(pr.v)));
-    for (let py = 0; py < S; py++) for (let px = 0; px < S; px++) {
-      const x = (px - gR) / gR, y = -(py - gR) / gR, r2 = x * x + y * y; const o = (py * S + px) * 4;
-      if (r2 > 1) { img.data[o + 3] = 0; continue; }
-      const z = Math.sqrt(1 - r2); const v = fAt([x, y, z]) / fmax; const t = Math.max(-1, Math.min(1, v));
-      const base = t >= 0 ? pos : neg, a = Math.abs(t); const shade = 0.55 + 0.45 * z;   // simple rim shading
-      img.data[o] = (bg[0] + (base[0] - bg[0]) * a) * shade; img.data[o + 1] = (bg[1] + (base[1] - bg[1]) * a) * shade; img.data[o + 2] = (bg[2] + (base[2] - bg[2]) * a) * shade; img.data[o + 3] = 255;
+    // render front hemisphere to an offscreen ImageData, then drawImage (DPR-safe).
+    // The raster depends only on sharpness, the prototype vectors, the theme and the
+    // globe radius, not on any hover-only state, so it is cached and rebuilt only when
+    // one of those changes. Dragging a prototype (which moves a lobe) recomputes; a
+    // pointerdown that grabs nothing, or a repaint at the same sharpness, reuses it.
+    const S = Math.round(gR * 2); const off = st.off;
+    let fieldKey = sharp + '|' + S + '|' + (colors.cellBg || colors.bg) + '|' + ACC;
+    for (const pr of st.protos) fieldKey += '|' + pr.v[0] + ',' + pr.v[1] + ',' + pr.v[2] + ',' + pr.a;
+    if (st._fieldKey !== fieldKey) {
+      off.width = S; off.height = S;
+      const octx = off.getContext('2d'); const img = octx.createImageData(S, S);
+      const bg = hex(colors.cellBg || colors.bg), pos = hex(ACC), neg = hex('#4a7fb3');
+      // estimate scale from the prototypes' own peaks
+      let fmax = 1e-6; for (const pr of st.protos) fmax = Math.max(fmax, Math.abs(fAt(pr.v)));
+      for (let py = 0; py < S; py++) for (let px = 0; px < S; px++) {
+        const x = (px - gR) / gR, y = -(py - gR) / gR, r2 = x * x + y * y; const o = (py * S + px) * 4;
+        if (r2 > 1) { img.data[o + 3] = 0; continue; }
+        const z = Math.sqrt(1 - r2); const v = fAt([x, y, z]) / fmax; const t = Math.max(-1, Math.min(1, v));
+        const base = t >= 0 ? pos : neg, a = Math.abs(t); const shade = 0.55 + 0.45 * z;   // simple rim shading
+        img.data[o] = (bg[0] + (base[0] - bg[0]) * a) * shade; img.data[o + 1] = (bg[1] + (base[1] - bg[1]) * a) * shade; img.data[o + 2] = (bg[2] + (base[2] - bg[2]) * a) * shade; img.data[o + 3] = 255;
+      }
+      octx.putImageData(img, 0, 0);
+      st._fieldKey = fieldKey;
     }
-    octx.putImageData(img, 0, 0);
     ctx.drawImage(off, cx - gR, cy - gR, gR * 2, gR * 2);
     ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(cx, cy, gR, 0, 6.283); ctx.stroke();
     // prototypes on the front hemisphere

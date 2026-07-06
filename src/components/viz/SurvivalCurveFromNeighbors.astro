@@ -1,0 +1,92 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 420 } = Astro.props;
+---
+<figure class="viz survneighbors" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// A survival curve you can read the reasons for. Instead of one opaque curve, the
+// patient's predicted survival is the kernel-weighted blend of the survival curves
+// of the prototype patients they resemble: Nadaraya-Watson, made clinical. The
+// faint curves are the neighbors; the bold one is their weighted average; the
+// dashed line is the black-box Cox curve for comparison.
+// Data: scripts/yat_deepsurv.py -> curves.json.
+import { defineViz } from './engine/vizkit.js';
+import { gate, loadingText, axes, T as Ty, fmt } from './engine/draw.js';
+
+defineViz('survneighbors', {
+  title: 'A survival curve blended from the patients you resemble.',
+  height: 420,
+  controls: [
+    { type: 'select', name: 'who', label: 'patient', value: '0',
+      options: [{ value: '0', label: 'patient A' }, { value: '1', label: 'patient B' }, { value: '2', label: 'patient C' }] },
+    { type: 'toggle', name: 'neighbors', label: 'show neighbor curves', value: true },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    gate(api, () => import('./deepsurv.js').then((m) => m.loadCurves()), (api, d) => {
+      api.state.d = d;
+    });
+  },
+
+  onControl(name, value, api) { api.render(); },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    if (!st.ready) { loadingText(api); return; }
+    const d = st.d;
+    const p = d.patients[+api.get('who')];
+    const tg = d.tgrid, T = tg.length;
+
+    const pad = 16, top = 30, bottom = 40;
+    const bx = pad, by = top, bw = W - 2 * pad, bh = H - top - bottom;
+    const A = axes(ctx, { x: bx, y: by, w: bw, h: bh }, {
+      xMin: 0, xMax: tg[T - 1], yMin: 0, yMax: 1,
+      xTicks: [0, 50, 100, 150, 200, 250], yTicks: [0, 0.25, 0.5, 0.75, 1],
+      fmtX: (v) => v.toFixed(0), fmtY: (v) => v.toFixed(2), grid: true, border: true,
+    }, colors);
+
+    const line = (curve, color, w, alpha, dash) => {
+      ctx.strokeStyle = color; ctx.lineWidth = w; ctx.globalAlpha = alpha;
+      if (dash) ctx.setLineDash(dash); else ctx.setLineDash([]);
+      ctx.beginPath();
+      for (let i = 0; i < T; i++) { const x = A.sx(tg[i]), y = A.sy(curve[i]); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+      ctx.stroke(); ctx.globalAlpha = 1; ctx.setLineDash([]);
+    };
+
+    // neighbor curves, weighted by resemblance (thicker = more weight)
+    if (api.get('neighbors')) {
+      p.top_protos.forEach((u, r) => {
+        line(d.proto_curves[u], colors.muted, 1 + 2 * p.top_weights[r], 0.22 + 0.3 * p.top_weights[r] / (p.top_weights[0] + 1e-6));
+      });
+    }
+    // the black-box Cox curve
+    line(p.blackbox, colors.blue, 2, 0.9, [5, 4]);
+    // the kernel-blended (Nadaraya-Watson) curve
+    line(p.nw, colors.accent, 2.8, 1);
+
+    // legend
+    Ty(ctx, colors, 'small', { color: colors.accent, weight: 'b' });
+    ctx.fillText('— blend of neighbors (this model)', bx + 8, by + 6);
+    Ty(ctx, colors, 'small', { color: colors.blue });
+    ctx.fillText('- - Cox baseline curve', bx + 8, by + 20);
+    if (api.get('neighbors')) {
+      Ty(ctx, colors, 'small', { color: colors.muted });
+      ctx.fillText('faint: the prototype neighbors, weighted by resemblance', bx + 8, by + 34);
+    }
+    Ty(ctx, colors, 'small', { align: 'center', color: colors.muted });
+    ctx.fillText('months since diagnosis', bx + bw / 2, by + bh + 28);
+
+    const wsum = p.top_weights.reduce((a, b) => a + b, 0);
+    api.readout('rd', `${(100 * wsum).toFixed(0)}% of this patient's survival curve comes from ${p.top_protos.length} prototypes (#${p.top_protos.join(', #')}). The bold curve is their resemblance-weighted average.`);
+  },
+});
+</script>

@@ -1,0 +1,122 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 460 } = Astro.props;
+---
+<figure class="viz depthdial" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Depth is a dial, not a fixed number of layers. Turn it: the decision surface is
+// the shared operator applied k times to every point of the input plane. For the
+// first few turns the boundary snaps into shape; after that it stops changing, so
+// there is nothing to gain from more depth. One operator, any depth, and the
+// network can safely stop as soon as the picture stops moving. Live compute.
+import { defineViz } from './engine/vizkit.js';
+import { gate, loadingText, mix, parseColor } from './engine/draw.js';
+import { loadReady, compute, makeRunner, CLS_A, CLS_B } from './yatdeq.js';
+
+const N = 100, KMAX = 14;
+const LOX = -2.6, HIX = 2.6, LOY = -2.6, HIY = 2.6;
+
+defineViz('depthdial', {
+  title: 'Turn up the depth. The answer forms, then stops changing.',
+  height: 460,
+  controls: [
+    { type: 'range', name: 'k', label: 'depth (iterations)', min: 0, max: KMAX, step: 1, value: KMAX, int: true,
+      reset: false, fmt: (v) => v, play: { period: 4200, loop: false } },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    gate(api, loadReady, (api, model) => {
+      const cmp = compute(model), T = model.test, nT = T.y.length;
+      const grid = new Array(N * N);
+      for (let r = 0; r < N; r++) for (let c = 0; c < N; c++)
+        grid[r * N + c] = [LOX + (c / (N - 1)) * (HIX - LOX), HIY - (r / (N - 1)) * (HIY - LOY)];
+      // iterate the whole plane and the test set on-device, snapshot the class-1 field at every depth
+      const rg = makeRunner(cmp, grid), rt = makeRunner(cmp, T.x);
+      const accOf = (probs) => { let ok = 0; for (let i = 0; i < nT; i++) if ((probs[i] > 0.5 ? 1 : 0) === T.y[i]) ok++; return ok / nT; };
+      const fields = [Float32Array.from(rg.prob1())];
+      const accs = [accOf(rt.prob1())];
+      for (let k = 1; k <= KMAX; k++) {
+        rg.step(); rt.step();
+        fields.push(Float32Array.from(rg.prob1())); accs.push(accOf(rt.prob1()));
+      }
+      rg.dispose(); rt.dispose();
+      // first depth at which accuracy reaches its plateau (within 0.5% of the best it ever gets)
+      let frozen = KMAX; const target = Math.max(...accs);
+      for (let k = 0; k <= KMAX; k++) if (accs[k] >= target - 0.005) { frozen = k; break; }
+      api.state.M = { fields, accs, frozen, tx: T.x, ty: T.y, off: document.createElement('canvas'), key: '' };
+    });
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0) return;
+    ctx.clearRect(0, 0, W, H);
+    if (!st.ready || !st.M) { loadingText(api, 'sweeping the input plane…'); return; }
+    const M = st.M, k = Math.min(api.get('k'), KMAX);
+    const pad = 16, side = Math.min(W - pad * 2 - 150, H - pad * 2 - 8);
+    const B = { x: pad, y: pad + 4, w: side, h: side };
+
+    // build the field image for this depth (offscreen -> drawImage keeps it retina-safe)
+    const key = k + '|' + colors.bg;
+    if (M.key !== key) {
+      M.key = key; const off = M.off; off.width = N; off.height = N;
+      const octx = off.getContext('2d'), img = octx.createImageData(N, N);
+      const bg = parseColor(colors.bg || '#ffffff'), lo = parseColor(CLS_A), hi = parseColor(CLS_B);
+      const f = M.fields[k];
+      for (let i = 0; i < N * N; i++) {
+        const t = f[i], col = t < 0.5 ? mix(bg, lo, (0.5 - t) * 2) : mix(bg, hi, (t - 0.5) * 2);
+        img.data[i * 4] = col[0] | 0; img.data[i * 4 + 1] = col[1] | 0; img.data[i * 4 + 2] = col[2] | 0; img.data[i * 4 + 3] = 255;
+      }
+      // darken cells straddling p=0.5 to draw the boundary
+      for (let r = 0; r < N; r++) for (let c = 0; c < N - 1; c++) {
+        const a = f[r * N + c] - 0.5, b = f[r * N + c + 1] - 0.5;
+        if (a * b < 0) { const i = (r * N + c) * 4; img.data[i] = img.data[i + 1] = img.data[i + 2] = 30; }
+      }
+      octx.putImageData(img, 0, 0);
+    }
+    ctx.imageSmoothingEnabled = true; ctx.drawImage(M.off, B.x, B.y, B.w, B.h);
+    ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.strokeRect(B.x + 0.5, B.y + 0.5, B.w - 1, B.h - 1);
+
+    // test points
+    const px = (x) => B.x + ((x - LOX) / (HIX - LOX)) * B.w, py = (y) => B.y + ((HIY - y) / (HIY - LOY)) * B.h;
+    for (let i = 0; i < M.ty.length; i++) {
+      ctx.fillStyle = M.ty[i] ? CLS_B : CLS_A; ctx.beginPath(); ctx.arc(px(M.tx[i][0]), py(M.tx[i][1]), 2.4, 0, 6.283); ctx.fill();
+      ctx.strokeStyle = colors.bg; ctx.lineWidth = 0.6; ctx.stroke();
+    }
+
+    // side panel: depth ladder of accuracy
+    const S = { x: B.x + B.w + 26, y: B.y + 6, w: W - pad - (B.x + B.w + 26), h: B.h - 12 };
+    ctx.fillStyle = colors.fg; ctx.font = '12px ui-sans-serif, system-ui'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('accuracy vs depth', S.x, S.y - 2);
+    const ay0 = S.y + 16, ah = S.h - 30, amin = 0.4, amax = 1.0;
+    const ax = (i) => S.x + (i / KMAX) * S.w, ayv = (a) => ay0 + ah - ((a - amin) / (amax - amin)) * ah;
+    ctx.strokeStyle = colors.border; ctx.globalAlpha = 0.4;
+    for (const a of [0.5, 0.75, 1.0]) { ctx.beginPath(); ctx.moveTo(S.x, ayv(a)); ctx.lineTo(S.x + S.w, ayv(a)); ctx.stroke();
+      ctx.globalAlpha = 1; ctx.fillStyle = colors.faint; ctx.font = '9px ui-monospace, monospace'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText((a * 100).toFixed(0), S.x - 3, ayv(a)); ctx.globalAlpha = 0.4; }
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = colors.blue; ctx.lineWidth = 2.2; ctx.beginPath();
+    for (let i = 0; i <= KMAX; i++) { const x = ax(i), y = ayv(M.accs[i]); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.stroke();
+    // frozen marker
+    ctx.strokeStyle = colors.accent; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(ax(M.frozen), ay0); ctx.lineTo(ax(M.frozen), ay0 + ah); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = colors.accent; ctx.font = '9px ui-sans-serif, system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText('plateau @ ' + M.frozen, ax(M.frozen), ay0 - 1);
+    // current depth marker
+    ctx.fillStyle = colors.fg; ctx.beginPath(); ctx.arc(ax(k), ayv(M.accs[k]), 4, 0, 6.283); ctx.fill();
+    ctx.strokeStyle = colors.bg; ctx.lineWidth = 1.4; ctx.stroke();
+    ctx.fillStyle = colors.muted; ctx.font = '11px ui-sans-serif, system-ui'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('depth ' + k, S.x, ay0 + ah + 20);
+    ctx.fillStyle = colors.fg; ctx.font = 'bold 13px ui-sans-serif, system-ui'; ctx.fillText((M.accs[k] * 100).toFixed(1) + '%', S.x + 52, ay0 + ah + 20);
+
+    api.readout('rd', k < M.frozen
+      ? `depth ${k}: boundary still forming, test accuracy ${(M.accs[k] * 100).toFixed(1)}%`
+      : `depth ${k}: accuracy reached its plateau by depth ${M.frozen}; more depth buys nothing (${(M.accs[k] * 100).toFixed(1)}%)`);
+  },
+});
+</script>

@@ -65,7 +65,7 @@ defineViz('rbfexpansion', {
     let sse = 0;
     for (let i = 0; i <= M; i++) { let s = 0; for (let j = 0; j < n; j++) { const d = xs[i] - centers[j]; s += alpha[j] * Math.exp(-(d * d) * inv2ss); } const px = sx(xs[i]), py = sy(s); i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); const e = s - target(xs[i]); sse += e * e; } ctx.stroke();
     ctx.fillStyle = muted; for (let k = 0; k < n; k++) { ctx.beginPath(); ctx.arc(sx(centers[k]), sy(targets[k]), 3, 0, Math.PI * 2); ctx.fill(); }
-    api.readout('ro', `σ ${sigma.toFixed(2)} · ${n} anchors · RMSE ${Math.sqrt(sse / (M + 1)).toFixed(3)} · jax-js`);
+    api.readout('ro', `σ ${sigma.toFixed(2)} · ${n} anchors · RMSE ${Math.sqrt(sse / (M + 1)).toFixed(3)} · live`);
   },
 });
 </script>

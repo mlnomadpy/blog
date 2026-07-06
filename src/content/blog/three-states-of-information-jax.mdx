@@ -2,7 +2,7 @@
 title: "The Three States of Information, in JAX"
 description: "A runnable companion to The Three States of Information: train tiny models in JAX and measure the three states directly: the feature-covariance spectrum collapsing from high-rank (random) to a C−1-mode frame (structured), the distributional simplicity bias that fits low-order structure first (organized), the neural-collapse simplex where class-mean cosines lock onto −1/(C−1), and the alignment/uniformity split of contrastive learning running on two separate clocks. Four live JAX visualizations, every number an eigenvalue or a loss."
 seoDescription: "Three states of information in JAX: effective rank, simplicity bias, neural-collapse equiangularity, and contrastive alignment versus uniformity."
-pubDate: 2026-06-07T12:40:00-07:00
+pubDate: 2026-06-07T12:45:00-07:00
 draft: false
 tags: [ml, training-dynamics, representation-learning, neural-collapse, simplex-etf, contrastive, phase-transitions, jax, implementation]
 references:
@@ -46,7 +46,7 @@ keywords:
 ---
 import CiteAs from '../../components/CiteAs.astro';
 
-*The [explainer](/blog/three-states-of-information/) named three states a representation passes through while training (**random**, **organized**, **structured**) and argued the loss plateaus are the transitions between them. This is the implementation companion: four tiny JAX runs that **measure** each state directly. The spectrum's effective rank falling from `d` toward `C−1`; the simplicity bias that fits a near-linear boundary before it wraps the moons; the class-mean cosines locking onto the Welch value `−1/(C−1)`; and the contrastive loss splitting into two forces on two clocks. Each metric is an eigenvalue or a loss, nothing scripted.*
+*The [explainer](/blog/three-states-of-information/) named three states a representation passes through while training (**random**, **organized**, **structured**) and argued the loss plateaus are the transitions between them. This is the implementation companion: four tiny JAX runs that **measure** each state directly. The spectrum's effective rank falling from high rank toward `C−1`; the simplicity bias that fits a near-linear boundary before it wraps the moons; the class-mean cosines locking onto the Welch value `−1/(C−1)`; and the contrastive loss splitting into two forces on two clocks. Each metric is an eigenvalue or a loss, nothing scripted.*
 
 *Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/three-states-of-information-jax): the same code, block by block, with the math written out and every figure reproduced from a real run.*
 
@@ -67,7 +67,7 @@ def make_step(loss_fn, opt):
 
 ## State as spectrum: effective rank falls toward C−1
 
-The cleanest single number for "how structured is this representation" is the **effective rank** of the feature covariance, the participation ratio $(\sum_i \lambda_i)^2 / \sum_i \lambda_i^2$ of its eigenvalues. At initialization the features are isotropic and the spectrum is flat, so the effective rank is near the full dimension `d` (the **random** state). As training squeezes out within-class variation, a few modes dominate and the rest are ground down; the spectrum collapses onto the `C−1` directions that separate the classes (the **structured** state). Organized is the in-between, where a handful of modes have emerged but the tail has not yet vanished.
+Can a single number say which state a representation is in? The best candidate is the **effective rank** of the feature covariance, the participation ratio $(\sum_i \lambda_i)^2 / \sum_i \lambda_i^2$ of its eigenvalues. At initialization no direction is preferred yet, the spectrum is spread over many modes, and the effective rank sits high, far above `C−1` (the **random** state; a finite ReLU network is not perfectly isotropic, so it starts high rather than at the full `d`). As training squeezes out within-class variation, a few modes dominate and the rest are ground down; the spectrum collapses onto the `C−1` directions that separate the classes (the **structured** state). Organized is the in-between, where a handful of modes have emerged but the tail has not yet vanished.
 
 ```python
 def feature_spectrum(Z):
@@ -81,19 +81,19 @@ def effective_rank(ev):
     return (ev.sum() ** 2) / (jnp.sum(ev ** 2) + 1e-12)   # participation ratio
 ```
 
-Train a small classifier on `C=5` Gaussian blobs with a `d=12` feature layer and watch the effective rank fall from ~12 toward `C−1 = 4`:
+Train a small classifier on `C=5` Gaussian blobs with a `d=12` feature layer and watch the effective rank fall from 7.6 toward `C−1 = 4`:
 
 ```python
 ev0 = feature_spectrum(feats(params, X))
-print("init effective rank:", float(effective_rank(ev0)))     # ~ 12 (isotropic)
+print("init effective rank:", float(effective_rank(ev0)))     # 7.56 (well above C-1)
 # ... train ...
 evT = feature_spectrum(feats(params, X))
-print("final effective rank:", float(effective_rank(evT)))    # ~ 3.9 ≈ C-1
+print("final effective rank:", float(effective_rank(evT)))    # 3.86, close to C-1 = 4
 ```
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/ts-spectrum-states.gif" alt="Animated feature-covariance eigenspectrum collapsing from a flat high-rank profile to a low-rank C-1-mode frame, with a state badge reading RANDOM, ORGANIZED, STRUCTURED" loading="eager" width="1100" height="520" />
-  <figcaption>Training reshapes the spectrum, computed live in JAX. A small classifier is trained with cross-entropy; each frame takes the eigenspectrum of the `d=12` feature covariance. It starts flat and high-rank (RANDOM, effective rank ≈ 12), develops a few dominant modes (ORGANIZED), and collapses onto a `C−1`-mode frame (STRUCTURED, effective rank ≈ 3.9). The badge reads the state off the spectrum and a 2-D class-separation metric.</figcaption>
+  <figcaption>Training reshapes the spectrum, computed live in JAX. A small classifier is trained with cross-entropy; each frame takes the eigenspectrum of the `d=12` feature covariance. The untrained network starts at effective rank 7.6, and the first few steps grind the tail down so fast that the animation opens mid-fall, at 4.7 with the badge already reading ORGANIZED; the spectrum then settles onto a `C−1`-mode frame (STRUCTURED, effective rank 3.9). The badge reads the state off the spectrum and a 2-D class-separation metric.</figcaption>
 </figure>
 
 ## Organized first: the simplicity bias
@@ -131,7 +131,7 @@ def boundary_complexity(p, grid, shape):
 
 ## Structured: the simplex and the Welch value
 
-The structured endpoint is not arbitrary. In the balanced classification limit the class means converge to a **simplex equiangular tight frame**: every pair of class-mean directions sits at the same angle, and that angle is the [Welch bound](/blog/welch-bound-good-latent-space/) value $-1/(C-1)$, the most-separated arrangement possible for `C` points on a sphere (Papyan, Han & Donoho, 2020; Welch, 1974). The diagnostic is the distribution of off-diagonal class-mean cosines: it should concentrate onto that single value.
+Where does the collapse land? Not at an arbitrary arrangement: in the balanced classification limit the class means converge to a **simplex equiangular tight frame**, every pair of class-mean directions at the same angle, and that angle is the [Welch bound](/blog/welch-bound-good-latent-space/) value $-1/(C-1)$, the most-separated arrangement possible for `C` points on a sphere (Papyan, Han & Donoho, 2020; Welch, 1974). The diagnostic is the distribution of off-diagonal class-mean cosines: it should concentrate onto that single value.
 
 ```python
 def equiangularity(Z, y, C):
@@ -156,7 +156,7 @@ print("equiangularity std:", float(cos.std()))   # -> 0 as the frame tightens
 
 ## Two clocks: alignment and uniformity
 
-The supervised picture has a contrastive twin. Wang & Isola (2020) show the contrastive loss decomposes into **alignment** (positive pairs pulled together) and **uniformity** (features spread evenly over the sphere). The two are not optimized at the same speed, and watching them separately is the cleanest view of organized-then-structured. With strong augmentations the dynamics are striking: uniformity (the spread) resolves first, and *while it spreads it flings positive pairs apart*, so alignment shows an early hump before the second phase pulls positives back together.
+Does the road through the states always run in the same direction? The supervised runs above went local-order-first: clusters, then the global frame. Contrastive learning is where that order can flip. Wang & Isola (2020) decompose the contrastive loss into **alignment** (positive pairs pulled together, the force behind local order) and **uniformity** (features spread evenly over the sphere, the force behind global order), and nothing says the two resolve at the same speed. In this run the augmentations are strong, and the race runs backwards: uniformity resolves fast, and *while it spreads it flings positive pairs apart*, so alignment climbs an early hump before a second, slower phase pulls positives back together. Global order arrives before local order, the mirror image of the explainer's gas-liquid-crystal route, and both routes end at the same structured code.
 
 ```python
 def align_loss(za, zb):
@@ -186,7 +186,7 @@ def enc(p, x):
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/ts-align-uniform.gif" alt="Animated contrastive embedding spreading onto a circle then snapping positive pairs together, with alignment and uniformity loss curves resolving on different timescales" loading="lazy" width="1100" height="520" />
-  <figcaption>The alignment/uniformity split, computed live in JAX. An encoder trained with the Wang–Isola loss maps eight augmented classes onto the unit circle. Right panel: uniformity (the spread, orange) resolves fast (the ORGANIZED state) while alignment (blue) shows a tell-tale early hump as spreading flings positives apart, then resolves slowly into the STRUCTURED state. Two forces, two clocks; the structured end is uniform *and* aligned.</figcaption>
+  <figcaption>The alignment/uniformity split, computed live in JAX. An encoder trained with the Wang–Isola loss maps eight augmented classes onto the unit circle. Right panel: uniformity (the spread, orange) resolves fast, while alignment (blue) climbs a tell-tale early hump as spreading flings positives apart, then resolves slowly. The badge names this run's two stations, spread-but-loose and then uniform-plus-aligned; read its middle label with care, because global spread without local order is the mirror image of the explainer's organized state, not the same stop. The end is the structured state either way: uniform *and* aligned.</figcaption>
 </figure>
 
 ## Rendering the GIFs
@@ -204,13 +204,13 @@ None is a benchmark; they are visual audits of the three states. The objects are
 
 ## The point
 
-The explainer made the case in pictures and prose; this companion turns each state into a number you can watch fall or concentrate. **Random** is a flat, full-rank spectrum. **Organized** is low-order structure fit first: a near-linear boundary, positives loosely clustered. **Structured** is the `C−1`-mode frame, the equiangular simplex at `−1/(C−1)`, the uniform-and-aligned sphere. Same three states, four different instruments, all live in JAX.
+The explainer made the case in pictures and prose; this companion turns each state into a number you can watch fall or concentrate. **Random** is a spread, high-rank spectrum. **Organized** is local, low-order structure fit first: dominant modes emerging, a near-linear boundary. **Structured** is the `C−1`-mode frame, the equiangular simplex at `−1/(C−1)`, the sphere uniform and aligned at once, however the two forces split the work of getting there. Same three states, four different instruments, all live in JAX.
 
 ---
 
 *References: three-states framing and the contrastive split from [Wang & Isola (2020)](https://arxiv.org/abs/2005.10242); neural collapse from [Papyan, Han & Donoho (2020)](https://arxiv.org/abs/2008.08186); the simplicity bias from [Refinetti et al. (2023)](https://arxiv.org/abs/2211.11567) and [Belrose et al. (2024)](https://arxiv.org/abs/2402.04362); saddle-to-saddle dynamics from [Saxe, McClelland & Ganguli (2013)](https://arxiv.org/abs/1312.6120); the Welch bound from [Welch (1974)](https://doi.org/10.1109/TIT.1974.1055219).*
 
-<CiteAs slug="three-states-of-information-jax" title="The Three States of Information, in JAX" pubDate="2026-06-07T12:40:00-07:00" />
+<CiteAs slug="three-states-of-information-jax" title="The Three States of Information, in JAX" pubDate="2026-06-07T12:45:00-07:00" />
 
 <style>{`
 .jax-fig { margin: 1.8rem auto; text-align: center; }

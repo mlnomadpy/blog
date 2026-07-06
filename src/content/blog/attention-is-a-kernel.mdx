@@ -86,29 +86,30 @@ keywords:
 import KernelSmoother from '../../components/viz/KernelSmoother.astro';
 import AttentionPatterns from '../../components/viz/AttentionPatterns.astro';
 import RBFExpansion from '../../components/viz/RBFExpansion.astro';
+import NoDistanceScatter from '../../components/viz/NoDistanceScatter.astro';
 import CiteAs from '../../components/CiteAs.astro';
 
-*A reading of self-attention through kernel smoothing and RKHS.*
+Open a transformer block and you find two layers sitting on equal footing. They share the residual stream, they consume comparable parameter budgets, and they were designed as a pair. Yet practitioners read one and not the other. Attention heads earn names for the algorithms they run: induction heads, copying heads, name-mover heads, positional heads. The position-wise MLP next door gets called "computation," "feature synthesis," or simply "the part we don't yet understand."
 
----
-
-Self-attention is the part of a transformer that practitioners can usually read. Heads can be visualized, individual attention patterns line up with recognizable behaviors, and a token's output can be written as an explicit weighted sum over other tokens. The position-wise MLP, sitting in the very same block, almost never affords this kind of reading.
-
-This piece is an explanation, not a new result. The observation that self-attention is mathematically a kernel smoother is due to [Tsai et al. (2019)](https://aclanthology.org/D19-1443/) and has been developed further by [Song et al. (2021)](https://ojs.aaai.org/index.php/AAAI/article/view/17172), [Choromanski et al. (2021)](https://arxiv.org/abs/2009.14794), [Katharopoulos et al. (2020)](https://arxiv.org/abs/2006.16236), and [Han et al. (2022)](https://arxiv.org/abs/2210.05794), among others. What I want to emphasize, and what seems to me underdiscussed, is that this is not just a reformulation useful for designing efficient attention variants. It is the reason attention is explainable in the first place.
-
-The claim of this piece, in one sentence: everything practitioners find "explainable" about attention is downstream of the single structural fact that attention has a kernel, and therefore it has a geometry, normalized contribution mass, and (when one is willing to symmetrize) an RKHS in which to reason about it. A standard ReLU MLP has none of these, not because it is more powerful, but because it is not a kernel machine.
+The disparity is so familiar that it is easy to mistake for a fact about visualization tooling: attention hands you a matrix you can plot, and the MLP does not. But the MLP has plottable matrices too, and plotting them has never produced an induction head. Something else separates the two layers, something the architecture diagram does not advertise. What does attention have that the MLP lacks?
 
 ## The asymmetry that the architecture does not advertise
 
-Inside a single transformer block, self-attention and the position-wise MLP sit on equal footing. They share the residual stream and consume comparable parameter budgets. Yet attention heads are routinely described in algorithmic terms (induction heads, copying heads, name-mover heads, positional heads), while MLPs are described, when described at all, as "computation," "feature synthesis," or simply "the part we don't yet understand."
-
-The disparity is so familiar that it is easy to mistake for a fact about visualization tooling. It is not. The asymmetry is mathematical, and it has a name in the older literature: **attention is a kernel smoother, and the MLP is not**.
+The answer turns out to be older than the transformer, and it comes from classical statistics: **attention is a kernel smoother, and the MLP is not**.
 
 Once one sees attention as a kernel smoother, the things practitioners do when they "explain a head" (reading off pairwise affinities $q_i \cdot k_j$, attributing portions of the output to specific tokens, reasoning about locality and retrieval) turn out to be exactly the operations that kernel smoothers were designed to support a half-century before transformers existed. The MLP, by contrast, has no kernel and so admits none of these operations natively. Whatever interpretability one can extract from it has to be imposed externally, by training a separate decoder, projecting into a learned dictionary, or otherwise constructing the geometry that the layer itself does not carry.
 
+That is the claim this piece defends: everything practitioners find "explainable" about attention is downstream of the single structural fact that attention has a kernel, and therefore a geometry, a normalized contribution mass, and (when one is willing to symmetrize) an RKHS in which to reason about it. A standard ReLU MLP has none of these, not because it is more powerful, but because it is not a kernel machine.
+
+The mathematical observation itself is not new. That self-attention is a kernel smoother is due to [Tsai et al. (2019)](https://aclanthology.org/D19-1443/), developed further by [Song et al. (2021)](https://ojs.aaai.org/index.php/AAAI/article/view/17172), [Choromanski et al. (2021)](https://arxiv.org/abs/2009.14794), [Katharopoulos et al. (2020)](https://arxiv.org/abs/2006.16236), and [Han et al. (2022)](https://arxiv.org/abs/2210.05794), mostly in service of designing efficient attention variants. What seems to me underdiscussed is what the reformulation explains: it is the reason attention is explainable in the first place.
+
 ## Attention as a kernel smoother
 
-The starting point is the definition every reader knows. Given a token sequence with queries $Q$, keys $K$, and values $V$ obtained by learned linear projections, scaled dot-product attention returns:
+What was a statistician in 1964 supposed to do with a scatter of noisy observations and no model to fit? Nadaraya and Watson's answer was almost embarrassingly direct: to predict at a point, let every observation vote, and weight each vote by how close that observation sits to the point you are asking about. The "how close" is a kernel, a bump centered on the query. Slide the query and the bump slides with it; observations under the bump dominate the vote, observations outside it barely count. The prediction is a locally weighted average that follows whatever the data does nearby, with no global model anywhere in sight.
+
+<KernelSmoother caption="Nadaraya–Watson kernel regression, computed live on this page. Drag along the chart to move the query x. The bell at the bottom is the kernel centered at x; data points are sized by their kernel weight. The smoothed curve is the prediction for every x in the domain. Self-attention is this picture, with the kernel replaced by an exponential dot product over learned q/k projections and the y_i replaced by learned value projections." />
+
+Now hold that picture and write down the definition every reader knows. Given a token sequence with queries $Q$, keys $K$, and values $V$ obtained by learned linear projections, scaled dot-product attention returns:
 
 $$
 \mathrm{softmax}\!\left(\frac{Q K^\top}{\sqrt d}\right) V,
@@ -122,15 +123,13 @@ y_i = \sum_j \alpha_{ij}\, v_j,
 \alpha_{ij} = \frac{\exp(q_i \cdot k_j / \sqrt d)}{\sum_m \exp(q_i \cdot k_m / \sqrt d)}.
 $$
 
-Side by side with this, write down the Nadaraya–Watson kernel regression estimator from classical nonparametric statistics. Given observations $(x_i, y_i)$ and a query point $x$:
+And here is the smoother from the panel above, in symbols. Given observations $(x_i, y_i)$ and a query point $x$, the Nadaraya–Watson estimator is:
 
 $$
 \hat f(x) = \sum_i \frac{K(x, x_i)}{\sum_j K(x, x_j)}\, y_i.
 $$
 
 These two expressions are the same up to relabeling.
-
-<KernelSmoother caption="Nadaraya–Watson kernel regression. Drag along the chart to move the query x. The orange bell at the bottom is the kernel centered at x; data points are sized by their kernel weight. The smoothed curve is the prediction for every x in the domain. Self-attention is this picture, with the kernel replaced by an exponential dot product over learned q/k projections and the y_i replaced by learned value projections." />
 
 | Kernel regression | Self-attention |
 |---|---|
@@ -144,7 +143,7 @@ The only structural difference is that the kernel in attention is non-symmetric:
 
 ## Three affordances kernel structure gives you
 
-These are what you are actually using whenever you "read" an attention pattern.
+So attention is a kernel smoother that learned its kernel and its targets end to end. What does that buy the person squinting at an attention map? Three things, and they are exactly the moves practitioners already make without naming them.
 
 **1. The kernel is an explicit pairwise score.** For every pair of tokens $(i, j)$ there is a single real number $q_i \cdot k_j$ that summarizes how relevant token $j$ is to token $i$ under this head. Visualizing a head means visualizing the matrix of $\alpha_{ij}$. Comparing two heads means comparing two such matrices. The algorithmic descriptions one finds in the mechanistic interpretability literature ("this head copies from the most recent occurrence of the current token," "this head attends from each token to its syntactic head") are statements about the structure of this matrix. The kernel supplies a geometry on tokens, and geometry is the kind of object humans can reason about.
 
@@ -158,7 +157,7 @@ A standard linear layer, where some output coordinate is a linear combination of
 
 ## And, when you symmetrize, an RKHS
 
-There is one further connection, weaker but worth stating, that completes the picture. If one is willing to symmetrize the kernel, replacing the query/key asymmetry with a single symmetric, positive-definite kernel $K(z, z')$ acting on a shared representation (as several variants in the literature do), then attention lives inside a reproducing kernel Hilbert space
+A pairwise score, a contribution mass, a locality: is that the whole inheritance, or does the kernel go one level deeper? One more level exists, weaker but worth having. If one is willing to symmetrize the kernel, replacing the query/key asymmetry with a single symmetric, positive-definite kernel $K(z, z')$ acting on a shared representation (as several variants in the literature do), then attention lives inside a reproducing kernel Hilbert space
 
 $$
 \mathcal{H}_K = \overline{\mathrm{span}}\{K(\cdot, z) : z \in \mathbb{R}^d\}.
@@ -181,13 +180,11 @@ in this basis with explicit coefficients. "Which token does this output depend o
 <RBFExpansion caption="A function (dashed) approximated as a finite sum of kernel sections K(·, k_j) centered at fixed anchor points. The orange curve is the sum; the lighter strokes are the individual α_j K(·, k_j). Shrinking the kernel width makes each section more local and the explanation more token-specific; widening it pools more sections together. This is what the inside of a kernel-machine layer looks like." />
 
 
-Even where the strict RKHS structure breaks (because the attention kernel is non-symmetric), the kernel-smoother view retains a *geometry* on tokens: a learned distance, an explicit similarity score. It is this geometry that makes attention legible. The MLP, as we now argue, has no geometry at all.
+Even where the strict RKHS structure breaks (because the attention kernel is non-symmetric), the kernel-smoother view retains a *geometry* on tokens: a learned distance, an explicit similarity score. It is this geometry that makes attention legible. And since the other layer in the block sits in the same residual stream and was trained by the same descent, it is natural to expect the same reading to carry straight over.
 
-## The MLP has no kernel, and that is the whole story
+## Now run the same reading on the MLP
 
-We can now state plainly the side of the story that the interpretability literature usually phrases as "MLPs are hard," because the kernel reading makes the obstruction concrete.
-
-A position-wise MLP is, by definition,
+The playbook that worked for attention has three steps: find the pairwise score, read off the contribution masses, use the kernel's geometry to say what "similar" means to the layer. By every expectation of symmetry the same three steps should go through next door. A position-wise MLP is, by definition,
 
 $$
 \mathrm{MLP}(x) = W_2\, \sigma(W_1 x + b_1) + b_2,
@@ -195,9 +192,15 @@ $$
 
 typically with $\sigma$ a ReLU or GELU.
 
-There is no kernel $K(x, x')$ in this expression, learned or otherwise. There is no similarity score one can point at. There is no normalized weighting of inputs into outputs. There is no notion of which directions in $\mathbb{R}^d$ the layer treats as "nearby." There is no Hilbert space in which the function $\mathrm{MLP}$ lives with a controllable norm.
+Now look for step one. There is no kernel $K(x, x')$ in this expression, learned or otherwise. There is no similarity score one can point at. There is no normalized weighting of inputs into outputs. There is no notion of which directions in $\mathbb{R}^d$ the layer treats as "nearby." There is no Hilbert space in which the function $\mathrm{MLP}$ lives with a controllable norm. The reading does not go through, not at step three or step two, but at step one: the object it starts from does not exist.
 
 The pre-activations $(W_1 x + b_1)_i = w_i \cdot x + b_i$ are linear features of the input, but a linear feature is not a kernel: it scores in one direction only, $w_i \in \mathbb{R}^d$, and supplies no geometry on pairs $(x, x')$. The ReLU nonlinearity then composes with the second linear map $W_2$, which mixes neurons arbitrarily and erases any chance that an individual unit corresponds to a human-readable feature.
+
+And you can watch the missing geometry directly, because it is a property of the primitive, not of anything training adds. Take two untrained layers, feed both the same random input pairs, and ask each layer's own similarity score to predict how far apart the two outputs land:
+
+<NoDistanceScatter caption="The missing geometry, computed live on this page from real forward passes through two untrained layers (no training anywhere). Both panels see the same random input pairs (x, x′). Left: a layer of kernel units with random centers; output distance is plotted against the pair's kernel score k(x, x′), and the cloud hugs a single decreasing band, because the kernel score largely determines what the layer does with the pair. Right: a random ReLU MLP; output distance is plotted against x·x′, the only pairwise number the primitive offers, and the score determines almost nothing. Resample to redraw with fresh random weights and inputs; ρ is the live rank correlation in each panel." />
+
+The left cloud bends along one curve; the right cloud is a smear. A kernel layer's outputs track the geometry its kernel defines before a single gradient step, so the score on the horizontal axis is a genuine explanation of the behavior on the vertical one. The ReLU layer offers no score with that property, and no amount of training will conjure one, because the parameterization has nowhere to keep it.
 
 This is, in a precise sense, the structural origin of the now-standard observations about MLP neurons. They are polysemantic because the parameterization does not reward monosemy. They are distributed because the parameterization does not pick out a privileged basis. They are basis-dependent in their feature decomposition because no canonical basis is on offer. The phenomenon called "superposition" is just **the absence of a geometry**. There is no metric on input space that the layer respects, and so features have nowhere natural to live except in arbitrary linear combinations of activations.
 

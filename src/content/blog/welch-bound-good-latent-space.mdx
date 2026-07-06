@@ -1,7 +1,7 @@
 ---
 title: 'What Makes a Good Latent Space? The Welch Bound and the Simplex'
 seoTitle: "What Makes a Good Latent Space? The Welch Bound"
-description: 'A visual story about the hidden codebook inside representation learning: why collapse happens, why opposition is a trap, why class means form a simplex, and why the Welch bound from radio engineering tells us the best possible geometry when too many concepts share too few dimensions.'
+description: 'The hidden codebook inside representation learning: why collapse happens, why opposition is a trap, why class means form a simplex, and why the Welch bound sets the best geometry when too many concepts share too few dimensions.'
 seoDescription: "Why class means form a simplex, and why the Welch bound from radio engineering gives the best latent geometry when too many concepts share too few dimensions."
 pubDate: 2026-06-02
 companion: welch-bound-jax-analysis
@@ -79,19 +79,19 @@ import FrameRaces from '../../components/viz/FrameRaces.astro';
 import AlignUniformity from '../../components/viz/AlignUniformity.astro';
 import CiteAs from '../../components/CiteAs.astro';
 
-*A latent space is a codebook.*
+How many meanings can you pack into a fixed number of dimensions before they start talking over each other? That is the real story of a good latent space: not "features" in the abstract, but a crowded communication channel.
 
-In many normalized embedding systems, classifier heads, contrastive encoders, retrieval models, every class, image, caption, or document is compared through a direction. At inference time, the model listens to those directions and decides which ones sound alike. If two directions are too correlated, they interfere. If every direction collapses into the same corner, the codebook is useless. If the codebook wastes dimensions, it becomes fragile. (Norms and continuous semantics matter too; the codebook lens is the part that the geometry below explains.)
+In many normalized embedding systems (classifier heads, contrastive encoders, retrieval models) every class, image, caption, or document is compared through a direction. At inference time, the model listens to those directions and decides which ones sound alike. If two directions are too correlated, they interfere. If every direction collapses into the same corner, nothing can be told apart. If the directions waste dimensions, the space becomes fragile.
 
-That is the story of a good latent space: not "features" in the abstract, but a crowded communication channel. How many meanings can you pack into a fixed number of dimensions before they start talking over each other?
+*A latent space is a codebook.* (Norms and continuous semantics matter too; the codebook lens is the part that the geometry below explains.)
 
-That question has a floor. Lloyd Welch proved it in 1974 for signal codes, long before anyone was training contrastive encoders. Several corners of modern representation learning keep rediscovering closely related geometry: when there is room, class means arrange as a **regular simplex**; when there is not, the best codebook presses against the **Welch bound**.
+And the packing question has a floor. Lloyd Welch proved it in 1974 for signal codes, long before anyone was training contrastive encoders. Several corners of modern representation learning keep rediscovering closely related geometry: when there is room, class means arrange as a **regular simplex**; when there is not, the best codebook presses against the **Welch bound**.
 
 This post builds that geometry from the failure mode up.
 
 ## The mystery appears immediately
 
-Start with a tiny encoder training live in your browser. Each colour is a class; each dot is an example; the larger rings are class centroids. Press **Play**.
+What does the failure actually look like? Below, a tiny encoder trains live in your browser. Each colour is a class; each dot is an example; the larger rings are class centroids. Press **Play**.
 
 With **repulsion on**, the classes tighten and spread into a clean codebook. Toggle **repulsion off**, re-roll, and run it again. The same encoder now takes the cheap solution: every class lands on the same point.
 
@@ -141,7 +141,7 @@ Now the conflict is visible. Separation wants large angles. Rank wants independe
 
 ## The false answer: make everything opposite
 
-Here is the trap. On the cosine scale, -1 looks like "maximally different." But two antiparallel vectors span one line. They are the same direction with a sign flip.
+What could be more different than opposite? On the cosine scale, -1 looks like "maximally different." But two antiparallel vectors span one line. They are the same direction with a sign flip.
 
 Before you drag the green arrow, guess which configuration is more useful for a representation: 180 degrees apart, or 90 degrees apart?
 
@@ -155,9 +155,9 @@ The correct question is not "how do I make every pair as opposite as possible?" 
 
 That question has a beautiful answer.
 
-## If the classes fit, the answer is a simplex
+## If the classes fit, what shape wins?
 
-For centered class means, $C$ classes fit as a perfect simplex when the embedding dimension satisfies $d \ge C - 1$. In that case, all pairs can share one common angle. No pair gets special treatment. No dimension is wasted.
+When there is room, every pair can get the same deal. For centered class means, room means $d \ge C - 1$: all pairs can then share one common angle. No pair gets special treatment. No dimension is wasted.
 
 The pairwise cosine is
 
@@ -215,7 +215,7 @@ The starts disagree. The floor does not. That is why the geometry is more than a
 
 ## Neural networks rediscover the same shape
 
-In 2020, [Papyan, Han, and Donoho](https://arxiv.org/abs/2008.08186) looked at classifiers trained past zero training error. The late phase of training simplified instead of becoming more chaotic:
+What happens to a classifier trained long past zero training error? The natural guess is drift into ever more idiosyncratic structure. When [Papyan, Han, and Donoho](https://arxiv.org/abs/2008.08186) looked in 2020, they found the opposite. The late phase simplified:
 
 - examples from the same class collapsed toward their class mean;
 - class means converged toward a simplex equiangular tight frame;
@@ -230,7 +230,7 @@ The surprise is not that neural networks found geometry. The surprise is that th
 
 ## Contrastive learning is codebook design with two forces
 
-[Wang and Isola](https://proceedings.mlr.press/v119/wang20k.html) later gave contrastive learning a clean two-force description:
+And what about training without labels? Contrastive learning has no class means to collapse, yet it faces the same crowded channel. [Wang and Isola](https://proceedings.mlr.press/v119/wang20k.html) gave it a clean two-force description:
 
 - **alignment:** matching views should be close;
 - **uniformity:** normalized features should spread over the hypersphere.

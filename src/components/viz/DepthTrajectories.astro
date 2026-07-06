@@ -1,0 +1,97 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 440 } = Astro.props;
+---
+<figure class="viz depthtrajectories" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Real hidden trajectories of the two trained networks, drawn through depth.
+// The residual stream is width 2 by design, so these ARE the hidden states,
+// not a projection. Left: the plain residual net (mu = 0, position updated
+// directly by the block). Right: the momentum net (mu = 0.9, block writes into
+// a velocity, velocity moves the position). Slide depth to watch both flows
+// carry the same test points; the path-length and accuracy readouts are from
+// the run in scripts/momentum_resnet.py.
+import { defineViz } from './engine/vizkit.js';
+import { grid, panel, dot, T, fmt, gate, loadingText } from './engine/draw.js';
+import { loadTraj, CLS } from './momres.js';
+
+defineViz('depthtrajectories', {
+  title: 'The same points, carried by a flow without and with a velocity state',
+  height: 440,
+  controls: [
+    { type: 'select', name: 'ds', label: 'task', reset: false, options: [
+      { value: 'rings', label: 'concentric rings' },
+      { value: 'spirals', label: 'interleaved spirals' }], value: 'rings' },
+    { type: 'range', name: 'depth', label: 'depth l', min: 0, max: 32, step: 1, value: 32, int: true, reset: false, play: { period: 7000, loop: false } },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) {
+    gate(api, loadTraj, (api, d) => {
+      api.state.d = d;
+      api.state.bounds = {};
+      for (const ds of ['rings', 'spirals']) {
+        let m = 0;
+        for (const mu of ['0.0', '0.9']) {
+          const tr = d[`${ds}_mu${mu}`].traj;
+          for (const path of tr) for (const p of path) m = Math.max(m, Math.abs(p[0]), Math.abs(p[1]));
+        }
+        api.state.bounds[ds] = Math.min(m, 6) * 1.06;
+      }
+    });
+  },
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    if (!st || !st.ready) { loadingText(api, 'loading the trained trajectories…'); return; }
+    const ds = api.get('ds'), depth = api.get('depth');
+    const cells = grid(size.W, size.H, 2, 1, 10);
+    const B = st.bounds[ds];
+    const variants = [
+      ['no velocity (mu = 0)', st.d[`${ds}_mu0.0`], 0],
+      ['momentum (mu = 0.9)', st.d[`${ds}_mu0.9`], 1],
+    ];
+    variants.forEach(([name, run, i]) => {
+      const m = panel(ctx, cells[i], colors, { header: 40 });
+      T(ctx, colors, 'label', { color: colors.fg, weight: 'b' });
+      ctx.fillText(name, cells[i].x + 10, cells[i].y + 16);
+      T(ctx, colors, 'small', { color: colors.muted });
+      ctx.fillText(`test acc ${(run.acc * 100).toFixed(1)}% · mean path length ${fmt(run.path_len)} · mean turn ${fmt(run.turn_deg, 0)}°`, cells[i].x + 10, cells[i].y + 30);
+      const px = (p) => [m.cx + (p[0] / B) * m.R, m.cy - (p[1] / B) * m.R];
+      // clip to the cell: deep trajectories run far outside the ±B window
+      ctx.save(); ctx.beginPath();
+      ctx.rect(cells[i].x, cells[i].y, cells[i].w, cells[i].h); ctx.clip();
+      // faint axes cross
+      ctx.strokeStyle = colors.border; ctx.setLineDash([2, 5]); ctx.beginPath();
+      ctx.moveTo(m.cx - m.R, m.cy); ctx.lineTo(m.cx + m.R, m.cy);
+      ctx.moveTo(m.cx, m.cy - m.R); ctx.lineTo(m.cx, m.cy + m.R); ctx.stroke(); ctx.setLineDash([]);
+      const L = run.traj[0].length - 1;
+      const dcur = Math.min(depth, L);
+      run.traj.forEach((path, k) => {
+        const col = CLS[run.y[k]];
+        // path up to the current depth
+        ctx.strokeStyle = col; ctx.lineWidth = 1.2; ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        for (let l = 0; l <= dcur; l++) { const p = px(path[l]); l ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); }
+        ctx.stroke(); ctx.globalAlpha = 1;
+        // start marker (the input point), tiny
+        const p0 = px(path[0]); dot(ctx, p0[0], p0[1], 1.6, col);
+        // head, the current hidden state
+        const ph = px(path[dcur]);
+        dot(ctx, ph[0], ph[1], 3.2, col);
+        if (dcur === L && run.pred[k] !== run.y[k]) {
+          ctx.strokeStyle = '#c2553a'; ctx.lineWidth = 1.6;
+          ctx.beginPath(); ctx.arc(ph[0], ph[1], 6, 0, 6.283); ctx.stroke();
+        }
+      });
+      ctx.restore();
+    });
+    const L = st.d[`${ds}_mu0.0`].traj[0].length - 1;
+    api.readout('rd', `layer ${Math.min(depth, L)} of ${L} · width-2 hidden states of the trained nets, no projection · red ring = misclassified at the readout`);
+  },
+});
+</script>

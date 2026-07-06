@@ -6,12 +6,15 @@ import ReadingProgress from '../components/ReadingProgress.astro';
 import PostNav from '../components/PostNav.astro';
 import RelatedPosts from '../components/RelatedPosts.astro';
 import CompanionCallout from '../components/CompanionCallout.astro';
+import SeriesNav from '../components/SeriesNav.astro';
 import References from '../components/References.astro';
 import PostAnalytics from '../components/PostAnalytics.astro';
 
 interface NavItem { slug: string; title: string }
 interface RelatedPost { slug: string; title: string; description?: string; pubDate: Date }
 interface Pair { role: 'explainer' | 'companion'; slug: string; title: string }
+interface SeriesItem { slug: string; title: string; current: boolean; explainerOfCurrent: boolean }
+interface Series { title: string; part: number; total: number; items: SeriesItem[] }
 interface Reference { key?: string; authors: string; year: number | string; title: string; venue?: string; url?: string; arxiv?: string; doi?: string }
 interface Props {
   title: string;
@@ -19,6 +22,7 @@ interface Props {
   description?: string;
   draft?: boolean;
   pair?: Pair;
+  series?: Series;
   references?: Reference[];
   pubDate: Date;
   updatedDate?: Date;
@@ -37,6 +41,7 @@ const {
   description,
   draft,
   pair,
+  series,
   references = [],
   pubDate,
   updatedDate,
@@ -90,6 +95,7 @@ const postSlug = base && postPath.startsWith(`${base}/`)
         </p>
       )}
     </header>
+    {series && <SeriesNav series={series} />}
     {pair && <CompanionCallout pair={pair} />}
     <slot />
     <References items={references} />

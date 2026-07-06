@@ -1,0 +1,131 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 420 } = Astro.props;
+---
+<figure class="viz patientproto" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Every hidden unit of the Yat risk model is a synthetic patient. Click one and
+// read its chart: the covariate profile it stands for, and whether resembling it
+// raises risk or protects. The "neurons are patients" reveal, computed live from
+// the exported prototypes. Data: scripts/yat_deepsurv.py -> prototypes.json.
+import { defineViz } from './engine/vizkit.js';
+import { gate, loadingText, frame, T as Ty, fmt } from './engine/draw.js';
+import { localPoint } from './engine/pointer.js';
+import { loadProto } from './deepsurv.js';
+
+defineViz('patientproto', {
+  title: 'Every unit is a synthetic patient. Click one.',
+  height: 420,
+  controls: [{ type: 'readout', name: 'rd' }],
+
+  setup(api) {
+    api.state.sel = 0;
+    gate(api, loadProto, (api, d) => {
+      const readouts = d.prototypes.map((p) => p.readout);
+      api.state.d = d;
+      api.state.maxAbs = Math.max(...readouts.map(Math.abs));
+      // pick the most risk-raising prototype to open on
+      api.state.sel = readouts.indexOf(Math.max(...readouts));
+      bind(api);
+    });
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    if (!st.ready) { loadingText(api); return; }
+    const d = st.d, protos = d.prototypes;
+
+    const pad = 14, gapX = 22;
+    const leftW = Math.min(210, W * 0.42);
+    const rightX = pad + leftW + gapX, rightW = W - rightX - pad;
+    const top = 30, bottom = 20;
+
+    // ---- left: the prototype gallery, each a chip colored by risk direction ----
+    Ty(ctx, colors, 'label', { weight: 'b' });
+    ctx.fillText(`${protos.length} prototype patients`, pad, top - 20);
+    const K = protos.length;
+    const cols = 4, rows = Math.ceil(K / cols);
+    const cw = leftW / cols, ch = Math.min(30, (H - top - bottom) / rows);
+    st._chips = [];
+    for (let i = 0; i < K; i++) {
+      const cx = pad + (i % cols) * cw, cy = top + Math.floor(i / cols) * ch;
+      const r = protos[i].readout;
+      const t = Math.abs(r) / st.maxAbs;
+      const col = r >= 0 ? colors.accent : colors.blue;
+      ctx.globalAlpha = 0.18 + 0.72 * t;
+      ctx.fillStyle = col;
+      ctx.fillRect(cx + 2, cy + 2, cw - 4, ch - 4);
+      ctx.globalAlpha = 1;
+      if (i === st.sel) { ctx.strokeStyle = colors.fg; ctx.lineWidth = 2; ctx.strokeRect(cx + 2, cy + 2, cw - 4, ch - 4); }
+      Ty(ctx, colors, 'small', { align: 'center', baseline: 'middle', color: '#fff', weight: 'b' });
+      ctx.fillText(`#${i}`, cx + cw / 2, cy + ch / 2);
+      st._chips.push({ x: cx + 2, y: cy + 2, w: cw - 4, h: ch - 4, i });
+    }
+    Ty(ctx, colors, 'small', { color: colors.accent });
+    ctx.fillText('■ risk-raising', pad, top + rows * ch + 4);
+    Ty(ctx, colors, 'small', { color: colors.blue });
+    ctx.fillText('■ protective', pad + 74, top + rows * ch + 4);
+
+    // ---- right: the selected prototype's clinical profile as bars ----
+    const p = protos[st.sel];
+    const names = d.feature_names, kind = d.feature_kind;
+    const nF = names.length;
+    Ty(ctx, colors, 'label', { color: colors.fg, weight: 'b' });
+    ctx.fillText(`Prototype patient #${st.sel}`, rightX, top - 20);
+    const dir = p.readout >= 0 ? 'RISK-RAISING' : 'PROTECTIVE';
+    Ty(ctx, colors, 'small', { align: 'right', color: p.readout >= 0 ? colors.accent : colors.blue, weight: 'b' });
+    ctx.fillText(`${dir}  a=${fmt(p.readout, 2)}`, rightX + rightW, top - 20);
+
+    const bx = rightX, by = top, bw = rightW, bh = H - top - bottom;
+    frame(ctx, colors, bx, by, bw, bh);
+    const rowH = bh / nF;
+    // draw each covariate as a bar; genes/age are z-ish so center at the mid,
+    // binaries drawn 0..1. We show the clinical (de-normalized) value as a label.
+    for (let j = 0; j < nF; j++) {
+      const y = by + j * rowH;
+      const clin = p.covariates_clin[j];
+      const norm = p.covariates_norm[j];
+      Ty(ctx, colors, 'small', { baseline: 'middle', color: colors.muted });
+      ctx.fillText(names[j], bx + 6, y + rowH / 2);
+      // bar zone on the right half
+      const zoneX = bx + bw * 0.52, zoneW = bw * 0.42, mid = zoneX + zoneW / 2;
+      ctx.strokeStyle = colors.border; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(mid, y + 3); ctx.lineTo(mid, y + rowH - 3); ctx.stroke();
+      // normalized value drives bar length (clamp to +-2.5 sigma)
+      const v = Math.max(-2.5, Math.min(2.5, norm)) / 2.5;
+      const col = v >= 0 ? colors.accent : colors.blue;
+      ctx.fillStyle = col; ctx.globalAlpha = 0.6;
+      const half = zoneW / 2;
+      ctx.fillRect(v >= 0 ? mid : mid + v * half, y + rowH * 0.28, Math.abs(v) * half, rowH * 0.44);
+      ctx.globalAlpha = 1;
+      Ty(ctx, colors, 'small', { align: 'right', baseline: 'middle', color: colors.fg });
+      const label = kind[j] === 'binary' ? (clin > 0.5 ? 'yes' : 'no')
+        : kind[j] === 'age' ? `${clin.toFixed(0)} yr` : clin.toFixed(2);
+      ctx.fillText(label, bx + bw - 6, y + rowH / 2);
+    }
+
+    api.readout('rd', `resembling prototype #${st.sel} ${p.readout >= 0 ? 'raises' : 'lowers'} log-risk by a=${fmt(p.readout, 2)} times the kernel score. Its profile is a synthetic patient in real clinical units.`);
+  },
+});
+
+function bind(api) {
+  if (api.canvas.dataset.ppBound) return; api.canvas.dataset.ppBound = '1';
+  api.canvas.addEventListener('pointerdown', (e) => {
+    const st = api.state; if (!st || !st._chips) return;
+    const pt = localPoint(api.canvas, e);
+    for (const c of st._chips) {
+      if (pt.x >= c.x && pt.x <= c.x + c.w && pt.y >= c.y && pt.y <= c.y + c.h) {
+        st.sel = c.i; api.render(); return;
+      }
+    }
+  });
+}
+</script>

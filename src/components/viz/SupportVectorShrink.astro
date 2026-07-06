@@ -1,0 +1,143 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 420 } = Astro.props;
+---
+<figure class="viz sv-shrink" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Support vector shrink: solve kernel ridge at varying λ, show a bar chart of
+// |αᵢ| for each training point. Drag λ from loose to tight and watch support
+// vectors disappear one by one as the budget evicts the most expensive modes.
+import { defineViz } from './engine/vizkit.js';
+import { softPanel, roundRect, T, rgba, parseColor } from './engine/draw.js';
+
+const SIG = 0.55;
+const BLUE = '#4a7fb3', ORANGE = '#b3661b';
+const BLUE_RGB = parseColor(BLUE), ORANGE_RGB = parseColor(ORANGE);
+
+function pts() {
+  return [
+    { x: -0.9, y: 0.55, c: 0, label: 'A' },
+    { x: -0.15, y: 0.9, c: 0, label: 'B' },
+    { x: 0.8, y: 0.6, c: 0, label: 'C' },
+    { x: -0.7, y: -0.65, c: 1, label: 'D' },
+    { x: 0.2, y: -0.95, c: 1, label: 'E' },
+    { x: 0.95, y: -0.45, c: 1, label: 'F' },
+  ];
+}
+
+const kern = (ax, ay, bx, by) => Math.exp(-((ax - bx) ** 2 + (ay - by) ** 2) / (2 * SIG * SIG));
+
+function solve(P, lam) {
+  const n = P.length;
+  const A = [];
+  for (let i = 0; i < n; i++) {
+    A.push([]);
+    for (let j = 0; j < n; j++) A[i].push(kern(P[i].x, P[i].y, P[j].x, P[j].y) + (i === j ? lam : 0));
+    A[i].push(P[i].c ? -1 : 1);
+  }
+  for (let col = 0; col < n; col++) {
+    let piv = col;
+    for (let r = col + 1; r < n; r++) if (Math.abs(A[r][col]) > Math.abs(A[piv][col])) piv = r;
+    [A[col], A[piv]] = [A[piv], A[col]];
+    const d = A[col][col] || 1e-9;
+    for (let j = col; j <= n; j++) A[col][j] /= d;
+    for (let r = 0; r < n; r++) if (r !== col) { const f = A[r][col]; for (let j = col; j <= n; j++) A[r][j] -= f * A[col][j]; }
+  }
+  return A.map((row) => row[n]);
+}
+
+defineViz('sv-shrink', {
+  title: 'Which points are support vectors? The budget decides.',
+  height: 420,
+  controls: [
+    { type: 'range', name: 'lam', label: 'regularization λ', min: -3, max: 2, step: 0.05, value: -1, fmt: (v) => (10 ** v).toFixed(2) },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    api.state = {};
+    api.set('lam', -1);
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0) return;
+    ctx.clearRect(0, 0, W, H);
+    const lam = 10 ** api.get('lam');
+    const P = pts();
+    const al = solve(P, lam);
+    P.forEach((p, i) => { p.a = al[i]; });
+
+    const pad = 14, topH = 50;
+    const chartTop = pad + topH;
+    const chartH = H - chartTop - pad - 40;
+
+    T(ctx, colors, 'label');
+    ctx.fillText('each bar is |αᵢ|, the coefficient of one training point in the representer sum', pad, pad + 13);
+    T(ctx, colors, 'small');
+    ctx.fillText('large bars are support vectors: move them and the boundary moves. small bars are dead weight.', pad, pad + 28);
+
+    const barW = Math.min(60, (W - pad * 2) / P.length - 10);
+    const totalW = P.length * (barW + 10);
+    const startX = (W - totalW) / 2;
+    const maxA = Math.max(...P.map((p) => Math.abs(p.a)), 0.01);
+
+    // threshold line at 0.05
+    const threshY = chartTop + chartH - (0.05 / maxA) * chartH;
+    ctx.strokeStyle = parseColor(colors.muted); ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(startX - 10, threshY); ctx.lineTo(startX + totalW + 10, threshY); ctx.stroke();
+    ctx.setLineDash([]);
+    T(ctx, colors, 'small', { align: 'right', color: colors.muted });
+    ctx.fillText('threshold', startX - 12, threshY + 3);
+
+    for (let i = 0; i < P.length; i++) {
+      const p = P[i];
+      const bx = startX + i * (barW + 10);
+      const absA = Math.abs(p.a);
+      const bh = (absA / maxA) * chartH;
+      const by = chartTop + chartH - bh;
+      const isSV = absA > 0.05;
+
+      // bar
+      const col = p.a >= 0 ? ORANGE_RGB : BLUE_RGB;
+      ctx.fillStyle = isSV ? rgba(col, 0.85) : rgba(parseColor(colors.muted), 0.3);
+      roundRect(ctx, bx, by, barW, Math.max(0, bh), 4);
+      ctx.fill();
+
+      // glow for support vectors
+      if (isSV) {
+        ctx.save();
+        ctx.shadowColor = rgba(col, 0.4);
+        ctx.shadowBlur = 8;
+        roundRect(ctx, bx, by, barW, Math.max(0, bh), 4);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // value on top
+      T(ctx, colors, 'small', { align: 'center', weight: isSV ? 'b' : '', color: isSV ? colors.fg : colors.muted });
+      ctx.fillText(absA.toFixed(2), bx + barW / 2, by - 6);
+
+      // label below
+      T(ctx, colors, 'small', { align: 'center', color: p.c ? BLUE : ORANGE });
+      ctx.fillText(p.label, bx + barW / 2, chartTop + chartH + 14);
+
+      // class ring
+      ctx.strokeStyle = p.c ? BLUE : ORANGE; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(bx + barW / 2, chartTop + chartH + 28, 4, 0, 6.283); ctx.stroke();
+    }
+
+    const svCount = P.filter((p) => Math.abs(p.a) > 0.05).length;
+    const deadCount = P.length - svCount;
+    api.readout('rd', `λ = ${lam.toFixed(2)} · ${svCount} support vectors, ${deadCount} dead weight`);
+  },
+});
+</script>

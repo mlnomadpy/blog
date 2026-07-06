@@ -1,0 +1,129 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 440 } = Astro.props;
+---
+<figure class="viz wholook" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Pick a held-out patient and watch their risk score assemble. The Yat model's
+// log-risk is an exact sum of prototype contributions c_u = a_u * phi_u(x); the
+// panel decomposes the score into the few prototypes the patient most resembles,
+// each bar signed (raising or lowering risk), the total reassembling exactly.
+// Data: scripts/yat_deepsurv.py -> attributions.json.
+import { defineViz } from './engine/vizkit.js';
+import { gate, loadingText, frame, T as Ty, fmt } from './engine/draw.js';
+
+defineViz('wholook', {
+  title: 'Your risk is a sum over the patients you resemble.',
+  height: 440,
+  controls: [
+    { type: 'select', name: 'who', label: 'held-out patient', value: 'median',
+      options: [
+        { value: 'lowest', label: 'lowest risk' },
+        { value: 'low', label: 'low risk' },
+        { value: 'median', label: 'median risk' },
+        { value: 'high', label: 'high risk' },
+        { value: 'highest', label: 'highest risk' },
+      ] },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    gate(api, () => import('./deepsurv.js').then((m) => m.loadAttr()), (api, d) => {
+      api.state.d = d;
+      api.state.byLabel = {};
+      d.patients.forEach((p) => { api.state.byLabel[p.label] = p; });
+    });
+  },
+
+  onControl(name, value, api) { api.render(); },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    if (!st.ready) { loadingText(api); return; }
+
+    const p = st.byLabel[api.get('who')];
+    const contrib = p.contrib;             // signed, sums to logrisk
+    const K = contrib.length;
+    // rank prototypes by |contribution|; show the top movers
+    const idx = Array.from({ length: K }, (_, i) => i).sort((a, b) => Math.abs(contrib[b]) - Math.abs(contrib[a]));
+    const TOPN = Math.min(10, K);
+    const top = idx.slice(0, TOPN);
+    const maxAbs = Math.max(...contrib.map(Math.abs));
+
+    const pad = 16, top0 = 40, bottom = 24;
+    const half = (W - 3 * pad) / 2;
+    const leftX = pad, rightX = pad * 2 + half;
+
+    // ---- left: the patient's own clinical profile ----
+    Ty(ctx, colors, 'label', { weight: 'b' });
+    ctx.fillText(`Patient (${p.label.replace('_', ' ')})`, leftX, top0 - 20);
+    const names = st.d.feature_names, nF = names.length;
+    const bx = leftX, by = top0, bw = half, bh = H - top0 - bottom - 46;
+    frame(ctx, colors, bx, by, bw, bh);
+    const rowH = bh / nF;
+    for (let j = 0; j < nF; j++) {
+      const y = by + j * rowH;
+      Ty(ctx, colors, 'small', { baseline: 'middle', color: colors.muted });
+      ctx.fillText(names[j], bx + 6, y + rowH / 2);
+      Ty(ctx, colors, 'small', { align: 'right', baseline: 'middle', color: colors.fg });
+      const v = p.covariates_clin[j];
+      ctx.fillText(Math.abs(v) < 2 ? v.toFixed(2) : v.toFixed(0), bx + bw - 6, y + rowH / 2);
+    }
+    // outcome line
+    Ty(ctx, colors, 'small', { color: colors.muted });
+    const outcome = p.event ? `died at ${p.time.toFixed(0)} mo` : `censored at ${p.time.toFixed(0)} mo`;
+    ctx.fillText(`observed: ${outcome}`, bx, by + bh + 14);
+    Ty(ctx, colors, 'value', { color: colors.fg, weight: 'b' });
+    ctx.fillText(`log-risk h(x) = ${fmt(p.logrisk, 2)}`, bx, by + bh + 34);
+
+    // ---- right: the attribution bars (signed), summing to the risk ----
+    Ty(ctx, colors, 'label', { weight: 'b' });
+    ctx.fillText('Prototypes you resemble most', rightX, top0 - 20);
+    const ax = rightX, ay = top0, aw = half, ah = H - top0 - bottom;
+    const midX = ax + aw * 0.30;               // zero line for signed bars
+    const barMax = aw * 0.62;
+    const rH = ah / (TOPN + 1);
+    // running total sweep marker
+    let running = 0;
+    // contributions of prototypes NOT shown, lumped
+    const shownSum = top.reduce((s, u) => s + contrib[u], 0);
+    const restSum = p.logrisk - shownSum;
+    ctx.strokeStyle = colors.border; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(midX, ay); ctx.lineTo(midX, ay + ah); ctx.stroke();
+    Ty(ctx, colors, 'small', { align: 'center', color: colors.faint });
+    ctx.fillText('0', midX, ay - 2);
+    top.forEach((u, r) => {
+      const y = ay + r * rH;
+      const c = contrib[u];
+      const col = c >= 0 ? colors.accent : colors.blue;
+      Ty(ctx, colors, 'small', { align: 'right', baseline: 'middle', color: colors.muted });
+      ctx.fillText(`#${u}`, midX - barMax * 0.5 - 2, y + rH / 2);
+      ctx.fillStyle = col; ctx.globalAlpha = 0.72;
+      const L = (c / maxAbs) * (barMax * 0.5);
+      ctx.fillRect(c >= 0 ? midX : midX + L, y + rH * 0.2, Math.abs(L), rH * 0.6);
+      ctx.globalAlpha = 1;
+      Ty(ctx, colors, 'small', { baseline: 'middle', align: c >= 0 ? 'left' : 'right', color: colors.fg });
+      ctx.fillText(fmt(c, 2), c >= 0 ? midX + L + 3 : midX + L - 3, y + rH / 2);
+      running += c;
+    });
+    // the "everything else" bar
+    const yr = ay + TOPN * rH;
+    Ty(ctx, colors, 'small', { align: 'right', baseline: 'middle', color: colors.faint });
+    ctx.fillText('rest', midX - barMax * 0.5 - 2, yr + rH / 2);
+    const Lr = (restSum / maxAbs) * (barMax * 0.5);
+    ctx.fillStyle = colors.muted; ctx.globalAlpha = 0.4;
+    ctx.fillRect(restSum >= 0 ? midX : midX + Lr, yr + rH * 0.2, Math.abs(Lr), rH * 0.6);
+    ctx.globalAlpha = 1;
+
+    api.readout('rd', `top ${TOPN} prototypes contribute ${fmt(shownSum, 2)} of the log-risk ${fmt(p.logrisk, 2)}; the rest ${fmt(restSum, 2)}. The sum is exact: h(x) = Σ a_u φ_u(x).`);
+  },
+});
+</script>

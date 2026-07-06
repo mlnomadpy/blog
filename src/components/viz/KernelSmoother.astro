@@ -84,7 +84,7 @@ defineViz('kernelsmoother', {
       ctx.fillStyle = ww > 0.05 ? accent : faint; ctx.globalAlpha = 0.35 + 0.65 * ww; ctx.beginPath(); ctx.arc(sx(xs[k]), sy(ys[k]), 2 + ww * 5.5, 0, Math.PI * 2); ctx.fill(); }
     ctx.globalAlpha = 1;
     ctx.fillStyle = accent; ctx.beginPath(); ctx.arc(qPx, sy(yhat), 5, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = fg; ctx.lineWidth = 1.5; ctx.stroke();
-    api.readout('ro', `drag to move query · x ${queryX.toFixed(2)} · ŷ ${yhat.toFixed(2)} · jax-js`);
+    api.readout('ro', `drag to move query · x ${queryX.toFixed(2)} · ŷ ${yhat.toFixed(2)} · live`);
   },
 });
 </script>
