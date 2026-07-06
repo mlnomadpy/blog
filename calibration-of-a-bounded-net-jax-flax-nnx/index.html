@@ -1,0 +1,585 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="generator" content="Astro v5.18.1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#fbfaf6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)"><title>Calibration of a Kernel MLP in JAX/Flax NNX</title><meta name="description" content="Reliability diagrams, ECE, temperature scaling and OOD channels for a Yat vs ReLU MLP, coded in JAX/Flax NNX from a real Fashion-MNIST run."><meta name="keywords" content="neural network calibration JAX, expected calibration error, temperature scaling Flax NNX, reliability diagram JAX, out-of-distribution detection kernel, Yat kernel MLP, ml, kernels, calibration, uncertainty, jax, flax, nnx, implementation, yat, ood, deep-learning"><meta name="author" content="Taha Bouhsine"><link rel="canonical" href="https://tahabouhsine.com/blog/calibration-of-a-bounded-net-jax-flax-nnx/"><link rel="icon" href="/blog/favicon.svg" type="image/svg+xml"><link rel="alternate" type="application/rss+xml" title="Records of the !mmortal Data Scientist" href="/blog/rss.xml"><link rel="sitemap" href="/blog/sitemap-index.xml"><link rel="me" href="https://github.com/mlnomadpy"><link rel="me" href="https://x.com/mlnomadpy"><link rel="me" href="https://www.linkedin.com/in/tahabsn/"><link rel="me" href="https://scholar.google.com/citations?user=IsBjb3EAAAAJ"><link rel="me" href="https://g.dev/tahabsn"><link rel="author" href="https://github.com/mlnomadpy"><meta property="og:type" content="article"><meta property="og:site_name" content="Records of the !mmortal Data Scientist"><meta property="og:title" content="Calibration of a Kernel MLP in JAX/Flax NNX"><meta property="og:description" content="Reliability diagrams, ECE, temperature scaling and OOD channels for a Yat vs ReLU MLP, coded in JAX/Flax NNX from a real Fashion-MNIST run."><meta property="og:url" content="https://tahabouhsine.com/blog/calibration-of-a-bounded-net-jax-flax-nnx/"><meta property="og:locale" content="en_US"><meta property="og:image" content="https://tahabouhsine.com/blog/og/calibration-of-a-bounded-net-jax-flax-nnx.png"><meta property="og:image:alt" content="Calibrating a Bounded Net, in JAX/Flax NNX — Records of the !mmortal Data Scientist"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:type" content="image/png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@mlnomadpy"><meta name="twitter:creator" content="@mlnomadpy"><meta name="twitter:title" content="Calibration of a Kernel MLP in JAX/Flax NNX"><meta name="twitter:description" content="Reliability diagrams, ECE, temperature scaling and OOD channels for a Yat vs ReLU MLP, coded in JAX/Flax NNX from a real Fashion-MNIST run."><meta name="twitter:image" content="https://tahabouhsine.com/blog/og/calibration-of-a-bounded-net-jax-flax-nnx.png"><meta name="twitter:image:alt" content="Calibrating a Bounded Net, in JAX/Flax NNX — Records of the !mmortal Data Scientist"><meta property="article:published_time" content="2026-07-04T17:00:00.000Z"><meta property="article:author" content="Taha Bouhsine"><meta property="article:section" content="Machine Learning"><meta property="article:tag" content="ml"><meta property="article:tag" content="kernels"><meta property="article:tag" content="calibration"><meta property="article:tag" content="uncertainty"><meta property="article:tag" content="jax"><meta property="article:tag" content="flax"><meta property="article:tag" content="nnx"><meta property="article:tag" content="implementation"><meta property="article:tag" content="yat"><meta property="article:tag" content="ood"><meta property="article:tag" content="deep-learning"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","@id":"https://tahabouhsine.com/blog/calibration-of-a-bounded-net-jax-flax-nnx/#article","headline":"Calibrating a Bounded Net, in JAX/Flax NNX","name":"Calibrating a Bounded Net, in JAX/Flax NNX","description":"Reliability diagrams, ECE, temperature scaling and OOD channels for a Yat vs ReLU MLP, coded in JAX/Flax NNX from a real Fashion-MNIST run.","image":["https://tahabouhsine.com/blog/og/calibration-of-a-bounded-net-jax-flax-nnx.png"],"datePublished":"2026-07-04T17:00:00.000Z","dateModified":"2026-07-04T17:00:00.000Z","author":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#author","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","jobTitle":"Machine Learning Researcher","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"publisher":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#publisher","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"mainEntityOfPage":{"@type":"WebPage","@id":"https://tahabouhsine.com/blog/calibration-of-a-bounded-net-jax-flax-nnx/"},"keywords":"neural network calibration JAX, expected calibration error, temperature scaling Flax NNX, reliability diagram JAX, out-of-distribution detection kernel, Yat kernel MLP, ml, kernels, calibration, uncertainty, jax, flax, nnx, implementation, yat, ood, deep-learning","url":"https://tahabouhsine.com/blog/calibration-of-a-bounded-net-jax-flax-nnx/","inLanguage":"en-US","wordCount":2292,"timeRequired":"PT12M","articleSection":"Machine Learning","isPartOf":{"@type":"Blog","@id":"https://tahabouhsine.com/blog/","name":"Records of the !mmortal Data Scientist","url":"https://tahabouhsine.com/blog/"}}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Blog","item":"https://tahabouhsine.com/blog/"},{"@type":"ListItem","position":2,"name":"Machine Learning","item":"https://tahabouhsine.com/blog/tag/ml/"},{"@type":"ListItem","position":3,"name":"Calibrating a Bounded Net, in JAX/Flax NNX","item":"https://tahabouhsine.com/blog/calibration-of-a-bounded-net-jax-flax-nnx/"}]}</script><script>
+    (function () {
+      if (window.__gaSetup) return;
+      window.__gaSetup = true;
+      var GA_ID = 'G-373438VHJB';
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ dataLayer.push(arguments); }
+      window.gtag = window.gtag || gtag;
+      window.__gaEventQueue = window.__gaEventQueue || [];
+      window.__trackGA = function (eventName, params) {
+        if (!eventName) return;
+        var item = { name: eventName, params: params || {} };
+        if (window.__gaLoaded) {
+          gtag('event', item.name, item.params);
+        } else {
+          window.__gaEventQueue.push(item);
+        }
+      };
+
+      // Track whether the first astro:page-load has fired, so a mid-session
+      // Accept can still record the current page.
+      window.__gaFirstLoadDone = window.__gaFirstLoadDone || false;
+      document.addEventListener('astro:page-load', function () { window.__gaFirstLoadDone = true; });
+
+      window.__loadGA = function () {
+        if (window.__gaLoaded) return;
+        window.__gaLoaded = true;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+        document.head.appendChild(s);
+        gtag('js', new Date());
+        gtag('config', GA_ID, { send_page_view: false });
+        (window.__gaEventQueue || []).splice(0).forEach(function (item) {
+          gtag('event', item.name, item.params);
+        });
+        function sendPV() {
+          gtag('event', 'page_view', {
+            page_title: document.title,
+            page_location: location.href,
+            page_path: location.pathname + location.search,
+          });
+        }
+        document.addEventListener('astro:page-load', sendPV);
+        // If the initial page-load already happened (accept mid-session),
+        // record this page now; otherwise the listener catches the first one.
+        if (window.__gaFirstLoadDone) sendPV();
+      };
+
+      try {
+        if (localStorage.getItem('analytics-consent') === 'granted') window.__loadGA();
+      } catch (e) {}
+    })();
+  </script><script>
+  (() => {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'light' || stored === 'dark') {
+      document.documentElement.setAttribute('data-theme', stored);
+    }
+  })();
+</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.DstInXr_.css">
+<link rel="stylesheet" href="/blog/_astro/_slug_.BzSIaIK4.css"><style>.cite-as[data-astro-cid-p234urri]{margin:3.5rem 0 0;padding-top:1.5rem;border-top:1px solid var(--border)}.cite-as[data-astro-cid-p234urri] h2[data-astro-cid-p234urri]{font-family:var(--mono);font-size:.82rem;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-faint);font-weight:500;margin:0 0 .75rem}.cite-as[data-astro-cid-p234urri] h3[data-astro-cid-p234urri]{font-family:var(--mono);font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-faint);font-weight:500;margin:1.5rem 0 .6rem}.cite-line[data-astro-cid-p234urri]{font-family:var(--serif);font-size:.98rem;line-height:1.55;color:var(--fg-muted);margin:0 0 .5rem}.cite-line[data-astro-cid-p234urri] em[data-astro-cid-p234urri]{color:var(--fg)}.cite-bib[data-astro-cid-p234urri]{margin:.4rem 0 0;position:relative}.cite-bib[data-astro-cid-p234urri] summary[data-astro-cid-p234urri]{cursor:pointer;font-family:var(--mono);font-size:.78rem;color:var(--fg-muted);padding:.25rem 0;user-select:none}.cite-bib[data-astro-cid-p234urri] summary[data-astro-cid-p234urri]:hover{color:var(--accent)}.cite-bib[data-astro-cid-p234urri] pre[data-astro-cid-p234urri]{margin:.4rem 0 0;padding:.85rem 1rem;background:var(--bg-elev);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;font-size:.82rem;line-height:1.55}.cite-bib[data-astro-cid-p234urri] pre[data-astro-cid-p234urri] code[data-astro-cid-p234urri]{background:transparent;border:0;padding:0}.cite-copy[data-astro-cid-p234urri]{position:absolute;top:2.1rem;right:.55rem;background:var(--bg);border:1px solid var(--border);color:var(--fg-muted);font-family:var(--mono);font-size:.72rem;padding:.25rem .55rem;border-radius:var(--radius-sm);cursor:pointer;transition:color var(--transition-fast),border-color var(--transition-fast)}.cite-copy[data-astro-cid-p234urri]:hover,.cite-copy[data-astro-cid-p234urri].copied{color:var(--accent);border-color:var(--accent)}
+</style></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/writeups">writeups</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>
+  (() => {
+    const apply = (theme) => {
+      document.documentElement.setAttribute('data-theme', theme);
+      const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+      if (meta) meta.setAttribute('content', theme === 'dark' ? '#0e1116' : '#fbfaf6');
+      // Sync giscus iframe if present
+      const giscus = document.querySelector('iframe.giscus-frame');
+      if (giscus && giscus.contentWindow) {
+        giscus.contentWindow.postMessage(
+          { giscus: { setConfig: { theme: theme === 'dark' ? 'dark' : 'light' } } },
+          'https://giscus.app'
+        );
+      }
+    };
+
+    const init = () => {
+      const btns = document.querySelectorAll('[data-theme-toggle]');
+      btns.forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', () => {
+          const current = document.documentElement.getAttribute('data-theme')
+            || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          const next = current === 'dark' ? 'light' : 'dark';
+          localStorage.setItem('theme', next);
+          apply(next);
+        });
+      });
+    };
+
+    init();
+    document.addEventListener('astro:after-swap', init);
+    document.addEventListener('astro:page-load', init);
+  })();
+</script> </nav> </div> </header> <main id="main">  <div class="reading-progress" data-reading-progress aria-hidden="true"></div> <script>
+  (() => {
+    const init = () => {
+      const bar = document.querySelector('[data-reading-progress]');
+      if (!bar) return;
+      const update = () => {
+        const h = document.documentElement;
+        const scrolled = h.scrollTop;
+        const max = h.scrollHeight - h.clientHeight;
+        const pct = max > 0 ? Math.min(100, (scrolled / max) * 100) : 0;
+        bar.style.width = pct + '%';
+      };
+      // Coalesce scroll events into one paint per frame so fast/touch
+      // scrolling stays smooth.
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => { update(); ticking = false; });
+      };
+      update();
+      window.removeEventListener('scroll', window.__rp_onScroll || (() => {}));
+      window.removeEventListener('resize', window.__rp_onScroll || (() => {}));
+      window.__rp_onScroll = onScroll;
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+    };
+    init();
+    document.addEventListener('astro:page-load', init);
+    document.addEventListener('astro:after-swap', init);
+  })();
+</script> <article data-blog-post data-pagefind-body data-pagefind-meta="date:2026-07-04"> <header class="post-header">  <h1 data-pagefind-meta="title">Calibrating a Bounded Net, in JAX/Flax NNX</h1> <p class="meta"> <time datetime="2026-07-04T17:00:00.000Z">July 4, 2026</time>   · 12 min read </p> <p style="margin-top:0.65rem" data-pagefind-meta="tags:ml,kernels,calibration,uncertainty,jax,flax,nnx,implementation,yat,ood,deep-learning"> <a class="tag" href="/blog/tag/ml/">#ml</a><a class="tag" href="/blog/tag/kernels/">#kernels</a><a class="tag" href="/blog/tag/calibration/">#calibration</a><a class="tag" href="/blog/tag/uncertainty/">#uncertainty</a><a class="tag" href="/blog/tag/jax/">#jax</a><a class="tag" href="/blog/tag/flax/">#flax</a><a class="tag" href="/blog/tag/nnx/">#nnx</a><a class="tag" href="/blog/tag/implementation/">#implementation</a><a class="tag" href="/blog/tag/yat/">#yat</a><a class="tag" href="/blog/tag/ood/">#ood</a><a class="tag" href="/blog/tag/deep-learning/">#deep-learning</a> </p> </header> <details class="series-nav" data-astro-cid-w7ld43o3><summary data-astro-cid-w7ld43o3><span class="sn-strip" data-astro-cid-w7ld43o3><span class="sn-part" data-astro-cid-w7ld43o3>Part 7 of 10</span><span class="sn-sep" aria-hidden="true" data-astro-cid-w7ld43o3>·</span><span class="sn-series" data-astro-cid-w7ld43o3>The Prototype Network</span></span><span class="sn-chevron" aria-hidden="true" data-astro-cid-w7ld43o3><svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" data-astro-cid-w7ld43o3><path d="M2.5 4.5 6 8l3.5-3.5" data-astro-cid-w7ld43o3></path></svg></span></summary><ol class="sn-list" data-astro-cid-w7ld43o3><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/what-a-finite-kernel-buys-an-mlp/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>1</span><span class="sn-title" data-astro-cid-w7ld43o3>What a Finite Kernel Buys an MLP</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/your-neuron-is-a-picture/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>2</span><span class="sn-title" data-astro-cid-w7ld43o3>Your Neuron Is a Direction. It Should Be a Picture.</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/edit-a-network-by-hand/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>3</span><span class="sn-title" data-astro-cid-w7ld43o3>Your Network Is a List of Pictures. You Can Edit It.</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/train-the-features/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>4</span><span class="sn-title" data-astro-cid-w7ld43o3>You Only Have to Train the Features</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/you-dont-have-to-train-the-features/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>5</span><span class="sn-title" data-astro-cid-w7ld43o3>You Don&#39;t Even Have to Train the Features</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/depth-by-construction/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>6</span><span class="sn-title" data-astro-cid-w7ld43o3>How Far Down Can You Build?</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/calibration-of-a-bounded-net/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>7</span><span class="sn-title" data-astro-cid-w7ld43o3>When 80% Should Mean 80%</span><span class="sn-note" data-astro-cid-w7ld43o3>this post's explainer</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/a-risk-model-that-names-its-reasons/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>8</span><span class="sn-title" data-astro-cid-w7ld43o3>A Risk Model That Names Its Reasons</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/your-network-is-a-fixed-point/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>9</span><span class="sn-title" data-astro-cid-w7ld43o3>Your Network Is a Stack of Layers. It Could Be a Fixed Point.</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/edit-a-fixed-point/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>10</span><span class="sn-title" data-astro-cid-w7ld43o3>Edit One Operator, Edit Every Depth</span></a></li></ol></details> <a class="companion-callout companion" href="/blog/calibration-of-a-bounded-net/" data-astro-cid-x4o4rwnl><span class="cc-icon" aria-hidden="true" data-astro-cid-x4o4rwnl>📖</span><span class="cc-body" data-astro-cid-x4o4rwnl><span class="cc-eyebrow" data-astro-cid-x4o4rwnl>Explainer companion</span><span class="cc-title" data-astro-cid-x4o4rwnl>When 80% Should Mean 80%</span><span class="cc-lead" data-astro-cid-x4o4rwnl>Want the full intuition first? This is the runnable companion to the explainer.</span></span><span class="cc-cta" data-astro-cid-x4o4rwnl>Read the explainer<span aria-hidden="true" data-astro-cid-x4o4rwnl>→</span></span></a>  <p><em>The <a href="/blog/calibration-of-a-bounded-net/">explainer</a> put a bounded kernel MLP’s confidence on trial against a matched ReLU MLP and found, against the series’ own bet, that the interpretable network is the one whose probabilities lie. This is the implementation: build both nets in <a href="https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html">Flax NNX</a> with the exact same softmax head, then measure their honesty with reliability diagrams, ECE, temperature scaling, and the two out-of-distribution channels. Every number below is from a real three-seed run; the script is <code>scripts/yat_calibration.py</code>.</em></p>
+<p><em>Prefer a notebook? Run the whole thing on <a href="https://www.kaggle.com/code/skywolfmo/calibration-of-a-bounded-net-jax-flax-nnx">Kaggle</a>: the same code, block by block, with the math written out and every figure reproduced from a real run.</em></p>
+<h2 id="two-nets-one-head">Two nets, one head<a class="heading-anchor-link" aria-label="Link to heading" href="#two-nets-one-head"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>What makes a calibration test fair? That confidence means the same thing for both contestants. So the two networks share everything downstream of the feature map: a linear readout to ten logits, then a softmax, then the max. Only the layer that turns an image into features differs, and that is the whole experiment. The Yat layer scores each input against <code>K</code> prototypes with the kernel from the earlier posts; the ReLU layer is the ordinary affine-then-rectify.</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">import</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jax, jax.numpy </span><span style="color:#D73A49;--shiki-dark:#F47067">as</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">from</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> flax </span><span style="color:#D73A49;--shiki-dark:#F47067">import</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">K </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 50</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">class</span><span style="color:#6F42C1;--shiki-dark:#F69D50"> YatLayer</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(</span><span style="color:#6F42C1;--shiki-dark:#6CB6FF">nnx</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.</span><span style="color:#6F42C1;--shiki-dark:#6CB6FF">Module</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#032F62;--shiki-dark:#96D0FF">    &quot;&quot;&quot;Each unit is the Yat kernel against a prototype row of W.&quot;&quot;&quot;</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> __init__</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(self, </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, rngs, Winit, b0</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1.0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, eps0</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1.0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.W </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Param(jnp.asarray(Winit))                       </span><span style="color:#6A737D;--shiki-dark:#768390"># [K, 784] prototypes</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.log_b </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Param(jnp.full((), jnp.log(jnp.expm1(b0))))</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.log_eps </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Param(jnp.full((), jnp.log(jnp.expm1(eps0))))</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> __call__</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(self, x):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        b </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jax.nn.softplus(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.log_b.value)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        eps </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jax.nn.softplus(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.log_eps.value)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        dot </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> x </span><span style="color:#D73A49;--shiki-dark:#F47067">@</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.W.value.T</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        d2 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.sum(x </span><span style="color:#D73A49;--shiki-dark:#F47067">**</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">keepdims</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">True</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.sum(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.W.value </span><span style="color:#D73A49;--shiki-dark:#F47067">**</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> dot</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (dot </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> b) </span><span style="color:#D73A49;--shiki-dark:#F47067">**</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#D73A49;--shiki-dark:#F47067"> /</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (d2 </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> eps)                           </span><span style="color:#6A737D;--shiki-dark:#768390"># [N, K] kernel scores</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">class</span><span style="color:#6F42C1;--shiki-dark:#F69D50"> YatMLP</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(</span><span style="color:#6F42C1;--shiki-dark:#6CB6FF">nnx</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.</span><span style="color:#6F42C1;--shiki-dark:#6CB6FF">Module</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> __init__</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(self, </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, rngs, Winit):</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.yat </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> YatLayer(</span><span style="color:#E36209;--shiki-dark:#F69D50">rngs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">rngs, </span><span style="color:#E36209;--shiki-dark:#F69D50">Winit</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">Winit)</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.readout </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Linear(K, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">10</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">rngs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">rngs)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> __call__</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(self, x):</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        return</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.readout(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.yat(x))                            </span><span style="color:#6A737D;--shiki-dark:#768390"># logits</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">class</span><span style="color:#6F42C1;--shiki-dark:#F69D50"> ReluMLP</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(</span><span style="color:#6F42C1;--shiki-dark:#6CB6FF">nnx</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.</span><span style="color:#6F42C1;--shiki-dark:#6CB6FF">Module</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> __init__</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(self, </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, rngs):</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.l1 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Linear(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">784</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, K, </span><span style="color:#E36209;--shiki-dark:#F69D50">rngs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">rngs)</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.l2 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Linear(K, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">10</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">rngs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">rngs)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> __call__</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(self, x):</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        return</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.l2(jax.nn.relu(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.l1(x)))                     </span><span style="color:#6A737D;--shiki-dark:#768390"># logits</span></span></code></pre>
+<p>Both are one hidden layer of 50 units, <code>784 -&gt; 50 -&gt; 10</code>. The Yat net’s prototypes are seeded from training images, the ReLU net is the same shape, and both train with plain cross-entropy. That last detail matters for the story: nothing in the objective ever asks the confidence to be honest, only correct.</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">import</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> optax</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6F42C1;--shiki-dark:#DCBDFB">@nnx.jit</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> train_step</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(model, opt, xb, yb):</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> loss_fn</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(m):</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> optax.softmax_cross_entropy_with_integer_labels(m(xb), yb).mean()</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    loss, grads </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.value_and_grad(loss_fn)(model)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    opt.update(model, grads)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> loss</span></span></code></pre>
+<p>The data split is fixed once and reused for both nets: 55,000 Fashion-MNIST images to train on, 5,000 held out for temperature scaling only, the full 10,000 test set for the diagrams, and MNIST’s test digits as the out-of-distribution probe. We train each net on three seeds (0, 1, 2) so every verdict below carries an error bar.</p>
+<h2 id="the-forecasters-test-in-code">The forecaster’s test, in code<a class="heading-anchor-link" aria-label="Link to heading" href="#the-forecasters-test-in-code"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>How do you catch a network overstating its confidence? Bin its predictions by claimed confidence and, in each bin, compare the claim against the accuracy it actually delivered. That comparison is the reliability diagram, and averaging its per-bin gaps, weighted by how many predictions live in each bin, is the expected calibration error. Confidence is read identically from both nets: softmax the logits, take the max.</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">import</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> numpy </span><span style="color:#D73A49;--shiki-dark:#F47067">as</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> softmax</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(z):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    z </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> z </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> z.max(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">keepdims</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">True</span><span style="color:#24292E;--shiki-dark:#ADBAC7">); e </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.exp(z)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> e </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> e.sum(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">keepdims</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">True</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> reliability</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(z, y, n_bins</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">15</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    p </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> softmax(z); conf </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> p.max(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">); pred </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> p.argmax(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    correct </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (pred </span><span style="color:#D73A49;--shiki-dark:#F47067">==</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> y).astype(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">float</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    edges </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.linspace(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, n_bins </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    idx </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.clip(np.digitize(conf, edges[</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">:</span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">]), </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, n_bins </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    count </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.zeros(n_bins); mconf </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.zeros(n_bins); macc </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.zeros(n_bins)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    for</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> b </span><span style="color:#D73A49;--shiki-dark:#F47067">in</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> range</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(n_bins):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        m </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> idx </span><span style="color:#D73A49;--shiki-dark:#F47067">==</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> b</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        count[b] </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> m.sum()</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        if</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> count[b] </span><span style="color:#D73A49;--shiki-dark:#F47067">&gt;</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">:</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">            mconf[b] </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> conf[m].mean(); macc[b] </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> correct[m].mean()</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    ece </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> float</span><span style="color:#24292E;--shiki-dark:#ADBAC7">((count </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> len</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(y) </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.abs(macc </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> mconf)).sum())      </span><span style="color:#6A737D;--shiki-dark:#768390"># count-weighted |acc - conf|</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> count, mconf, macc, ece</span></span></code></pre>
+<p>Run it on both nets and the staircases part ways. The ReLU bars land on the diagonal; the Yat bars sag below it, claiming more than they deliver in almost every bin.</p>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/calib-staircase.png" alt="Two reliability diagrams computed from the seed-0 test logits, the Yat net's bars sagging below the diagonal with red overconfidence strips while the ReLU net's bars hug the diagonal" loading="lazy" width="968" height="495"/><figcaption>The reliability diagram computed from the exported test logits. Every prediction drops into one of 15 confidence bins; the bar is the delivered accuracy in that bin, the tick is the average claimed confidence, and the strip between them is the overconfidence gap. The Yat net (left) sits below the diagonal almost everywhere, ECE 7.6% on this seed; the ReLU net (right) hugs it, ECE 1.7%. Rendered by <code>scripts/render_calibration_gifs.py</code>.</figcaption></figure>
+<p>Averaged over the three seeds the numbers are stark. The ReLU net’s ECE is <strong>1.76% ± 0.22</strong>; the Yat net’s is <strong>6.20% ± 1.13</strong>, between three and four times worse. The proper scoring rules agree: NLL 0.360 vs 0.577, Brier 0.181 vs 0.244.</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> nll_of</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(z, y):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    p </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> softmax(z)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> float</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(</span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7">np.log(np.clip(p[np.arange(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">len</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(y)), y], </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1e-12</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)).mean())</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> brier_of</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(z, y):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    p </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> softmax(z); onehot </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.eye(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">10</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)[y]</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> float</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(((p </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> onehot) </span><span style="color:#D73A49;--shiki-dark:#F47067">**</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">).sum(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">).mean())</span></span></code></pre>
+<h2 id="why-the-bounded-net-brags">Why the bounded net brags<a class="heading-anchor-link" aria-label="Link to heading" href="#why-the-bounded-net-brags"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Where does the overconfidence come from? Not from the objective, and not from a bug: from the units. A Yat unit is a kernel score, and near its prototype that score is large, with a median strongest match around 207 on the seed-0 test set. The linear readout inherits that dynamic range, so the median top logit of the Yat net is <strong>28.9</strong> against the ReLU net’s <strong>7.2</strong>. And the softmax does not read logits, it reads gaps between them, exponentiated. A lead of a few units already pins the winner near probability one.</p>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/calib-saturation.png" alt="The softmax confidence curve rising and saturating at 1 as the winning logit's lead grows, with each net's real median gap and top-logit magnitude marked" loading="lazy" width="946" height="495"/><figcaption>The softmax as a function of the winner’s lead over the runner-up. Past a lead of a few units it is flat at one. The markers sit at each net’s true median top-two gap, labeled with the median top-logit magnitude and the fraction of test predictions above 0.99 confidence, all computed from the exported logits. The Yat net’s huge logits push more of its answers onto the flat, so it sounds certain more often. Rendered by <code>scripts/render_calibration_gifs.py</code>.</figcaption></figure>
+<p>So the fix should be a unit conversion. That is temperature scaling.</p>
+<h2 id="one-knob-fit-on-held-out-data">One knob, fit on held-out data<a class="heading-anchor-link" aria-label="Link to heading" href="#one-knob-fit-on-held-out-data"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Temperature scaling divides every logit by a single scalar <code>T</code> before the softmax, and picks <code>T</code> on the held-out split by minimizing NLL. It never touches the argmax, so accuracy is untouched; it only changes how loudly the network states what it already decided.</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">from</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> scipy.optimize </span><span style="color:#D73A49;--shiki-dark:#F47067">import</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> minimize_scalar</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> fit_temperature</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(z_val, y_val):</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> obj</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(logT):                                                  </span><span style="color:#6A737D;--shiki-dark:#768390"># search in log-space, T &gt; 0</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nll_of(z_val </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.exp(logT), y_val)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    r </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> minimize_scalar(obj, </span><span style="color:#E36209;--shiki-dark:#F69D50">bounds</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(np.log(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0.05</span><span style="color:#24292E;--shiki-dark:#ADBAC7">), np.log(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">20.0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)), </span><span style="color:#E36209;--shiki-dark:#F69D50">method</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#032F62;--shiki-dark:#96D0FF">&#39;bounded&#39;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> float</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(np.exp(r.x))</span></span></code></pre>
+<p>Turn the knob and the Yat reliability curve rotates toward the diagonal as its held-out loss draws down to its minimum. That minimum lands at <code>T = 2.07</code> on seed 0, meaning the raw net was more than twice as loud as it should have been.</p>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/calib-temperature.gif" alt="The Yat reliability curve rotating toward the diagonal as the temperature increases, next to the test NLL curve drawing down to its minimum at the fitted temperature" loading="lazy" width="968" height="506"/><figcaption>Dividing the Yat logits by a temperature T, recomputed live from the exported logits. Left: the reliability curve rotating toward the diagonal as T grows. Right: the loss the knob minimizes, drawing itself out and bottoming near the fitted T = 2.07. The knob only rescales, so the accuracy never moves. Rendered by <code>scripts/render_calibration_gifs.py</code>.</figcaption></figure>
+<p>Does the prototype net at least need less correction? The opposite. The ReLU net’s fitted temperature is <strong>1.17 ± 0.02</strong>, a nudge; the Yat net needs <strong>1.68 ± 0.29</strong>, and its temperature swings from 1.37 to 2.07 across the three seeds while the ReLU net’s barely moves. Worse, one knob cannot close the gap, because the Yat curve is bent rather than merely tilted: after scaling the ReLU net sits at ECE <strong>0.82%</strong> and the Yat net at <strong>3.11%</strong>, still three to four times worse. Calibration lives in the head, and both nets have the same head. The kernel just feeds it wilder numbers.</p>
+<h2 id="the-number-the-softmax-throws-away">The number the softmax throws away<a class="heading-anchor-link" aria-label="Link to heading" href="#the-number-the-softmax-throws-away"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>That is the in-distribution verdict, and it goes to the black box. But the earlier posts made their “knows when it doesn’t know” claim off-distribution, so feed both nets MNIST digits, handwriting shown to a garment classifier, and read the confidence differently. Softmax has a blind spot: add a constant to every logit and it does not move, so it is a contrast reader that cannot see the absolute level. And absolute level is exactly how a bounded kernel says “I recognize nothing here”: off-distribution every well is shallow and all ten scores sink together. So ask the same forward pass two questions, one before the softmax and one after.</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D;--shiki-dark:#768390"># the pre-softmax field magnitude: the strongest kernel match, straight off the Yat layer</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">kmax_test </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.asarray(yat.yat(jnp.asarray(Xte))).max(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)            </span><span style="color:#6A737D;--shiki-dark:#768390"># [N_test]</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">kmax_ood  </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.asarray(yat.yat(jnp.asarray(Xood))).max(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)           </span><span style="color:#6A737D;--shiki-dark:#768390"># [N_ood]</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D;--shiki-dark:#768390"># the same forward pass, read after the softmax</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">conf_test </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> softmax(logits_of(yat, Xte)).max(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">conf_ood  </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> softmax(logits_of(yat, Xood)).max(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> auroc</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(pos, neg):                                                </span><span style="color:#6A737D;--shiki-dark:#768390"># rank-based, ties averaged</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    s </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.concatenate([pos, neg]); order </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.argsort(s, </span><span style="color:#E36209;--shiki-dark:#F69D50">kind</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#032F62;--shiki-dark:#96D0FF">&#39;mergesort&#39;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    ranks </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.empty(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">len</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(s)); sr </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> s[order]; i </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 0</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    while</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> i </span><span style="color:#D73A49;--shiki-dark:#F47067">&lt;</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> len</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(sr):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        j </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> i</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        while</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> j </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1</span><span style="color:#D73A49;--shiki-dark:#F47067"> &lt;</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> len</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(sr) </span><span style="color:#D73A49;--shiki-dark:#F47067">and</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> sr[j </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">] </span><span style="color:#D73A49;--shiki-dark:#F47067">==</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> sr[i]: j </span><span style="color:#D73A49;--shiki-dark:#F47067">+=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        ranks[order[i:j </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">]] </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 0.5</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (i </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> j) </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">; i </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> j </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    rp </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> ranks[:</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">len</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(pos)].sum()</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> float</span><span style="color:#24292E;--shiki-dark:#ADBAC7">((rp </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> len</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(pos) </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">len</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(pos) </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">len</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(pos) </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> len</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(neg)))</span></span></code></pre>
+<p>Read before the softmax, the two datasets pull apart; read after it, they smear together.</p>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/calib-channels.png" alt="Two histograms side by side: the field-magnitude channel separating Fashion from MNIST cleanly, the softmax-confidence channel leaving them overlapping" loading="lazy" width="968" height="484"/><figcaption>One Yat net, two readings of the same forward pass, computed from the exported runs. Left: the strongest kernel match on a log axis; Fashion (blue) sits high, MNIST (red) sits low, and they barely overlap, AUROC 0.917. Right: the softmax confidence built from those same scores, where both datasets pile toward the right wall, AUROC 0.929 on this seed but far less stable. Rendered by <code>scripts/render_calibration_gifs.py</code>.</figcaption></figure>
+<p>Across the three seeds the field magnitude separates Fashion from MNIST at AUROC <strong>0.916 ± 0.008</strong>. The comparison the literature demands is the ReLU net’s max logit, the well-known max-logit and energy score, which reaches <strong>0.935 ± 0.005</strong>, a touch better; magnitude as an OOD signal is not the kernel’s invention. What the field wins is not the third decimal, it is stability and meaning: a kernel score of 27 against a typical 207 is a sentence you can say out loud before running any benchmark, and it holds through every retraining.</p>
+<h2 id="the-channel-that-does-not-wobble">The channel that does not wobble<a class="heading-anchor-link" aria-label="Link to heading" href="#the-channel-that-does-not-wobble"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Which is the last thing to see, because it is the whole reason to route the OOD question around the softmax. Retrain the net three times and recompute both channels, and the softmax channel’s separation lurches from seed to seed while the field channel holds.</p>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/calib-seeds.png" alt="A grouped dot chart of three retrainings per channel: the softmax-confidence AUROCs spread from 0.81 to 0.92, the field-magnitude AUROCs cluster tightly near 0.92" loading="lazy" width="924" height="484"/><figcaption>Three real retrainings, each channel’s Fashion-vs-MNIST AUROC recomputed from the exported per-seed scores, one point per seed. The softmax-confidence channel spreads from 0.92 down to 0.81; the field-magnitude channel clusters between 0.90 and 0.92 every time. Its worst seed drops near the ReLU max-logit baseline while the field never has a bad day. Same network, same question, one answer you can deploy and one you cannot. Rendered by <code>scripts/render_calibration_gifs.py</code>.</figcaption></figure>
+<p>The field magnitude reads AUROC 0.914, 0.924, 0.901 across the seeds; the softmax reads 0.924, 0.905, 0.809. On a bad retraining the softmax channel is barely better than the ReLU baseline, while the field never has the bad day. That is the abstention rule from the earlier posts, now with its error bars measured.</p>
+<h2 id="what-the-experiment-settled">What the experiment settled<a class="heading-anchor-link" aria-label="Link to heading" href="#what-the-experiment-settled"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The scoreboard, three seeds, nothing cherry-picked. In-distribution the ReLU net wins outright: ECE 1.76% against 6.20%, temperature 1.17 against 1.68, and it stays ahead after both are corrected, because the kernel’s dynamic range saturates the softmax. Off-distribution the field magnitude, the number the softmax deletes, separates Fashion from MNIST at a steady 0.92 while the softmax channel wobbles. Calibration is a property of the probability head, not of the feature geometry: a softmax bolted onto a kernel launders similarity scores into false certainty, and the honest deployment recipe is a thermometer for the probabilities and a seismograph, the un-normalized field, for the “is this even my world?” question.</p>
+<hr/>
+<p><em>Calibration of modern networks and temperature scaling are <a href="https://arxiv.org/abs/1706.04599">Guo et al. (2017)</a>; the binned ECE is <a href="https://ojs.aaai.org/index.php/AAAI/article/view/9602">Naeini et al. (2015)</a>; the Brier score is <a href="https://journals.ametsoc.org/view/journals/mwre/78/1/1520-0493_1950_078_0001_vofeit_2_0_co_2.xml">Brier (1950)</a>; max-softmax and energy/logit OOD scores are <a href="https://arxiv.org/abs/1610.02136">Hendrycks and Gimpel (2017)</a> and <a href="https://arxiv.org/abs/2010.03759">Liu et al. (2020)</a>; the Yat kernel is <a href="https://arxiv.org/abs/2605.03262">Bouhsine (2026)</a>. The conceptual companion is <a href="/blog/calibration-of-a-bounded-net/">When 80% Should Mean 80%</a>. Every number is printed by <code>scripts/yat_calibration.py</code>.</em></p>
+<section class="cite-as" aria-labelledby="cite-calibration-of-a-bounded-net-jax-flax-nnx" data-astro-cid-p234urri> <h2 id="cite-calibration-of-a-bounded-net-jax-flax-nnx" data-astro-cid-p234urri>Cite as</h2> <p class="cite-line" data-astro-cid-p234urri>
+Bouhsine, T. (<time datetime="2026-07-04T17:00:00.000Z" data-astro-cid-p234urri>2026, July 4</time>).
+<em data-astro-cid-p234urri>Calibrating a Bounded Net, in JAX/Flax NNX</em>. Records of the !mmortal Data Scientist.
+<a href="https://tahabouhsine.com/blog/calibration-of-a-bounded-net-jax-flax-nnx/" data-astro-cid-p234urri>https://tahabouhsine.com/blog/calibration-of-a-bounded-net-jax-flax-nnx/</a> </p> <details class="cite-bib" data-astro-cid-p234urri> <summary data-astro-cid-p234urri>BibTeX</summary> <pre data-astro-cid-p234urri><code class="bibtex" data-astro-cid-p234urri>@misc{bouhsine2026calibrationofaboundednetjaxflaxnnx,
+  author       = {Bouhsine, Taha},
+  title        = {Calibrating a Bounded Net, in JAX/Flax NNX},
+  year         = {2026},
+  month        = {jul},
+  howpublished = {\url{https://tahabouhsine.com/blog/calibration-of-a-bounded-net-jax-flax-nnx/}},
+  note         = {Blog post, Records of the !mmortal Data Scientist}
+}</code></pre> <button type="button" class="cite-copy" data-copy="@misc{bouhsine2026calibrationofaboundednetjaxflaxnnx,
+  author       = {Bouhsine, Taha},
+  title        = {Calibrating a Bounded Net, in JAX/Flax NNX},
+  year         = {2026},
+  month        = {jul},
+  howpublished = {\url{https://tahabouhsine.com/blog/calibration-of-a-bounded-net-jax-flax-nnx/}},
+  note         = {Blog post, Records of the !mmortal Data Scientist}
+}" aria-label="Copy BibTeX" data-astro-cid-p234urri>copy</button> </details>  </section>  <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('.cite-copy').forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(btn.dataset.copy || '');
+            const original = btn.textContent;
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = original;
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>
+<style>
+.jax-fig { margin: 1.8rem auto; text-align: center; }
+.jax-fig img { max-width: 520px; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; background: #fbf8f1; }
+.jax-fig-wide img { max-width: 880px; }
+.jax-fig figcaption { margin-top: 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--fg-muted); max-width: 64ch; margin-left: auto; margin-right: auto; }
+</style>  <section class="references" aria-labelledby="references-heading" data-astro-cid-rn7nvbl4><h2 id="references-heading" data-astro-cid-rn7nvbl4>References</h2><ol data-astro-cid-rn7nvbl4><li id="ref-1" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Guo, C., Pleiss, G., Sun, Y., Weinberger, K. Q.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2017)</span>. <a class="ref-title" href="https://arxiv.org/abs/1706.04599" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>On Calibration of Modern Neural Networks</a>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>ICML 2017</span>.<a class="ref-ext" href="https://arxiv.org/abs/1706.04599" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:1706.04599</a></li><li id="ref-2" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Naeini, M. P., Cooper, G. F., Hauskrecht, M.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2015)</span>. <span class="ref-title" data-astro-cid-rn7nvbl4>Obtaining Well Calibrated Probabilities Using Bayesian Binning</span>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>AAAI 2015</span>.</li><li id="ref-3" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Brier, G. W.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(1950)</span>. <span class="ref-title" data-astro-cid-rn7nvbl4>Verification of Forecasts Expressed in Terms of Probability</span>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>Monthly Weather Review 78, 1–3</span>.</li><li id="ref-4" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Hendrycks, D., Gimpel, K.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2017)</span>. <a class="ref-title" href="https://arxiv.org/abs/1610.02136" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>A Baseline for Detecting Misclassified and Out-of-Distribution Examples in Neural Networks</a>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>ICLR 2017</span>.<a class="ref-ext" href="https://arxiv.org/abs/1610.02136" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:1610.02136</a></li><li id="ref-5" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Liu, W., Wang, X., Owens, J., Li, Y.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2020)</span>. <a class="ref-title" href="https://arxiv.org/abs/2010.03759" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>Energy-based Out-of-distribution Detection</a>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>NeurIPS 2020</span>.<a class="ref-ext" href="https://arxiv.org/abs/2010.03759" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:2010.03759</a></li><li id="ref-6" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Bouhsine, T.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2026)</span>. <a class="ref-title" href="https://arxiv.org/abs/2605.03262" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance</a>.
+<a class="ref-ext" href="https://arxiv.org/abs/2605.03262" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:2605.03262</a></li></ol></section> </article> <script>(function(){const payload = {"post_title":"Calibrating a Bounded Net, in JAX/Flax NNX","post_slug":"calibration-of-a-bounded-net-jax-flax-nnx","post_path":"/blog/calibration-of-a-bounded-net-jax-flax-nnx/","post_tags":"ml,kernels,calibration,uncertainty,jax,flax,nnx,implementation,yat,ood,deep-learning","word_count":2292,"reading_time_minutes":12,"is_draft":false};
+
+  (() => {
+    const thresholds = [25, 50, 75, 90, 100];
+    const state = { viewed: false, sent: new Set() };
+
+    const track = (name, params = {}) => {
+      if (typeof window.__trackGA === 'function') {
+        window.__trackGA(name, {
+          ...payload,
+          ...params,
+          non_interaction: name === 'blog_post_view',
+        });
+      }
+    };
+
+    const init = () => {
+      const article = document.querySelector('[data-blog-post]');
+      if (!article) return;
+
+      if (!state.viewed) {
+        state.viewed = true;
+        track('blog_post_view');
+      }
+
+      const progress = () => {
+        const rect = article.getBoundingClientRect();
+        const articleTop = window.scrollY + rect.top;
+        const articleHeight = Math.max(1, article.offsetHeight);
+        const viewportBottom = window.scrollY + window.innerHeight;
+        return Math.max(0, Math.min(100, ((viewportBottom - articleTop) / articleHeight) * 100));
+      };
+
+      const update = () => {
+        const pct = progress();
+        thresholds.forEach((threshold) => {
+          if (pct >= threshold && !state.sent.has(threshold)) {
+            state.sent.add(threshold);
+            track('blog_post_read_depth', { read_percent: threshold });
+            if (threshold === 90) {
+              track('blog_post_read', { read_percent: threshold });
+            }
+          }
+        });
+      };
+
+      if (window.__postAnalyticsCleanup) window.__postAnalyticsCleanup();
+
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => {
+          update();
+          ticking = false;
+        });
+      };
+
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+      window.__postAnalyticsCleanup = () => {
+        window.removeEventListener('scroll', onScroll);
+        window.removeEventListener('resize', onScroll);
+      };
+      update();
+    };
+
+    init();
+    document.addEventListener('astro:page-load', init, { once: true });
+  })();
+})();</script> <aside class="related" aria-labelledby="related-heading" data-astro-cid-dpgbfi7r><h2 id="related-heading" data-astro-cid-dpgbfi7r>Related posts</h2><ul data-astro-cid-dpgbfi7r><li data-astro-cid-dpgbfi7r><a href="/blog/edit-a-fixed-point-jax-flax-nnx/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>Editing a Deep Equilibrium Network, in JAX/Flax NNX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion: build the weight-tied Yat equilibrium operator in Flax NNX, then teach a class by appending rows to the readout (F untouched, exact) or into the shared dynamics (one paste, present at every depth), measure the contraction certificate with power iteration and bisect one gain to restore it, audit the drift of 520 old fixed points, watch a layer-only edit evaporate, and forget by masking. Every number is from a real run.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-07-04T17:00:00.000Z" data-astro-cid-dpgbfi7r>Jul 4, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/where-does-a-weight-live-jax-flax-nnx/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>Where a Weight Lives, in JAX/Flax NNX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion: build the representer-theorem weight in JAX. A positive-definite kernel, the Gram matrix, a single linear solve for the coefficients, and the weight comes out as a combination of the data, f = sum alpha_i k(x_i, .). A linear weight cannot separate nested rings; the placed kernel weight does, read purely through the kernel as a similarity-weighted vote of the data.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-06-25T17:00:00.000Z" data-astro-cid-dpgbfi7r>Jun 25, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/handbuilt-features-jax-flax-nnx/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>The Hand-Built Network, in JAX/Flax NNX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion: build the training-free image classifier from the post in JAX. The feature extractor is pure JAX (Sobel gradients, orientation binning, patch pooling); the classifier is a Flax NNX module holding k-means prototypes that votes with the Yat kernel. Nothing is trained, and it reproduces the 83.3% on Fashion-MNIST.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-06-24T17:00:00.000Z" data-astro-cid-dpgbfi7r>Jun 24, 2026</time></span></a></li></ul></aside> <nav class="post-nav" aria-label="Adjacent posts"><a href="/blog/depth-by-construction-jax-flax-nnx/" class="prev" rel="prev"><div class="label">← Previous</div><div class="title">Building the Second Layer by Hand, in JAX/Flax NNX</div></a><a href="/blog/a-risk-model-that-names-its-reasons/" class="next" rel="next"><div class="label">Next →</div><div class="title">A Risk Model That Names Its Reasons</div></a></nav> <section aria-label="Comments" id="giscus-mount" style="margin-top:3rem" data-giscus="{&#34;repo&#34;:&#34;mlnomadpy/blog&#34;,&#34;repoId&#34;:&#34;MDEwOlJlcG9zaXRvcnk0MDQ4MzY2NDU=&#34;,&#34;category&#34;:&#34;Announcements&#34;,&#34;categoryId&#34;:&#34;DIC_kwDOGCFRJc4C9EiR&#34;,&#34;mapping&#34;:&#34;pathname&#34;,&#34;reactionsEnabled&#34;:&#34;1&#34;,&#34;emitMetadata&#34;:&#34;0&#34;,&#34;inputPosition&#34;:&#34;top&#34;,&#34;theme&#34;:&#34;preferred_color_scheme&#34;,&#34;lang&#34;:&#34;en&#34;}"></section><script>
+    (() => {
+      const load = () => {
+        const mount = document.getElementById('giscus-mount');
+        if (!mount || mount.dataset.loaded === '1') return;
+        const cfg = JSON.parse(mount.dataset.giscus);
+        const theme = document.documentElement.getAttribute('data-theme')
+          || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        const s = document.createElement('script');
+        s.src = 'https://giscus.app/client.js';
+        s.async = true;
+        s.crossOrigin = 'anonymous';
+        const attrs = {
+          'data-repo': cfg.repo,
+          'data-repo-id': cfg.repoId,
+          'data-category': cfg.category,
+          'data-category-id': cfg.categoryId,
+          'data-mapping': cfg.mapping,
+          'data-strict': '0',
+          'data-reactions-enabled': cfg.reactionsEnabled,
+          'data-emit-metadata': cfg.emitMetadata,
+          'data-input-position': cfg.inputPosition,
+          'data-theme': theme,
+          'data-lang': cfg.lang,
+          'data-loading': 'lazy',
+        };
+        for (const k in attrs) s.setAttribute(k, attrs[k]);
+        mount.appendChild(s);
+        mount.dataset.loaded = '1';
+      };
+      load();
+      document.addEventListener('astro:page-load', load);
+      document.addEventListener('astro:after-swap', load);
+    })();
+  </script> <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('pre').forEach((pre) => {
+        if (pre.dataset.copyEnhanced) return;
+        pre.dataset.copyEnhanced = '1';
+        const btn = document.createElement('button');
+        btn.className = 'code-copy';
+        btn.type = 'button';
+        btn.textContent = 'copy';
+        btn.setAttribute('aria-label', 'Copy code');
+        btn.addEventListener('click', async () => {
+          const code = pre.querySelector('code');
+          const text = (code ? code.innerText : pre.innerText) || '';
+          try {
+            await navigator.clipboard.writeText(text);
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = 'copy';
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+        pre.appendChild(btn);
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>  </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span class="site-footer__links"> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> <a class="site-footer__support" href="https://buymeacoffee.com/mlnomadpy" target="_blank" rel="noopener noreferrer" aria-label="Support this blog on Buy Me a Coffee">
+buy me a coffee
+</a> </span> </footer> <div id="consent-banner" class="consent-banner" role="dialog" aria-live="polite" aria-label="Analytics consent" hidden><p class="consent-text">
+I use Google Analytics to see which posts get read. It sets cookies only
+      if you accept. No ads, no selling data.
+</p><div class="consent-actions"><button type="button" id="consent-decline" class="consent-btn consent-decline">Decline</button><button type="button" id="consent-accept" class="consent-btn consent-accept">Accept</button></div></div>
+
+  <script>
+    (() => {
+      const KEY = 'analytics-consent';
+      const setup = () => {
+        const banner = document.getElementById('consent-banner');
+        if (!banner) return;
+        let choice = null;
+        try { choice = localStorage.getItem(KEY); } catch (e) {}
+        // Already decided → keep hidden.
+        if (choice === 'granted' || choice === 'denied') { banner.hidden = true; return; }
+        banner.hidden = false;
+
+        const decide = (value) => {
+          try { localStorage.setItem(KEY, value); } catch (e) {}
+          banner.hidden = true;
+          if (value === 'granted' && typeof window.__loadGA === 'function') window.__loadGA();
+        };
+        const accept = document.getElementById('consent-accept');
+        const decline = document.getElementById('consent-decline');
+        if (accept && !accept.dataset.bound) {
+          accept.dataset.bound = '1';
+          accept.addEventListener('click', () => decide('granted'));
+        }
+        if (decline && !decline.dataset.bound) {
+          decline.dataset.bound = '1';
+          decline.addEventListener('click', () => decide('denied'));
+        }
+      };
+      setup();
+      document.addEventListener('astro:page-load', setup);
+    })();
+  </script>
+
+  <style>
+    /* Author `display:flex` below would otherwise override the UA [hidden]
+       rule, leaving the banner visible after a choice. This wins on specificity. */
+    .consent-banner[hidden] { display: none !important; }
+    .consent-banner {
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      right: 1rem;
+      max-width: 30rem;
+      margin-left: auto;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+      padding: 0.95rem 1.1rem;
+      background: var(--bg-elev, #fff);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      font-family: var(--sans);
+    }
+    .consent-text {
+      margin: 0;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: var(--fg-muted);
+    }
+    .consent-actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+    }
+    .consent-btn {
+      font-family: var(--sans);
+      font-size: 0.82rem;
+      padding: 0.4rem 0.95rem;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    }
+    .consent-decline {
+      background: transparent;
+      color: var(--fg-muted);
+    }
+    .consent-decline:hover { color: var(--fg); border-color: var(--fg-faint); }
+    .consent-accept {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg);
+      font-weight: 600;
+    }
+    .consent-accept:hover { filter: brightness(1.05); }
+    @media (max-width: 520px) {
+      .consent-banner { left: 0.6rem; right: 0.6rem; bottom: 0.6rem; }
+    }
+  </style> <script>
+      // Inject a fullscreen toggle button onto every .viz figure on the page.
+      (() => {
+        const ENTER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10V4h6"/><path d="M20 10V4h-6"/><path d="M4 14v6h6"/><path d="M20 14v6h-6"/></svg>';
+        const EXIT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H4v6"/><path d="M14 4h6v6"/><path d="M10 20H4v-6"/><path d="M14 20h6v-6"/></svg>';
+        const inFs = () => document.fullscreenElement || document.webkitFullscreenElement;
+        const enhance = () => {
+          document.querySelectorAll('.viz').forEach((fig) => {
+            if (fig.dataset.fsReady) return;
+            fig.dataset.fsReady = '1';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'viz-fs-btn';
+            btn.setAttribute('aria-label', 'Toggle fullscreen');
+            btn.innerHTML = ENTER_SVG + '<span>fullscreen</span>';
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              try {
+                if (inFs() === fig) {
+                  await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen?.());
+                } else if (fig.requestFullscreen) {
+                  await fig.requestFullscreen();
+                } else if (fig.webkitRequestFullscreen) {
+                  await fig.webkitRequestFullscreen();
+                }
+              } catch (_) {}
+            });
+            fig.appendChild(btn);
+          });
+          const sync = () => {
+            document.querySelectorAll('.viz-fs-btn').forEach((b) => {
+              const fig = b.parentElement;
+              const open = inFs() === fig;
+              b.innerHTML = (open ? EXIT_SVG : ENTER_SVG) + '<span>' + (open ? 'exit' : 'fullscreen') + '</span>';
+            });
+          };
+          document.addEventListener('fullscreenchange', sync);
+          document.addEventListener('webkitfullscreenchange', sync);
+        };
+        enhance();
+        document.addEventListener('astro:page-load', enhance);
+        document.addEventListener('astro:after-swap', enhance);
+      })();
+    </script> </body> </html>

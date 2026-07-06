@@ -1,0 +1,583 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="generator" content="Astro v5.18.1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#fbfaf6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)"><title>Depth by Construction in JAX/Flax NNX</title><meta name="description" content="Build a second hand-designed feature layer in JAX/Flax NNX: min-AND junctions on layer-1 edges, the same Yat head, no training, and the flat rung it measures."><meta name="keywords" content="second feature layer by hand JAX, hand-built junction detectors, min-AND combinations Flax NNX, constructed Yat head depth, combinatorial feature wall, ml, kernels, interpretability, prototypes, computer-vision, construction, depth, jax, flax, nnx, yat, deep-learning"><meta name="author" content="Taha Bouhsine"><link rel="canonical" href="https://tahabouhsine.com/blog/depth-by-construction-jax-flax-nnx/"><link rel="icon" href="/blog/favicon.svg" type="image/svg+xml"><link rel="alternate" type="application/rss+xml" title="Records of the !mmortal Data Scientist" href="/blog/rss.xml"><link rel="sitemap" href="/blog/sitemap-index.xml"><link rel="me" href="https://github.com/mlnomadpy"><link rel="me" href="https://x.com/mlnomadpy"><link rel="me" href="https://www.linkedin.com/in/tahabsn/"><link rel="me" href="https://scholar.google.com/citations?user=IsBjb3EAAAAJ"><link rel="me" href="https://g.dev/tahabsn"><link rel="author" href="https://github.com/mlnomadpy"><meta property="og:type" content="article"><meta property="og:site_name" content="Records of the !mmortal Data Scientist"><meta property="og:title" content="Depth by Construction in JAX/Flax NNX"><meta property="og:description" content="Build a second hand-designed feature layer in JAX/Flax NNX: min-AND junctions on layer-1 edges, the same Yat head, no training, and the flat rung it measures."><meta property="og:url" content="https://tahabouhsine.com/blog/depth-by-construction-jax-flax-nnx/"><meta property="og:locale" content="en_US"><meta property="og:image" content="https://tahabouhsine.com/blog/og/depth-by-construction-jax-flax-nnx.png"><meta property="og:image:alt" content="Building the Second Layer by Hand, in JAX/Flax NNX — Records of the !mmortal Data Scientist"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:type" content="image/png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@mlnomadpy"><meta name="twitter:creator" content="@mlnomadpy"><meta name="twitter:title" content="Depth by Construction in JAX/Flax NNX"><meta name="twitter:description" content="Build a second hand-designed feature layer in JAX/Flax NNX: min-AND junctions on layer-1 edges, the same Yat head, no training, and the flat rung it measures."><meta name="twitter:image" content="https://tahabouhsine.com/blog/og/depth-by-construction-jax-flax-nnx.png"><meta name="twitter:image:alt" content="Building the Second Layer by Hand, in JAX/Flax NNX — Records of the !mmortal Data Scientist"><meta property="article:published_time" content="2026-07-04T17:00:00.000Z"><meta property="article:author" content="Taha Bouhsine"><meta property="article:section" content="Machine Learning"><meta property="article:tag" content="ml"><meta property="article:tag" content="kernels"><meta property="article:tag" content="interpretability"><meta property="article:tag" content="prototypes"><meta property="article:tag" content="computer-vision"><meta property="article:tag" content="construction"><meta property="article:tag" content="depth"><meta property="article:tag" content="jax"><meta property="article:tag" content="flax"><meta property="article:tag" content="nnx"><meta property="article:tag" content="yat"><meta property="article:tag" content="deep-learning"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","@id":"https://tahabouhsine.com/blog/depth-by-construction-jax-flax-nnx/#article","headline":"Building the Second Layer by Hand, in JAX/Flax NNX","name":"Building the Second Layer by Hand, in JAX/Flax NNX","description":"Build a second hand-designed feature layer in JAX/Flax NNX: min-AND junctions on layer-1 edges, the same Yat head, no training, and the flat rung it measures.","image":["https://tahabouhsine.com/blog/og/depth-by-construction-jax-flax-nnx.png"],"datePublished":"2026-07-04T17:00:00.000Z","dateModified":"2026-07-04T17:00:00.000Z","author":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#author","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","jobTitle":"Machine Learning Researcher","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"publisher":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#publisher","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"mainEntityOfPage":{"@type":"WebPage","@id":"https://tahabouhsine.com/blog/depth-by-construction-jax-flax-nnx/"},"keywords":"second feature layer by hand JAX, hand-built junction detectors, min-AND combinations Flax NNX, constructed Yat head depth, combinatorial feature wall, ml, kernels, interpretability, prototypes, computer-vision, construction, depth, jax, flax, nnx, yat, deep-learning","url":"https://tahabouhsine.com/blog/depth-by-construction-jax-flax-nnx/","inLanguage":"en-US","wordCount":2681,"timeRequired":"PT14M","articleSection":"Machine Learning","isPartOf":{"@type":"Blog","@id":"https://tahabouhsine.com/blog/","name":"Records of the !mmortal Data Scientist","url":"https://tahabouhsine.com/blog/"}}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Blog","item":"https://tahabouhsine.com/blog/"},{"@type":"ListItem","position":2,"name":"Machine Learning","item":"https://tahabouhsine.com/blog/tag/ml/"},{"@type":"ListItem","position":3,"name":"Building the Second Layer by Hand, in JAX/Flax NNX","item":"https://tahabouhsine.com/blog/depth-by-construction-jax-flax-nnx/"}]}</script><script>
+    (function () {
+      if (window.__gaSetup) return;
+      window.__gaSetup = true;
+      var GA_ID = 'G-373438VHJB';
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ dataLayer.push(arguments); }
+      window.gtag = window.gtag || gtag;
+      window.__gaEventQueue = window.__gaEventQueue || [];
+      window.__trackGA = function (eventName, params) {
+        if (!eventName) return;
+        var item = { name: eventName, params: params || {} };
+        if (window.__gaLoaded) {
+          gtag('event', item.name, item.params);
+        } else {
+          window.__gaEventQueue.push(item);
+        }
+      };
+
+      // Track whether the first astro:page-load has fired, so a mid-session
+      // Accept can still record the current page.
+      window.__gaFirstLoadDone = window.__gaFirstLoadDone || false;
+      document.addEventListener('astro:page-load', function () { window.__gaFirstLoadDone = true; });
+
+      window.__loadGA = function () {
+        if (window.__gaLoaded) return;
+        window.__gaLoaded = true;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+        document.head.appendChild(s);
+        gtag('js', new Date());
+        gtag('config', GA_ID, { send_page_view: false });
+        (window.__gaEventQueue || []).splice(0).forEach(function (item) {
+          gtag('event', item.name, item.params);
+        });
+        function sendPV() {
+          gtag('event', 'page_view', {
+            page_title: document.title,
+            page_location: location.href,
+            page_path: location.pathname + location.search,
+          });
+        }
+        document.addEventListener('astro:page-load', sendPV);
+        // If the initial page-load already happened (accept mid-session),
+        // record this page now; otherwise the listener catches the first one.
+        if (window.__gaFirstLoadDone) sendPV();
+      };
+
+      try {
+        if (localStorage.getItem('analytics-consent') === 'granted') window.__loadGA();
+      } catch (e) {}
+    })();
+  </script><script>
+  (() => {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'light' || stored === 'dark') {
+      document.documentElement.setAttribute('data-theme', stored);
+    }
+  })();
+</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.DstInXr_.css">
+<link rel="stylesheet" href="/blog/_astro/_slug_.BzSIaIK4.css"><style>.cite-as[data-astro-cid-p234urri]{margin:3.5rem 0 0;padding-top:1.5rem;border-top:1px solid var(--border)}.cite-as[data-astro-cid-p234urri] h2[data-astro-cid-p234urri]{font-family:var(--mono);font-size:.82rem;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-faint);font-weight:500;margin:0 0 .75rem}.cite-as[data-astro-cid-p234urri] h3[data-astro-cid-p234urri]{font-family:var(--mono);font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-faint);font-weight:500;margin:1.5rem 0 .6rem}.cite-line[data-astro-cid-p234urri]{font-family:var(--serif);font-size:.98rem;line-height:1.55;color:var(--fg-muted);margin:0 0 .5rem}.cite-line[data-astro-cid-p234urri] em[data-astro-cid-p234urri]{color:var(--fg)}.cite-bib[data-astro-cid-p234urri]{margin:.4rem 0 0;position:relative}.cite-bib[data-astro-cid-p234urri] summary[data-astro-cid-p234urri]{cursor:pointer;font-family:var(--mono);font-size:.78rem;color:var(--fg-muted);padding:.25rem 0;user-select:none}.cite-bib[data-astro-cid-p234urri] summary[data-astro-cid-p234urri]:hover{color:var(--accent)}.cite-bib[data-astro-cid-p234urri] pre[data-astro-cid-p234urri]{margin:.4rem 0 0;padding:.85rem 1rem;background:var(--bg-elev);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;font-size:.82rem;line-height:1.55}.cite-bib[data-astro-cid-p234urri] pre[data-astro-cid-p234urri] code[data-astro-cid-p234urri]{background:transparent;border:0;padding:0}.cite-copy[data-astro-cid-p234urri]{position:absolute;top:2.1rem;right:.55rem;background:var(--bg);border:1px solid var(--border);color:var(--fg-muted);font-family:var(--mono);font-size:.72rem;padding:.25rem .55rem;border-radius:var(--radius-sm);cursor:pointer;transition:color var(--transition-fast),border-color var(--transition-fast)}.cite-copy[data-astro-cid-p234urri]:hover,.cite-copy[data-astro-cid-p234urri].copied{color:var(--accent);border-color:var(--accent)}
+</style></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/writeups">writeups</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>
+  (() => {
+    const apply = (theme) => {
+      document.documentElement.setAttribute('data-theme', theme);
+      const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+      if (meta) meta.setAttribute('content', theme === 'dark' ? '#0e1116' : '#fbfaf6');
+      // Sync giscus iframe if present
+      const giscus = document.querySelector('iframe.giscus-frame');
+      if (giscus && giscus.contentWindow) {
+        giscus.contentWindow.postMessage(
+          { giscus: { setConfig: { theme: theme === 'dark' ? 'dark' : 'light' } } },
+          'https://giscus.app'
+        );
+      }
+    };
+
+    const init = () => {
+      const btns = document.querySelectorAll('[data-theme-toggle]');
+      btns.forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', () => {
+          const current = document.documentElement.getAttribute('data-theme')
+            || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          const next = current === 'dark' ? 'light' : 'dark';
+          localStorage.setItem('theme', next);
+          apply(next);
+        });
+      });
+    };
+
+    init();
+    document.addEventListener('astro:after-swap', init);
+    document.addEventListener('astro:page-load', init);
+  })();
+</script> </nav> </div> </header> <main id="main">  <div class="reading-progress" data-reading-progress aria-hidden="true"></div> <script>
+  (() => {
+    const init = () => {
+      const bar = document.querySelector('[data-reading-progress]');
+      if (!bar) return;
+      const update = () => {
+        const h = document.documentElement;
+        const scrolled = h.scrollTop;
+        const max = h.scrollHeight - h.clientHeight;
+        const pct = max > 0 ? Math.min(100, (scrolled / max) * 100) : 0;
+        bar.style.width = pct + '%';
+      };
+      // Coalesce scroll events into one paint per frame so fast/touch
+      // scrolling stays smooth.
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => { update(); ticking = false; });
+      };
+      update();
+      window.removeEventListener('scroll', window.__rp_onScroll || (() => {}));
+      window.removeEventListener('resize', window.__rp_onScroll || (() => {}));
+      window.__rp_onScroll = onScroll;
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+    };
+    init();
+    document.addEventListener('astro:page-load', init);
+    document.addEventListener('astro:after-swap', init);
+  })();
+</script> <article data-blog-post data-pagefind-body data-pagefind-meta="date:2026-07-04"> <header class="post-header">  <h1 data-pagefind-meta="title">Building the Second Layer by Hand, in JAX/Flax NNX</h1> <p class="meta"> <time datetime="2026-07-04T17:00:00.000Z">July 4, 2026</time>   · 14 min read </p> <p style="margin-top:0.65rem" data-pagefind-meta="tags:ml,kernels,interpretability,prototypes,computer-vision,construction,depth,jax,flax,nnx,yat,deep-learning"> <a class="tag" href="/blog/tag/ml/">#ml</a><a class="tag" href="/blog/tag/kernels/">#kernels</a><a class="tag" href="/blog/tag/interpretability/">#interpretability</a><a class="tag" href="/blog/tag/prototypes/">#prototypes</a><a class="tag" href="/blog/tag/computer-vision/">#computer-vision</a><a class="tag" href="/blog/tag/construction/">#construction</a><a class="tag" href="/blog/tag/depth/">#depth</a><a class="tag" href="/blog/tag/jax/">#jax</a><a class="tag" href="/blog/tag/flax/">#flax</a><a class="tag" href="/blog/tag/nnx/">#nnx</a><a class="tag" href="/blog/tag/yat/">#yat</a><a class="tag" href="/blog/tag/deep-learning/">#deep-learning</a> </p> </header> <details class="series-nav" data-astro-cid-w7ld43o3><summary data-astro-cid-w7ld43o3><span class="sn-strip" data-astro-cid-w7ld43o3><span class="sn-part" data-astro-cid-w7ld43o3>Part 6 of 10</span><span class="sn-sep" aria-hidden="true" data-astro-cid-w7ld43o3>·</span><span class="sn-series" data-astro-cid-w7ld43o3>The Prototype Network</span></span><span class="sn-chevron" aria-hidden="true" data-astro-cid-w7ld43o3><svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" data-astro-cid-w7ld43o3><path d="M2.5 4.5 6 8l3.5-3.5" data-astro-cid-w7ld43o3></path></svg></span></summary><ol class="sn-list" data-astro-cid-w7ld43o3><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/what-a-finite-kernel-buys-an-mlp/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>1</span><span class="sn-title" data-astro-cid-w7ld43o3>What a Finite Kernel Buys an MLP</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/your-neuron-is-a-picture/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>2</span><span class="sn-title" data-astro-cid-w7ld43o3>Your Neuron Is a Direction. It Should Be a Picture.</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/edit-a-network-by-hand/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>3</span><span class="sn-title" data-astro-cid-w7ld43o3>Your Network Is a List of Pictures. You Can Edit It.</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/train-the-features/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>4</span><span class="sn-title" data-astro-cid-w7ld43o3>You Only Have to Train the Features</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/you-dont-have-to-train-the-features/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>5</span><span class="sn-title" data-astro-cid-w7ld43o3>You Don&#39;t Even Have to Train the Features</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/depth-by-construction/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>6</span><span class="sn-title" data-astro-cid-w7ld43o3>How Far Down Can You Build?</span><span class="sn-note" data-astro-cid-w7ld43o3>this post's explainer</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/calibration-of-a-bounded-net/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>7</span><span class="sn-title" data-astro-cid-w7ld43o3>When 80% Should Mean 80%</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/a-risk-model-that-names-its-reasons/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>8</span><span class="sn-title" data-astro-cid-w7ld43o3>A Risk Model That Names Its Reasons</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/your-network-is-a-fixed-point/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>9</span><span class="sn-title" data-astro-cid-w7ld43o3>Your Network Is a Stack of Layers. It Could Be a Fixed Point.</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/edit-a-fixed-point/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>10</span><span class="sn-title" data-astro-cid-w7ld43o3>Edit One Operator, Edit Every Depth</span></a></li></ol></details> <a class="companion-callout companion" href="/blog/depth-by-construction/" data-astro-cid-x4o4rwnl><span class="cc-icon" aria-hidden="true" data-astro-cid-x4o4rwnl>📖</span><span class="cc-body" data-astro-cid-x4o4rwnl><span class="cc-eyebrow" data-astro-cid-x4o4rwnl>Explainer companion</span><span class="cc-title" data-astro-cid-x4o4rwnl>How Far Down Can You Build?</span><span class="cc-lead" data-astro-cid-x4o4rwnl>Want the full intuition first? This is the runnable companion to the explainer.</span></span><span class="cc-cta" data-astro-cid-x4o4rwnl>Read the explainer<span aria-hidden="true" data-astro-cid-x4o4rwnl>→</span></span></a>  <p><em>The <a href="/blog/depth-by-construction/">explainer</a> took the recipe for a second feature layer off the shelf, built junctions, continuations, bends and stripes by hand on top of the hand-built first layer, and measured a flat rung: 82.9% for both layers, against 83.3% for one. This is the implementation. Layer 2 is pure numpy, four lines of min-AND over the layer-1 maps; the head is the same <a href="https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html">Flax NNX</a> module of placed k-means prototypes that votes with the Yat kernel, no training loop anywhere. Every number is from a real run; the script is <code>scripts/handbuilt_depth.py</code>.</em></p>
+<p><em>Prefer a notebook? Run the whole thing on <a href="https://www.kaggle.com/code/skywolfmo/depth-by-construction-jax-flax-nnx">Kaggle</a>: the same code, block by block, with the math written out and every figure reproduced from a real run.</em></p>
+<h2 id="what-layer-2-is-made-of">What layer 2 is made of<a class="heading-anchor-link" aria-label="Link to heading" href="#what-layer-2-is-made-of"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>What can a second layer even say? Only things about the first. Layer 1’s whole vocabulary is seven words per cell, six oriented-edge energies and a corner, so layer 2 has to be sentences that <em>relate</em> those words. The cheapest honest AND between two non-negative energies is their minimum, and four kinds of sentence fall out of it: a junction (two orientations in one cell), a continuation (one orientation one cell along its own direction), a bend (a continuation that arrives rotated a step), and a stripe (a parallel echo two cells across). Layer 1 comes in unchanged from the last companion, mean-pooled to a 14-by-14 cell grid so layer 2 has neighbours to reach into.</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">import</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> numpy </span><span style="color:#D73A49;--shiki-dark:#F47067">as</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np, math</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">from</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> scipy.ndimage </span><span style="color:#D73A49;--shiki-dark:#F47067">import</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> convolve</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">NB</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">NCH</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">CELL</span><span style="color:#D73A49;--shiki-dark:#F47067"> =</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 6</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">7</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">14</span><span style="color:#6A737D;--shiki-dark:#768390">                                  # 6 orientations + corner, on a 14x14 cell grid</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">CENTERS</span><span style="color:#D73A49;--shiki-dark:#F47067"> =</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.linspace(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, np.pi, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">NB</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">endpoint</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">False</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">CONTOUR</span><span style="color:#D73A49;--shiki-dark:#F47067"> =</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> [(</span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7">math.sin(a), math.cos(a)) </span><span style="color:#D73A49;--shiki-dark:#F47067">for</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> a </span><span style="color:#D73A49;--shiki-dark:#F47067">in</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> CENTERS</span><span style="color:#24292E;--shiki-dark:#ADBAC7">]  </span><span style="color:#6A737D;--shiki-dark:#768390"># unit step along each edge&#39;s own direction</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">SX</span><span style="color:#D73A49;--shiki-dark:#F47067"> =</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.array([[</span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">], [</span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">], [</span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">]], </span><span style="color:#032F62;--shiki-dark:#96D0FF">&#39;float32&#39;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">); </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">SY</span><span style="color:#D73A49;--shiki-dark:#F47067"> =</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> SX</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.T</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> channel_maps</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(X):                                      </span><span style="color:#6A737D;--shiki-dark:#768390"># layer 1, verbatim from the last post</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    gx </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.stack([convolve(im, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">SX</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">mode</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#032F62;--shiki-dark:#96D0FF">&#39;nearest&#39;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">for</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> im </span><span style="color:#D73A49;--shiki-dark:#F47067">in</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> X])</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    gy </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.stack([convolve(im, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">SY</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">mode</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#032F62;--shiki-dark:#96D0FF">&#39;nearest&#39;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">for</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> im </span><span style="color:#D73A49;--shiki-dark:#F47067">in</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> X])</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    mag </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.sqrt(gx </span><span style="color:#D73A49;--shiki-dark:#F47067">**</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#D73A49;--shiki-dark:#F47067"> +</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> gy </span><span style="color:#D73A49;--shiki-dark:#F47067">**</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1e-6</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    ang </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.arctan2(gy, gx) </span><span style="color:#D73A49;--shiki-dark:#F47067">%</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.pi</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    out </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> [np.clip(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#D73A49;--shiki-dark:#F47067"> -</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.abs(((ang </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> CENTERS</span><span style="color:#24292E;--shiki-dark:#ADBAC7">[b] </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.pi </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">%</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.pi) </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.pi </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (np.pi </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> NB</span><span style="color:#24292E;--shiki-dark:#ADBAC7">), </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> mag</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">           for</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> b </span><span style="color:#D73A49;--shiki-dark:#F47067">in</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> range</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">NB</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)]</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    out.append(np.abs(gx) </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.abs(gy))                   </span><span style="color:#6A737D;--shiki-dark:#768390"># corner</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.stack(out, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)                               </span><span style="color:#6A737D;--shiki-dark:#768390"># [n, 7, 28, 28]</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> cells</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(maps):                                          </span><span style="color:#6A737D;--shiki-dark:#768390"># 2x2 mean-pool to the 14x14 cell grid</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    n </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> len</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(maps)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> maps.reshape(n, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">NCH</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">CELL</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">CELL</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">).mean((</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">3</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">5</span><span style="color:#24292E;--shiki-dark:#ADBAC7">))</span></span></code></pre>
+<p>A junction is the whole idea in one picture: take the map of one orientation and the map of another, and keep only where both fire. That pointwise minimum is a new detector, computed from layer 1 exactly the way layer 1 was computed from pixels, with nothing fit.</p>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/depth-junction-assembly.png" alt="Three panels on a real bag: the 30-degree edge map, the 90-degree edge map, and their pointwise minimum, a 30+90 junction detector that fires only at the corners where both orientations are present" loading="lazy" width="946" height="429"/><figcaption>The entire mechanism of layer 2, on a real garment. Left, the 30° edge map of a bag; middle, its 90° edge map; right, their pointwise minimum, a detector that is bright only where <em>both</em> orientations are present in the same cell, which is what a junction is. This is <code>np.minimum(e1, e2)</code>, the cheapest honest AND of two non-negative energies, no parameter fit. Rendered by <code>scripts/render_depth_figs.py</code>.</figcaption></figure>
+<h2 id="the-four-lines-that-are-the-layer">The four lines that are the layer<a class="heading-anchor-link" aria-label="Link to heading" href="#the-four-lines-that-are-the-layer"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The whole second layer is those four sentences, written once and evaluated on the cell grid. A junction is a min of two orientations in place; a continuation is a min of an orientation with itself shifted one cell along its contour; a bend swaps the shifted partner for the neighbouring orientation; a stripe reaches across the edge instead of along it. The shift is bilinear, so a contour that runs at 30° is followed at 30°, not snapped to the pixel grid.</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> shift_frac</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(A, dy, dx):                                </span><span style="color:#6A737D;--shiki-dark:#768390"># sample A at (y+dy, x+dx), bilinear</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    y0, x0 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> math.floor(dy), math.floor(dx); fy, fx </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> dy </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> y0, dx </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> x0</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> sh</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(a, iy, ix):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        out </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.zeros_like(a); h, w </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> a.shape[</span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">:]</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        ys, xs </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> max</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7">iy), </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">max</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7">ix); ye, xe </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> min</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(h, h </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> iy), </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">min</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(w, w </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> ix)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        if</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> ye </span><span style="color:#D73A49;--shiki-dark:#F47067">&gt;</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> ys </span><span style="color:#D73A49;--shiki-dark:#F47067">and</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> xe </span><span style="color:#D73A49;--shiki-dark:#F47067">&gt;</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> xs: out[</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">...</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, ys:ye, xs:xe] </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> a[</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">...</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, ys </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> iy:ye </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> iy, xs </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> ix:xe </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> ix]</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> out</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> ((</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#D73A49;--shiki-dark:#F47067"> -</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> fy) </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#D73A49;--shiki-dark:#F47067"> -</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> fx) </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> sh(A, y0, x0) </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#D73A49;--shiki-dark:#F47067"> -</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> fy) </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> fx </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> sh(A, y0, x0 </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">            +</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> fy </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#D73A49;--shiki-dark:#F47067"> -</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> fx) </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> sh(A, y0 </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, x0) </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> fy </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> fx </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> sh(A, y0 </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, x0 </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">))</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> l2_maps</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(C):                                           </span><span style="color:#6A737D;--shiki-dark:#768390"># [n, 33, 14, 14]: the named layer-2 vocabulary</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    E </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> C[:, :</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">NB</span><span style="color:#24292E;--shiki-dark:#ADBAC7">]; out </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> []</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    for</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> b1 </span><span style="color:#D73A49;--shiki-dark:#F47067">in</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> range</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">NB</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):                                  </span><span style="color:#6A737D;--shiki-dark:#768390"># 15 junctions</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        for</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> b2 </span><span style="color:#D73A49;--shiki-dark:#F47067">in</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> range</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(b1 </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">NB</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">            out.append(np.minimum(E[:, b1], E[:, b2]))</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    for</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> b </span><span style="color:#D73A49;--shiki-dark:#F47067">in</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> range</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">NB</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):                                   </span><span style="color:#6A737D;--shiki-dark:#768390"># 6 continuations</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        dx, dy </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> CONTOUR</span><span style="color:#24292E;--shiki-dark:#ADBAC7">[b]</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        out.append(np.minimum(E[:, b], shift_frac(E[:, b], dy, dx)))</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    for</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> b </span><span style="color:#D73A49;--shiki-dark:#F47067">in</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> range</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">NB</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):                                   </span><span style="color:#6A737D;--shiki-dark:#768390"># 6 bends: the continuation arrives rotated a step</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        dx, dy </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> CONTOUR</span><span style="color:#24292E;--shiki-dark:#ADBAC7">[b]</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        nb </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.maximum(shift_frac(E[:, (b </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">%</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> NB</span><span style="color:#24292E;--shiki-dark:#ADBAC7">], dy, dx), shift_frac(E[:, (b </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">%</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> NB</span><span style="color:#24292E;--shiki-dark:#ADBAC7">], dy, dx))</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        out.append(np.minimum(E[:, b], nb))</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    for</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> b </span><span style="color:#D73A49;--shiki-dark:#F47067">in</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> range</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">NB</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):                                   </span><span style="color:#6A737D;--shiki-dark:#768390"># 6 stripes: a parallel echo two cells across</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        gdx, gdy </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> math.cos(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">CENTERS</span><span style="color:#24292E;--shiki-dark:#ADBAC7">[b]), math.sin(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">CENTERS</span><span style="color:#24292E;--shiki-dark:#ADBAC7">[b])</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        echo </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.maximum(shift_frac(E[:, b], gdy </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, gdx </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">), shift_frac(E[:, b], </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7">gdy </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7">gdx </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">))</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        out.append(np.minimum(E[:, b], echo))</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.stack(out, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span></code></pre>
+<p>Fifteen junction pairs, six continuations, six bends, six stripes: <strong>33 named detectors</strong>, each one sentence long. Re-pooled over a 4-by-4 grid that is <strong>33 × 16 = 528 new dimensions</strong>, and every one is still nameable (“a 30°+90° junction in the top-right region”). None of it was trained.</p>
+<h2 id="the-head-is-the-same-placed-module">The head is the same placed module<a class="heading-anchor-link" aria-label="Link to heading" href="#the-head-is-the-same-placed-module"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>What classifies these features? The exact head from the first two companions, unchanged. The constructed Yat head is a Flax NNX module whose variables are <em>placed</em>, not learned: <code>W</code> holds k-means centroids of the training features, <code>A</code> is a one-hot table routing each prototype’s vote to its class, and the forward pass is the Yat kernel against every prototype, then the per-class maximum, then an argmax. That it slots onto layer-2 features without touching a line is the point: depth changed the representation, not the classifier.</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">from</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> flax </span><span style="color:#D73A49;--shiki-dark:#F47067">import</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">import</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jax, jax.numpy </span><span style="color:#D73A49;--shiki-dark:#F47067">as</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">class</span><span style="color:#6F42C1;--shiki-dark:#F69D50"> YatHead</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(</span><span style="color:#6F42C1;--shiki-dark:#6CB6FF">nnx</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.</span><span style="color:#6F42C1;--shiki-dark:#6CB6FF">Module</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#032F62;--shiki-dark:#96D0FF">    &quot;&quot;&quot;Placed prototypes W (k-means centroids), one-hot votes A, nearest-prototype vote.&quot;&quot;&quot;</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> __init__</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(self, W, vote, b</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0.5</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, eps</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1.0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.W </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Variable(jnp.asarray(W))                        </span><span style="color:#6A737D;--shiki-dark:#768390"># [K, D] prototypes, D = 343 or 528 or 871</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.A </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Variable(jax.nn.one_hot(jnp.asarray(vote), </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">10</span><span style="color:#24292E;--shiki-dark:#ADBAC7">))</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.b, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.eps </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> b, eps</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> __call__</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(self, z):                                          </span><span style="color:#6A737D;--shiki-dark:#768390"># z: [N, D] features</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        dot </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> z </span><span style="color:#D73A49;--shiki-dark:#F47067">@</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.W.value.T</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        d2 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (z </span><span style="color:#D73A49;--shiki-dark:#F47067">**</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">).sum(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">keepdims</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">True</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.W.value </span><span style="color:#D73A49;--shiki-dark:#F47067">**</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">).sum(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> dot</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        ker </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (dot </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.b) </span><span style="color:#D73A49;--shiki-dark:#F47067">**</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#D73A49;--shiki-dark:#F47067"> /</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (d2 </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.eps)                 </span><span style="color:#6A737D;--shiki-dark:#768390"># the Yat kernel</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        scores </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.where(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.A.value.T[</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">None</span><span style="color:#24292E;--shiki-dark:#ADBAC7">].astype(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">bool</span><span style="color:#24292E;--shiki-dark:#ADBAC7">), ker[:, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">None</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, :], </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7">jnp.inf).max(</span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> scores.argmax(</span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span></code></pre>
+<p>There is still no <code>nnx.Param</code> in it. <code>nnx.Variable</code> is the right type for state an optimizer would never touch, and the whole depth experiment reuses this one module three times: on layer 1 alone, on layer 2 alone, and on the two concatenated.</p>
+<h2 id="the-flat-rung">The flat rung<a class="heading-anchor-link" aria-label="Link to heading" href="#the-flat-rung"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Now assemble it, which is just extract, z-score, place prototypes, set the softening ε from the data’s own scale, and read the argmax. Doing that for layer 1 alone reproduces the number the series has carried since the first hand-built post.</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">from</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> sklearn.cluster </span><span style="color:#D73A49;--shiki-dark:#F47067">import</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> KMeans</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> build_and_eval</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(Ftr_raw, Fte_raw, ytr, yte, per</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">20</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    mu, sd </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> Ftr_raw.mean(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">), Ftr_raw.std(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1e-6</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    Ftr, Fte </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (Ftr_raw </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> mu) </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> sd, (Fte_raw </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> mu) </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> sd            </span><span style="color:#6A737D;--shiki-dark:#768390"># z-score into the head&#39;s space</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    W, vote </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> [], []</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    for</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> c </span><span style="color:#D73A49;--shiki-dark:#F47067">in</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> range</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">10</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        W </span><span style="color:#D73A49;--shiki-dark:#F47067">+=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> list</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(KMeans(per, </span><span style="color:#E36209;--shiki-dark:#F69D50">n_init</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">random_state</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">).fit(Ftr[ytr </span><span style="color:#D73A49;--shiki-dark:#F47067">==</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> c][:</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">2500</span><span style="color:#24292E;--shiki-dark:#ADBAC7">]).cluster_centers_)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        vote </span><span style="color:#D73A49;--shiki-dark:#F47067">+=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> [c] </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> per</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    W </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.array(W, </span><span style="color:#032F62;--shiki-dark:#96D0FF">&#39;float32&#39;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">); vote </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.array(vote)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    d2 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (Fte </span><span style="color:#D73A49;--shiki-dark:#F47067">**</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">).sum(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">keepdims</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">True</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (W </span><span style="color:#D73A49;--shiki-dark:#F47067">**</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">).sum(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> Fte </span><span style="color:#D73A49;--shiki-dark:#F47067">@</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> W.T</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    eps </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> float</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(np.median(d2) </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 0.1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)                                </span><span style="color:#6A737D;--shiki-dark:#768390"># placed, like everything else</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    head </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> YatHead(W, vote, </span><span style="color:#E36209;--shiki-dark:#F69D50">b</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0.5</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">eps</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">eps)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 100</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (np.asarray(head(jnp.asarray(Fte))) </span><span style="color:#D73A49;--shiki-dark:#F47067">==</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> yte).mean()</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D;--shiki-dark:#768390"># layer 1 alone (343 named dims) -&gt; 83.3%</span></span></code></pre>
+<p>It prints <strong>83.3%</strong>. The obvious next move is to concatenate the 528 layer-2 dimensions onto the 343 and run the same head. That is the whole experiment, and the whole disappointment.</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">Fc_tr </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.concatenate([F1tr, F2tr], </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)                            </span><span style="color:#6A737D;--shiki-dark:#768390"># 343 + 528 = 871 named dims</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">Fc_te </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.concatenate([F1te, F2te], </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">acc </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> build_and_eval(Fc_tr, Fc_te, ytr, yte)                       </span><span style="color:#6A737D;--shiki-dark:#768390"># -&gt; 82.9%</span></span></code></pre>
+<p>It prints <strong>82.9%</strong>, a move of −0.4 on a layer of century-old vision science. Iterating like on any model, each redesign a theory of what broke, does not help: junctions alone score <strong>83.5%</strong> (the best of six designs), and the rest land at 82.8, 83.0, 82.9, and, for a geometric-mean AND and a two-cell reach, 83.2 and 81.8. Six theories, six refutations by a few tenths.</p>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/depth-six-designs.png" alt="Six bars, each a design iteration of the layer-2 vocabulary, all near 83 percent, with junctions-only highlighted as the best at 83.5 and two-cell-reach the worst at 81.8, against a dashed layer-1 baseline of 83.3" loading="lazy" width="924" height="528"/><figcaption>The researcher’s sweep, every number from the run. Six design iterations on the layer-2 vocabulary: junctions only (83.5, best, in teal), + continuations (82.8), + bends (83.0), + stripes (82.9), geometric-mean AND (83.2), two-cell reach (81.8). No theory rises above the layer-1 line by more than two tenths; the head shrugs at every new word offered. Rendered by <code>scripts/render_depth_figs.py</code>.</figcaption></figure>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/depth-ladder.png" alt="A horizontal accuracy ladder on the 78 to 87 percent range showing blue built-by-hand rungs clustered near 83 and the fully trained network alone in orange at 85.7" loading="lazy" width="936" height="576"/><figcaption>The construction ladder, built (blue) against trained (orange), on the axis that magnifies the photo finish: raw pixels 79.0, layer 1 by hand 83.3, layer 2 alone 78.8, both layers 82.9, best of six 83.5, and the trained head on built features 83.2, all sitting on top of one another, while only the fully trained network keeps its 85.7. Rendered by <code>scripts/render_depth_figs.py</code>.</figcaption></figure>
+<h2 id="the-detectors-are-real-and-that-is-the-trap">The detectors are real, and that is the trap<a class="heading-anchor-link" aria-label="Link to heading" href="#the-detectors-are-real-and-that-is-the-trap"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Flat rung, so the detectors must be junk? The code says otherwise. Throw away all 343 edge dimensions and classify from layer 2 <em>alone</em>, nothing but junctions, continuations, bends and stripes, and it reaches <strong>78.8%</strong>, within a fifth of a point of the raw-pixel network’s 79.0. Detectors that never see a raw edge recover almost the entire baseline: they carry genuine class signal.</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">build_and_eval(F2tr, F2te, ytr, yte)                              </span><span style="color:#6A737D;--shiki-dark:#768390"># layer 2 ALONE -&gt; 78.8%</span></span></code></pre>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/depth-layer2-alone.png" alt="Six dimmed layer-1 edge maps of a trouser on the left marked discarded, three bright layer-2 relation maps in the middle marked kept, and a gauge reading 78.8 percent on the right" loading="lazy" width="946" height="473"/><figcaption>Classifying from relations only, the real maps and the real number. Left, the six layer-1 edge maps, dimmed because they are discarded; middle, the hand-built layer-2 detectors (junctions, a continuation) that are kept; right, the gauge at the measured 78.8% the head reaches on layer 2 alone, close to the raw-pixel 79. The words are real words with real signal, even with the edges thrown away. Rendered by <code>scripts/render_depth_figs.py</code>.</figcaption></figure>
+<p>So why does adding them to layer 1 do nothing? Because they are <em>synonyms</em>. Every layer-2 value is a fixed function of layer-1 values, and a min of two edges says nothing the pair of edges had not already said. The kernel head reads whole vectors, so it was already comparing garments on those coordinates jointly; rewriting the same information in a richer vocabulary gives it nothing new to vote with. You can see the redundancy directly: correlate each layer-2 detector with the layer-1 channels it is built from, and the structure is not noise, it is the detector spelling out its own recipe.</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">L1 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> Ctr.mean((</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">3</span><span style="color:#24292E;--shiki-dark:#ADBAC7">))                                              </span><span style="color:#6A737D;--shiki-dark:#768390"># per-channel layer-1 energy [n, 7]</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">L2 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> l2_maps(Ctr).mean((</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">3</span><span style="color:#24292E;--shiki-dark:#ADBAC7">))                                    </span><span style="color:#6A737D;--shiki-dark:#768390"># per-detector layer-2 energy [n, 33]</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">L1z </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (L1 </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> L1.mean(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)) </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (L1.std(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1e-9</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">L2z </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (L2 </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> L2.mean(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)) </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (L2.std(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1e-9</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">corr </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (L2z.T </span><span style="color:#D73A49;--shiki-dark:#F47067">@</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> L1z) </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> len</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(L1)                                    </span><span style="color:#6A737D;--shiki-dark:#768390"># each row: a layer-2 dim&#39;s edge recipe</span></span></code></pre>
+<figure class="jax-fig"><img src="/blog/depth-synonym-gram.png" alt="A correlation heatmap, rows of layer-2 detectors against columns of layer-1 edge channels, with the continuation rows outlined in teal along a diagonal showing each continuation correlating with its own edge orientation" loading="lazy" width="814" height="550"/><figcaption>The synonym diagnosis, from real feature correlations. The measured correlation of each layer-2 detector with the seven layer-1 channels. The teal-outlined diagonal in the top rows is each continuation correlating almost perfectly with its own orientation; junction rows light up under both their constituent edges. A layer-2 dimension is a fixed function of layer-1 dimensions, so the concat is flat. Rendered by <code>scripts/render_depth_figs.py</code>.</figcaption></figure>
+<h2 id="counting-the-wall">Counting the wall<a class="heading-anchor-link" aria-label="Link to heading" href="#counting-the-wall"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Maybe the fix is just the <em>right</em> 33 sentences. That objection is correct, and it is the whole finding, once you count what “right” would cost. A pairwise layer-2 type is two channels at a relative cell offset, and within a one-cell neighbourhood there are <strong>224</strong> nameable types; three-way combinations, the kind a trained CNN routinely represents, run to roughly <strong>4,630</strong> before you have even chosen pooling or the form of the AND. We hand-picked 33 of the 224 using the best prior our species has about early vision, and moved the needle +0.2 at best.</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">same </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> NCH</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">NCH</span><span style="color:#D73A49;--shiki-dark:#F47067"> +</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">//</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#6A737D;--shiki-dark:#768390">                                       # offset (0,0), unordered incl. self-pairs</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">shifted </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> NCH</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> NCH</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 8</span><span style="color:#D73A49;--shiki-dark:#F47067"> //</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#6A737D;--shiki-dark:#768390">                                      # 8 nonzero offsets, halved by symmetry</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">pairs_possible </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> same </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> shifted                                  </span><span style="color:#6A737D;--shiki-dark:#768390"># 224</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">triples_possible </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">NCH</span><span style="color:#D73A49;--shiki-dark:#F47067"> **</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 3</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">9</span><span style="color:#D73A49;--shiki-dark:#F47067"> **</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">//</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 6</span><span style="color:#6A737D;--shiki-dark:#768390">                     # ~4,630 three-way types</span></span></code></pre>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/depth-vocab-wall.png" alt="An accuracy scatter flat near 83 percent as vocabulary grows from 7 to 40 names, on a log x-axis that extends right to dashed markers at 224 and 4630 possible detector types, far past the built curve" loading="lazy" width="902" height="506"/><figcaption>The combinatorial wall, to scale. The built vocabulary grows from 7 to 40 names and stays flat at 83.3, 83.5, 82.8, 83.0, 82.9; the log axis extends to show how many detectors there were to choose from: 224 pairwise types, ~4,630 three-way, with the fully trained network’s 85.7% above the whole curve. Naming does not run out. Knowing which names matter does. Rendered by <code>scripts/render_depth_figs.py</code>.</figcaption></figure>
+<h2 id="what-this-measures">What this measures<a class="heading-anchor-link" aria-label="Link to heading" href="#what-this-measures"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Run this script and the ladder reads the same thing the explainer argues: construction is not a rival to training that fell 2.4 points short, it is a measurement instrument. It reports, layer by layer, how much of a network is generic structure a person could write (all of the classifier, all of layer 1, 83.3 of the 85.7 points) and how much is data-selected combination (the rest). At layer 1, naming and helping coincided, so human priors could curate the vocabulary completely. One layer up they come apart: picking the few combinations that add signal, jointly, against what the layer below already provides, is a search over thousands of coupled candidates with the data as judge. The code names that search plainly. It is called training.</p>
+<hr/>
+<p><em>Oriented-edge first stages are from <a href="https://doi.org/10.1113/jphysiol.1962.sp006837">Hubel and Wiesel (1962)</a>; the edges-then-tokens grammar is Marr’s primal sketch (Vision, 1982); the layer-1 detectors follow the HOG lineage of <a href="https://doi.org/10.1109/CVPR.2005.177">Dalal and Triggs (2005)</a>; <a href="https://arxiv.org/abs/1708.07747">Fashion-MNIST</a> from Xiao et al. (2017); the Yat kernel from <a href="https://arxiv.org/abs/2605.03262">Bouhsine (2026)</a>. The conceptual companion is <a href="/blog/depth-by-construction/">How Far Down Can You Build?</a>.</em></p>
+<section class="cite-as" aria-labelledby="cite-depth-by-construction-jax-flax-nnx" data-astro-cid-p234urri> <h2 id="cite-depth-by-construction-jax-flax-nnx" data-astro-cid-p234urri>Cite as</h2> <p class="cite-line" data-astro-cid-p234urri>
+Bouhsine, T. (<time datetime="2026-07-04T17:00:00.000Z" data-astro-cid-p234urri>2026, July 4</time>).
+<em data-astro-cid-p234urri>Building the Second Layer by Hand, in JAX/Flax NNX</em>. Records of the !mmortal Data Scientist.
+<a href="https://tahabouhsine.com/blog/depth-by-construction-jax-flax-nnx/" data-astro-cid-p234urri>https://tahabouhsine.com/blog/depth-by-construction-jax-flax-nnx/</a> </p> <details class="cite-bib" data-astro-cid-p234urri> <summary data-astro-cid-p234urri>BibTeX</summary> <pre data-astro-cid-p234urri><code class="bibtex" data-astro-cid-p234urri>@misc{bouhsine2026depthbyconstructionjaxflaxnnx,
+  author       = {Bouhsine, Taha},
+  title        = {Building the Second Layer by Hand, in JAX/Flax NNX},
+  year         = {2026},
+  month        = {jul},
+  howpublished = {\url{https://tahabouhsine.com/blog/depth-by-construction-jax-flax-nnx/}},
+  note         = {Blog post, Records of the !mmortal Data Scientist}
+}</code></pre> <button type="button" class="cite-copy" data-copy="@misc{bouhsine2026depthbyconstructionjaxflaxnnx,
+  author       = {Bouhsine, Taha},
+  title        = {Building the Second Layer by Hand, in JAX/Flax NNX},
+  year         = {2026},
+  month        = {jul},
+  howpublished = {\url{https://tahabouhsine.com/blog/depth-by-construction-jax-flax-nnx/}},
+  note         = {Blog post, Records of the !mmortal Data Scientist}
+}" aria-label="Copy BibTeX" data-astro-cid-p234urri>copy</button> </details>  </section>  <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('.cite-copy').forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(btn.dataset.copy || '');
+            const original = btn.textContent;
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = original;
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>
+<style>
+.jax-fig { margin: 1.8rem auto; text-align: center; }
+.jax-fig img { max-width: 520px; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; background: #fbf8f1; }
+.jax-fig-wide img { max-width: 880px; }
+.jax-fig figcaption { margin-top: 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--fg-muted); max-width: 64ch; margin-left: auto; margin-right: auto; }
+</style>  <section class="references" aria-labelledby="references-heading" data-astro-cid-rn7nvbl4><h2 id="references-heading" data-astro-cid-rn7nvbl4>References</h2><ol data-astro-cid-rn7nvbl4><li id="ref-1" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Hubel, D. H., Wiesel, T. N.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(1962)</span>. <span class="ref-title" data-astro-cid-rn7nvbl4>Receptive Fields, Binocular Interaction and Functional Architecture in the Cat&#39;s Visual Cortex</span>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>The Journal of Physiology 160, 106–154</span>.</li><li id="ref-2" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Marr, D.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(1982)</span>. <span class="ref-title" data-astro-cid-rn7nvbl4>Vision: A Computational Investigation into the Human Representation and Processing of Visual Information</span>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>W. H. Freeman</span>.</li><li id="ref-3" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Dalal, N., Triggs, B.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2005)</span>. <span class="ref-title" data-astro-cid-rn7nvbl4>Histograms of Oriented Gradients for Human Detection</span>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>CVPR 2005</span>.</li><li id="ref-4" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Xiao, H., Rasul, K., Vollgraf, R.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2017)</span>. <a class="ref-title" href="https://arxiv.org/abs/1708.07747" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>Fashion-MNIST: a Novel Image Dataset for Benchmarking Machine Learning Algorithms</a>.
+<a class="ref-ext" href="https://arxiv.org/abs/1708.07747" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:1708.07747</a></li><li id="ref-5" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Bouhsine, T.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2026)</span>. <a class="ref-title" href="https://arxiv.org/abs/2605.03262" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance</a>.
+<a class="ref-ext" href="https://arxiv.org/abs/2605.03262" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:2605.03262</a></li></ol></section> </article> <script>(function(){const payload = {"post_title":"Building the Second Layer by Hand, in JAX/Flax NNX","post_slug":"depth-by-construction-jax-flax-nnx","post_path":"/blog/depth-by-construction-jax-flax-nnx/","post_tags":"ml,kernels,interpretability,prototypes,computer-vision,construction,depth,jax,flax,nnx,yat,deep-learning","word_count":2681,"reading_time_minutes":14,"is_draft":false};
+
+  (() => {
+    const thresholds = [25, 50, 75, 90, 100];
+    const state = { viewed: false, sent: new Set() };
+
+    const track = (name, params = {}) => {
+      if (typeof window.__trackGA === 'function') {
+        window.__trackGA(name, {
+          ...payload,
+          ...params,
+          non_interaction: name === 'blog_post_view',
+        });
+      }
+    };
+
+    const init = () => {
+      const article = document.querySelector('[data-blog-post]');
+      if (!article) return;
+
+      if (!state.viewed) {
+        state.viewed = true;
+        track('blog_post_view');
+      }
+
+      const progress = () => {
+        const rect = article.getBoundingClientRect();
+        const articleTop = window.scrollY + rect.top;
+        const articleHeight = Math.max(1, article.offsetHeight);
+        const viewportBottom = window.scrollY + window.innerHeight;
+        return Math.max(0, Math.min(100, ((viewportBottom - articleTop) / articleHeight) * 100));
+      };
+
+      const update = () => {
+        const pct = progress();
+        thresholds.forEach((threshold) => {
+          if (pct >= threshold && !state.sent.has(threshold)) {
+            state.sent.add(threshold);
+            track('blog_post_read_depth', { read_percent: threshold });
+            if (threshold === 90) {
+              track('blog_post_read', { read_percent: threshold });
+            }
+          }
+        });
+      };
+
+      if (window.__postAnalyticsCleanup) window.__postAnalyticsCleanup();
+
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => {
+          update();
+          ticking = false;
+        });
+      };
+
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+      window.__postAnalyticsCleanup = () => {
+        window.removeEventListener('scroll', onScroll);
+        window.removeEventListener('resize', onScroll);
+      };
+      update();
+    };
+
+    init();
+    document.addEventListener('astro:page-load', init, { once: true });
+  })();
+})();</script> <aside class="related" aria-labelledby="related-heading" data-astro-cid-dpgbfi7r><h2 id="related-heading" data-astro-cid-dpgbfi7r>Related posts</h2><ul data-astro-cid-dpgbfi7r><li data-astro-cid-dpgbfi7r><a href="/blog/depth-by-construction/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>How Far Down Can You Build?</span><span class="related-desc" data-astro-cid-dpgbfi7r>One hand-built feature layer matched a trained backbone at 83.3% on Fashion-MNIST, and real networks are deep. Conveniently, the recipe for a second layer has been on the shelf for half a century: vision science says edges assemble into junctions, continuations, bends and stripes. This post takes the recipe down and follows it, builds layer 2 entirely by hand with every dimension still nameable in one sentence, and measures exactly where construction stops, and why.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-07-04T00:00:00.000Z" data-astro-cid-dpgbfi7r>Jul 4, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/handbuilt-features-jax-flax-nnx/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>The Hand-Built Network, in JAX/Flax NNX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion: build the training-free image classifier from the post in JAX. The feature extractor is pure JAX (Sobel gradients, orientation binning, patch pooling); the classifier is a Flax NNX module holding k-means prototypes that votes with the Yat kernel. Nothing is trained, and it reproduces the 83.3% on Fashion-MNIST.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-06-24T17:00:00.000Z" data-astro-cid-dpgbfi7r>Jun 24, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/edit-a-network-jax-flax-nnx/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>Editing a Network by Hand, in JAX/Flax NNX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion: build the prototype Yat-MLP in Flax NNX, then add a class by concatenating a few prototype rows and forget a class by masking them out, with no gradient steps. Class-incremental learning that matches a from-scratch build, and exact machine unlearning, both as array edits you can read. Every number is from a real run on Fashion-MNIST.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-06-22T18:00:00.000Z" data-astro-cid-dpgbfi7r>Jun 22, 2026</time></span></a></li></ul></aside> <nav class="post-nav" aria-label="Adjacent posts"><a href="/blog/distillation-is-kernel-transfer-jax-flax-nnx/" class="prev" rel="prev"><div class="label">← Previous</div><div class="title">Distillation as Kernel Transfer, in JAX/Flax NNX</div></a><a href="/blog/calibration-of-a-bounded-net-jax-flax-nnx/" class="next" rel="next"><div class="label">Next →</div><div class="title">Calibrating a Bounded Net, in JAX/Flax NNX</div></a></nav> <section aria-label="Comments" id="giscus-mount" style="margin-top:3rem" data-giscus="{&#34;repo&#34;:&#34;mlnomadpy/blog&#34;,&#34;repoId&#34;:&#34;MDEwOlJlcG9zaXRvcnk0MDQ4MzY2NDU=&#34;,&#34;category&#34;:&#34;Announcements&#34;,&#34;categoryId&#34;:&#34;DIC_kwDOGCFRJc4C9EiR&#34;,&#34;mapping&#34;:&#34;pathname&#34;,&#34;reactionsEnabled&#34;:&#34;1&#34;,&#34;emitMetadata&#34;:&#34;0&#34;,&#34;inputPosition&#34;:&#34;top&#34;,&#34;theme&#34;:&#34;preferred_color_scheme&#34;,&#34;lang&#34;:&#34;en&#34;}"></section><script>
+    (() => {
+      const load = () => {
+        const mount = document.getElementById('giscus-mount');
+        if (!mount || mount.dataset.loaded === '1') return;
+        const cfg = JSON.parse(mount.dataset.giscus);
+        const theme = document.documentElement.getAttribute('data-theme')
+          || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        const s = document.createElement('script');
+        s.src = 'https://giscus.app/client.js';
+        s.async = true;
+        s.crossOrigin = 'anonymous';
+        const attrs = {
+          'data-repo': cfg.repo,
+          'data-repo-id': cfg.repoId,
+          'data-category': cfg.category,
+          'data-category-id': cfg.categoryId,
+          'data-mapping': cfg.mapping,
+          'data-strict': '0',
+          'data-reactions-enabled': cfg.reactionsEnabled,
+          'data-emit-metadata': cfg.emitMetadata,
+          'data-input-position': cfg.inputPosition,
+          'data-theme': theme,
+          'data-lang': cfg.lang,
+          'data-loading': 'lazy',
+        };
+        for (const k in attrs) s.setAttribute(k, attrs[k]);
+        mount.appendChild(s);
+        mount.dataset.loaded = '1';
+      };
+      load();
+      document.addEventListener('astro:page-load', load);
+      document.addEventListener('astro:after-swap', load);
+    })();
+  </script> <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('pre').forEach((pre) => {
+        if (pre.dataset.copyEnhanced) return;
+        pre.dataset.copyEnhanced = '1';
+        const btn = document.createElement('button');
+        btn.className = 'code-copy';
+        btn.type = 'button';
+        btn.textContent = 'copy';
+        btn.setAttribute('aria-label', 'Copy code');
+        btn.addEventListener('click', async () => {
+          const code = pre.querySelector('code');
+          const text = (code ? code.innerText : pre.innerText) || '';
+          try {
+            await navigator.clipboard.writeText(text);
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = 'copy';
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+        pre.appendChild(btn);
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>  </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span class="site-footer__links"> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> <a class="site-footer__support" href="https://buymeacoffee.com/mlnomadpy" target="_blank" rel="noopener noreferrer" aria-label="Support this blog on Buy Me a Coffee">
+buy me a coffee
+</a> </span> </footer> <div id="consent-banner" class="consent-banner" role="dialog" aria-live="polite" aria-label="Analytics consent" hidden><p class="consent-text">
+I use Google Analytics to see which posts get read. It sets cookies only
+      if you accept. No ads, no selling data.
+</p><div class="consent-actions"><button type="button" id="consent-decline" class="consent-btn consent-decline">Decline</button><button type="button" id="consent-accept" class="consent-btn consent-accept">Accept</button></div></div>
+
+  <script>
+    (() => {
+      const KEY = 'analytics-consent';
+      const setup = () => {
+        const banner = document.getElementById('consent-banner');
+        if (!banner) return;
+        let choice = null;
+        try { choice = localStorage.getItem(KEY); } catch (e) {}
+        // Already decided → keep hidden.
+        if (choice === 'granted' || choice === 'denied') { banner.hidden = true; return; }
+        banner.hidden = false;
+
+        const decide = (value) => {
+          try { localStorage.setItem(KEY, value); } catch (e) {}
+          banner.hidden = true;
+          if (value === 'granted' && typeof window.__loadGA === 'function') window.__loadGA();
+        };
+        const accept = document.getElementById('consent-accept');
+        const decline = document.getElementById('consent-decline');
+        if (accept && !accept.dataset.bound) {
+          accept.dataset.bound = '1';
+          accept.addEventListener('click', () => decide('granted'));
+        }
+        if (decline && !decline.dataset.bound) {
+          decline.dataset.bound = '1';
+          decline.addEventListener('click', () => decide('denied'));
+        }
+      };
+      setup();
+      document.addEventListener('astro:page-load', setup);
+    })();
+  </script>
+
+  <style>
+    /* Author `display:flex` below would otherwise override the UA [hidden]
+       rule, leaving the banner visible after a choice. This wins on specificity. */
+    .consent-banner[hidden] { display: none !important; }
+    .consent-banner {
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      right: 1rem;
+      max-width: 30rem;
+      margin-left: auto;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+      padding: 0.95rem 1.1rem;
+      background: var(--bg-elev, #fff);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      font-family: var(--sans);
+    }
+    .consent-text {
+      margin: 0;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: var(--fg-muted);
+    }
+    .consent-actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+    }
+    .consent-btn {
+      font-family: var(--sans);
+      font-size: 0.82rem;
+      padding: 0.4rem 0.95rem;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    }
+    .consent-decline {
+      background: transparent;
+      color: var(--fg-muted);
+    }
+    .consent-decline:hover { color: var(--fg); border-color: var(--fg-faint); }
+    .consent-accept {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg);
+      font-weight: 600;
+    }
+    .consent-accept:hover { filter: brightness(1.05); }
+    @media (max-width: 520px) {
+      .consent-banner { left: 0.6rem; right: 0.6rem; bottom: 0.6rem; }
+    }
+  </style> <script>
+      // Inject a fullscreen toggle button onto every .viz figure on the page.
+      (() => {
+        const ENTER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10V4h6"/><path d="M20 10V4h-6"/><path d="M4 14v6h6"/><path d="M20 14v6h-6"/></svg>';
+        const EXIT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H4v6"/><path d="M14 4h6v6"/><path d="M10 20H4v-6"/><path d="M14 20h6v-6"/></svg>';
+        const inFs = () => document.fullscreenElement || document.webkitFullscreenElement;
+        const enhance = () => {
+          document.querySelectorAll('.viz').forEach((fig) => {
+            if (fig.dataset.fsReady) return;
+            fig.dataset.fsReady = '1';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'viz-fs-btn';
+            btn.setAttribute('aria-label', 'Toggle fullscreen');
+            btn.innerHTML = ENTER_SVG + '<span>fullscreen</span>';
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              try {
+                if (inFs() === fig) {
+                  await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen?.());
+                } else if (fig.requestFullscreen) {
+                  await fig.requestFullscreen();
+                } else if (fig.webkitRequestFullscreen) {
+                  await fig.webkitRequestFullscreen();
+                }
+              } catch (_) {}
+            });
+            fig.appendChild(btn);
+          });
+          const sync = () => {
+            document.querySelectorAll('.viz-fs-btn').forEach((b) => {
+              const fig = b.parentElement;
+              const open = inFs() === fig;
+              b.innerHTML = (open ? EXIT_SVG : ENTER_SVG) + '<span>' + (open ? 'exit' : 'fullscreen') + '</span>';
+            });
+          };
+          document.addEventListener('fullscreenchange', sync);
+          document.addEventListener('webkitfullscreenchange', sync);
+        };
+        enhance();
+        document.addEventListener('astro:page-load', enhance);
+        document.addEventListener('astro:after-swap', enhance);
+      })();
+    </script> </body> </html>
