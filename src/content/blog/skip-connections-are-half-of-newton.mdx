@@ -102,7 +102,7 @@ x_{t+1} = x_t + \Delta t\, v_{t+\frac12}, \qquad
 v_{t+1} = v_{t+\frac12} + \tfrac{\Delta t}{2} a(x_{t+1}).
 $$
 
-That is **leapfrog**, the integrator behind every serious orbital and molecular simulation. Same step size, same force, same cost per step: two extra force evaluations' worth of reordering. The difference is that leapfrog is *symplectic*, it preserves the phase-space volume the true dynamics preserves, and so its energy error stays bounded forever instead of accumulating (Hairer, Lubich and Wanner have a whole book on why). Euler, by contrast, adds a little energy on the outside of every curve. It cannot help it: it always moves along the *old* direction a moment too long.
+That is **leapfrog**, the integrator behind every serious orbital and molecular simulation. Same step size, same force, and, with one bookkeeping note, the same cost. Written out this way leapfrog evaluates the force twice per step where Euler pays once, but the force that closes one step at $x_{t+1}$ is exactly the force that opens the next, so a production integrator caches it and the steady-state price is one fresh force evaluation per step, same as Euler's. The difference is that leapfrog is *symplectic*, it preserves the phase-space volume the true dynamics preserves, and so its energy error stays bounded forever instead of accumulating (Hairer, Lubich and Wanner have a whole book on why). Euler, by contrast, adds a little energy on the outside of every curve. It cannot help it: it always moves along the *old* direction a moment too long.
 
 What should that do to a planet? It should spiral out. Each orbit, Euler injects a sliver of energy, the ellipse swells, and eventually the planet unbinds and leaves. Not because gravity was wrong, because the bookkeeping was.
 
@@ -126,7 +126,7 @@ So the claim "a ResNet is an integrator" had better be exact, or none of this tr
 | a velocity state $v_l$ (usually absent) | the momentum ledger |
 | its damping $\mu$ | friction / how long inertia is remembered |
 
-This reading is not mine; it is the founding observation of a whole research thread. E (2017) and Haber and Ruthotto (2017) proposed treating deep networks as discretized dynamical systems; Chen et al. (2018) took the limit and got Neural ODEs, where the network *is* the vector field and depth is a continuous time you hand to an off-the-shelf integrator. The difference from the planet is only what generates the field: gravity is $-r/\lVert r\rVert^3$, a residual branch is a trained two-layer MLP. The integrator neither knows nor cares.
+This reading is not mine; it is the founding observation of a whole research thread. E (2017) and Haber and Ruthotto (2017) proposed treating deep networks as discretized dynamical systems; Chen et al. (2018) took the limit and got Neural ODEs, where the network *is* the vector field and depth is a continuous time you hand to an off-the-shelf integrator. The difference from the planet is only what generates the field: gravity is $-r/\lVert r\rVert^3$, a residual branch is a trained two-layer MLP. The integrator neither knows nor cares. Exact, though, in a specific and limited sense: the correspondence lives at the level of the *update rule*, the same integrator arithmetic pointed at a different vector field, and it claims nothing about physical semantics. The residual branch is not a force in any physical sense; it is the slot a force occupies in the equations.
 
 And that is what makes the correspondence useful rather than decorative: everything numerical analysis knows about Euler's missing ledger becomes a *forecast* about plain residual networks. Three forecasts, concretely.
 
@@ -156,7 +156,7 @@ The experiment, all in `scripts/momentum_resnet.py`, is built so you can *see* t
 - Three 2-D tasks: two moons (easy), two interleaved spirals (hard but topologically free), and **concentric rings**, a disk of one class fully enclosed by an annulus of the other, the task Prediction 2 says a deep first-order flow must fail.
 - Three seeds per configuration, 4000 full-batch Adam steps, and a linear readout on the final 2-D state.
 
-Everything in that list is bookkeeping except the last task. Rings is the one the theorem has already ruled on: a deep plain net cannot get it exactly right, because the inner class is walled in at every angle. Three seeds wait at every depth, and the theorem does not get a vote on what gradient descent actually does.
+Everything in that list is bookkeeping except the last task. Rings is the one the theorem has already ruled on: in the flow limit, a plain net cannot get it exactly right, because the inner class is walled in at every angle. Three seeds wait at every depth, and the theorem does not get a vote on what gradient descent actually does.
 
 ## The cliff that refused to appear
 
@@ -169,6 +169,31 @@ The rings task is where the physics said the trouble must live. And here the exp
 All but. So was the theorem wrong, or were we? Reread Prediction 2 the way a mathematician would. Trajectories cannot cross, the map cannot tear space, and therefore a first-order planar flow feeding a linear readout can never get the rings task *exactly* right. That is the whole claim, and nothing in it outlaws 99%: a homeomorphism is free to squeeze the surrounding ring into a thin filament and hide almost all of its probability mass, and therefore almost all of its mistakes, inside it. We read "cannot do the task" and imagined a collapse. The theorem never promised a collapse. It promised a ceiling.
 
 And the ceiling is exactly where every run put it. At depth 8 the plain net is not yet a flow (steps of $h = 1$ can jump the wall; non-crossing does not bind a coarse discrete map), and it posts a perfect 100.0% in two seeds of three. At depths 32 and 128, where it refines into an honest flow, it never touches 100% again in any seed; its best runs stall at 99.76% and 99.95%. The momentum net scores 100.0% in all three seeds at depth 8 and again at depth 32. The plain net is doing exactly what a cornered homeomorphism must: hide its forbidden mistakes in the filament and pay a stray handful of fresh test points as rent, forever. The 1890s uniqueness theorem behind non-crossing did not predict the collapse we expected; it predicted the *ceiling* we found. On the spirals the ledger shows up as reliability instead: at depth 128 the plain net's three seeds spread from 92.9% to 98.3%, while the momentum net's sit within six tenths of a point of each other (97.7% to 98.3%).
+
+> **What the theorem does and does not say.** The non-crossing claim is scoped, and the scope is doing real work. It assumes a 2-D hidden state (our width-2 stream, no extra dimensions to detour through), flow-like behavior (per-block steps small enough that the network approximates a continuous flow), a fixed total integration time, a smooth field, and a linear readout on the final state. Widen the state and the wall is gone; that is the whole design of Dupont et al.'s (2019) Augmented Neural ODEs, which escape by padding on extra dimensions. And even inside the scope there is a caveat Dupont et al. themselves flag: continuous trajectories can never cross, but a finite network's *discretization error* can let trajectories effectively cross between steps, so the theorem constrains the continuum limit, not any finite network. That is exactly the shape of our data. The plain net at depths 32 and 128 climbs to 99.76% and 99.95% and never back to 100.0%: its finite steps let it cross almost everywhere, and the last fraction of a point is the part of the wall that survives.
+
+Since so much of the argument hangs on fractions of a point, here is the full sweep, so every claim above can be audited at a glance: three seeds per cell, mean test accuracy with the min-to-max seed range in parentheses, all from `scripts/momentum_resnet.py`.
+
+| task | depth $L$ | plain net, $\mu = 0$ (%) | momentum net, $\mu = 0.9$ (%) |
+| --- | --- | --- | --- |
+| moons | 8 | 99.97 (99.95 to 100.0) | 99.98 (99.95 to 100.0) |
+| moons | 32 | 99.85 (99.80 to 99.95) | 99.98 (99.95 to 100.0) |
+| moons | 128 | 99.89 (99.80 to 100.0) | 99.97 (99.90 to 100.0) |
+| spirals | 8 | 96.18 (94.87 to 97.61) | 97.66 (96.88 to 98.44) |
+| spirals | 32 | 97.82 (97.36 to 98.44) | 97.54 (97.22 to 97.75) |
+| spirals | 128 | 96.16 (92.87 to 98.29) | 98.08 (97.71 to 98.34) |
+| rings | 8 | 99.93 (99.80 to 100.0) | 100.00 (100.0 in all seeds) |
+| rings | 32 | 99.64 (99.56 to 99.76) | 100.00 (100.0 in all seeds) |
+| rings | 128 | 99.85 (99.76 to 99.95) | 99.95 (99.85 to 100.0) |
+
+And the handful of numbers the trajectory and rewind arguments below lean on, from the same run:
+
+| quantity (rings, depth 32) | plain net, $\mu = 0$ | momentum net |
+| --- | --- | --- |
+| mean turn per layer | 52.9° | 9.6° at $\mu = 0.9$ |
+| total path length (stream units) | 15.9 | 14.7 at $\mu = 0.9$ |
+| rewind error, float32 | no inverse exists | $3.7 \times 10^{-4}$ at $\mu = 0.9$; $54$ at $\mu = 0.6$; $3.7 \times 10^{10}$ at $\mu = 0.3$ |
+| rewind error, float64 | no inverse exists | near $10^{-13}$ at $\mu = 0.9$ (the live panel below) |
 
 So the scoreboard underdetermines the story: two networks can both sit near 99.9 and be doing violently different things. Watch the hidden states themselves, because with a width-2 stream we actually can.
 
@@ -194,7 +219,7 @@ $$
 
 No stored activations, no approximation: from the final position *and velocity*, the whole trajectory unwinds. This is the network inheriting time-reversibility from its integrator, and it is the property Sander et al. built Momentum ResNets around, because a network you can invert is a network you can train without caching activations, at almost no memory cost in depth. The script checks it on the trained depth-32 rings net: run exactly backward from $(x_{32}, v_{32})$, the dynamics reconstruct all 64 probe inputs to a worst-case error of $3.7 \times 10^{-4}$ at $\mu = 0.9$.
 
-Then the check does something better than succeed: it fails informatively. The same algebra on the net trained at $\mu = 0.3$ returns a reconstruction error of $3.7 \times 10^{10}$. Nothing is wrong with the formula; the arithmetic is the problem. Every backward step divides by $\mu$, so whatever rounding the forward pass left behind is amplified by $1/\mu$ per layer: a factor of 29 across 32 layers at $\mu = 0.9$, a factor of $5 \times 10^{16}$ at $\mu = 0.3$ (and at $\mu = 0.6$ the measured error is 54, right where that arithmetic puts it). This, too, is physics you already know. The damping $\mu$ is the friction dial, and friction is precisely what makes real systems forget their past: a lightly damped dynamics can be rewound, a heavily damped one has burned its history, and the floating point is only the messenger delivering the news. Friction is the thief of memory.
+Then the check does something better than succeed: it fails informatively. The same algebra on the net trained at $\mu = 0.3$ returns a reconstruction error of $3.7 \times 10^{10}$. Nothing is wrong with the formula; the arithmetic is the problem. Every backward step divides by $\mu$, so whatever rounding the forward pass left behind is amplified by $1/\mu$ per layer: a factor of 29 across 32 layers at $\mu = 0.9$, a factor of $5 \times 10^{16}$ at $\mu = 0.3$ (and at $\mu = 0.6$ the measured error is 54, right where that arithmetic puts it). This, too, is physics you already know. The damping $\mu$ is the friction dial, and friction is precisely what makes real systems forget their past: a lightly damped dynamics can be rewound, a heavily damped one has burned its history, and the floating point is only the messenger delivering the news. Sander et al. saw this coming: their paper confronts exactly this finite-precision leak, and the practical fix is to store the few low-order bits each update rounds away so that the arithmetic itself becomes exactly reversible. Our rewind is the demonstration of why that machinery has to exist. Friction is the thief of memory.
 
 <RewindExact caption="Time reversibility, computed live: ten test points are carried forward through the trained momentum net (solid paths), then the browser is handed only the final position and velocity of each and runs the update rule backward. The hollow rings are the reconstructed states landing back on the forward path, layer by layer, and the readout tracks the worst reconstruction error. A plain residual block discards the information this rewind needs; there is no formula to run x + F(x) backward. The rewind runs at mu = 0.9, where the ledger's memory is long enough for the arithmetic to survive the trip; the error here sits near 1e-13 because the browser integrates in double precision, while the script's single-precision forward pass lands at 3.7e-4, the same amplification of a different noise floor." />
 
