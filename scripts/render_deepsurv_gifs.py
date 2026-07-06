@@ -8,13 +8,17 @@ real Kaplan-Meier estimates on real risk tertiles, attribution bars are the real
 signed contributions a_u phi_u(x), reliability points are real predicted-vs-observed
 survival, the OOD walk uses the real kernel evaluated on a real patient.
 
-Six GIFs:
-  1. deepsurv-stratify   : both models' risk-tertile KM curves separating over training.
-  2. deepsurv-assemble   : one patient's risk assembling bar-by-bar from prototypes.
-  3. deepsurv-settle     : the prototype cloud (2D PCA) settling onto patient data.
-  4. deepsurv-forget     : cohort deletion, the risk field before/after, cohort re-routes.
-  5. deepsurv-abstain    : a patient walked off-distribution, the kernel field going quiet.
-  6. deepsurv-reliability: predicted-vs-observed survival drawing itself for both models.
+Four GIFs (each a real temporal process) + two static PNGs (results, no process):
+  1. deepsurv-stratify     GIF: risk-tertile KM curves separating over training epochs.
+  2. deepsurv-settle       GIF: the prototype cloud (2D PCA) migrating over training epochs.
+  3. deepsurv-forget       GIF: cohort deletion, real before/after risk field, cohort re-routes.
+  4. deepsurv-abstain      GIF: a patient swept off-distribution, kernel-max falling live.
+  5. deepsurv-attribution  PNG: one patient's signed prototype contributions summing to h(x).
+  6. deepsurv-reliability  PNG: predicted-vs-observed survival, both models.
+
+A GIF is earned only when motion carries information no single frame gives. The
+attribution bars and the calibration curve are static results, so they are figures,
+not animations.
 
 Run: python3 scripts/render_deepsurv_gifs.py   (local, reads the bundle, no training)
 """
@@ -101,9 +105,11 @@ def gif_stratify():
 
 
 # ===========================================================================
-# 2. A PATIENT'S RISK ASSEMBLING from prototype contributions, bar by bar.
+# 2. A PATIENT'S RISK DECOMPOSED into signed prototype contributions (static).
+#    This is an attribution figure, not a process: one patient, all its terms,
+#    each bar the exact a_u phi_u(x), summing back to h(x). No motion earns it.
 # ===========================================================================
-def gif_assemble():
+def fig_attribution():
     a = load("attributions.json")
     pt = [p for p in a["patients"] if p["label"] == "high"][0]
     contrib = np.array(pt["contrib"])
@@ -113,44 +119,41 @@ def gif_assemble():
     top = order[:TOP]
     logrisk = pt["logrisk"]
     maxabs = np.abs(contrib).max()
-    frames = []
-    # reveal bars one at a time, running total climbing
-    for step in list(range(TOP + 1)) + [TOP] * 8:
-        fig, (axL, axR) = plt.subplots(1, 2, figsize=(11, 4.8), dpi=100,
-                                       gridspec_kw={"width_ratios": [1.4, 1]})
-        fig.patch.set_facecolor(BG)
-        style_ax(axL); style_ax(axR)
-        # left: signed bars, revealed
-        ys = np.arange(TOP)[::-1]
-        for r, u in enumerate(top):
-            shown = r < step
-            c = contrib[u]
-            col = ACCENT if c >= 0 else BLUE
-            axL.barh(ys[r], c, color=col, alpha=0.85 if shown else 0.08,
-                     edgecolor="none", height=0.7)
-            axL.text(-maxabs * 1.28, ys[r], f"#{u}", va="center", ha="left",
-                     color=MUTED if shown else BORDER, fontsize=10)
-        axL.axvline(0, color=BORDER, lw=1)
-        axL.set_xlim(-maxabs * 1.35, maxabs * 1.15)
-        axL.set_ylim(-0.6, TOP - 0.4)
-        axL.set_yticks([])
-        axL.set_xlabel("contribution to log-risk   a_u φ_u(x)", color=MUTED, fontsize=10)
-        axL.set_title("prototypes this patient resembles", color=INK, fontsize=12, weight="bold")
-        # right: running total vs true log-risk
-        running = contrib[top[:step]].sum()
-        axR.bar([0], [running], color=ACCENT, alpha=0.85, width=0.5)
-        axR.axhline(logrisk, color=INK, lw=1.6, ls="--")
-        axR.text(0, logrisk + 0.06, f"true h(x) = {logrisk:.2f}", ha="center",
-                 color=INK, fontsize=10)
-        axR.set_ylim(min(0, logrisk - 0.4), max(logrisk + 0.5, running + 0.5))
-        axR.set_xlim(-0.6, 0.6); axR.set_xticks([])
-        axR.set_ylabel("log-risk assembled", color=MUTED, fontsize=10)
-        axR.set_title(f"running sum = {running:.2f}", color=INK, fontsize=12, weight="bold")
-        fig.suptitle("Your risk is a sum over the patients you resemble",
-                     color=INK, fontsize=14, weight="bold", y=0.99)
-        fig.tight_layout(rect=[0, 0, 1, 0.93])
-        frames.append(fig_to_arr(fig)); plt.close(fig)
-    save_gif(frames, OUT / "deepsurv-assemble.gif", fps=3)
+
+    fig, (axL, axR) = plt.subplots(1, 2, figsize=(11, 4.8), dpi=100,
+                                   gridspec_kw={"width_ratios": [1.4, 1]})
+    fig.patch.set_facecolor(BG)
+    style_ax(axL); style_ax(axR)
+    # left: all signed contribution bars for this patient's top prototypes
+    ys = np.arange(TOP)[::-1]
+    for r, u in enumerate(top):
+        c = contrib[u]
+        col = ACCENT if c >= 0 else BLUE
+        axL.barh(ys[r], c, color=col, alpha=0.9, edgecolor="none", height=0.7)
+        axL.text(-maxabs * 1.28, ys[r], f"#{u}", va="center", ha="left",
+                 color=MUTED, fontsize=10)
+    axL.axvline(0, color=BORDER, lw=1)
+    axL.set_xlim(-maxabs * 1.35, maxabs * 1.15)
+    axL.set_ylim(-0.6, TOP - 0.4)
+    axL.set_yticks([])
+    axL.set_xlabel("contribution to log-risk   a_u φ_u(x)", color=MUTED, fontsize=10)
+    axL.set_title("prototypes this patient resembles", color=INK, fontsize=12, weight="bold")
+    # right: the terms summed back to the true log-risk, exact
+    total = contrib.sum()
+    axR.bar([0], [total], color=ACCENT, alpha=0.9, width=0.5)
+    axR.axhline(logrisk, color=INK, lw=1.6, ls="--")
+    axR.text(0, logrisk + 0.06, f"true h(x) = {logrisk:.2f}", ha="center",
+             color=INK, fontsize=10)
+    axR.set_ylim(min(0, logrisk - 0.4), max(logrisk + 0.5, total + 0.5))
+    axR.set_xlim(-0.6, 0.6); axR.set_xticks([])
+    axR.set_ylabel("log-risk assembled", color=MUTED, fontsize=10)
+    axR.set_title(f"Σ contributions = {total:.2f}", color=INK, fontsize=12, weight="bold")
+    fig.suptitle("Your risk is a sum over the patients you resemble",
+                 color=INK, fontsize=14, weight="bold", y=0.99)
+    fig.tight_layout(rect=[0, 0, 1, 0.93])
+    fig.savefig(OUT / "deepsurv-attribution.png", dpi=100, facecolor=BG)
+    plt.close(fig)
+    print(f"  deepsurv-attribution.png written")
 
 
 # ===========================================================================
@@ -280,45 +283,44 @@ def gif_abstain():
 
 
 # ===========================================================================
-# 6. RELIABILITY drawing itself: predicted vs observed survival, both models.
+# 6. RELIABILITY (static): predicted vs observed survival, both models.
+#    A calibration curve is a static figure; the x-axis is predicted survival,
+#    not time, so drawing it on adds nothing. One frame carries every point.
 # ===========================================================================
-def gif_reliability():
+def fig_reliability():
     ood = load("ood.json")
-    horizons = np.array(ood["horizons"])
     ry = ood["reliability_yat"]; rm = ood["reliability_mlp"]
     cols = [BLUE, GREEN, ACCENT]
-    Hn = len(horizons)
-    frames = []
-    for k in list(range(1, Hn + 1)) + [Hn] * 8:
-        fig, axes = plt.subplots(1, 2, figsize=(11, 4.8), dpi=100)
-        fig.patch.set_facecolor(BG)
-        for ax, rel, title in [(axes[0], ry, "Yat DeepSurv"), (axes[1], rm, "standard DeepSurv")]:
-            style_ax(ax)
-            ax.plot([0, 1], [0, 1], color=BORDER, lw=1.2, ls="--")
-            for g in range(3):
-                pred = np.array(rel[g]["pred"])[:k]
-                obs = np.array(rel[g]["obs"])[:k]
-                ax.plot(pred, obs, "-o", color=cols[g], lw=2, ms=5,
-                        label=["low-risk", "mid-risk", "high-risk"][g] + " third")
-            ax.set_xlim(0, 1); ax.set_ylim(0, 1)
-            ax.set_xlabel("predicted survival", color=MUTED, fontsize=10)
-            ax.set_ylabel("observed survival (Kaplan-Meier)", color=MUTED, fontsize=10)
-            ax.set_title(title, color=INK, fontsize=13, weight="bold")
-            if title.startswith("Yat"):
-                ax.legend(loc="upper left", fontsize=9, frameon=False, labelcolor=INK)
-        fig.suptitle("Predicted vs observed survival   (on the diagonal = honest)",
-                     color=INK, fontsize=14, weight="bold", y=0.99)
-        fig.tight_layout(rect=[0, 0, 1, 0.93])
-        frames.append(fig_to_arr(fig)); plt.close(fig)
-    save_gif(frames, OUT / "deepsurv-reliability.gif", fps=3, preview_idx=len(frames) - 6)
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.8), dpi=100)
+    fig.patch.set_facecolor(BG)
+    for ax, rel, title in [(axes[0], ry, "Yat DeepSurv"), (axes[1], rm, "standard DeepSurv")]:
+        style_ax(ax)
+        ax.plot([0, 1], [0, 1], color=BORDER, lw=1.2, ls="--")
+        for g in range(3):
+            pred = np.array(rel[g]["pred"])
+            obs = np.array(rel[g]["obs"])
+            ax.plot(pred, obs, "-o", color=cols[g], lw=2, ms=5,
+                    label=["low-risk", "mid-risk", "high-risk"][g] + " third")
+        ax.set_xlim(0, 1); ax.set_ylim(0, 1)
+        ax.set_xlabel("predicted survival", color=MUTED, fontsize=10)
+        ax.set_ylabel("observed survival (Kaplan-Meier)", color=MUTED, fontsize=10)
+        ax.set_title(title, color=INK, fontsize=13, weight="bold")
+        if title.startswith("Yat"):
+            ax.legend(loc="upper left", fontsize=9, frameon=False, labelcolor=INK)
+    fig.suptitle("Predicted vs observed survival   (on the diagonal = honest)",
+                 color=INK, fontsize=14, weight="bold", y=0.99)
+    fig.tight_layout(rect=[0, 0, 1, 0.93])
+    fig.savefig(OUT / "deepsurv-reliability.png", dpi=100, facecolor=BG)
+    plt.close(fig)
+    print(f"  deepsurv-reliability.png written")
 
 
 if __name__ == "__main__":
-    print("Rendering DeepSurv companion GIFs from the bundle...")
-    gif_stratify()
-    gif_assemble()
-    gif_settle()
-    gif_forget()
-    gif_abstain()
-    gif_reliability()
+    print("Rendering DeepSurv companion figures from the bundle...")
+    gif_stratify()      # KEEP: KM tertiles separating over real training epochs
+    fig_attribution()   # static: attribution bar chart, no process
+    gif_settle()        # KEEP: prototypes migrating over real training epochs
+    gif_forget()        # KEEP: real before/after risk-field change on deletion
+    gif_abstain()       # KEEP: real off-manifold covariate sweep, kernel live
+    fig_reliability()   # static: calibration curve, no process
     print("Done.")

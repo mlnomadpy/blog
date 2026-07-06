@@ -163,11 +163,11 @@ contrib = phi * a[None, :]                             # [n, K] signed contribut
 assert np.allclose(contrib.sum(1), np.asarray(model(jnp.asarray(X))), atol=1e-3)
 ```
 
-The contributions sum back to the log-risk to within $2\times10^{-6}$ on the held-out set, so a patient's score is genuinely the sum of named prototype terms. Reveal them one at a time and the risk assembles.
+The contributions sum back to the log-risk to within $2\times10^{-6}$ on the held-out set, so a patient's score is genuinely the sum of named prototype terms.
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/blog/deepsurv-assemble.gif" alt="Signed contribution bars for a patient's prototypes revealed one at a time, with a running sum climbing to the patient's true log-risk" loading="lazy" width="600" height="262" />
-  <figcaption>A patient's log-risk assembling from prototype contributions. Each bar is a real signed term a_u φ_u(x); orange raises risk, blue lowers it. The running sum climbs to the model's true h(x). From <code>scripts/yat_deepsurv.py</code>.</figcaption>
+  <img src="/blog/deepsurv-attribution.png" alt="Signed contribution bars for a patient's top prototypes, orange raising risk and blue lowering it, with the terms summing to the patient's true log-risk" loading="lazy" width="600" height="262" />
+  <figcaption>A patient's log-risk decomposed into prototype contributions. Each bar is a real signed term a_u φ_u(x); orange raises risk, blue lowers it. The terms sum to the model's true h(x) = 1.47. From <code>scripts/yat_deepsurv.py</code>.</figcaption>
 </figure>
 
 ## Cohort deletion is a masked readout
@@ -216,8 +216,8 @@ Walk a real patient off the data manifold and watch the meter fall into the regi
 Because the Yat trunk's log-risks are read off bounded kernels, its predicted survival tracks the observed survival closely, group by group. Bin the held-out patients into risk tertiles, and for each tertile compare the model's mean predicted survival against the Kaplan-Meier estimate at a set of horizons: on the diagonal is honest.
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/blog/deepsurv-reliability.gif" alt="Predicted versus observed survival curves drawing themselves horizon by horizon for three risk tertiles, for the Yat DeepSurv and the standard DeepSurv" loading="lazy" width="600" height="262" />
-  <figcaption>Predicted vs observed survival, drawing itself horizon by horizon. Each point is a risk tertile at a follow-up horizon; the diagonal is a perfectly calibrated model. The Yat DeepSurv (left) hugs the diagonal across all three tertiles; the standard DeepSurv (right) drifts off it. Real predicted-vs-Kaplan-Meier points from <code>scripts/yat_deepsurv.py</code>.</figcaption>
+  <img src="/blog/deepsurv-reliability.png" alt="Predicted versus observed survival for three risk tertiles at a set of follow-up horizons, for the Yat DeepSurv and the standard DeepSurv side by side" loading="lazy" width="600" height="262" />
+  <figcaption>Predicted vs observed survival. Each point is a risk tertile at a follow-up horizon; the diagonal is a perfectly calibrated model. The Yat DeepSurv (left) hugs the diagonal across all three tertiles; the standard DeepSurv (right) drifts off it. Real predicted-vs-Kaplan-Meier points from <code>scripts/yat_deepsurv.py</code>.</figcaption>
 </figure>
 
 That is the whole white-box DeepSurv: one loss, two trunks, and a handful of array operations that turn the legible trunk's one number into reasons, an edit, and an abstention. The [explainer](/blog/a-risk-model-that-names-its-reasons/) is where the clinical story lives.

@@ -1,0 +1,268 @@
+---
+title: "A Network That Is a Fixed Point, in JAX/Flax NNX"
+seoTitle: "A Fixed-Point Neural Network in JAX/Flax NNX"
+seoDescription: "Build the Yat deep-equilibrium net in JAX/Flax NNX: one shared operator solved to its fixed point, trained by implicit differentiation."
+description: "A runnable companion: build the Yat deep-equilibrium network in JAX/Flax NNX. One shared operator F(z;x)=tanh(A·φ_W(z)+Ux+z0), solved to its fixed point by damped iteration, trained not by backprop-through-iterations but by implicit differentiation, the adjoint (I−Jᵀ)u=∂L/∂z* run by the same contraction. Plus the weight-tied maze operator that extrapolates from 11×11 to 27×27 by iterating longer. Every number is from a real run: 98.2% on two moons from 1700 shared parameters, ‖J‖ 0.66/0.92, 99.5% on mazes far larger than training."
+pubDate: 2026-07-01T10:00:00-07:00
+draft: false
+tags: [ml, kernels, deep-equilibrium, fixed-point, implicit-differentiation, jax, flax, nnx, adaptive-depth, yat, deep-learning]
+references:
+  - authors: "Bai, S., Kolter, J. Z., Koltun, V."
+    year: 2019
+    title: "Deep Equilibrium Models"
+    venue: "NeurIPS 2019"
+    arxiv: "1909.01377"
+  - authors: "Winston, E., Kolter, J. Z."
+    year: 2020
+    title: "Monotone Operator Equilibrium Networks"
+    venue: "NeurIPS 2020"
+    arxiv: "2006.08591"
+  - authors: "Bai, S., Koltun, V., Kolter, J. Z."
+    year: 2021
+    title: "Stabilizing Equilibrium Models by Jacobian Regularization"
+    venue: "ICML 2021"
+    arxiv: "2106.14342"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+keywords:
+  - deep equilibrium model JAX
+  - implicit differentiation Flax NNX
+  - fixed-point neural network
+  - custom_vjp adjoint solve
+  - contraction mapping training
+  - weight-tied recurrent operator
+---
+import CiteAs from '../../components/CiteAs.astro';
+
+*The [explainer](/blog/your-network-is-a-fixed-point/) argued that a network does not have to be a tower of layers you march through. Share one Yat operator across all of depth and the network becomes an equation: its answer is the fixed point the state settles into, its depth is however many turns the input needs, and it is trained by differentiating the equation rather than the path to it. This is the implementation. The operator is written in [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html), the fixed-point solve is a damped iteration, and the training uses `jax.custom_vjp` so the backward pass is another fixed-point solve, the piece the explainer stated but never showed in code. Every number is from a real run: `scripts/yat_deq.py` (two moons) and `scripts/yat_deq_maze.py` (reachability).*
+
+*Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/your-network-is-a-fixed-point-jax-flax-nnx): the same code, block by block, with the math written out and every figure reproduced from a real run.*
+
+## One operator, written once
+
+What is the whole network, in code? A single function that reads its own output. The [Yat features](/blog/your-neuron-is-a-picture/) score the running state $z$ against a bank of shared prototypes $W$, and the operator mixes those scores, injects the input, and squashes. There is no per-layer weight here: the same $W$, $A$, and $U$ are used on every turn.
+
+```python
+import jax, jax.numpy as jnp
+from flax import nnx
+
+class YatDEQ(nnx.Module):
+    """One shared Yat operator F(z; x) = tanh(A · φ_W(z) + U x + z0), reused at every depth."""
+    def __init__(self, d_in, d, m, ncls, *, rngs):
+        k = rngs.params()
+        self.W   = nnx.Param(jax.random.normal(k, (m, d)) * 0.6)          # m shared prototypes in state space
+        self.A   = nnx.Param(jax.random.normal(k, (d, m)) * (0.5 / m ** 0.5))  # small -> encourages contraction
+        self.Uin = nnx.Param(jax.random.normal(k, (d, d_in)) * 0.5)       # input injection, every turn
+        self.z0  = nnx.Param(jnp.zeros((d,)))
+        self.b   = nnx.Param(jnp.full((), 0.5)); self.eps = nnx.Param(jnp.full((), 1.0))
+        self.C   = nnx.Param(jax.random.normal(k, (ncls, d)) * 0.5)       # linear readout on z*
+        self.cb  = nnx.Param(jnp.zeros((ncls,)))
+
+    def phi(self, z):                                                     # φ_W(z): state-to-prototype similarities
+        b, eps = jax.nn.softplus(self.b.value), jax.nn.softplus(self.eps.value)
+        dot = z @ self.W.value.T
+        d2  = (z ** 2).sum(-1, keepdims=True) + (self.W.value ** 2).sum(-1) - 2 * dot
+        return (dot + b) ** 2 / (d2 + eps)
+
+    def F(self, z, x):                                                    # one application of the operator
+        return jnp.tanh(self.phi(z) @ self.A.value.T + x @ self.Uin.value.T + self.z0.value)
+```
+
+That is the entire network, at any depth. An ordinary deep net would hold a fresh `W_ℓ` and `A_ℓ` per layer; here `F` is a method, and depth is just how many times you call it. For two moons the state lives in 32 dimensions, there are 24 shared prototypes, and the whole thing is **1700 numbers**, the same count whether the solver turns six times or sixty.
+
+## Solving the equation, not marching a stack
+
+How do you run a network with no fixed depth? You iterate the operator until its output stops changing. The state starts at zero and each turn nudges it toward the fixed point; a little damping ($\beta = 0.7$) keeps the iteration stable. When the step size falls below a tolerance, the state has arrived, and that resting point $z^\*$ is the answer.
+
+```python
+def solve(F, x, z0, iters=120, beta=0.7):
+    """Damped Picard: z_{k+1} = (1-β) z_k + β F(z_k). Returns z* and the residual trace."""
+    def step(z, _):
+        zn = (1 - beta) * z + beta * F(z, x)
+        return zn, jnp.max(jnp.linalg.norm(zn - z, axis=-1))     # per-step max residual
+    z_star, resid = jax.lax.scan(step, z0, None, length=iters)
+    return z_star, resid
+```
+
+The residual trace is the whole convergence story. Drop one input in, iterate, and watch the step size collapse while the state rolls into its resting point.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/deq-settle.gif" alt="One input iterated to equilibrium: the left panel shows a 2D window on the 32D state rolling into z* inside the cloud of every input's equilibrium; the right panel shows the step size collapsing on a log axis toward the halt tolerance" loading="lazy" width="774" height="372" />
+  <figcaption>The forward solve, run. Left: a 2-D window on the 32-D state, starting at the origin and rolling into its fixed point z* (star) inside the faint cloud of every input's equilibrium. Right: the per-turn step size on a log axis, collapsing straight through the halt tolerance. When the state stops moving, it has arrived. Every number is the real operator iterated live; rendered by <code>scripts/render_deq_gifs.py</code>.</figcaption>
+</figure>
+
+The straight-line collapse on the log axis is the tell that the operator is a contraction: each turn shrinks the step by a near-constant factor. Across the whole test set the residual drives down to about $4 \times 10^{-7}$, so the state truly stops rather than merely slowing.
+
+## Why the answer is unique: a contraction
+
+A resting point is only an answer if every start finds the same one. The operator is a contraction if it brings any two states closer every turn, $\lVert F(z) - F(z') \rVert \le \rho \lVert z - z' \rVert$ with $\rho < 1$, and Banach's theorem then guarantees one fixed point reached from anywhere. We measure that stretch as the top singular value of the Jacobian $J_F$ at $z^\*$, estimated by power iteration on $J_F^\top J_F$.
+
+```python
+def spectral_norm(model, x, z_star, key, iters=6):
+    """‖J_F‖₂ at z* by power iteration on JᵀJ (differentiable in params; direction detached)."""
+    fz = lambda zz: model.F(zz, x)
+    v = jax.random.normal(key, z_star.shape)
+    v = v / (jnp.linalg.norm(v, axis=-1, keepdims=True) + 1e-9)
+    for _ in range(iters):
+        Jv = jax.jvp(fz, (z_star,), (v,))[1]                    # J v
+        JtJv = jax.vjp(fz, z_star)[1](Jv)[0]                    # Jᵀ (J v)
+        v = jax.lax.stop_gradient(JtJv / (jnp.linalg.norm(JtJv, axis=-1, keepdims=True) + 1e-9))
+    return jnp.linalg.norm(jax.jvp(fz, (z_star,), (v,))[1], axis=-1)   # ≈ ‖J‖₂ per sample
+```
+
+Nothing forces the raw operator to contract, so we train it in, adding a penalty that pushes $\lVert J_F\rVert$ below a target with margin. After training the measured slope averages **0.66** and tops out at **0.92** across the test set: a genuine contraction. Fix one input, start the state from four wildly scattered places, and they all fall into the same $z^\*$.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/deq-contraction.gif" alt="One fixed input, four scattered starting states, all four trajectories collapsing onto the same fixed point z* in a 2D window; the spread between them shrinking geometrically on a log axis" loading="lazy" width="774" height="372" />
+  <figcaption>Banach, made literal. Left: four wildly different starts, same input, all four trajectories pulled onto one z* (star). Right: the spread between the four states on a log axis, a near-straight geometric decay whose slope is the contraction rate. The trained operator's ‖J‖ averages 0.66, so the answer never depends on where the state began. Rendered by <code>scripts/render_deq_gifs.py</code>.</figcaption>
+</figure>
+
+The penalty rides alongside the cross-entropy in the loss, evaluated at the equilibrium (detached, so the contraction term shapes the operator without fighting the readout gradient).
+
+```python
+import optax
+
+def loss_fn(model, x, y, key):
+    z_star = deq(model, x)                                       # forward fixed-point solve (below)
+    logits = z_star @ model.C.value.T + model.cb.value
+    ce = optax.softmax_cross_entropy_with_integer_labels(logits, y).mean()
+    sigma = spectral_norm(model, x, jax.lax.stop_gradient(z_star), key)
+    contract = 3.0 * jnp.mean(jax.nn.relu(sigma - 0.7) ** 2)     # 0 once ‖J‖₂ < target
+    return ce + contract
+```
+
+## Trained through what, exactly: implicit differentiation
+
+Here is the piece the explainer named but never showed. The forward pass is "iterate until it stops", fourteen turns for one input and sixty-five for another. Unrolling whatever it happened to take, storing every intermediate state to backpropagate through, would cost memory that grows with the turn count, and it would betray the framing: we said the answer was the solution of an equation, not the path to it. So do not differentiate the path. Differentiate the equation.
+
+The fixed point satisfies $z^\* = F(z^\*; x)$, an identity. Differentiating it makes the chain rule fold into itself, $dz^\* = J_F\,dz^\* + \partial_\theta F$, and the gradient becomes one linear solve in the Jacobian: the adjoint $(I - J_F^\top)\,u = \partial\mathcal{L}/\partial z^\*$. And $u = J_F^\top u + \partial\mathcal{L}/\partial z^\*$ is itself a fixed-point equation, so the *same* damped iteration that ran the forward solve runs the backward one, at constant memory no matter how many forward turns there were. We wire this into JAX with a custom vector-Jacobian product.
+
+```python
+from functools import partial
+
+@partial(jax.custom_vjp, nondiff_argnums=())
+def deq(model, x):
+    z0 = jnp.zeros((x.shape[0], model.z0.value.shape[0]))
+    z_star, _ = solve(model.F, x, z0)
+    return z_star
+
+def deq_fwd(model, x):
+    z0 = jnp.zeros((x.shape[0], model.z0.value.shape[0]))
+    z_star, _ = solve(model.F, x, z0)
+    return z_star, (model, x, z_star)
+
+def deq_bwd(res, g):
+    model, x, z_star = res
+    # z* = F(z*), so the cotangent obeys (I − Jᵀ) u = g  ->  u = Jᵀu + g, another fixed point.
+    _, vjp_z = jax.vjp(lambda z: model.F(z, x), z_star)          # Jᵀ · (·)
+    u, _ = solve(lambda u, _: vjp_z(u)[0] + g, None, jnp.zeros_like(g))   # SAME iteration, backward
+    # push u back through the params/input, no unrolled solver in sight
+    _, vjp_px = jax.vjp(lambda mm, xx: mm.F(z_star, xx), model, x)
+    g_model, g_x = vjp_px(u)
+    return g_model, g_x
+
+deq.defvjp(deq_fwd, deq_bwd)
+```
+
+The elegance is that the two solves are the same solve. The contraction that made the forward iteration converge ($\lVert J_F\rVert < 1$) makes the backward one converge too, by the identical Banach argument, because $J_F^\top$ has the same spectral norm as $J_F$. Run both from the trained operator and their residuals fall on the same kind of geometric line.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/deq-implicit.gif" alt="Two log-axis residual plots side by side: the forward fixed-point solve z=F(z) on the left and the backward adjoint solve u=Jᵀu+∂L/∂z* on the right, both residuals decaying to near zero, showing the same contraction runs both" loading="lazy" width="787" height="385" />
+  <figcaption>The centerpiece, the part backprop-through-layers never has to think about. Left: the FORWARD solve z = F(z) driving its residual down. Right: the BACKWARD adjoint solve u = Jᵀu + ∂L/∂z*, the implicit-function-theorem gradient, run by the very same damped iteration and decaying the very same way. No layers are stored, no path is unrolled; the equation is differentiated, not the march to it. Both traces are computed live from the trained operator via <code>jax.vjp</code>. Rendered by <code>scripts/render_deq_gifs.py</code>.</figcaption>
+</figure>
+
+## Depth becomes a dial the input turns
+
+If depth is iteration count, how much of it does any input actually need? Apply the operator a chosen number of times across the whole input plane and color each point with the decision it would give if it stopped there. For the first several turns the boundary is still forming; then it snaps into place and freezes.
+
+```python
+def boundary_at_depth(model, grid, k):
+    z = jnp.zeros((grid.shape[0], model.z0.value.shape[0]))
+    for _ in range(k):                                          # k turns of the shared operator
+        z = 0.3 * z + 0.7 * model.F(z, grid)
+    return jax.nn.softmax(z @ model.C.value.T + model.cb.value, -1)[:, 1]
+```
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/deq-depth-dial.gif" alt="Left: the two-moons decision boundary forming over the first several turns then freezing; right: test accuracy climbing then plateauing at turn 6" loading="lazy" width="774" height="379" />
+  <figcaption>Depth as a dial. Left: the shared operator applied k times across the whole plane, its decision surface forming over the first turns and then frozen. Right: the test accuracy that tracks it, flat past the plateau at turn 6. The classification settles long before the state microscopically stops, so more depth past the snap buys nothing, which is exactly when the network can halt. Rendered by <code>scripts/render_deq_gifs.py</code>.</figcaption>
+</figure>
+
+The classification is settled by about the sixth turn and never changes afterward, so the halting rule "stop when the answer stops moving" is safe. And the number of turns is not a constant: easy inputs deep inside a class settle fast, hard inputs on the boundary take longer.
+
+```python
+def iters_to_settle(model, x, tol=1e-4, maxk=120):
+    z = jnp.zeros((x.shape[0], model.z0.value.shape[0]))
+    ks = jnp.full((x.shape[0],), maxk)
+    for k in range(maxk):
+        zn = 0.3 * z + 0.7 * model.F(z, x)
+        r = jnp.linalg.norm(zn - z, axis=-1)
+        ks = jnp.where((r < tol) & (ks == maxk), k + 1, ks)     # first turn each input settles
+        z = zn
+    return ks                                                   # per-input adaptive depth
+```
+
+Sweep the budget and the confident interiors fill in first; the stragglers are precisely the ambiguous points hugging the boundary. The real spread runs from **14** turns for the easiest input to a median of **20** and **65** for the single hardest.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/deq-adaptive.gif" alt="Left: the two-moons test set filling in as the depth budget sweeps, filled points settled, hollow points still iterating, the interiors first and boundary stragglers last; right: a histogram of turns-to-settle building up from 14 to 65" loading="lazy" width="774" height="379" />
+  <figcaption>Adaptive depth, with no extra machinery. Sweep the depth budget: filled points have settled within it, hollow points are still iterating. The class interiors settle first, the boundary points last. The histogram is the real distribution of turns-to-settle across the test set, from 14 for the easiest input to 65 for the hardest. The input decides the depth, not the architecture. Rendered by <code>scripts/render_deq_gifs.py</code>.</figcaption>
+</figure>
+
+## Why go deep at all: a maze that makes you earn it
+
+Two moons settled in six turns, so why build a machine that can go a thousand? Because some problems make depth the point. Grid reachability spreads one ring per step out from a goal, so a cell forty hops away genuinely cannot be decided in fewer than forty turns. We share one Yat operator across all of them, reading each cell's five-cell neighbourhood and masked by the walls: a weight-tied recurrent convolution.
+
+```python
+def patch(z):                                                   # the 5-cell neighborhood, self + 4 neighbors
+    return jnp.concatenate([z, shift(z, 1, 0), shift(z, -1, 0),
+                            shift(z, 0, 1), shift(z, 0, -1)], -1)
+
+def maze_F(p, z, x, free):                                       # one turn of the shared grid operator
+    pt = patch(z)
+    dot = pt @ p['W'].T
+    d2  = (pt ** 2).sum(-1, keepdims=True) + (p['W'] ** 2).sum(-1) - 2 * dot
+    phi = (dot + p['b']) ** 2 / (d2 + p['eps'])                  # Yat feature on the neighborhood
+    return jnp.tanh(phi @ p['A'].T + x @ p['Uin'].T + p['z0']) * free   # walls carry nothing
+```
+
+We train this only on small $11\times11$ grids, unrolled for 30 turns, so no front it ever followed traveled more than thirty steps. Then we hand it a $27\times27$ maze whose front must travel forty cells and more, into territory no training run reached. Everything about generalization says it should fall apart. It does not: it floods right past the training line and solves the mazes to **99.5%** of cells, as long as you let it iterate long enough for the front to arrive.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/deq-maze.gif" alt="Left: a 27x27 maze being flooded from the goal by the operator trained only on 11x11 grids, the reachable front spreading ring by ring; right: cell accuracy climbing past the 30-turn training length toward 99.5 percent, then a scatter of turns-to-settle against propagation distance with correlation 0.98" loading="lazy" width="787" height="385" />
+  <figcaption>Extrapolation by thinking longer. Left: the same operator, trained only on 11×11, flooding a 27×27 maze from the goal (star), one ring of reachable per turn. Right: cell accuracy climbing, 54% at 22 turns, 76% at the 30-turn training length, up to 99.5% once the front crosses. The tail resolves into the payoff: turns-to-settle against the true propagation distance across 120 instances, correlation r = 0.98. A twelve-layer stack is stuck at twelve hops forever; a recursion is not. Rendered by <code>scripts/render_deq_gifs.py</code>.</figcaption>
+</figure>
+
+The scatter closes the circle with the adaptive-depth story: the turns each maze needs track its true propagation distance almost perfectly, $r = 0.98$. The network never picks a depth. The problem hands it one.
+
+## What the code buys
+
+The whole two-moons network, at any depth, is `1700` parameters, one operator $(W, A, U, C)$ reused for every turn, and it still reaches **98.2%** on the interleaving moons. The maze operator is smaller still and solves grids far larger than any it trained on. The two ideas that made all of it work are short: `solve` is a damped Picard iteration, and `deq_bwd` is the same iteration run backward, the implicit function theorem in five lines. No stack of activations is ever stored, because there is no stack. The network is an equation, and the code solves it, forward and backward, the same way.
+
+```python
+# put together: train the fixed point end to end
+model = YatDEQ(d_in=2, d=32, m=24, ncls=2, rngs=nnx.Rngs(0))
+optimizer = nnx.Optimizer(model, optax.adam(3e-3))
+
+@nnx.jit
+def train_step(model, optimizer, x, y, key):
+    grads = nnx.grad(loss_fn)(model, x, y, key)                 # flows through deq_bwd (implicit diff)
+    optimizer.update(grads)
+
+# ... it lands at 98.2% test on two moons, ‖J‖ mean 0.66 / max 0.92, residual ~4e-7 ...
+```
+
+---
+
+*The deep-equilibrium framing is from [Bai, Kolter, and Koltun (2019)](https://arxiv.org/abs/1909.01377); the contraction/monotone-operator view from [Winston and Kolter (2020)](https://arxiv.org/abs/2006.08591); Jacobian regularization for stability from [Bai, Koltun, and Kolter (2021)](https://arxiv.org/abs/2106.14342); the Yat kernel from [Bouhsine (2026)](https://arxiv.org/abs/2605.03262). The conceptual companion is [Your Network Is a Stack of Layers. It Could Be a Fixed Point.](/blog/your-network-is-a-fixed-point/)*
+
+<CiteAs slug="your-network-is-a-fixed-point-jax-flax-nnx" title="A Network That Is a Fixed Point, in JAX/Flax NNX" pubDate="2026-07-01T10:00:00-07:00" />
+
+<style>{`
+.jax-fig { margin: 1.8rem auto; text-align: center; }
+.jax-fig img { max-width: 520px; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; background: #fbf8f1; }
+.jax-fig-wide img { max-width: 880px; }
+.jax-fig figcaption { margin-top: 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--fg-muted); max-width: 64ch; margin-left: auto; margin-right: auto; }
+`}</style>

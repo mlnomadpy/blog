@@ -100,8 +100,8 @@ print(con_rand)   # 72.7%
 **72.7%** from a network that never saw a gradient. Random convolutional features are a known free lunch: even an untuned stack of filters keeps enough class structure for a head that only has to read it.
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/blog/train-free-lunch.gif" alt="Test images poured through two heads on the same random-backbone features: a coin flip sorts them at 10% while the built Yat head sorts them into the right bins at 73%" loading="lazy" width="968" height="528" />
-  <figcaption>The free lunch, poured out. The same random-backbone features fall through two heads into ten class bins. A coin flip lands them anywhere, at the 10% you would expect from a network that never trained; the built Yat head sorts the very same features into the right bins at 73%. The structure was already in the random filters; the head only had to read it. Rendered by <code>scripts/render_train_features_gifs.py</code>.</figcaption>
+  <img src="/blog/train-free-lunch.png" alt="Test images sorted by two heads on the same random-backbone features into ten class bins: a coin flip sits at 10% while the built Yat head sorts them into the right bins at 73%" loading="lazy" width="968" height="528" />
+  <figcaption>The free lunch. The same random-backbone features, sorted by two heads into ten class bins. A coin flip lands them anywhere, at the 10% you would expect from a network that never trained; the built Yat head puts the very same features into the right bins at 73%, each dot coloured by its true class so a same-coloured column is a hit. The structure was already in the random filters; the head only had to read it. Rendered by <code>scripts/render_train_features_gifs.py</code>.</figcaption>
 </figure>
 
 ## Train the backbone, compare the heads
@@ -143,13 +143,13 @@ So the curve runs from 72.7% on random features to 85.9% on trained ones, all re
 </figure>
 
 <figure class="jax-fig">
-  <img src="/blog/train-two-heads.gif" alt="Two accuracy curves drawing themselves over training epochs: the built head starts high and the trained head climbs from chance to finish only a couple of points above it" loading="lazy" width="792" height="600" />
+  <img src="/blog/train-two-heads.png" alt="Two accuracy curves over training epochs: the built head starts high at 73% and the trained head climbs from chance to finish only a couple of points above it" loading="lazy" width="792" height="600" />
   <figcaption>The two heads, read off the same backbone as it trains. The built head is good immediately, at 73% before a single gradient step, because it just reads the features. The trained head starts at chance and has to climb, and after six epochs it finishes only a point or two ahead. The gap is all training the head ever buys. Rendered by <code>scripts/render_train_features_gifs.py</code>.</figcaption>
 </figure>
 
 <figure class="jax-fig">
-  <img src="/blog/train-head-swap.gif" alt="A bar chart on one frozen trained backbone, swapping between a random linear head at 16%, the built Yat head at 86%, and the trained linear head at 88%" loading="lazy" width="816" height="600" />
-  <figcaption>The thesis in one chart. Freeze the trained backbone and bolt on three different heads. A random, untrained linear head reads its features at 16%, near chance; the built Yat head, placed with no gradient, reads them at 86%; the trained linear head, at 88%. Once the features are good, the head is furniture: any reasonable one recovers almost all the accuracy, and training it buys the last point or two. Rendered by <code>scripts/render_train_features_gifs.py</code>.</figcaption>
+  <img src="/blog/train-head-swap.png" alt="A bar chart on one frozen trained backbone with three heads side by side: a random linear head at 16%, the built Yat head at 86%, and the trained linear head at 88%" loading="lazy" width="816" height="600" />
+  <figcaption>The thesis in one chart. Freeze the trained backbone and bolt on three different heads, side by side. A random, untrained linear head reads its features at 16%, near chance; the built Yat head, placed with no gradient, reads them at 86%; the trained linear head, at 88%. Once the features are good, the head is furniture: any reasonable one recovers almost all the accuracy, and training it buys the last point or two. Rendered by <code>scripts/render_train_features_gifs.py</code>.</figcaption>
 </figure>
 
 ---

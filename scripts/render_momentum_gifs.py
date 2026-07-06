@@ -19,9 +19,11 @@ Every moving thing is a real number from the real computation:
   5. momentum-rewind.gif           the exact backward pass retracing every point
                                    home in float64 (max err ~3e-13), then the
                                    float32 rewind error rising as (1/mu)^layers.
-  6. momentum-ceiling.gif          test accuracy vs depth on rings, 3 seeds each
-                                   (public/momentum-resnet/results.json): the
-                                   plain flow never touches the 100% line again.
+  6. momentum-ceiling.png          (STATIC) test accuracy vs depth on rings, 3
+                                   seeds each (public/momentum-resnet/results.json):
+                                   the plain flow never touches the 100% line again.
+                                   Depth is a categorical scoreboard axis, not a
+                                   process, so this is a figure, not a GIF.
 
 Sources of truth: public/momentum-resnet/{results,trajectories,cliff,inertia}.json
 (from scripts/momentum_resnet.py) and the Kaggle telemetry npz.
@@ -621,9 +623,12 @@ def gif_rewind():
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# GIF 6 -- the exactness ceiling
+# FIGURE 6 -- the exactness ceiling (static)
+#   Accuracy vs depth is a scoreboard of independent sweep runs, not a temporal
+#   process: depth is a categorical x-axis and the three seeds per point are a
+#   static scatter. Every number is in one frame, so this is a figure, not a GIF.
 # ═══════════════════════════════════════════════════════════════════════════
-def gif_ceiling():
+def fig_ceiling():
     runs = RESULTS['network_runs']
     depths = [8, 32, 128]
     acc = {mu: np.array([[a * 100 for a in runs[f'rings/L{L}/mu{mu}']['accs']]
@@ -631,74 +636,60 @@ def gif_ceiling():
     xpos = np.array([0.0, 1.0, 2.0])
     Y0, Y1 = 99.42, 100.10
 
-    N_INTRO, N_PER, N_RESOLVE = 12, 22, 40
-    NF = N_INTRO + 3 * N_PER + N_RESOLVE
-    frames = []
-    for fi in range(NF):
-        fig = plt.figure(figsize=(8.4, 5.2), dpi=105, facecolor=BG)
-        fig.text(0.5, 0.95, 'The exactness ceiling: 100% on rings is a line a flow cannot touch',
-                 ha='center', fontsize=13.2, weight='bold')
-        fig.text(0.5, 0.897, 'test accuracy vs depth, 3 seeds per point, total time fixed (T = 8): deeper means smaller steps, closer to an honest flow',
-                 ha='center', fontsize=8.7, color=MUTED)
-        ax = fig.add_axes([0.10, 0.165, 0.86, 0.665])
-        style_ax(ax)
-        ax.set_xlim(-0.35, 2.35); ax.set_ylim(Y0, Y1)
-        ax.set_xticks(xpos)
-        ax.set_xticklabels(['L = 8\n(h = 1)', 'L = 32\n(h = 0.25)', 'L = 128\n(h = 0.0625)'],
-                           fontsize=8.5, color=MUTED)
-        ax.set_ylabel('test accuracy (%)', fontsize=9, color=MUTED)
-        ax.tick_params(colors=MUTED, labelsize=8)
-        ax.axhline(100, color=INK, lw=1.1, ls='--', alpha=0.85)
-        ax.text(-0.30, 100.015, 'exact separation (100%)', fontsize=8.5, color=INK)
+    fig = plt.figure(figsize=(8.4, 5.2), dpi=105, facecolor=BG)
+    fig.text(0.5, 0.95, 'The exactness ceiling: 100% on rings is a line a flow cannot touch',
+             ha='center', fontsize=13.2, weight='bold')
+    fig.text(0.5, 0.897, 'test accuracy vs depth, 3 seeds per point, total time fixed (T = 8): deeper means smaller steps, closer to an honest flow',
+             ha='center', fontsize=8.7, color=MUTED)
+    ax = fig.add_axes([0.10, 0.165, 0.86, 0.665])
+    style_ax(ax)
+    ax.set_xlim(-0.35, 2.35); ax.set_ylim(Y0, Y1)
+    ax.set_xticks(xpos)
+    ax.set_xticklabels(['L = 8\n(h = 1)', 'L = 32\n(h = 0.25)', 'L = 128\n(h = 0.0625)'],
+                       fontsize=8.5, color=MUTED)
+    ax.set_ylabel('test accuracy (%)', fontsize=9, color=MUTED)
+    ax.tick_params(colors=MUTED, labelsize=8)
+    ax.axhline(100, color=INK, lw=1.1, ls='--', alpha=0.85)
+    ax.text(-0.30, 100.015, 'exact separation (100%)', fontsize=8.5, color=INK)
 
-        stage = (fi - N_INTRO) / N_PER if fi >= N_INTRO else 0.0
-        ndep = min(3, int(stage) + (1 if fi >= N_INTRO else 0))
-        frac = min(1.0, stage - int(stage) if stage < 3 else 1.0)
-        resolve = ease((fi - (N_INTRO + 3 * N_PER)) / (N_RESOLVE - 1)) if fi >= N_INTRO + 3 * N_PER else 0.0
+    for mu, col, name, dx in (('0.0', C_PLAIN, 'plain residual (mu = 0)', -0.05),
+                              ('0.9', C_MOM, 'momentum (mu = 0.9)', 0.05)):
+        A = acc[mu]
+        for di in range(3):
+            for s in range(3):
+                ax.scatter([xpos[di] + dx], [A[di, s]], s=44, color=col,
+                           zorder=5, edgecolors=BG, linewidths=0.6)
+            if di > 0:
+                ax.plot(xpos[di - 1:di + 1] + dx, A[di - 1:di + 1].mean(1), color=col,
+                        lw=1.4, alpha=0.6, zorder=3)
+            ax.fill_between([xpos[di] + dx - 0.06, xpos[di] + dx + 0.06],
+                            A[di].min(), A[di].max(), color=col, alpha=0.18, zorder=2)
+        ax.scatter([], [], s=44, color=col, label=name)
+    ax.legend(loc='lower left', fontsize=8.5, facecolor=PANEL, edgecolor=LINE,
+              labelcolor=INK)
 
-        for mu, col, name, dx in (('0.0', C_PLAIN, 'plain residual (mu = 0)', -0.05),
-                                  ('0.9', C_MOM, 'momentum (mu = 0.9)', 0.05)):
-            A = acc[mu]
-            for di in range(ndep):
-                a = ease(min(1.0, (stage - di) * 1.6))
-                for s in range(3):
-                    ax.scatter([xpos[di] + dx], [A[di, s]], s=44, color=col, alpha=a,
-                               zorder=5, edgecolors=BG, linewidths=0.6)
-                if di > 0:
-                    am = ease(min(1.0, (stage - di) * 1.6))
-                    ax.plot(xpos[di - 1:di + 1] + dx, A[di - 1:di + 1].mean(1), color=col,
-                            lw=1.4, alpha=0.6 * am, zorder=3)
-                if a >= 1:
-                    ax.fill_between([xpos[di] + dx - 0.06, xpos[di] + dx + 0.06],
-                                    A[di].min(), A[di].max(), color=col, alpha=0.18, zorder=2)
-            ax.scatter([], [], s=44, color=col, label=name)
-        ax.legend(loc='lower left', fontsize=8.5, facecolor=PANEL, edgecolor=LINE,
-                  labelcolor=INK)
-
-        if resolve > 0:
-            # shade the forbidden gap where the plain net is an honest flow
-            for di in (1, 2):
-                top = 100.0; bot = acc['0.0'][di].max()
-                ax.fill_between([xpos[di] - 0.22, xpos[di] + 0.22], bot, top,
-                                color=C_PLAIN, alpha=0.22 * resolve, zorder=1)
-                ax.text(xpos[di] - 0.25, bot - 0.012, f'best plain seed {bot:.2f}%',
-                        ha='right' if di == 1 else 'right', va='top', fontsize=7.6,
-                        color=C_PLAIN, alpha=resolve)
-            ax.annotate('h = 1 is not yet a flow:\ncoarse steps can jump the wall\n(2 of 3 seeds hit 100%)',
-                        xy=(xpos[0] - 0.05, 100.0), xytext=(xpos[0] + 0.02, 99.62),
-                        fontsize=7.8, color=MUTED, alpha=resolve,
-                        arrowprops=dict(arrowstyle='->', color=MUTED, lw=0.8,
-                                        alpha=0.7 * resolve))
-            fig.text(0.5, 0.008,
-                     'once deep enough to be an honest flow (L >= 32), the plain net never touches 100%\n'
-                     'in any of its 6 runs; the momentum net pins the line in every seed at L = 8 and L = 32',
-                     ha='center', va='bottom', fontsize=8.8, color=C_GOLD, alpha=resolve)
-        frames.append(fig_rgba(fig))
-    save_gif(PUB / 'momentum-ceiling.gif', frames, fps=11, hold=26)
+    # shade the forbidden gap where the plain net is an honest flow
+    for di in (1, 2):
+        top = 100.0; bot = acc['0.0'][di].max()
+        ax.fill_between([xpos[di] - 0.22, xpos[di] + 0.22], bot, top,
+                        color=C_PLAIN, alpha=0.22, zorder=1)
+        ax.text(xpos[di] - 0.25, bot - 0.012, f'best plain seed {bot:.2f}%',
+                ha='right', va='top', fontsize=7.6, color=C_PLAIN)
+    ax.annotate('h = 1 is not yet a flow:\ncoarse steps can jump the wall\n(2 of 3 seeds hit 100%)',
+                xy=(xpos[0] - 0.05, 100.0), xytext=(xpos[0] + 0.02, 99.62),
+                fontsize=7.8, color=MUTED,
+                arrowprops=dict(arrowstyle='->', color=MUTED, lw=0.8, alpha=0.7))
+    fig.text(0.5, 0.008,
+             'once deep enough to be an honest flow (L >= 32), the plain net never touches 100%\n'
+             'in any of its 6 runs; the momentum net pins the line in every seed at L = 8 and L = 32',
+             ha='center', va='bottom', fontsize=8.8, color=C_GOLD)
+    fig.savefig(PUB / 'momentum-ceiling.png', dpi=105, facecolor=BG)
+    plt.close(fig)
+    print(f'wrote {PUB / "momentum-ceiling.png"}')
 
 
 GIFS = {'orbits': gif_orbits, 'lapse': gif_depth_lapse, 'ledger': gif_velocity_ledger,
-        'crystal': gif_crystallize, 'rewind': gif_rewind, 'ceiling': gif_ceiling}
+        'crystal': gif_crystallize, 'rewind': gif_rewind, 'ceiling': fig_ceiling}
 
 if __name__ == '__main__':
     which = sys.argv[1:] or list(GIFS)

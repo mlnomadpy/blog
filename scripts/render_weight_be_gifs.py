@@ -3,13 +3,13 @@
 Every moving thing is a real number computed from the kernel math (eigenvalues by
 FFT, RKHS norms, kernel-ridge solves, Legendre spectra). No synthetic metaphors.
 
-  1. weight-be-spectra.gif  the eigenvalue decay of three kernels drawing itself:
+  1. weight-be-spectra.png  (static figure) the eigenvalue decay of three kernels:
                             Gaussian (a cliff), Sobolev/Laplace (a gentle slope),
                             and the Yat denominator / inverse-multiquadric (an
                             exponential, sitting between the two).
-  2. weight-be-bill.gif     a corner's running RKHS bill Σ_{k≤K} cₖ²/λₖ: it plateaus
-                            (finite, admitted) only under the Sobolev kernel; under
-                            the Gaussian and the IMQ it runs to infinity.
+  2. weight-be-bill.png     (static figure) a corner's RKHS bill Σ_{k≤K} cₖ²/λₖ: it
+                            plateaus (finite, admitted) only under the Sobolev kernel;
+                            under the Gaussian and the IMQ it runs to infinity.
   3. weight-be-corner.gif   kernel ridge lowering its penalty: only the Sobolev
                             (Laplace) fit finds the corner; the Gaussian rounds it.
   4. weight-be-sphere.gif   on the sphere, sharpening a zonal kernel lets the same
@@ -48,6 +48,12 @@ def save_gif(path, frames, fps, hold=14):
     print(f'wrote {path} ({os.path.getsize(path)//1024} KB)')
 
 
+def save_png(path, fig):
+    fig.savefig(path, dpi=118, facecolor=BG)
+    plt.close(fig)
+    print(f'wrote {path} ({os.path.getsize(path)//1024} KB)')
+
+
 # ── kernel eigenvalues on the circle = the real DFT of the kernel (jax) ──
 N = 2048
 GRID = jnp.linspace(-jnp.pi, jnp.pi, N, endpoint=False)
@@ -73,64 +79,59 @@ LAM = {n: lam_of(n, _k) for n in ('Gaussian', 'Sobolev', 'Yat')}
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# GIF 1 — the three eigenvalue spectra drawing themselves
+# FIGURE 1 — the three eigenvalue spectra (static). Three fixed decay curves;
+# the whole story is the final plot, so this is a still figure, not an animation.
 # ═══════════════════════════════════════════════════════════════════════════
-def gif_spectra():
+def png_spectra():
     ks = np.arange(1, K + 1)
     series = [('Gaussian (a cliff)', LAM['Gaussian'], GAUSS_C),
               ('Sobolev / Matérn (gentle, ~k⁻²)', LAM['Sobolev'], SOB_C),
               ('Yat denominator / IMQ (exponential)', LAM['Yat'], YAT_C)]
-    NF = 46; frames = []
-    for fi in range(NF):
-        kk = max(2, int(ease(fi / (NF - 1)) * K))
-        fig = plt.figure(figsize=(6.6, 5.0), dpi=118, facecolor=BG)
-        fig.text(0.5, 0.95, 'A kernel is a price list: how fast its eigenvalues fall', ha='center', fontsize=13.5, weight='bold')
-        fig.text(0.5, 0.905, 'λₖ on a log scale (tall = cheap). The decay is the whole personality of the kernel.', ha='center', fontsize=9, color=MUTED)
-        ax = fig.add_axes([0.12, 0.12, 0.84, 0.74]); ax.set_facecolor(PANEL)
-        for name, lam, col in series:
-            ax.plot(ks[:kk], np.log10(np.maximum(lam[1:kk + 1], 1e-16)), color=col, lw=2.4)
-            ax.scatter([ks[kk - 1]], [np.log10(max(lam[kk], 1e-16))], s=30, color=col, zorder=5, edgecolors=BG)
-            ax.text(0.02, {'Gaussian (a cliff)': 0.16, 'Sobolev / Matérn (gentle, ~k⁻²)': 0.09, 'Yat denominator / IMQ (exponential)': 0.02}[name],
-                    name, transform=ax.transAxes, color=col, fontsize=9.5, weight='bold')
-        ax.set_xlim(1, K); ax.set_ylim(-15, 0.5)
-        ax.set_xlabel('frequency mode k', color=MUTED, fontsize=10)
-        ax.set_ylabel('log₁₀ λₖ', color=MUTED, fontsize=10); ax.tick_params(colors=MUTED, labelsize=8)
-        for s in ax.spines.values(): s.set_color(LINE)
-        frames.append(fig_rgba(fig))
-    save_gif(PUB / 'weight-be-spectra.gif', frames, fps=15)
+    fig = plt.figure(figsize=(6.6, 5.0), dpi=118, facecolor=BG)
+    fig.text(0.5, 0.95, 'A kernel is a price list: how fast its eigenvalues fall', ha='center', fontsize=13.5, weight='bold')
+    fig.text(0.5, 0.905, 'λₖ on a log scale (tall = cheap). The decay is the whole personality of the kernel.', ha='center', fontsize=9, color=MUTED)
+    ax = fig.add_axes([0.12, 0.12, 0.84, 0.74]); ax.set_facecolor(PANEL)
+    for name, lam, col in series:
+        ax.plot(ks, np.log10(np.maximum(lam[1:K + 1], 1e-16)), color=col, lw=2.4)
+        ax.scatter([ks[-1]], [np.log10(max(lam[K], 1e-16))], s=30, color=col, zorder=5, edgecolors=BG)
+        ax.text(0.02, {'Gaussian (a cliff)': 0.16, 'Sobolev / Matérn (gentle, ~k⁻²)': 0.09, 'Yat denominator / IMQ (exponential)': 0.02}[name],
+                name, transform=ax.transAxes, color=col, fontsize=9.5, weight='bold')
+    ax.set_xlim(1, K); ax.set_ylim(-15, 0.5)
+    ax.set_xlabel('frequency mode k', color=MUTED, fontsize=10)
+    ax.set_ylabel('log₁₀ λₖ', color=MUTED, fontsize=10); ax.tick_params(colors=MUTED, labelsize=8)
+    for s in ax.spines.values(): s.set_color(LINE)
+    save_png(PUB / 'weight-be-spectra.png', fig)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# GIF 2 — a corner's running RKHS bill: converges only under Sobolev
+# FIGURE 2 — a corner's RKHS bill (static). Three fixed cumulative-sum curves;
+# the final plot carries the whole comparison, so this is a still figure.
 # ═══════════════════════════════════════════════════════════════════════════
-def gif_bill():
+def png_bill():
     KB = 90; ks = np.arange(1, KB + 1)
     c = ck2_of(ks); c = c / c.sum()                    # unit-energy corner
     bills = {n: np.cumsum(c / np.maximum(lam_of(n, ks), 1e-30)) for n in ('Gaussian', 'Sobolev', 'Yat')}
     cols = {'Gaussian': GAUSS_C, 'Sobolev': SOB_C, 'Yat': YAT_C}
     labels = {'Gaussian': 'Gaussian → ∞ (fast)', 'Sobolev': 'Sobolev: finite, admitted', 'Yat': 'Yat / IMQ → ∞ (slowly)'}
-    CAP = 1e6; NF = 50; frames = []
-    for fi in range(NF):
-        kk = max(2, int(ease(fi / (NF - 1)) * KB))
-        fig = plt.figure(figsize=(6.6, 5.0), dpi=118, facecolor=BG)
-        fig.text(0.5, 0.95, 'A corner’s bill, mode by mode:  ‖f‖² = Σ cₖ²/λₖ', ha='center', fontsize=13.5, weight='bold')
-        fig.text(0.5, 0.905, 'only the Sobolev bill stays finite; a corner is too rough for the Gaussian and for Yat', ha='center', fontsize=8.8, color=MUTED)
-        ax = fig.add_axes([0.13, 0.12, 0.83, 0.74]); ax.set_facecolor(PANEL)
-        for name in ['Sobolev', 'Yat', 'Gaussian']:
-            run = np.minimum(bills[name][:kk], CAP)
-            ax.plot(ks[:kk], np.log10(np.maximum(run, 1e-2)), color=cols[name], lw=2.4)
-            yv = np.log10(max(min(bills[name][kk - 1], CAP), 1e-2))
-            ax.scatter([ks[kk - 1]], [yv], s=30, color=cols[name], zorder=5, edgecolors=BG)
-        for i, name in enumerate(['Gaussian', 'Yat', 'Sobolev']):
-            ax.text(0.02, 0.93 - i * 0.07, labels[name], transform=ax.transAxes, color=cols[name], fontsize=9.5, weight='bold')
-        ax.axhline(np.log10(CAP), color=RED, lw=0.8, ls=':')
-        ax.text(KB, np.log10(CAP), ' unaffordable', color=RED, fontsize=8, va='bottom', ha='right')
-        ax.set_xlim(1, KB); ax.set_ylim(-2, 6.4)
-        ax.set_xlabel('modes summed, up to k', color=MUTED, fontsize=10)
-        ax.set_ylabel('log₁₀ running bill', color=MUTED, fontsize=10); ax.tick_params(colors=MUTED, labelsize=8)
-        for s in ax.spines.values(): s.set_color(LINE)
-        frames.append(fig_rgba(fig))
-    save_gif(PUB / 'weight-be-bill.gif', frames, fps=15)
+    CAP = 1e6
+    fig = plt.figure(figsize=(6.6, 5.0), dpi=118, facecolor=BG)
+    fig.text(0.5, 0.95, 'A corner’s bill, mode by mode:  ‖f‖² = Σ cₖ²/λₖ', ha='center', fontsize=13.5, weight='bold')
+    fig.text(0.5, 0.905, 'only the Sobolev bill stays finite; a corner is too rough for the Gaussian and for Yat', ha='center', fontsize=8.8, color=MUTED)
+    ax = fig.add_axes([0.13, 0.12, 0.83, 0.74]); ax.set_facecolor(PANEL)
+    for name in ['Sobolev', 'Yat', 'Gaussian']:
+        run = np.minimum(bills[name], CAP)
+        ax.plot(ks, np.log10(np.maximum(run, 1e-2)), color=cols[name], lw=2.4)
+        yv = np.log10(max(min(bills[name][-1], CAP), 1e-2))
+        ax.scatter([ks[-1]], [yv], s=30, color=cols[name], zorder=5, edgecolors=BG)
+    for i, name in enumerate(['Gaussian', 'Yat', 'Sobolev']):
+        ax.text(0.02, 0.93 - i * 0.07, labels[name], transform=ax.transAxes, color=cols[name], fontsize=9.5, weight='bold')
+    ax.axhline(np.log10(CAP), color=RED, lw=0.8, ls=':')
+    ax.text(KB, np.log10(CAP), ' unaffordable', color=RED, fontsize=8, va='bottom', ha='right')
+    ax.set_xlim(1, KB); ax.set_ylim(-2, 6.4)
+    ax.set_xlabel('modes summed, up to k', color=MUTED, fontsize=10)
+    ax.set_ylabel('log₁₀ running bill', color=MUTED, fontsize=10); ax.tick_params(colors=MUTED, labelsize=8)
+    for s in ax.spines.values(): s.set_color(LINE)
+    save_png(PUB / 'weight-be-bill.png', fig)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -224,5 +225,5 @@ if __name__ == '__main__':
     print('decay check (λ_k at k=8,16,32):')
     for n in ['Gaussian', 'Sobolev', 'Yat']:
         print(f'  {n:9s}', [f'{LAM[n][k]:.1e}' for k in (8, 16, 32)])
-    gif_spectra(); gif_bill(); gif_corner(); gif_sphere()
+    png_spectra(); png_bill(); gif_corner(); gif_sphere()
     print('WEIGHT_BE_GIFS_DONE')

@@ -1,0 +1,245 @@
+---
+title: "Calibrating a Bounded Net, in JAX/Flax NNX"
+seoTitle: "Calibration of a Kernel MLP in JAX/Flax NNX"
+seoDescription: "Reliability diagrams, ECE, temperature scaling and OOD channels for a Yat vs ReLU MLP, coded in JAX/Flax NNX from a real Fashion-MNIST run."
+description: "A runnable companion: build the matched Yat and ReLU MLPs in Flax NNX with the same softmax head, then measure their honesty. The reliability diagram and ECE, temperature scaling fit on a held-out split, NLL and Brier, and the two out-of-distribution channels, kernel-field magnitude versus softmax confidence, all in JAX with every number from a real three-seed run."
+pubDate: 2026-07-04T10:00:00-07:00
+draft: false
+tags: [ml, kernels, calibration, uncertainty, jax, flax, nnx, implementation, yat, ood, deep-learning]
+references:
+  - authors: "Guo, C., Pleiss, G., Sun, Y., Weinberger, K. Q."
+    year: 2017
+    title: "On Calibration of Modern Neural Networks"
+    venue: "ICML 2017"
+    arxiv: "1706.04599"
+  - authors: "Naeini, M. P., Cooper, G. F., Hauskrecht, M."
+    year: 2015
+    title: "Obtaining Well Calibrated Probabilities Using Bayesian Binning"
+    venue: "AAAI 2015"
+  - authors: "Brier, G. W."
+    year: 1950
+    title: "Verification of Forecasts Expressed in Terms of Probability"
+    venue: "Monthly Weather Review 78, 1–3"
+  - authors: "Hendrycks, D., Gimpel, K."
+    year: 2017
+    title: "A Baseline for Detecting Misclassified and Out-of-Distribution Examples in Neural Networks"
+    venue: "ICLR 2017"
+    arxiv: "1610.02136"
+  - authors: "Liu, W., Wang, X., Owens, J., Li, Y."
+    year: 2020
+    title: "Energy-based Out-of-distribution Detection"
+    venue: "NeurIPS 2020"
+    arxiv: "2010.03759"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+keywords:
+  - neural network calibration JAX
+  - expected calibration error
+  - temperature scaling Flax NNX
+  - reliability diagram JAX
+  - out-of-distribution detection kernel
+  - Yat kernel MLP
+---
+import CiteAs from '../../components/CiteAs.astro';
+
+*The [explainer](/blog/calibration-of-a-bounded-net/) put a bounded kernel MLP's confidence on trial against a matched ReLU MLP and found, against the series' own bet, that the interpretable network is the one whose probabilities lie. This is the implementation: build both nets in [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html) with the exact same softmax head, then measure their honesty with reliability diagrams, ECE, temperature scaling, and the two out-of-distribution channels. Every number below is from a real three-seed run; the script is `scripts/yat_calibration.py`.*
+
+*Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/calibration-of-a-bounded-net-jax-flax-nnx): the same code, block by block, with the math written out and every figure reproduced from a real run.*
+
+
+## Two nets, one head
+
+What makes a calibration test fair? That confidence means the same thing for both contestants. So the two networks share everything downstream of the feature map: a linear readout to ten logits, then a softmax, then the max. Only the layer that turns an image into features differs, and that is the whole experiment. The Yat layer scores each input against `K` prototypes with the kernel from the earlier posts; the ReLU layer is the ordinary affine-then-rectify.
+
+```python
+import jax, jax.numpy as jnp
+from flax import nnx
+
+K = 50
+
+class YatLayer(nnx.Module):
+    """Each unit is the Yat kernel against a prototype row of W."""
+    def __init__(self, *, rngs, Winit, b0=1.0, eps0=1.0):
+        self.W = nnx.Param(jnp.asarray(Winit))                       # [K, 784] prototypes
+        self.log_b = nnx.Param(jnp.full((), jnp.log(jnp.expm1(b0))))
+        self.log_eps = nnx.Param(jnp.full((), jnp.log(jnp.expm1(eps0))))
+
+    def __call__(self, x):
+        b = jax.nn.softplus(self.log_b.value)
+        eps = jax.nn.softplus(self.log_eps.value)
+        dot = x @ self.W.value.T
+        d2 = jnp.sum(x ** 2, -1, keepdims=True) + jnp.sum(self.W.value ** 2, -1) - 2 * dot
+        return (dot + b) ** 2 / (d2 + eps)                           # [N, K] kernel scores
+
+class YatMLP(nnx.Module):
+    def __init__(self, *, rngs, Winit):
+        self.yat = YatLayer(rngs=rngs, Winit=Winit)
+        self.readout = nnx.Linear(K, 10, rngs=rngs)
+    def __call__(self, x):
+        return self.readout(self.yat(x))                            # logits
+
+class ReluMLP(nnx.Module):
+    def __init__(self, *, rngs):
+        self.l1 = nnx.Linear(784, K, rngs=rngs)
+        self.l2 = nnx.Linear(K, 10, rngs=rngs)
+    def __call__(self, x):
+        return self.l2(jax.nn.relu(self.l1(x)))                     # logits
+```
+
+Both are one hidden layer of 50 units, `784 -> 50 -> 10`. The Yat net's prototypes are seeded from training images, the ReLU net is the same shape, and both train with plain cross-entropy. That last detail matters for the story: nothing in the objective ever asks the confidence to be honest, only correct.
+
+```python
+import optax
+
+@nnx.jit
+def train_step(model, opt, xb, yb):
+    def loss_fn(m):
+        return optax.softmax_cross_entropy_with_integer_labels(m(xb), yb).mean()
+    loss, grads = nnx.value_and_grad(loss_fn)(model)
+    opt.update(model, grads)
+    return loss
+```
+
+The data split is fixed once and reused for both nets: 55,000 Fashion-MNIST images to train on, 5,000 held out for temperature scaling only, the full 10,000 test set for the diagrams, and MNIST's test digits as the out-of-distribution probe. We train each net on three seeds (0, 1, 2) so every verdict below carries an error bar.
+
+## The forecaster's test, in code
+
+How do you catch a network overstating its confidence? Bin its predictions by claimed confidence and, in each bin, compare the claim against the accuracy it actually delivered. That comparison is the reliability diagram, and averaging its per-bin gaps, weighted by how many predictions live in each bin, is the expected calibration error. Confidence is read identically from both nets: softmax the logits, take the max.
+
+```python
+import numpy as np
+
+def softmax(z):
+    z = z - z.max(1, keepdims=True); e = np.exp(z)
+    return e / e.sum(1, keepdims=True)
+
+def reliability(z, y, n_bins=15):
+    p = softmax(z); conf = p.max(1); pred = p.argmax(1)
+    correct = (pred == y).astype(float)
+    edges = np.linspace(0, 1, n_bins + 1)
+    idx = np.clip(np.digitize(conf, edges[1:-1]), 0, n_bins - 1)
+    count = np.zeros(n_bins); mconf = np.zeros(n_bins); macc = np.zeros(n_bins)
+    for b in range(n_bins):
+        m = idx == b
+        count[b] = m.sum()
+        if count[b] > 0:
+            mconf[b] = conf[m].mean(); macc[b] = correct[m].mean()
+    ece = float((count / len(y) * np.abs(macc - mconf)).sum())      # count-weighted |acc - conf|
+    return count, mconf, macc, ece
+```
+
+Run it on both nets and the staircases part ways. The ReLU bars land on the diagonal; the Yat bars sag below it, claiming more than they deliver in almost every bin.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/calib-staircase.png" alt="Two reliability diagrams computed from the seed-0 test logits, the Yat net's bars sagging below the diagonal with red overconfidence strips while the ReLU net's bars hug the diagonal" loading="lazy" width="968" height="495" />
+  <figcaption>The reliability diagram computed from the exported test logits. Every prediction drops into one of 15 confidence bins; the bar is the delivered accuracy in that bin, the tick is the average claimed confidence, and the strip between them is the overconfidence gap. The Yat net (left) sits below the diagonal almost everywhere, ECE 7.6% on this seed; the ReLU net (right) hugs it, ECE 1.7%. Rendered by <code>scripts/render_calibration_gifs.py</code>.</figcaption>
+</figure>
+
+Averaged over the three seeds the numbers are stark. The ReLU net's ECE is **1.76% ± 0.22**; the Yat net's is **6.20% ± 1.13**, between three and four times worse. The proper scoring rules agree: NLL 0.360 vs 0.577, Brier 0.181 vs 0.244.
+
+```python
+def nll_of(z, y):
+    p = softmax(z)
+    return float(-np.log(np.clip(p[np.arange(len(y)), y], 1e-12, 1)).mean())
+
+def brier_of(z, y):
+    p = softmax(z); onehot = np.eye(10)[y]
+    return float(((p - onehot) ** 2).sum(1).mean())
+```
+
+## Why the bounded net brags
+
+Where does the overconfidence come from? Not from the objective, and not from a bug: from the units. A Yat unit is a kernel score, and near its prototype that score is large, with a median strongest match around 207 on the seed-0 test set. The linear readout inherits that dynamic range, so the median top logit of the Yat net is **28.9** against the ReLU net's **7.2**. And the softmax does not read logits, it reads gaps between them, exponentiated. A lead of a few units already pins the winner near probability one.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/calib-saturation.png" alt="The softmax confidence curve rising and saturating at 1 as the winning logit's lead grows, with each net's real median gap and top-logit magnitude marked" loading="lazy" width="946" height="495" />
+  <figcaption>The softmax as a function of the winner's lead over the runner-up. Past a lead of a few units it is flat at one. The markers sit at each net's true median top-two gap, labeled with the median top-logit magnitude and the fraction of test predictions above 0.99 confidence, all computed from the exported logits. The Yat net's huge logits push more of its answers onto the flat, so it sounds certain more often. Rendered by <code>scripts/render_calibration_gifs.py</code>.</figcaption>
+</figure>
+
+So the fix should be a unit conversion. That is temperature scaling.
+
+## One knob, fit on held-out data
+
+Temperature scaling divides every logit by a single scalar `T` before the softmax, and picks `T` on the held-out split by minimizing NLL. It never touches the argmax, so accuracy is untouched; it only changes how loudly the network states what it already decided.
+
+```python
+from scipy.optimize import minimize_scalar
+
+def fit_temperature(z_val, y_val):
+    def obj(logT):                                                  # search in log-space, T > 0
+        return nll_of(z_val / np.exp(logT), y_val)
+    r = minimize_scalar(obj, bounds=(np.log(0.05), np.log(20.0)), method='bounded')
+    return float(np.exp(r.x))
+```
+
+Turn the knob and the Yat reliability curve rotates toward the diagonal as its held-out loss draws down to its minimum. That minimum lands at `T = 2.07` on seed 0, meaning the raw net was more than twice as loud as it should have been.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/calib-temperature.gif" alt="The Yat reliability curve rotating toward the diagonal as the temperature increases, next to the test NLL curve drawing down to its minimum at the fitted temperature" loading="lazy" width="968" height="506" />
+  <figcaption>Dividing the Yat logits by a temperature T, recomputed live from the exported logits. Left: the reliability curve rotating toward the diagonal as T grows. Right: the loss the knob minimizes, drawing itself out and bottoming near the fitted T = 2.07. The knob only rescales, so the accuracy never moves. Rendered by <code>scripts/render_calibration_gifs.py</code>.</figcaption>
+</figure>
+
+Does the prototype net at least need less correction? The opposite. The ReLU net's fitted temperature is **1.17 ± 0.02**, a nudge; the Yat net needs **1.68 ± 0.29**, and its temperature swings from 1.37 to 2.07 across the three seeds while the ReLU net's barely moves. Worse, one knob cannot close the gap, because the Yat curve is bent rather than merely tilted: after scaling the ReLU net sits at ECE **0.82%** and the Yat net at **3.11%**, still three to four times worse. Calibration lives in the head, and both nets have the same head. The kernel just feeds it wilder numbers.
+
+## The number the softmax throws away
+
+That is the in-distribution verdict, and it goes to the black box. But the earlier posts made their "knows when it doesn't know" claim off-distribution, so feed both nets MNIST digits, handwriting shown to a garment classifier, and read the confidence differently. Softmax has a blind spot: add a constant to every logit and it does not move, so it is a contrast reader that cannot see the absolute level. And absolute level is exactly how a bounded kernel says "I recognize nothing here": off-distribution every well is shallow and all ten scores sink together. So ask the same forward pass two questions, one before the softmax and one after.
+
+```python
+# the pre-softmax field magnitude: the strongest kernel match, straight off the Yat layer
+kmax_test = np.asarray(yat.yat(jnp.asarray(Xte))).max(1)            # [N_test]
+kmax_ood  = np.asarray(yat.yat(jnp.asarray(Xood))).max(1)           # [N_ood]
+
+# the same forward pass, read after the softmax
+conf_test = softmax(logits_of(yat, Xte)).max(1)
+conf_ood  = softmax(logits_of(yat, Xood)).max(1)
+
+def auroc(pos, neg):                                                # rank-based, ties averaged
+    s = np.concatenate([pos, neg]); order = np.argsort(s, kind='mergesort')
+    ranks = np.empty(len(s)); sr = s[order]; i = 0
+    while i < len(sr):
+        j = i
+        while j + 1 < len(sr) and sr[j + 1] == sr[i]: j += 1
+        ranks[order[i:j + 1]] = 0.5 * (i + j) + 1; i = j + 1
+    rp = ranks[:len(pos)].sum()
+    return float((rp - len(pos) * (len(pos) + 1) / 2) / (len(pos) * len(neg)))
+```
+
+Read before the softmax, the two datasets pull apart; read after it, they smear together.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/calib-channels.png" alt="Two histograms side by side: the field-magnitude channel separating Fashion from MNIST cleanly, the softmax-confidence channel leaving them overlapping" loading="lazy" width="968" height="484" />
+  <figcaption>One Yat net, two readings of the same forward pass, computed from the exported runs. Left: the strongest kernel match on a log axis; Fashion (blue) sits high, MNIST (red) sits low, and they barely overlap, AUROC 0.917. Right: the softmax confidence built from those same scores, where both datasets pile toward the right wall, AUROC 0.929 on this seed but far less stable. Rendered by <code>scripts/render_calibration_gifs.py</code>.</figcaption>
+</figure>
+
+Across the three seeds the field magnitude separates Fashion from MNIST at AUROC **0.916 ± 0.008**. The comparison the literature demands is the ReLU net's max logit, the well-known max-logit and energy score, which reaches **0.935 ± 0.005**, a touch better; magnitude as an OOD signal is not the kernel's invention. What the field wins is not the third decimal, it is stability and meaning: a kernel score of 27 against a typical 207 is a sentence you can say out loud before running any benchmark, and it holds through every retraining.
+
+## The channel that does not wobble
+
+Which is the last thing to see, because it is the whole reason to route the OOD question around the softmax. Retrain the net three times and recompute both channels, and the softmax channel's separation lurches from seed to seed while the field channel holds.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/calib-seeds.png" alt="A grouped dot chart of three retrainings per channel: the softmax-confidence AUROCs spread from 0.81 to 0.92, the field-magnitude AUROCs cluster tightly near 0.92" loading="lazy" width="924" height="484" />
+  <figcaption>Three real retrainings, each channel's Fashion-vs-MNIST AUROC recomputed from the exported per-seed scores, one point per seed. The softmax-confidence channel spreads from 0.92 down to 0.81; the field-magnitude channel clusters between 0.90 and 0.92 every time. Its worst seed drops near the ReLU max-logit baseline while the field never has a bad day. Same network, same question, one answer you can deploy and one you cannot. Rendered by <code>scripts/render_calibration_gifs.py</code>.</figcaption>
+</figure>
+
+The field magnitude reads AUROC 0.914, 0.924, 0.901 across the seeds; the softmax reads 0.924, 0.905, 0.809. On a bad retraining the softmax channel is barely better than the ReLU baseline, while the field never has the bad day. That is the abstention rule from the earlier posts, now with its error bars measured.
+
+## What the experiment settled
+
+The scoreboard, three seeds, nothing cherry-picked. In-distribution the ReLU net wins outright: ECE 1.76% against 6.20%, temperature 1.17 against 1.68, and it stays ahead after both are corrected, because the kernel's dynamic range saturates the softmax. Off-distribution the field magnitude, the number the softmax deletes, separates Fashion from MNIST at a steady 0.92 while the softmax channel wobbles. Calibration is a property of the probability head, not of the feature geometry: a softmax bolted onto a kernel launders similarity scores into false certainty, and the honest deployment recipe is a thermometer for the probabilities and a seismograph, the un-normalized field, for the "is this even my world?" question.
+
+---
+
+*Calibration of modern networks and temperature scaling are [Guo et al. (2017)](https://arxiv.org/abs/1706.04599); the binned ECE is [Naeini et al. (2015)](https://ojs.aaai.org/index.php/AAAI/article/view/9602); the Brier score is [Brier (1950)](https://journals.ametsoc.org/view/journals/mwre/78/1/1520-0493_1950_078_0001_vofeit_2_0_co_2.xml); max-softmax and energy/logit OOD scores are [Hendrycks and Gimpel (2017)](https://arxiv.org/abs/1610.02136) and [Liu et al. (2020)](https://arxiv.org/abs/2010.03759); the Yat kernel is [Bouhsine (2026)](https://arxiv.org/abs/2605.03262). The conceptual companion is [When 80% Should Mean 80%](/blog/calibration-of-a-bounded-net/). Every number is printed by `scripts/yat_calibration.py`.*
+
+<CiteAs slug="calibration-of-a-bounded-net-jax-flax-nnx" title="Calibrating a Bounded Net, in JAX/Flax NNX" pubDate="2026-07-04T10:00:00-07:00" />
+
+<style>{`
+.jax-fig { margin: 1.8rem auto; text-align: center; }
+.jax-fig img { max-width: 520px; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; background: #fbf8f1; }
+.jax-fig-wide img { max-width: 880px; }
+.jax-fig figcaption { margin-top: 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--fg-muted); max-width: 64ch; margin-left: auto; margin-right: auto; }
+`}</style>

@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """How many modes to spend. The rank-d spectral codebook reconstructs the label
 kernel out of its top d eigenmodes; the reconstruction error is exactly the tail
-of the spectrum. Live in JAX we sweep the budget d from 1 to C and watch the
-rank-d Gram matrix sharpen back into the target kernel while kernel-target
-alignment climbs toward 1 and the reconstruction error falls toward 0. Every
-number is a jnp.linalg.eigh away."""
+of the spectrum. This is not a temporal process -- it is a budget you choose --
+so it renders as a static figure: the target kernel, three rank-d reconstructions
+(d = 1, 3, C), and the full alignment-up / error-down curves over every budget d.
+Every number is a jnp.linalg.eigh away."""
 from __future__ import annotations
 from pathlib import Path
-import imageio.v2 as imageio
 import jax, jax.numpy as jnp
 import numpy as np
 import matplotlib
@@ -18,11 +17,10 @@ from PIL import Image  # noqa: E402
 
 jax.config.update("jax_enable_x64", True)
 ROOT = Path(__file__).resolve().parents[1]
-OUT_GIF = ROOT / "public" / "mds-reconstruction.gif"
+OUT_PNG = ROOT / "public" / "mds-reconstruction.png"
 OUT_PREVIEW = ROOT / "public" / "mds-reconstruction-preview.png"
 
-W, H, FPS, C, SIG, HOLD = 1100, 520, 14, 10, 2.6, 8
-FRAMES = C * HOLD
+W, H, C, SIG = 1100, 520, 10, 2.6
 BG, PANEL, INK, MUTED, BORDER, ACCENT, BLUE, GREEN = "#fbfaf6", "#ffffff", "#181818", "#666a70", "#ded9cb", "#b3661b", "#4a7fb3", "#3a8f5e"
 KMAP = LinearSegmentedColormap.from_list("kern", ["#1d3a5f", "#4a7fb3", "#fbf8f1", "#d89a5a", "#b3661b"])
 
@@ -45,56 +43,59 @@ def rank_d(d):
     return Shat, err, align
 
 
-CURVE = [rank_d(d) for d in range(1, C + 1)]                    # precompute the full sweep
+CURVE = [rank_d(d) for d in range(1, C + 1)]                    # the full sweep, all budgets at once
 
 
-def draw(frame):
-    d = 1 + frame // HOLD
-    Shat, err, align = CURVE[d - 1]
-
+def draw():
     fig = plt.figure(figsize=(W / 100, H / 100), dpi=100, facecolor=BG)
     fig.text(0.5, 0.95, "How many modes to spend", ha="center", color=INK, fontsize=18, weight="bold")
     fig.text(0.5, 0.905, "the rank-d codebook rebuilds the label kernel; the error is the tail of the spectrum", ha="center", color=MUTED, fontsize=11.5)
 
-    # target kernel
-    axt = fig.add_axes([0.04, 0.16, 0.2, 0.6]); axt.imshow(Snp, cmap=KMAP, vmin=-VMAX, vmax=VMAX)
-    axt.set_xticks([]); axt.set_yticks([]); [sp.set_color(BORDER) for sp in axt.spines.values()]
-    axt.set_title("target kernel S", color=INK, fontsize=10.5, weight="bold", pad=5)
+    # target kernel, then three reconstructions at increasing budget
+    show = [("target kernel S", Snp, None, INK)]
+    for d in (1, 3, C):
+        Shat, err, align = CURVE[d - 1]
+        show.append((f"rank-{d}   (err {err:.2f})", Shat, d, ACCENT))
+    for k, (title, mat, d, col) in enumerate(show):
+        ax = fig.add_axes([0.035 + k * 0.125, 0.5, 0.11, 0.33])
+        ax.imshow(mat, cmap=KMAP, vmin=-VMAX, vmax=VMAX)
+        ax.set_xticks([]); ax.set_yticks([])
+        lw = 2 if d is not None else 1
+        [(sp.set_color(col), sp.set_linewidth(lw)) for sp in ax.spines.values()]
+        ax.set_title(title, color=col, fontsize=9.5, weight="bold", pad=4)
 
-    # rank-d reconstruction
-    axr = fig.add_axes([0.265, 0.16, 0.2, 0.6]); axr.imshow(Shat, cmap=KMAP, vmin=-VMAX, vmax=VMAX)
-    axr.set_xticks([]); axr.set_yticks([]); [sp.set_color(ACCENT) for sp in axr.spines.values()]
-    [sp.set_linewidth(2) for sp in axr.spines.values()]
-    axr.set_title(f"rank-{d} reconstruction", color=ACCENT, fontsize=10.5, weight="bold", pad=5)
-
-    # eigenspectrum, first d highlighted
-    axs = fig.add_axes([0.53, 0.55, 0.43, 0.26]); axs.set_facecolor(PANEL)
+    # spectrum: every mode, normalized
+    axs = fig.add_axes([0.055, 0.13, 0.24, 0.28]); axs.set_facecolor(PANEL)
     bars = w_pos / (w_pos[0] + 1e-12)
-    axs.bar(np.arange(C), bars, color=[ACCENT if i < d else BORDER for i in range(C)])
-    axs.set_ylim(0, 1.05); axs.set_xticks([]); axs.set_yticks([]); [sp.set_color(BORDER) for sp in axs.spines.values()]
-    axs.set_title("spectrum: modes kept (orange)", color=INK, fontsize=10, weight="bold", pad=4)
+    axs.bar(np.arange(C), bars, color=ACCENT)
+    axs.set_ylim(0, 1.05); axs.set_xticks(range(C)); axs.set_xticklabels(range(1, C + 1), color=MUTED, fontsize=8)
+    axs.set_yticks([]); [sp.set_color(BORDER) for sp in axs.spines.values()]
+    axs.set_xlabel("mode", color=MUTED, fontsize=9)
+    axs.set_title("spectrum of the label kernel", color=INK, fontsize=10, weight="bold", pad=4)
 
-    # alignment up / error down
-    axc = fig.add_axes([0.53, 0.13, 0.43, 0.3]); axc.set_facecolor(PANEL)
-    ds = np.arange(1, d + 1)
+    # alignment up / error down across the whole budget
+    axc = fig.add_axes([0.40, 0.13, 0.55, 0.34]); axc.set_facecolor(PANEL)
+    ds = np.arange(1, C + 1)
     aligns = [CURVE[k - 1][2] for k in ds]; errs = [CURVE[k - 1][1] for k in ds]
-    axc.plot(ds, aligns, color=GREEN, lw=2.2, marker="o", ms=3, label="kernel-target alignment ↑")
-    axc.plot(ds, errs, color=BLUE, lw=2.2, marker="o", ms=3, label="reconstruction error ↓")
+    axc.plot(ds, aligns, color=GREEN, lw=2.4, marker="o", ms=4, label="kernel-target alignment ↑")
+    axc.plot(ds, errs, color=BLUE, lw=2.4, marker="o", ms=4, label="reconstruction error ↓")
+    for d, col in ((1, ACCENT), (3, ACCENT), (C, ACCENT)):
+        axc.axvline(d, color=col, lw=1, ls=(0, (2, 3)), alpha=0.5)
     axc.set_xlim(0.8, C + 0.2); axc.set_ylim(-0.03, 1.05); axc.set_xticks(range(1, C + 1))
-    axc.tick_params(colors=MUTED, labelsize=8); axc.set_yticks([0, 0.5, 1.0]); axc.set_yticklabels(["0", ".5", "1"], color=MUTED, fontsize=8)
+    axc.tick_params(colors=MUTED, labelsize=8.5); axc.set_yticks([0, 0.5, 1.0]); axc.set_yticklabels(["0", ".5", "1"], color=MUTED, fontsize=8.5)
     [sp.set_color(BORDER) for sp in axc.spines.values()]
-    axc.set_xlabel("budget d (modes spent)", color=MUTED, fontsize=9.5)
-    axc.legend(loc="center right", fontsize=8.5, frameon=False)
+    axc.set_xlabel("budget d (modes spent)", color=MUTED, fontsize=10)
+    axc.set_title("what each budget buys", color=INK, fontsize=10.5, weight="bold", pad=4)
+    axc.legend(loc="center right", fontsize=9, frameon=False)
 
-    fig.text(0.265, 0.07, f"d = {d}   ·   alignment {align:.2f}   ·   error {err:.2f}", ha="center", color=INK, fontsize=11, weight="bold")
     fig.canvas.draw(); rgba = np.asarray(fig.canvas.buffer_rgba()).copy(); plt.close(fig); return rgba
 
 
 def main():
-    frames = [draw(i) for i in range(FRAMES)]
-    Image.fromarray(frames[int(FRAMES * 0.45)]).save(OUT_PREVIEW)
-    imageio.mimsave(OUT_GIF, frames, duration=1 / FPS, loop=0, palettesize=128, subrectangles=True)
-    print("wrote", OUT_GIF)
+    buf = draw()
+    Image.fromarray(buf).save(OUT_PNG)
+    Image.fromarray(buf).save(OUT_PREVIEW)
+    print("wrote", OUT_PNG)
 
 
 if __name__ == "__main__":

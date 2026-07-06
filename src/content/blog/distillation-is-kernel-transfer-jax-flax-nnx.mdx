@@ -1,0 +1,224 @@
+---
+title: "Distillation as Kernel Transfer, in JAX/Flax NNX"
+seoTitle: "Kernel Distillation in JAX/Flax NNX"
+seoDescription: "Run the label-free distillation experiment in JAX/Flax NNX: extract the class kernel, train a student on pairwise relations only, probe it, watch it inherit."
+description: "A runnable companion: the five-run distillation experiment in JAX/Flax NNX. Train a teacher CNN, extract its class-similarity kernel S = E[softmax(z/T) softmax(z/T)ᵀ], train a student on nothing but pairwise relations (no labels, no soft targets), and measure it against the label ceiling and the random floor with a linear and a nearest-centroid probe. Every number is from a real run, with six GIFs that animate the kernel assembling, the temperature dial, the handoff, the spectrum inheritance, the probe race, and the inherited mistakes."
+pubDate: 2026-07-04T10:00:00-07:00
+draft: false
+tags: [ml, knowledge-distillation, dark-knowledge, kernel-methods, jax, flax, nnx, implementation, representation-learning, fashion-mnist]
+references:
+  - authors: "Hinton, G., Vinyals, O., Dean, J."
+    year: 2015
+    title: "Distilling the Knowledge in a Neural Network"
+    arxiv: "1503.02531"
+  - authors: "Park, W., Kim, D., Lu, Y., Cho, M."
+    year: 2019
+    title: "Relational Knowledge Distillation"
+    venue: "CVPR 2019"
+    arxiv: "1904.05068"
+  - authors: "Tung, F., Mori, G."
+    year: 2019
+    title: "Similarity-Preserving Knowledge Distillation"
+    venue: "ICCV 2019"
+    arxiv: "1907.09682"
+  - authors: "Kornblith, S., Norouzi, M., Lee, H., Hinton, G."
+    year: 2019
+    title: "Similarity of Neural Network Representations Revisited"
+    venue: "ICML 2019"
+    arxiv: "1905.00414"
+  - authors: "Xiao, H., Rasul, K., Vollgraf, R."
+    year: 2017
+    title: "Fashion-MNIST: a Novel Image Dataset for Benchmarking Machine Learning Algorithms"
+    arxiv: "1708.07747"
+keywords:
+  - kernel distillation JAX
+  - relational knowledge distillation Flax NNX
+  - class-similarity kernel extraction
+  - label-free distillation
+  - centered kernel alignment
+  - nearest-centroid probe
+---
+import CiteAs from '../../components/CiteAs.astro';
+
+*The [explainer](/blog/distillation-is-kernel-transfer/) argued that what distillation transfers is a geometry, a class-similarity kernel, not an answer key, and it ran an experiment to prove it: a student trained on nothing but pairwise relations, no labels anywhere, that still out-organizes the label-trained student on the geometry-native probe. This is the implementation. The teacher is a small [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html) CNN; the kernel is a five-line extraction from its softened outputs; the relational student trains with a loss that never names a class. There is a real training loop here, but the student's loss never sees a label. Every number is from a real run; the script is `scripts/kernel_distill.py`.*
+
+*Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/distillation-is-kernel-transfer-jax): the same code, block by block, with the math written out and every figure reproduced from a real run.*
+
+## The teacher, an ordinary CNN
+
+Where does dark knowledge come from? From a network that already knows something. So the first thing to build is an honest teacher: a small convolutional classifier on Fashion-MNIST, trained the usual way on labels. The one design choice worth naming is that the module exposes its penultimate layer through an `embed` method, because everything below reads geometry off that latent, never off the logits.
+
+```python
+import jax, jax.numpy as jnp, optax
+from flax import nnx
+
+class CNN(nnx.Module):
+    def __init__(self, c1, c2, d, rngs):
+        self.conv1 = nnx.Conv(1, c1, kernel_size=(3, 3), rngs=rngs)
+        self.conv2 = nnx.Conv(c1, c2, kernel_size=(3, 3), rngs=rngs)
+        self.fc = nnx.Linear(c2 * 7 * 7, d, rngs=rngs)
+        self.head = nnx.Linear(d, 10, rngs=rngs)
+
+    def embed(self, x):                       # the latent the probes and Grams read
+        x = nnx.relu(self.conv1(x)); x = nnx.max_pool(x, (2, 2), strides=(2, 2))
+        x = nnx.relu(self.conv2(x)); x = nnx.max_pool(x, (2, 2), strides=(2, 2))
+        return self.fc(x.reshape(x.shape[0], -1))
+
+    def __call__(self, x):
+        return self.head(nnx.relu(self.embed(x)))
+
+teacher = CNN(16, 32, 64, nnx.Rngs(0))        # student is the same, thinner: CNN(8, 16, 32)
+```
+
+Trained six epochs with Adam on plain cross-entropy, this teacher reaches **87.2%** test accuracy. That is the reference geometry. Nothing about it is special; the point of the experiment is what can be recovered from its outputs alone.
+
+## The kernel, extracted in five lines
+
+What does one softened output carry? At temperature $T$, the teacher's softmax over a garment is a vector of resemblances, and the outer product $p\,p^{\top}$ is one noisy receipt of how the classes relate from where that garment sits. Average the receipts over the test set and the class-similarity kernel falls out:
+
+$$
+S(T) = \mathbb{E}\big[\, p\, p^{\top} \big], \qquad p = \mathrm{softmax}(z/T).
+$$
+
+In code that is a softmax and a mean of outer products, nothing more. The same three lines, swept over a grid of temperatures, give the whole story of how much geometry the outputs leak.
+
+```python
+def class_kernel(z, T):                        # z: [N, 10] teacher test logits
+    p = jax.nn.softmax(z / T, axis=1)
+    S = (p[:, :, None] * p[:, None, :]).mean(0)  # E[p pᵀ], a 10x10 kernel
+    d = jnp.sqrt(jnp.diag(S))
+    return S / jnp.outer(d, d)                  # diagonal-normalized to unit self-similarity
+```
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/distill-kernel-assemble.gif" alt="A running-mean class kernel building up from single outer products as real teacher outputs stream one garment at a time; the fed row and column light up and the shirt-family and shoe-family blocks emerge from the average" loading="lazy" width="940" height="400" />
+  <figcaption>The kernel as a running mean of receipts. Left: a real test garment and the teacher's softened output p at T = 4. Middle: the single receipt p pᵀ that output contributes, its class row and column highlighted. Right: the estimate S accumulating. Individual outputs are noisy, but by a couple hundred examples the shirt-family and shoe-family blocks stand out of the average. Every number is a real teacher output from the run. Rendered by <code>scripts/render_distill_gifs.py</code>.</figcaption>
+</figure>
+
+Read across the temperature grid, the kernel's mean off-diagonal climbs from **0.032** at $T=1$ through **0.298** at $T=4$ to **0.902** at $T=16$, and its effective rank falls from **8.9** to **7.0** to **4.3**. Cold, the classes are strangers and $S$ is near the identity; hot, everything resembles everything and $S$ washes toward uniform. The choice $T=4$ selects a specific geometry in between, and everything the student inherits is downstream of it.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/distill-temperature-dial.gif" alt="A temperature dial sweeping T from 0.5 to 32; the class kernel morphs from near-identity through a blocky family structure to near-uniform, while the real mean-off-diagonal curve and effective-rank curve draw themselves alongside" loading="lazy" width="920" height="420" />
+  <figcaption>The temperature dial, recomputed live from the run's real logits. Left: S(T) morphing from identity (classes are strangers) through blocks (the families stand out) to uniform (everything resembles everything). Right: the run's real mean-off-diagonal and effective-rank curves drawing themselves across the dial. Temperature is the knob on how much geometry leaves the teacher. Rendered by <code>scripts/render_distill_gifs.py</code>.</figcaption>
+</figure>
+
+## The standard-KD student, for reference
+
+Before stripping distillation to the kernel, it helps to have the ordinary version in the same code. Classic distillation matches the student's softened output to the teacher's soft targets by a KL divergence at temperature $T$, with the usual $T^2$ scaling so the gradient magnitude survives the softening. No hard labels enter, but the per-class structure of the teacher's output does: the student is still told, class by class, what the answer should look like.
+
+```python
+@nnx.jit
+def step_kd(model, opt, x, p_t):               # p_t: teacher soft targets at T
+    def loss_fn(m):
+        logq = jax.nn.log_softmax(m(x) / TEMP)
+        return (TEMP ** 2) * (p_t * (jnp.log(p_t + 1e-12) - logq)).sum(1).mean()
+    loss, grads = nnx.value_and_grad(loss_fn)(model)
+    opt.update(model, grads)
+    return loss
+```
+
+The KD student reaches **84.6%** direct accuracy, **85.8%** linear-probe. On a small, clean dataset with abundant labels, soft targets have little to add over the labels themselves, so this baseline does not beat the label-trained student. That is expected, and beside the point. The question is not whether distillation wins; it is what distillation *moves*.
+
+## The kernel-only student, where no label appears
+
+Here is the loss the whole experiment turns on. Strip away the labels, the soft targets, even the teacher's head. For each batch, the teacher's softened outputs define a cosine similarity for every *pair* of examples, and the student's only job is to make its embedding geometry reproduce that Gram. The loss never mentions a class; it only ever says *these two should be this similar*.
+
+$$
+\mathcal{L} = \frac{1}{|B|(|B|-1)} \sum_{i \neq j}
+\Big( \langle \hat e_i, \hat e_j \rangle - \langle \hat p_i, \hat p_j \rangle \Big)^{2}
+$$
+
+```python
+@nnx.jit
+def step_kernel(model, opt, x, pn):            # pn: L2-normalized teacher soft outputs
+    def loss_fn(m):
+        g_t = pn @ pn.T                        # teacher's target Gram for this batch
+        e = m.embed(x)
+        en = e / (jnp.linalg.norm(e, axis=1, keepdims=True) + 1e-8)
+        g_s = en @ en.T                        # student's embedding Gram
+        mask = 1.0 - jnp.eye(x.shape[0])       # off-diagonal only: relations, not norms
+        return (((g_s - g_t) ** 2) * mask).sum() / mask.sum()
+    loss, grads = nnx.value_and_grad(loss_fn)(model)
+    opt.update(model, grads)
+    return loss
+```
+
+There is no classifier head in this student's training path at all. The teacher's soft outputs enter only as `pn`, a Gram target; no integer label is ever passed. Watch the geometry cross the wire: the student's batch Gram over thirty held-out garments, checkpointed every epoch, develops the teacher's block structure while the relational loss melts.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/distill-handoff.gif" alt="Two Gram matrices side by side over thirty class-sorted garments; the student's Gram, starting nearly featureless, develops the teacher target's shirt-family and shoe-family blocks epoch by epoch from real checkpoints, while a relational-loss curve falls to near zero" loading="lazy" width="920" height="390" />
+  <figcaption>The handoff, from real per-epoch checkpoints. Left: the teacher's target Gram on 30 garments (class-colored strips; the blocks are the shirt and shoe families). Middle: the seed-0 student's Gram over the same garments at each recorded epoch, developing those blocks without ever hearing a class name. Right: the run's real relational loss melting. Rendered by <code>scripts/render_distill_gifs.py</code>.</figcaption>
+</figure>
+
+## Measuring everyone the same way
+
+Since the relational student has no head, competence has to be read off its frozen embedding, and the fairest thing is to read every model's embedding the same way. Two probes, and labels enter only here, in the ruler, never in the student's gradient. A linear probe is allowed to shear and re-weight the space to find the classes; a nearest-centroid probe is not allowed to fix anything, so it only succeeds if the classes already sit in tight, well-placed clumps.
+
+```python
+from sklearn.linear_model import LogisticRegression
+
+def probes(model, Xtr, ytr, Xte, yte):
+    Etr, Ete = embed_of(model, Xtr), embed_of(model, Xte)   # frozen latents
+    linear = 100.0 * LogisticRegression(max_iter=1000).fit(Etr, ytr).score(Ete, yte)
+    mu = np.stack([unit(Etr)[ytr == c].mean(0) for c in range(10)])   # class centroids
+    pred = (unit(Ete) @ unit(mu).T).argmax(1)               # nearest centroid, no weights
+    return linear, 100.0 * (pred == yte).mean()
+```
+
+The five runs, from the run (relational student across seeds 0, 1, 2; everything else seed 0):
+
+| run | training signal | linear probe | nearest centroid |
+| --- | --- | --- | --- |
+| teacher | labels | 88.1% | 81.7% |
+| soft targets (KD) | teacher's $p(T{=}4)$ | 85.8% | 79.0% |
+| **relations only** | **pairwise similarities** | **83.7 / 84.5 / 84.9%** | **81.2 / 81.0 / 81.4%** |
+| true labels | the answer key | 87.0% | 80.0% |
+| random init | nothing | 77.5% | 62.0% |
+
+The floor is high: a random CNN already probes at 77.5% linear, so nobody gets credit for the first three quarters of the scale. The interval that measures *training* runs from 77.5 to the label ceiling at 87.0, and the relations-only student lands at 83.7 to 84.9, about two thirds of what a label could add, from a signal that never contained a label. And on the ruler that cannot cheat, the nearest-centroid probe, the label-free student scores **81.2%**, *above* the label-trained student's 80.0% and essentially at the teacher's own 81.7%.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/distill-probe-race.gif" alt="Two panels of accuracy curves drawing themselves epoch by epoch, one for the linear probe and one for the nearest-centroid probe; the relations-only, KD, and label curves climb from the random floor, and on the centroid panel the relations-only curve ends above the label curve" loading="lazy" width="920" height="410" />
+  <figcaption>The probe race, from the run's real per-epoch curves. Left: linear probe. Right: nearest-centroid probe. Each run climbs from its random floor. On the geometry-native centroid probe the relations-only student finishes above the label-trained student: a student told only how pairs relate arranges its classes better than one told the answers. Rendered by <code>scripts/render_distill_gifs.py</code>.</figcaption>
+</figure>
+
+## Whose spectrum, and whose mistakes
+
+If a latent space is the spectral embedding of a class kernel, then a student trained on a kernel should not merely probe well; its latent geometry should *become* that kernel's, eigenvalue by eigenvalue. Two candidate kernels sit in the experiment: the teacher's own private latent geometry, and $S(T{=}4)$, the version of it that went through the softmax and out onto the wire. They are not the same object, and the student inherits the one that was actually handed over.
+
+```python
+def spectrum(G):                               # normalized eigenvalue profile of a 10x10 Gram
+    w = np.clip(np.linalg.eigvalsh(G)[::-1], 0, None)
+    return w / (w.sum() + 1e-12)
+```
+
+Measured, the copy is more faithful to the wire than the author is. By the last epoch the student's class-mean Gram agrees with $S(4)$ at CKA **0.976**, while the teacher's *own* latent Gram agrees with it at only **0.854**. In L1 spectrum distance the student sits at **0.24** from the transferred kernel but **0.47** from the teacher's private latent; the KD and label students, which fit answers rather than relations, stay close to the teacher-latent shape instead (L1 **0.06** and **0.03**).
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/distill-spectrum-inherit.gif" alt="Eigenvalue bars for the student's latent growing epoch by epoch from a random init toward the outline of the transferred kernel's spectrum, while dashed ticks marking the teacher's own private latent spectrum stay unmatched; an L1 gap readout falls to 0.24" loading="lazy" width="920" height="440" />
+  <figcaption>Spectrum inheritance, from the run's real per-epoch eigenvalues. The student's bars (orange) grow from a random init into the outline of the transferred kernel S(T=4) (blue), not into the teacher's own private latent (dashed ticks). The L1 gap to S(4) closes to 0.24 while the gap to the teacher's latent stays at 0.47. Nothing in the relational loss mentions eigenvalues. Rendered by <code>scripts/render_distill_gifs.py</code>.</figcaption>
+</figure>
+
+The inherited geometry even fails like the teacher. Rank every model's off-diagonal confusions on the test set and the relational student's mistake pattern correlates with the teacher's at **0.957** (the random control manages 0.712). The teacher's centroid probe sends stray Shirts mostly to T-shirt, Pullover, and Coat at rates 0.26, 0.22, 0.15; the label-free student's rates are 0.24, 0.23, 0.17. It did not just learn where the classes are; it learned which mistakes are natural.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/distill-errors-inherit.png" alt="Two confusion off-diagonal heatmaps side by side, teacher and label-free student, with a scatter of the paired mistake rates landing near the y = x line and a Pearson correlation of 0.957" loading="lazy" width="940" height="420" />
+  <figcaption>Inherited mistakes, every point real. The teacher's and the label-free student's off-diagonal confusion rates sit side by side; the paired rates land near the y = x line and the Pearson correlation over all pairs is the real 0.957, far above the random control's 0.712. The student inherits which confusions are natural. Rendered by <code>scripts/render_distill_gifs.py</code>.</figcaption>
+</figure>
+
+## What the code shows
+
+The whole experiment is one script and five networks. The teacher serializes its class kernel through its softened outputs; a student that matches nothing but pairwise relations reconstructs the embedding on its side of the wire, closes about two thirds of the random-to-labels gap, out-organizes the label-trained student on the geometry-native probe, and grows the transferred kernel's spectrum eigenvalue by eigenvalue. None of the numbers here are chosen. They are what `scripts/kernel_distill.py` prints, and the loss that produced the label-free student never once named a class.
+
+---
+
+*Relational distillation as a method is the RKD / similarity-preserving line ([Park et al., 2019](https://arxiv.org/abs/1904.05068); [Tung and Mori, 2019](https://arxiv.org/abs/1907.09682)); CKA is from [Kornblith et al. (2019)](https://arxiv.org/abs/1905.00414); the dark-knowledge puzzle from [Hinton et al. (2015)](https://arxiv.org/abs/1503.02531); [Fashion-MNIST](https://arxiv.org/abs/1708.07747) from Xiao et al. (2017). The conceptual companion is [Distillation Is a Geometry, Not an Answer Key](/blog/distillation-is-kernel-transfer/).*
+
+<CiteAs slug="distillation-is-kernel-transfer-jax-flax-nnx" title="Distillation as Kernel Transfer, in JAX/Flax NNX" pubDate="2026-07-04T10:00:00-07:00" />
+
+<style>{`
+.jax-fig { margin: 1.8rem auto; text-align: center; }
+.jax-fig img { max-width: 520px; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; background: #fbf8f1; }
+.jax-fig-wide img { max-width: 880px; }
+.jax-fig figcaption { margin-top: 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--fg-muted); max-width: 64ch; margin-left: auto; margin-right: auto; }
+`}</style>

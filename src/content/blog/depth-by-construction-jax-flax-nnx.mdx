@@ -1,0 +1,241 @@
+---
+title: "Building the Second Layer by Hand, in JAX/Flax NNX"
+seoTitle: "Depth by Construction in JAX/Flax NNX"
+description: "A runnable companion: build a whole second feature layer by hand in JAX, on top of the hand-built first. Named min-AND combinations of layer-1 edges (junctions, continuations, bends, stripes) feed the same constructed Yat head, no training anywhere. It reproduces the flat rung: 83.3% at layer 1, 82.9% with both, 78.8% from relations alone, and counts the combinatorial wall of 224 pairwise and 4,630 three-way types where construction stops."
+seoDescription: "Build a second hand-designed feature layer in JAX/Flax NNX: min-AND junctions on layer-1 edges, the same Yat head, no training, and the flat rung it measures."
+pubDate: 2026-07-04T10:00:00-07:00
+draft: false
+tags: [ml, kernels, interpretability, prototypes, computer-vision, construction, depth, jax, flax, nnx, yat, deep-learning]
+references:
+  - authors: "Hubel, D. H., Wiesel, T. N."
+    year: 1962
+    title: "Receptive Fields, Binocular Interaction and Functional Architecture in the Cat's Visual Cortex"
+    venue: "The Journal of Physiology 160, 106–154"
+  - authors: "Marr, D."
+    year: 1982
+    title: "Vision: A Computational Investigation into the Human Representation and Processing of Visual Information"
+    venue: "W. H. Freeman"
+  - authors: "Dalal, N., Triggs, B."
+    year: 2005
+    title: "Histograms of Oriented Gradients for Human Detection"
+    venue: "CVPR 2005"
+  - authors: "Xiao, H., Rasul, K., Vollgraf, R."
+    year: 2017
+    title: "Fashion-MNIST: a Novel Image Dataset for Benchmarking Machine Learning Algorithms"
+    arxiv: "1708.07747"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+keywords:
+  - second feature layer by hand JAX
+  - hand-built junction detectors
+  - min-AND combinations Flax NNX
+  - constructed Yat head depth
+  - combinatorial feature wall
+---
+import CiteAs from '../../components/CiteAs.astro';
+
+*The [explainer](/blog/depth-by-construction/) took the recipe for a second feature layer off the shelf, built junctions, continuations, bends and stripes by hand on top of the hand-built first layer, and measured a flat rung: 82.9% for both layers, against 83.3% for one. This is the implementation. Layer 2 is pure numpy, four lines of min-AND over the layer-1 maps; the head is the same [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html) module of placed k-means prototypes that votes with the Yat kernel, no training loop anywhere. Every number is from a real run; the script is `scripts/handbuilt_depth.py`.*
+
+*Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/depth-by-construction-jax-flax-nnx): the same code, block by block, with the math written out and every figure reproduced from a real run.*
+
+## What layer 2 is made of
+
+What can a second layer even say? Only things about the first. Layer 1's whole vocabulary is seven words per cell, six oriented-edge energies and a corner, so layer 2 has to be sentences that *relate* those words. The cheapest honest AND between two non-negative energies is their minimum, and four kinds of sentence fall out of it: a junction (two orientations in one cell), a continuation (one orientation one cell along its own direction), a bend (a continuation that arrives rotated a step), and a stripe (a parallel echo two cells across). Layer 1 comes in unchanged from the last companion, mean-pooled to a 14-by-14 cell grid so layer 2 has neighbours to reach into.
+
+```python
+import numpy as np, math
+from scipy.ndimage import convolve
+
+NB, NCH, CELL = 6, 7, 14                                  # 6 orientations + corner, on a 14x14 cell grid
+CENTERS = np.linspace(0, np.pi, NB, endpoint=False)
+CONTOUR = [(-math.sin(a), math.cos(a)) for a in CENTERS]  # unit step along each edge's own direction
+SX = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], 'float32'); SY = SX.T
+
+def channel_maps(X):                                      # layer 1, verbatim from the last post
+    gx = np.stack([convolve(im, SX, mode='nearest') for im in X])
+    gy = np.stack([convolve(im, SY, mode='nearest') for im in X])
+    mag = np.sqrt(gx ** 2 + gy ** 2) + 1e-6
+    ang = np.arctan2(gy, gx) % np.pi
+    out = [np.clip(1 - np.abs(((ang - CENTERS[b] + np.pi / 2) % np.pi) - np.pi / 2) / (np.pi / NB), 0, 1) * mag
+           for b in range(NB)]
+    out.append(np.abs(gx) * np.abs(gy))                   # corner
+    return np.stack(out, 1)                               # [n, 7, 28, 28]
+
+def cells(maps):                                          # 2x2 mean-pool to the 14x14 cell grid
+    n = len(maps)
+    return maps.reshape(n, NCH, CELL, 2, CELL, 2).mean((3, 5))
+```
+
+A junction is the whole idea in one picture: take the map of one orientation and the map of another, and keep only where both fire. That pointwise minimum is a new detector, computed from layer 1 exactly the way layer 1 was computed from pixels, with nothing fit.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/depth-junction-assembly.png" alt="Three panels on a real bag: the 30-degree edge map, the 90-degree edge map, and their pointwise minimum, a 30+90 junction detector that fires only at the corners where both orientations are present" loading="lazy" width="946" height="429" />
+  <figcaption>The entire mechanism of layer 2, on a real garment. Left, the 30° edge map of a bag; middle, its 90° edge map; right, their pointwise minimum, a detector that is bright only where <em>both</em> orientations are present in the same cell, which is what a junction is. This is <code>np.minimum(e1, e2)</code>, the cheapest honest AND of two non-negative energies, no parameter fit. Rendered by <code>scripts/render_depth_figs.py</code>.</figcaption>
+</figure>
+
+## The four lines that are the layer
+
+The whole second layer is those four sentences, written once and evaluated on the cell grid. A junction is a min of two orientations in place; a continuation is a min of an orientation with itself shifted one cell along its contour; a bend swaps the shifted partner for the neighbouring orientation; a stripe reaches across the edge instead of along it. The shift is bilinear, so a contour that runs at 30° is followed at 30°, not snapped to the pixel grid.
+
+```python
+def shift_frac(A, dy, dx):                                # sample A at (y+dy, x+dx), bilinear
+    y0, x0 = math.floor(dy), math.floor(dx); fy, fx = dy - y0, dx - x0
+    def sh(a, iy, ix):
+        out = np.zeros_like(a); h, w = a.shape[-2:]
+        ys, xs = max(0, -iy), max(0, -ix); ye, xe = min(h, h - iy), min(w, w - ix)
+        if ye > ys and xe > xs: out[..., ys:ye, xs:xe] = a[..., ys + iy:ye + iy, xs + ix:xe + ix]
+        return out
+    return ((1 - fy) * (1 - fx) * sh(A, y0, x0) + (1 - fy) * fx * sh(A, y0, x0 + 1)
+            + fy * (1 - fx) * sh(A, y0 + 1, x0) + fy * fx * sh(A, y0 + 1, x0 + 1))
+
+def l2_maps(C):                                           # [n, 33, 14, 14]: the named layer-2 vocabulary
+    E = C[:, :NB]; out = []
+    for b1 in range(NB):                                  # 15 junctions
+        for b2 in range(b1 + 1, NB):
+            out.append(np.minimum(E[:, b1], E[:, b2]))
+    for b in range(NB):                                   # 6 continuations
+        dx, dy = CONTOUR[b]
+        out.append(np.minimum(E[:, b], shift_frac(E[:, b], dy, dx)))
+    for b in range(NB):                                   # 6 bends: the continuation arrives rotated a step
+        dx, dy = CONTOUR[b]
+        nb = np.maximum(shift_frac(E[:, (b + 1) % NB], dy, dx), shift_frac(E[:, (b - 1) % NB], dy, dx))
+        out.append(np.minimum(E[:, b], nb))
+    for b in range(NB):                                   # 6 stripes: a parallel echo two cells across
+        gdx, gdy = math.cos(CENTERS[b]), math.sin(CENTERS[b])
+        echo = np.maximum(shift_frac(E[:, b], gdy * 2, gdx * 2), shift_frac(E[:, b], -gdy * 2, -gdx * 2))
+        out.append(np.minimum(E[:, b], echo))
+    return np.stack(out, 1)
+```
+
+Fifteen junction pairs, six continuations, six bends, six stripes: **33 named detectors**, each one sentence long. Re-pooled over a 4-by-4 grid that is **33 × 16 = 528 new dimensions**, and every one is still nameable ("a 30°+90° junction in the top-right region"). None of it was trained.
+
+## The head is the same placed module
+
+What classifies these features? The exact head from the first two companions, unchanged. The constructed Yat head is a Flax NNX module whose variables are *placed*, not learned: `W` holds k-means centroids of the training features, `A` is a one-hot table routing each prototype's vote to its class, and the forward pass is the Yat kernel against every prototype, then the per-class maximum, then an argmax. That it slots onto layer-2 features without touching a line is the point: depth changed the representation, not the classifier.
+
+```python
+from flax import nnx
+import jax, jax.numpy as jnp
+
+class YatHead(nnx.Module):
+    """Placed prototypes W (k-means centroids), one-hot votes A, nearest-prototype vote."""
+    def __init__(self, W, vote, b=0.5, eps=1.0):
+        self.W = nnx.Variable(jnp.asarray(W))                        # [K, D] prototypes, D = 343 or 528 or 871
+        self.A = nnx.Variable(jax.nn.one_hot(jnp.asarray(vote), 10))
+        self.b, self.eps = b, eps
+
+    def __call__(self, z):                                          # z: [N, D] features
+        dot = z @ self.W.value.T
+        d2 = (z ** 2).sum(1, keepdims=True) + (self.W.value ** 2).sum(1) - 2 * dot
+        ker = (dot + self.b) ** 2 / (d2 + self.eps)                 # the Yat kernel
+        scores = jnp.where(self.A.value.T[None].astype(bool), ker[:, None, :], -jnp.inf).max(-1)
+        return scores.argmax(-1)
+```
+
+There is still no `nnx.Param` in it. `nnx.Variable` is the right type for state an optimizer would never touch, and the whole depth experiment reuses this one module three times: on layer 1 alone, on layer 2 alone, and on the two concatenated.
+
+## The flat rung
+
+Now assemble it, which is just extract, z-score, place prototypes, set the softening ε from the data's own scale, and read the argmax. Doing that for layer 1 alone reproduces the number the series has carried since the first hand-built post.
+
+```python
+from sklearn.cluster import KMeans
+
+def build_and_eval(Ftr_raw, Fte_raw, ytr, yte, per=20):
+    mu, sd = Ftr_raw.mean(0), Ftr_raw.std(0) + 1e-6
+    Ftr, Fte = (Ftr_raw - mu) / sd, (Fte_raw - mu) / sd            # z-score into the head's space
+    W, vote = [], []
+    for c in range(10):
+        W += list(KMeans(per, n_init=2, random_state=0).fit(Ftr[ytr == c][:2500]).cluster_centers_)
+        vote += [c] * per
+    W = np.array(W, 'float32'); vote = np.array(vote)
+    d2 = (Fte ** 2).sum(1, keepdims=True) + (W ** 2).sum(1) - 2 * Fte @ W.T
+    eps = float(np.median(d2) * 0.1)                                # placed, like everything else
+    head = YatHead(W, vote, b=0.5, eps=eps)
+    return 100 * (np.asarray(head(jnp.asarray(Fte))) == yte).mean()
+
+# layer 1 alone (343 named dims) -> 83.3%
+```
+
+It prints **83.3%**. The obvious next move is to concatenate the 528 layer-2 dimensions onto the 343 and run the same head. That is the whole experiment, and the whole disappointment.
+
+```python
+Fc_tr = np.concatenate([F1tr, F2tr], 1)                            # 343 + 528 = 871 named dims
+Fc_te = np.concatenate([F1te, F2te], 1)
+acc = build_and_eval(Fc_tr, Fc_te, ytr, yte)                       # -> 82.9%
+```
+
+It prints **82.9%**, a move of −0.4 on a layer of century-old vision science. Iterating like on any model, each redesign a theory of what broke, does not help: junctions alone score **83.5%** (the best of six designs), and the rest land at 82.8, 83.0, 82.9, and, for a geometric-mean AND and a two-cell reach, 83.2 and 81.8. Six theories, six refutations by a few tenths.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/depth-six-designs.png" alt="Six bars, each a design iteration of the layer-2 vocabulary, all near 83 percent, with junctions-only highlighted as the best at 83.5 and two-cell-reach the worst at 81.8, against a dashed layer-1 baseline of 83.3" loading="lazy" width="924" height="528" />
+  <figcaption>The researcher's sweep, every number from the run. Six design iterations on the layer-2 vocabulary: junctions only (83.5, best, in teal), + continuations (82.8), + bends (83.0), + stripes (82.9), geometric-mean AND (83.2), two-cell reach (81.8). No theory rises above the layer-1 line by more than two tenths; the head shrugs at every new word offered. Rendered by <code>scripts/render_depth_figs.py</code>.</figcaption>
+</figure>
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/depth-ladder.png" alt="A horizontal accuracy ladder on the 78 to 87 percent range showing blue built-by-hand rungs clustered near 83 and the fully trained network alone in orange at 85.7" loading="lazy" width="936" height="576" />
+  <figcaption>The construction ladder, built (blue) against trained (orange), on the axis that magnifies the photo finish: raw pixels 79.0, layer 1 by hand 83.3, layer 2 alone 78.8, both layers 82.9, best of six 83.5, and the trained head on built features 83.2, all sitting on top of one another, while only the fully trained network keeps its 85.7. Rendered by <code>scripts/render_depth_figs.py</code>.</figcaption>
+</figure>
+
+## The detectors are real, and that is the trap
+
+Flat rung, so the detectors must be junk? The code says otherwise. Throw away all 343 edge dimensions and classify from layer 2 *alone*, nothing but junctions, continuations, bends and stripes, and it reaches **78.8%**, within a fifth of a point of the raw-pixel network's 79.0. Detectors that never see a raw edge recover almost the entire baseline: they carry genuine class signal.
+
+```python
+build_and_eval(F2tr, F2te, ytr, yte)                              # layer 2 ALONE -> 78.8%
+```
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/depth-layer2-alone.png" alt="Six dimmed layer-1 edge maps of a trouser on the left marked discarded, three bright layer-2 relation maps in the middle marked kept, and a gauge reading 78.8 percent on the right" loading="lazy" width="946" height="473" />
+  <figcaption>Classifying from relations only, the real maps and the real number. Left, the six layer-1 edge maps, dimmed because they are discarded; middle, the hand-built layer-2 detectors (junctions, a continuation) that are kept; right, the gauge at the measured 78.8% the head reaches on layer 2 alone, close to the raw-pixel 79. The words are real words with real signal, even with the edges thrown away. Rendered by <code>scripts/render_depth_figs.py</code>.</figcaption>
+</figure>
+
+So why does adding them to layer 1 do nothing? Because they are *synonyms*. Every layer-2 value is a fixed function of layer-1 values, and a min of two edges says nothing the pair of edges had not already said. The kernel head reads whole vectors, so it was already comparing garments on those coordinates jointly; rewriting the same information in a richer vocabulary gives it nothing new to vote with. You can see the redundancy directly: correlate each layer-2 detector with the layer-1 channels it is built from, and the structure is not noise, it is the detector spelling out its own recipe.
+
+```python
+L1 = Ctr.mean((2, 3))                                              # per-channel layer-1 energy [n, 7]
+L2 = l2_maps(Ctr).mean((2, 3))                                    # per-detector layer-2 energy [n, 33]
+L1z = (L1 - L1.mean(0)) / (L1.std(0) + 1e-9)
+L2z = (L2 - L2.mean(0)) / (L2.std(0) + 1e-9)
+corr = (L2z.T @ L1z) / len(L1)                                    # each row: a layer-2 dim's edge recipe
+```
+
+<figure class="jax-fig">
+  <img src="/blog/depth-synonym-gram.png" alt="A correlation heatmap, rows of layer-2 detectors against columns of layer-1 edge channels, with the continuation rows outlined in teal along a diagonal showing each continuation correlating with its own edge orientation" loading="lazy" width="814" height="550" />
+  <figcaption>The synonym diagnosis, from real feature correlations. The measured correlation of each layer-2 detector with the seven layer-1 channels. The teal-outlined diagonal in the top rows is each continuation correlating almost perfectly with its own orientation; junction rows light up under both their constituent edges. A layer-2 dimension is a fixed function of layer-1 dimensions, so the concat is flat. Rendered by <code>scripts/render_depth_figs.py</code>.</figcaption>
+</figure>
+
+## Counting the wall
+
+Maybe the fix is just the *right* 33 sentences. That objection is correct, and it is the whole finding, once you count what "right" would cost. A pairwise layer-2 type is two channels at a relative cell offset, and within a one-cell neighbourhood there are **224** nameable types; three-way combinations, the kind a trained CNN routinely represents, run to roughly **4,630** before you have even chosen pooling or the form of the AND. We hand-picked 33 of the 224 using the best prior our species has about early vision, and moved the needle +0.2 at best.
+
+```python
+same = NCH * (NCH + 1) // 2                                       # offset (0,0), unordered incl. self-pairs
+shifted = NCH * NCH * 8 // 2                                      # 8 nonzero offsets, halved by symmetry
+pairs_possible = same + shifted                                  # 224
+triples_possible = (NCH ** 3) * (9 ** 2) // 6                     # ~4,630 three-way types
+```
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/depth-vocab-wall.png" alt="An accuracy scatter flat near 83 percent as vocabulary grows from 7 to 40 names, on a log x-axis that extends right to dashed markers at 224 and 4630 possible detector types, far past the built curve" loading="lazy" width="902" height="506" />
+  <figcaption>The combinatorial wall, to scale. The built vocabulary grows from 7 to 40 names and stays flat at 83.3, 83.5, 82.8, 83.0, 82.9; the log axis extends to show how many detectors there were to choose from: 224 pairwise types, ~4,630 three-way, with the fully trained network's 85.7% above the whole curve. Naming does not run out. Knowing which names matter does. Rendered by <code>scripts/render_depth_figs.py</code>.</figcaption>
+</figure>
+
+## What this measures
+
+Run this script and the ladder reads the same thing the explainer argues: construction is not a rival to training that fell 2.4 points short, it is a measurement instrument. It reports, layer by layer, how much of a network is generic structure a person could write (all of the classifier, all of layer 1, 83.3 of the 85.7 points) and how much is data-selected combination (the rest). At layer 1, naming and helping coincided, so human priors could curate the vocabulary completely. One layer up they come apart: picking the few combinations that add signal, jointly, against what the layer below already provides, is a search over thousands of coupled candidates with the data as judge. The code names that search plainly. It is called training.
+
+---
+
+*Oriented-edge first stages are from [Hubel and Wiesel (1962)](https://doi.org/10.1113/jphysiol.1962.sp006837); the edges-then-tokens grammar is Marr's primal sketch (Vision, 1982); the layer-1 detectors follow the HOG lineage of [Dalal and Triggs (2005)](https://doi.org/10.1109/CVPR.2005.177); [Fashion-MNIST](https://arxiv.org/abs/1708.07747) from Xiao et al. (2017); the Yat kernel from [Bouhsine (2026)](https://arxiv.org/abs/2605.03262). The conceptual companion is [How Far Down Can You Build?](/blog/depth-by-construction/).*
+
+<CiteAs slug="depth-by-construction-jax-flax-nnx" title="Building the Second Layer by Hand, in JAX/Flax NNX" pubDate="2026-07-04T10:00:00-07:00" />
+
+<style>{`
+.jax-fig { margin: 1.8rem auto; text-align: center; }
+.jax-fig img { max-width: 520px; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; background: #fbf8f1; }
+.jax-fig-wide img { max-width: 880px; }
+.jax-fig figcaption { margin-top: 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--fg-muted); max-width: 64ch; margin-left: auto; margin-right: auto; }
+`}</style>
