@@ -1,7 +1,7 @@
 ---
 title: "Skip Connections With Inertia, in JAX/Flax NNX"
 seoTitle: "Momentum ResNets in JAX/Flax NNX"
-description: "A runnable companion: the residual block as a forward-Euler step, then the momentum residual network as a Flax NNX module with one extra state, a velocity the blocks write into. Train both on the rings task the non-crossing theorem forbids, watch the training crystallize, and run the trained network exactly backward until floating point, amplified by 1/mu per layer, steals the past."
+description: "A runnable companion: the residual block as a forward-Euler step, then the momentum residual network as a Flax NNX module with one extra state, a velocity the blocks write into. Train both on the rings task a first-order flow cannot separate exactly, watch the training crystallize, and run the trained network exactly backward until floating point, amplified by 1/mu per layer, steals the past."
 seoDescription: "Build a momentum ResNet in JAX/Flax NNX: the residual block as an Euler step, a velocity ledger, training on rings, and an exact rewind of the whole network."
 pubDate: 2026-07-04T10:00:00-07:00
 draft: false
@@ -44,7 +44,7 @@ import CiteAs from '../../components/CiteAs.astro';
 
 ## Two integrators, eight lines apart
 
-Before any network, the physics fact the whole post leans on, in code small enough to trust. A second-order system carries two states, position and velocity. Forward Euler updates both from the *stale* state; leapfrog interleaves them, half a velocity kick, a position drift with the fresh velocity, half a kick to finish. Same force, same step size, same cost:
+Before any network, the physics fact the whole post leans on, in code small enough to trust. A second-order system carries two states, position and velocity. Forward Euler updates both from the *stale* state; leapfrog interleaves them, half a velocity kick, a position drift with the fresh velocity, half a kick to finish. Same force, same step size:
 
 ```python
 def accel(r):                                  # Kepler, GM = 1
@@ -59,6 +59,8 @@ def leapfrog(r, v, dt):
     r = r + dt * v                             # drift with the FRESH velocity
     return r, v + 0.5 * dt * accel(r)          # half kick
 ```
+
+Before anyone bills leapfrog double, one honest accounting note: as written, `leapfrog` calls `accel` twice per step where `euler` calls it once, because this version favors visible symmetry over bookkeeping. In the standard kick-drift-kick formulation the force that closes one step is exactly the force that opens the next, so a production integrator caches it and the steady-state cost is one force evaluation per step, the same as Euler.
 
 Launch the same planet with both, $\Delta t = 0.02$, twenty orbits, and print the damage:
 
@@ -109,7 +111,7 @@ class MomentumResNet(nnx.Module):
 
 Two decisions in the constructor matter for everything downstream. The residual stream is **width 2**, so the hidden state is a literal point in a plane and every trajectory in this post is the state itself, not a projection. And the total integration time is fixed at $T = L\,h = 8$, so depth refines the *same* flow: $L = 32$ means steps of $h = 0.25$. The blocks are per-layer (untied), a tiny $2 \to 16 \to 2$ tanh MLP each, exactly the explainer's setup.
 
-## Training on the task the theorem forbids
+## Training on the task a flow cannot get exactly right
 
 The interesting dataset is the one the physics singled out: a disk of one class walled in by an annulus of the other. A first-order planar flow is a homeomorphism, its trajectories cannot cross, so it can never pull the inside class out *exactly*; a network with a velocity state doubles the state to $(x, v)$ and crosses freely in the position shadow. Rings are ten lines:
 
@@ -175,6 +177,20 @@ What the theorem forbids is *exactness*, and exactness is the one line in the fi
 
 The seed accounting behind the dots: at depth 8 the plain net is not yet a flow (steps of $h = 1$ can jump the wall) and it hits 100.0% in two seeds of three; at depths 32 and 128, where it refines into an honest flow, it never touches 100% again in any of its six runs, its best seeds stalling at 99.76% and 99.95%, while the momentum net pins 100.0% in every seed at depths 8 and 32. On spirals the same ledger shows up as reliability rather than a ceiling: the plain net's three depth-128 seeds spread from 92.9% to 98.3%, the momentum net's sit within six tenths of a point of each other.
 
+The whole sweep fits in one table, so the plot above can be audited at a glance: three seeds per cell, mean test accuracy with the min-to-max seed range in parentheses, from `scripts/momentum_resnet.py`.
+
+| task | depth $L$ | plain net, $\mu = 0$ (%) | momentum net, $\mu = 0.9$ (%) |
+| --- | --- | --- | --- |
+| moons | 8 | 99.97 (99.95 to 100.0) | 99.98 (99.95 to 100.0) |
+| moons | 32 | 99.85 (99.80 to 99.95) | 99.98 (99.95 to 100.0) |
+| moons | 128 | 99.89 (99.80 to 100.0) | 99.97 (99.90 to 100.0) |
+| spirals | 8 | 96.18 (94.87 to 97.61) | 97.66 (96.88 to 98.44) |
+| spirals | 32 | 97.82 (97.36 to 98.44) | 97.54 (97.22 to 97.75) |
+| spirals | 128 | 96.16 (92.87 to 98.29) | 98.08 (97.71 to 98.34) |
+| rings | 8 | 99.93 (99.80 to 100.0) | 100.00 (100.0 in all seeds) |
+| rings | 32 | 99.64 (99.56 to 99.76) | 100.00 (100.0 in all seeds) |
+| rings | 128 | 99.85 (99.76 to 99.95) | 99.95 (99.85 to 100.0) |
+
 The 1890s uniqueness theorem did not predict a collapse; it predicted a *ceiling*, and the ceiling is exactly where the runs put it. A homeomorphism cornered by topology squeezes the surrounding class into a thin filament, hides its mistakes inside it, and pays a stray handful of test points as rent, forever.
 
 ## Watching the state instead of the scoreboard
@@ -228,7 +244,7 @@ rewind mu=0.6 float32: max |x0_rec - x0| = 1.7e+02
 rewind mu=0.3 float32: max |x0_rec - x0| = 9.7e+09
 ```
 
-Nothing is wrong with the formula. Look at the last line of `rewind`: every backward step **divides by $\mu$**, so whatever rounding noise the forward pass left behind is amplified by $(1/\mu)$ per layer. At $\mu = 0.9$ that is a factor of $29$ across 32 layers, gentle enough that single precision still comes home to $10^{-4}$. At $\mu = 0.3$ it is a factor of $5 \times 10^{16}$, and the past is simply gone. The explainer's canonical run (`scripts/momentum_resnet.py`) measures the same law on its single-precision forward pass: $3.7 \times 10^{-4}$ at $\mu = 0.9$, $54$ at $\mu = 0.6$, $3.7 \times 10^{10}$ at $\mu = 0.3$. The friction dial is a memory dial: a lightly damped dynamics can be rewound, a heavily damped one has burned its own history, and floating point is just the messenger.
+Nothing is wrong with the formula. Look at the last line of `rewind`: every backward step **divides by $\mu$**, so whatever rounding noise the forward pass left behind is amplified by $(1/\mu)$ per layer. At $\mu = 0.9$ that is a factor of $29$ across 32 layers, gentle enough that single precision still comes home to $10^{-4}$. At $\mu = 0.3$ it is a factor of $5 \times 10^{16}$, and the past is simply gone. The explainer's canonical run (`scripts/momentum_resnet.py`) measures the same law on its single-precision forward pass: $3.7 \times 10^{-4}$ at $\mu = 0.9$, $54$ at $\mu = 0.6$, $3.7 \times 10^{10}$ at $\mu = 0.3$. The friction dial is a memory dial: a lightly damped dynamics can be rewound, a heavily damped one has burned its own history, and floating point is just the messenger. None of this is news to the architects: Sander et al. (2021) discuss precisely this finite-precision leak, and their exactly-invertible implementation stores the low-order bits each forward update would discard so the backward pass can hand them back. The three error lines above are the reason that bookkeeping exists.
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/momentum-rewind.gif" alt="Three acts: test points flow forward through the trained momentum net; hollow markers then retrace the exact path home from only the final position and velocity, with the float64 error curve flat near 1e-13; then the float32 rewind errors at mu 0.9, 0.6 and 0.3 rise along dotted one-over-mu-to-the-k prediction lines on a log axis, reaching 1e10" loading="lazy" width="945" height="525" />
