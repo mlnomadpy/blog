@@ -121,7 +121,7 @@ defineViz('linearattentionapprox', {
     heatmap(ctx, { x: x0, y: y0, w: side, h: side }, state.A, N, colors);
     heatmap(ctx, { x: x0 + side + gap, y: y0, w: side, h: side }, Ahat, N, colors);
 
-    api.readout('ro', `output error ${(relErr * 100).toFixed(relErr < 0.1 ? 1 : 0)}%${collapse ? ' · ⚠ denominator collapsed' : ''} · jax-js`);
+    api.readout('ro', `output error ${(relErr * 100).toFixed(relErr < 0.1 ? 1 : 0)}%${collapse ? ' · ⚠ denominator collapsed' : ''} · live`);
   },
 });
 </script>

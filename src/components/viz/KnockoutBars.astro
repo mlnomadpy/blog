@@ -25,7 +25,7 @@ const id = `kb-${Math.random().toString(36).slice(2, 9)}`;
     </div>
     <div class="kb-readout" id={`${id}-readout`}>—</div>
   </div>
-  <canvas id={`${id}-c`} height={height} aria-label="Per-operator OCR change bar chart"></canvas>
+  <canvas id={`${id}-c`} height={height} aria-label="Per-operator change in OCR accuracy, bar chart of the paper's intervention table"></canvas>
   {caption && <figcaption>{caption}</figcaption>}
 </figure>
 
@@ -45,8 +45,9 @@ const id = `kb-${Math.random().toString(36).slice(2, 9)}`;
     transition: all var(--transition-fast);
     min-width: 34px;
   }
-  .kb-buttons button:hover { color: var(--accent); border-color: var(--accent); }
+  .kb-buttons button:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
   .kb-buttons button.active { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+  .kb-buttons button:disabled { opacity: 0.35; cursor: not-allowed; }
   .kb-readout {
     font-family: var(--mono);
     font-size: 0.78rem;
@@ -60,37 +61,30 @@ const id = `kb-${Math.random().toString(36).slice(2, 9)}`;
     const c = document.getElementById(id + '-c');
     if (!c || c.dataset.ready) return;
     c.dataset.ready = '1';
+    c.style.height = (+c.getAttribute('height') || 320) + 'px';   // pin: no CSS height -> collapsed canvas
     const ctx = c.getContext('2d');
     const wrap = document.querySelector(`[data-kb="${id}"]`);
     const subBtns = wrap.querySelectorAll('[data-group="subset"] button');
     const modeBtns = wrap.querySelectorAll('[data-group="mode"] button');
     const readout = document.getElementById(id + '-readout');
 
-    // Baseline OCR per operator from Painting Arithmetic phased curriculum.
-    // (Approximations consistent with paper text: × baseline 86.5%.)
-    const baseline = { plus: 92.0, minus: 92.0, times: 86.5, div: 92.0 };
-    // ΔOCR (pp) from the paper's intervention table.
-    const deltas = {
-      times: {
-        row:    { plus: -14.4, minus: -13.8, times: -43.7, div:  -1.6, N: 30 },
-        slot:   { plus:  -1.9, minus:  -3.6, times: -40.0, div:  -0.6, N: 30 },
-        random: { plus:  -8.9, minus:  -9.8, times:  -9.2, div:  -2.6, N: 30 },
-      },
-      plus: {
-        row:    { plus: -13.6, minus: -5.1, times: -1.9, div: -2.3, N: 32 },
-        slot:   { plus:  -4.5, minus: +0.6, times: -1.2, div: -0.4, N: 32 },
-        random: { plus: -12.5, minus: -8.2, times: -20.0, div: -3.9, N: 32 },
-      },
-      minus: {
-        row:    { plus: -3.5, minus: -4.4, times: -3.2, div: -0.8, N: 14 },
-        slot:   { plus: -1.5, minus: -2.1, times: -1.0, div: -0.4, N: 14 },
-        random: { plus: -4.9, minus: -5.6, times: -3.4, div: -1.5, N: 14 },
-      },
-      div: {
-        row:    { plus: -13.1, minus: -18.3, times:  -9.7, div: -15.8, N: 47 },
-        slot:   { plus:  -3.0, minus:  -4.8, times:  -2.0, div: -12.0, N: 47 },
-        random: { plus: -10.3, minus: -11.4, times: -10.0, div:  -6.5, N: 47 },
-      },
+    // ΔOCR (percentage points), verbatim from Table 2 of Painting Arithmetic
+    // (public/papers/painting-arithmetic.pdf). The paper reports SLOT and RANDOM
+    // only for the × and + subsets, and a per-operator baseline only for ×
+    // (86.5% -> 42.7% under ROW), so this chart shows deltas, nothing invented.
+    const TABLE2 = {
+      times: { N: 30,
+        row:    { plus: -14.4, minus: -13.8, times: -43.7, div: -1.6 },
+        slot:   { plus:  -1.9, minus:  -3.6, times: -40.0, div: -0.6 },
+        random: { plus:  -8.9, minus:  -9.8, times:  -9.2, div: -2.6 } },
+      plus: { N: 32,
+        row:    { plus: -13.6, minus: -5.1, times:  -1.9, div: -2.3 },
+        slot:   { plus:  -4.5, minus:  0.6, times:  -1.2, div: -0.4 },
+        random: { plus: -12.5, minus: -8.2, times: -20.0, div: -3.9 } },
+      minus: { N: 14,
+        row:    { plus: -3.5, minus: -4.4, times: -3.2, div: -0.8 } },
+      div: { N: 47,
+        row:    { plus: -13.1, minus: -18.3, times: -9.7, div: -15.8 } },
     };
     const opLabel = { plus: '+', minus: '−', times: '×', div: '÷' };
     const opOrder = ['plus', 'minus', 'times', 'div'];
@@ -105,7 +99,6 @@ const id = `kb-${Math.random().toString(36).slice(2, 9)}`;
       const v = (n) => s.getPropertyValue(n).trim();
       return {
         accent: v('--accent') || '#b3661b',
-        accentSoft: v('--accent-soft') || '#b3661b14',
         bg: v('--bg') || '#fbfaf6',
         bgSunken: v('--bg-sunken') || '#f1efe7',
         fg: v('--fg') || '#1a1a1a',
@@ -135,126 +128,118 @@ const id = `kb-${Math.random().toString(36).slice(2, 9)}`;
       requestAnimationFrame(() => { rafScheduled = false; draw(); });
     };
 
+    const syncButtons = () => {
+      const avail = TABLE2[subset];
+      modeBtns.forEach((b) => {
+        const ok = !!avail[b.dataset.mode];
+        b.disabled = !ok;
+        if (!ok && mode === b.dataset.mode) mode = 'row';
+        b.classList.toggle('active', b.dataset.mode === mode);
+      });
+      subBtns.forEach((b) => b.classList.toggle('active', b.dataset.subset === subset));
+    };
+
     const draw = () => {
       const W = state.w, H = state.h;
       if (W === 0) return;
       ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
       ctx.clearRect(0, 0, W, H);
 
-      const padL = 50, padR = 16, padT = 18, padB = 60;
+      const padL = 54, padR = 16, padT = 24, padB = 52;
       const plotW = W - padL - padR;
       const plotH = H - padT - padB;
-      const yMin = 0, yMax = 100;
+      const yMin = -50, yMax = 5;
       const sy = (v) => padT + (yMax - v) / (yMax - yMin) * plotH;
+      const d = TABLE2[subset][mode];
 
-      // Grid + axis ticks (every 20 pp)
+      // Grid + axis ticks (every 10 pp)
       ctx.strokeStyle = colors.border;
       ctx.lineWidth = 1;
       ctx.beginPath();
-      for (let v = 0; v <= 100; v += 20) {
-        const y = sy(v);
-        ctx.moveTo(padL, y); ctx.lineTo(W - padR, y);
-      }
+      for (let v = -50; v <= 0; v += 10) { const y = sy(v); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); }
       ctx.stroke();
       ctx.fillStyle = colors.faint;
       ctx.font = '10px ui-monospace, monospace';
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
-      for (let v = 0; v <= 100; v += 20) {
-        ctx.fillText(v + '%', padL - 4, sy(v));
-      }
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
+      for (let v = -50; v <= 0; v += 10) ctx.fillText(v + ' pp', padL - 4, sy(v));
+      // zero line, emphasised
+      ctx.strokeStyle = colors.muted;
+      ctx.beginPath(); ctx.moveTo(padL, sy(0)); ctx.lineTo(W - padR, sy(0)); ctx.stroke();
+
       ctx.save();
       ctx.translate(14, padT + plotH / 2);
       ctx.rotate(-Math.PI / 2);
       ctx.fillStyle = colors.muted;
-      ctx.fillText('OCR per operator (%)', 0, 0);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText('ΔOCR per operator (pp), paper Table 2', 0, 0);
       ctx.restore();
 
       const groupW = plotW / opOrder.length;
-      const barPad = groupW * 0.18;
-      const innerW = groupW - 2 * barPad;
-      const barW = innerW / 2 - 4;
-      const d = deltas[subset][mode];
+      const barW = Math.min(58, groupW * 0.42);
 
       opOrder.forEach((op, i) => {
         const cx = padL + groupW * i + groupW / 2;
-        const base = baseline[op];
-        const after = Math.max(0, Math.min(100, base + d[op]));
         const isTargeted = (subset === op);
-
-        // Baseline bar
-        const bx1 = cx - innerW / 2;
-        const baseY = sy(base);
-        ctx.fillStyle = colors.bgSunken;
-        ctx.strokeStyle = colors.muted;
-        ctx.lineWidth = 1;
-        ctx.fillRect(bx1, baseY, barW, sy(0) - baseY);
-        ctx.strokeRect(bx1, baseY, barW, sy(0) - baseY);
-
-        // After bar
-        const bx2 = cx + 4 - barW;
-        const afterY = sy(after);
-        ctx.fillStyle = isTargeted ? colors.accent : colors.accent + '88';
+        const val = d[op];
+        const y0 = sy(0), y1 = sy(val);
+        const top = Math.min(y0, y1), h = Math.max(1, Math.abs(y1 - y0));
+        ctx.fillStyle = isTargeted ? colors.accent : colors.accent + '55';
         ctx.strokeStyle = isTargeted ? colors.accent : colors.muted;
-        ctx.fillRect(bx2 + barW + 0, afterY, barW, sy(0) - afterY);
-        ctx.strokeRect(bx2 + barW + 0, afterY, barW, sy(0) - afterY);
+        ctx.lineWidth = 1;
+        ctx.fillRect(cx - barW / 2, top, barW, h);
+        ctx.strokeRect(cx - barW / 2, top, barW, h);
 
-        // Δ label below the after bar
-        const dlabel = (d[op] > 0 ? '+' : '') + d[op].toFixed(1) + ' pp';
+        // value label at the bar tip
+        const label = (val > 0 ? '+' : '') + val.toFixed(1);
         ctx.fillStyle = isTargeted ? colors.accent : colors.muted;
-        ctx.font = '11px ui-monospace, monospace';
+        ctx.font = (isTargeted ? 'bold ' : '') + '11px ui-monospace, monospace';
         ctx.textAlign = 'center';
+        ctx.textBaseline = val <= 0 ? 'top' : 'bottom';
+        ctx.fillText(label, cx, val <= 0 ? y1 + 4 : y1 - 4);
+
+        // operator label under the plot
+        ctx.fillStyle = isTargeted ? colors.fg : colors.muted;
+        ctx.font = 'bold 15px ' + (getComputedStyle(document.body).fontFamily || 'serif');
         ctx.textBaseline = 'top';
-        ctx.fillText(dlabel, cx, sy(0) + 4);
-
-        // Operator label
-        ctx.fillStyle = colors.fg;
-        ctx.font = 'bold 14px ' + (getComputedStyle(document.body).fontFamily || 'serif');
-        ctx.fillText(opLabel[op], cx, sy(0) + 22);
-
-        // small after-value tick text on top of after bar
-        ctx.fillStyle = colors.fg;
-        ctx.font = '10px ui-monospace, monospace';
-        ctx.textBaseline = 'bottom';
-        ctx.fillText(Math.round(after) + '%', bx2 + barW + barW / 2, afterY - 3);
+        ctx.fillText(opLabel[op], cx, padT + plotH + 8);
+        if (isTargeted) {
+          ctx.font = '9px ui-monospace, monospace';
+          ctx.fillStyle = colors.faint;
+          ctx.fillText('targeted', cx, padT + plotH + 26);
+        }
       });
 
-      // Legend
+      // header note: what the paper reports for this selection
       ctx.font = '10px ui-monospace, monospace';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      const lyTop = padT - 6;
-      ctx.fillStyle = colors.bgSunken;
-      ctx.strokeStyle = colors.muted;
-      ctx.fillRect(padL, lyTop - 5, 10, 10);
-      ctx.strokeRect(padL, lyTop - 5, 10, 10);
       ctx.fillStyle = colors.faint;
-      ctx.fillText(' baseline', padL + 12, lyTop);
-      ctx.fillStyle = colors.accent;
-      ctx.fillRect(padL + 88, lyTop - 5, 10, 10);
-      ctx.fillStyle = colors.faint;
-      ctx.fillText(' after knock-out', padL + 100, lyTop);
+      const note = (subset === 'minus' || subset === 'div')
+        ? 'paper reports only the row intervention for this subset'
+        : (subset === 'times' && mode === 'row') ? 'paper baseline for ×: 86.5% → 42.7% under this intervention' : '';
+      if (note) ctx.fillText(note, padL, padT - 12);
 
-      // Compute and show specificity (targeted Δ minus mean of others)
-      const otherOps = opOrder.filter((o) => o !== subset);
-      const meanOther = otherOps.reduce((a, o) => a + d[o], 0) / otherOps.length;
-      const spec = d[subset] - meanOther;
-      readout.textContent = `subset = ${opLabel[subset]} (N=${d.N}) · intervention = ${mode} · Δ on target = ${d[subset].toFixed(1)} pp · mean Δ on others = ${meanOther.toFixed(1)} pp · specificity = ${spec.toFixed(1)} pp`;
+      // specificity per the paper's Definition 3: target drop minus mean collateral
+      const others = opOrder.filter((o) => o !== subset);
+      const spec = -d[subset] + others.reduce((a, o) => a + d[o], 0) / others.length;
+      readout.textContent = `subset = ${opLabel[subset]} (N=${TABLE2[subset].N}) · intervention = ${mode} · Δ on target = ${d[subset].toFixed(1)} pp · specificity (paper Def. 3) = ${spec >= 0 ? '+' : ''}${spec.toFixed(1)} pp`;
     };
 
     subBtns.forEach((b) => b.addEventListener('click', () => {
       subset = b.dataset.subset;
-      subBtns.forEach((o) => o.classList.toggle('active', o === b));
+      syncButtons();
       requestRedraw();
     }));
     modeBtns.forEach((b) => b.addEventListener('click', () => {
+      if (b.disabled) return;
       mode = b.dataset.mode;
-      modeBtns.forEach((o) => o.classList.toggle('active', o === b));
+      syncButtons();
       requestRedraw();
     }));
 
+    syncButtons();
     const ro = new ResizeObserver(() => { fit(); requestRedraw(); });
     ro.observe(c);
     const io = new IntersectionObserver((entries) => {

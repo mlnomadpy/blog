@@ -51,13 +51,14 @@ defineViz('boundarymorph', {
       Object.assign(api.state, {
         ready: true, protos, test, meta, tj, K, W, Wn2: model.Wn2, Wout: model.Wout, bout: model.bout, vote: model.vote,
         b: model.b, eps: model.eps, testCtx: offscreen(test), seed: 3,
+        morph: (() => { const c = document.createElement('canvas'); c.width = 28; c.height = 28; return c; })(), morphKey: '',
       });
       pickPair(api);
       api.render();
     });
   },
 
-  onAction(name, api) { if (name === 'newpair' && api.state) { api.state.seed = (api.state.seed * 7 + 5) % 9973; pickPair(api); api.setControl && api.setControl('mix', 0.5); api.render(); } },
+  onAction(name, api) { if (name === 'newpair' && api.state) { api.state.seed = (api.state.seed * 7 + 5) % 9973; pickPair(api); api.state.morphKey = ''; api.setControl && api.setControl('mix', 0.5); api.render(); } },
 
   draw(api) {
     const { ctx, colors, size, state: st } = api;
@@ -97,13 +98,16 @@ defineViz('boundarymorph', {
     drawTile(st.test, st.iA, tcols, pad, rowY, thumb, CLASS_COL[st.cA % 10]);
     drawTile(st.test, st.iB, tcols, W - pad - thumb, rowY, thumb, CLASS_COL[st.cB % 10]);
 
-    // morphed image (drawn from pixels, center)
+    // morphed image (rasterized once per blend/pair into a cached 28×28 offscreen, then stretched)
     const big = 92, mx0 = (W - big) / 2, my0 = rowY;
-    const tmp = document.createElement('canvas'); tmp.width = 28; tmp.height = 28;
-    const tctx = tmp.getContext('2d'), id = tctx.createImageData(28, 28);
-    for (let i = 0; i < 784; i++) { const v = Math.max(0, Math.min(255, x[i] * 255)); id.data[i * 4] = id.data[i * 4 + 1] = id.data[i * 4 + 2] = v; id.data[i * 4 + 3] = 255; }
-    tctx.putImageData(id, 0, 0);
-    ctx.imageSmoothingEnabled = true; ctx.drawImage(tmp, mx0, my0, big, big);
+    const mkey = st.iA + '_' + st.iB + '_' + t.toFixed(2);
+    if (st.morphKey !== mkey) {
+      st.morphKey = mkey;
+      const tctx = st.morph.getContext('2d'), id = tctx.createImageData(28, 28);
+      for (let i = 0; i < 784; i++) { const v = Math.max(0, Math.min(255, x[i] * 255)); id.data[i * 4] = id.data[i * 4 + 1] = id.data[i * 4 + 2] = v; id.data[i * 4 + 3] = 255; }
+      tctx.putImageData(id, 0, 0);
+    }
+    ctx.imageSmoothingEnabled = true; ctx.drawImage(st.morph, mx0, my0, big, big);
     ctx.lineWidth = 2.5; ctx.strokeStyle = colors.fg; ctx.strokeRect(mx0 - 0.5, my0 - 0.5, big + 1, big + 1);
 
     ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillStyle = colors.muted; ctx.font = '10px ui-sans-serif, system-ui';

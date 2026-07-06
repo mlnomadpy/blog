@@ -1,0 +1,135 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 460 } = Astro.props;
+---
+<figure class="viz oneeditdepth" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// What "one edit, every depth" costs when the weights are NOT shared. The untied
+// 12-layer stack was trained on the same data; to place the taught class's wells into
+// its dynamics, the paste must be repeated at each layer where the edit should exist.
+// The dial picks how many of its last layers get the paste; the bars are the measured
+// cost from the real run (scripts/yat_deq_edit.py): numbers written, and how far old
+// inputs' final states move, with no contraction certificate to re-check. The tied
+// loop's single 512-number paste, present at every turn by construction, sits beside
+// them as the reference line.
+import { defineViz } from './engine/vizkit.js';
+import { gate, loadingText, T, fmt, roundRect } from './engine/draw.js';
+import { loadReady, CLS } from './yatdeqedit.js';
+
+defineViz('oneeditdepth', {
+  title: 'One paste in a loop, or one paste per layer in a stack',
+  height: 460,
+  controls: [
+    { type: 'range', name: 'ji', label: 'layers of the stack that get the paste', min: 0, max: 4, step: 1, value: 0, int: true,
+      reset: false, fmt: () => '' },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    gate(api, loadReady, (api, model) => {
+      const mt = model.metrics;
+      api.state.M = { sweep: mt.stack.sweep, L: mt.stack.L,
+                      stackParams: mt.stack.params, tiedParams: mt.base.params,
+                      tiedEdit: mt.stack.tied_edit_params,
+                      tiedDz: mt.teach_T2.dz_max, tiedSig: mt.teach_T2.sigma_max,
+                      tiedRecall: mt.teach_T2.acc['3'] };
+    });
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0) return;
+    if (!st.ready || !st.M) { loadingText(api, 'loading the run…'); return; }
+    const M = st.M, sel = M.sweep[api.get('ji')], j = sel.j;
+    const pad = 14;
+
+    // ── top: the two architectures, drawn honestly ──
+    const archH = 148, colW = (W - pad * 3) / 2;
+    const A = { x: pad, y: pad + 20, w: colW, h: archH };
+    const B = { x: pad * 2 + colW, y: pad + 20, w: colW, h: archH };
+
+    // the loop: one operator, output wired back, one orange chip
+    T(ctx, colors, 'kicker'); ctx.fillText('the loop: one shared operator (' + M.tiedParams + ' numbers)', A.x, A.y - 6);
+    const bx = A.x + A.w / 2 - 46, by = A.y + 34, bw = 92, bh = 44;
+    roundRect(ctx, bx, by, bw, bh, 8); ctx.fillStyle = colors.cellBg; ctx.fill();
+    ctx.strokeStyle = colors.fg; ctx.lineWidth = 1.4; ctx.stroke();
+    T(ctx, colors, 'label', { align: 'center', color: colors.fg });
+    ctx.fillText('F(z; x)', bx + bw / 2, by + 20);
+    ctx.fillStyle = CLS[3]; roundRect(ctx, bx + bw / 2 - 18, by + 27, 36, 10, 3); ctx.fill();
+    T(ctx, colors, 'small', { align: 'center', color: '#fff' });
+    ctx.fillText('paste', bx + bw / 2, by + 35);
+    // feedback wire
+    ctx.strokeStyle = colors.muted; ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(bx + bw, by + bh / 2); ctx.lineTo(bx + bw + 26, by + bh / 2);
+    ctx.lineTo(bx + bw + 26, by + bh + 20); ctx.lineTo(bx - 26, by + bh + 20);
+    ctx.lineTo(bx - 26, by + bh / 2); ctx.lineTo(bx, by + bh / 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(bx, by + bh / 2); ctx.lineTo(bx - 6, by + bh / 2 - 4); ctx.lineTo(bx - 6, by + bh / 2 + 4); ctx.closePath();
+    ctx.fillStyle = colors.muted; ctx.fill();
+    T(ctx, colors, 'small', { align: 'center', color: colors.faint });
+    ctx.fillText('every turn reuses the same operator, so one paste exists at every depth', A.x + A.w / 2, by + bh + 38);
+
+    // the stack: L separate operators, the pasted ones chipped
+    T(ctx, colors, 'kicker'); ctx.fillText('the stack: ' + M.L + ' untied layers (' + M.stackParams + ' numbers)', B.x, B.y - 6);
+    const cw = Math.min(34, (B.w - 20) / M.L), ch = 46, sx0 = B.x + (B.w - cw * M.L) / 2, sy0 = B.y + 34;
+    for (let l = 0; l < M.L; l++) {
+      const edited = l >= M.L - j;
+      roundRect(ctx, sx0 + l * cw + 2, sy0, cw - 4, ch, 5);
+      ctx.fillStyle = colors.cellBg; ctx.fill();
+      ctx.strokeStyle = edited ? CLS[3] : colors.border; ctx.lineWidth = edited ? 1.6 : 1; ctx.stroke();
+      T(ctx, colors, 'small', { align: 'center', color: colors.faint });
+      ctx.fillText('A' + l, sx0 + l * cw + cw / 2, sy0 + 14);
+      if (edited) { ctx.fillStyle = CLS[3]; roundRect(ctx, sx0 + l * cw + 5, sy0 + ch - 14, cw - 10, 8, 2); ctx.fill(); }
+    }
+    T(ctx, colors, 'small', { align: 'center', color: colors.faint });
+    ctx.fillText(j === 0 ? 'no layer pasted: the taught wells exist at no depth of the dynamics'
+      : 'pasted at the last ' + j + (j === 1 ? ' layer' : ' layers') + ': the edit exists only at ' + (j === 1 ? 'that depth' : 'those depths'), B.x + B.w / 2, sy0 + ch + 20);
+
+    // ── bottom: the measured cost, from the real run ──
+    const chY = A.y + archH + 34, chH = H - chY - pad - 22;
+    const half = (W - pad * 3) / 2;
+    const C1 = { x: pad, y: chY, w: half, h: chH };
+    const C2 = { x: pad * 2 + half, y: chY, w: half, h: chH };
+    barsPanel(ctx, colors, C1, M.sweep, api.get('ji'), (s) => s.edit_params,
+      'numbers pasted into the stack', (v) => v.toFixed(0), M.tiedEdit, 'tied: ' + M.tiedEdit + ' once');
+    barsPanel(ctx, colors, C2, M.sweep, api.get('ji'), (s) => s.dz_old_max,
+      'max shift of an old input’s final state', (v) => fmt(v, 2), M.tiedDz, 'tied: ' + fmt(M.tiedDz, 2) + ' (certified: max ‖J‖ ' + fmt(M.tiedSig, 2) + ')');
+
+    const rec = sel.acc['3'];
+    api.readout('rd', `stack, last ${j} pasted: new-class recall ${(rec * 100).toFixed(1)}% · ${sel.edit_params} numbers · old states move up to ${fmt(sel.dz_old_max, 2)} · no certificate to re-check`);
+  },
+});
+
+function barsPanel(ctx, colors, box, sweep, selIdx, val, title, fv, tiedV, tiedLabel) {
+  T(ctx, colors, 'kicker'); ctx.textAlign = 'left';
+  ctx.fillText(title, box.x, box.y - 6);
+  ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.strokeRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1);
+  const vmax = Math.max(tiedV, ...sweep.map(val)) * 1.15 || 1;
+  const n = sweep.length, bw = (box.w - 20) / n;
+  for (let i = 0; i < n; i++) {
+    const v = val(sweep[i]), h = Math.max(0, (v / vmax) * (box.h - 34));
+    const x = box.x + 10 + i * bw, y = box.y + box.h - 16 - h;
+    ctx.fillStyle = CLS[3]; ctx.globalAlpha = i === selIdx ? 0.95 : 0.3;
+    ctx.fillRect(x + bw * 0.18, y, bw * 0.64, h);
+    ctx.globalAlpha = 1;
+    T(ctx, colors, 'small', { align: 'center', color: i === selIdx ? colors.fg : colors.faint });
+    ctx.fillText(String(sweep[i].j), x + bw / 2, box.y + box.h - 4);
+    if (i === selIdx) { T(ctx, colors, 'small', { align: 'center', color: colors.fg }); ctx.fillText(fv(v), x + bw / 2, y - 4); }
+  }
+  // the tied reference
+  const ty = box.y + box.h - 16 - (tiedV / vmax) * (box.h - 34);
+  ctx.strokeStyle = colors.accent; ctx.setLineDash([5, 3]); ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.moveTo(box.x + 4, ty); ctx.lineTo(box.x + box.w - 4, ty); ctx.stroke(); ctx.setLineDash([]);
+  T(ctx, colors, 'small', { align: 'right', color: colors.accent });
+  ctx.fillText(tiedLabel, box.x + box.w - 8, ty - 4);
+  T(ctx, colors, 'small', { align: 'center', color: colors.faint });
+  ctx.fillText('layers pasted', box.x + box.w / 2, box.y + box.h + 12);
+}
+</script>

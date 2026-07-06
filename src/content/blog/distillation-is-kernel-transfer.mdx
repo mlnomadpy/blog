@@ -1,0 +1,196 @@
+---
+title: 'Distillation Is a Geometry, Not an Answer Key'
+seoTitle: "Knowledge Distillation Is Kernel Transfer"
+description: 'Knowledge distillation has a standing puzzle: Hinton''s student recognized 98.6% of the digit 3s in the test set after training on a transfer set with every 3 deleted. An answer key cannot do that, so what actually crosses the wire? This post gives dark knowledge a data type, a class-similarity kernel, and runs the experiment that isolates it: a student trained on nothing but pairwise relations, no labels, no soft targets, no class names, measured against the label-trained ceiling and the random floor. With live experiments: watch the kernel accumulate from single outputs, turn the temperature knob on how much geometry leaks, train a relational student in the page, and watch whose spectrum the student grows into.'
+seoDescription: "Hinton's student learned a digit it never saw. What actually crosses the wire in distillation? Strip it to pairwise similarities alone and measure."
+pubDate: 2026-07-04
+draft: false
+tags: [ml, knowledge-distillation, dark-knowledge, kernel-methods, representation-learning, latent-space, spectral-embedding, class-similarity, fashion-mnist, jax]
+references:
+  - authors: "Cristianini, N., Shawe-Taylor, J., Elisseeff, A., Kandola, J."
+    year: 2002
+    title: "On Kernel-Target Alignment"
+    venue: "NIPS 2001"
+  - authors: "Hinton, G., Vinyals, O., Dean, J."
+    year: 2015
+    title: "Distilling the Knowledge in a Neural Network"
+    arxiv: "1503.02531"
+  - authors: "Furlanello, T., Lipton, Z. C., Tschannen, M., Itti, L., Anandkumar, A."
+    year: 2018
+    title: "Born-Again Neural Networks"
+    venue: "ICML 2018"
+    arxiv: "1805.04770"
+  - authors: "Park, W., Kim, D., Lu, Y., Cho, M."
+    year: 2019
+    title: "Relational Knowledge Distillation"
+    venue: "CVPR 2019"
+    arxiv: "1904.05068"
+  - authors: "Tung, F., Mori, G."
+    year: 2019
+    title: "Similarity-Preserving Knowledge Distillation"
+    venue: "ICCV 2019"
+    arxiv: "1907.09682"
+  - authors: "Kornblith, S., Norouzi, M., Lee, H., Hinton, G."
+    year: 2019
+    title: "Similarity of Neural Network Representations Revisited"
+    venue: "ICML 2019"
+    arxiv: "1905.00414"
+  - authors: "Müller, R., Kornblith, S., Hinton, G."
+    year: 2019
+    title: "When Does Label Smoothing Help?"
+    venue: "NeurIPS 2019"
+    arxiv: "1906.02629"
+  - authors: "Stanton, S., Izmailov, P., Kirichenko, P., Alemi, A. A., Wilson, A. G."
+    year: 2021
+    title: "Does Knowledge Distillation Really Work?"
+    venue: "NeurIPS 2021"
+    arxiv: "2106.05945"
+keywords:
+  - knowledge distillation
+  - dark knowledge
+  - kernel transfer
+  - class-similarity kernel
+  - relational knowledge distillation
+  - similarity-preserving distillation
+  - distillation temperature
+  - label-free distillation
+  - centered kernel alignment
+  - spectrum inheritance
+---
+import WhatALogitLeaks from '../../components/viz/WhatALogitLeaks.astro';
+import TemperatureLens from '../../components/viz/TemperatureLens.astro';
+import KernelHandoff from '../../components/viz/KernelHandoff.astro';
+import InheritanceScale from '../../components/viz/InheritanceScale.astro';
+import SpectrumInheritance from '../../components/viz/SpectrumInheritance.astro';
+import CiteAs from '../../components/CiteAs.astro';
+
+*The capstone of the latent-space arc. [Latent on the Spectrum](/blog/latent-on-the-spectrum/) argued that a latent space is the spectral embedding of a similarity kernel over classes, and its companion showed that a teacher's softened softmax carries exactly that kernel. This post closes the loop with an experiment you can rerun: strip distillation down to the kernel alone, no labels anywhere, and measure how much of the teacher's competence survives the handoff.*
+
+In 2015, Hinton, Vinyals and Dean reported something that should still bother you. They trained a small network to imitate a big one's softened outputs on a transfer set from which **every example of the digit 3 had been deleted**. The student never saw a 3, was never told 3s exist, and its bias for the class had to be fixed up by hand. It then recognized 98.6% of the 3s in the test set.
+
+An answer key cannot do that. If distillation were the student copying the teacher's answers, deleting a class from the transfer set would delete the class from the student. Something else came over the wire, something that was present in the teacher's answers *about other digits*. Hinton called it dark knowledge and pointed at the small probabilities: a 7 that is a little bit 1, a 2 that is faintly a 3. But "small probabilities" is a description, not a mechanism. What object, exactly, is being transferred?
+
+This series has already met the object. It just arrived from the other direction.
+
+## Every answer leaks the relations
+
+What does one softened output actually contain? Take a trained classifier on Fashion-MNIST (the teacher for everything below: a small CNN at **87.2%** test accuracy, from `scripts/kernel_distill.py`). Show it one shirt. At temperature $T=4$ its softmax does not say "Shirt." It says: mostly Shirt, quite a bit T-shirt, some Pullover, some Coat, essentially zero Trouser, zero Bag. One prediction, and it has already told you how an entire neighbourhood of the class system is arranged from where this example sits.
+
+Now let the examples stream. Each output $p = \mathrm{softmax}(z/T)$ is one noisy receipt of resemblance; average their outer products and the noise cancels while the structure compounds:
+
+$$
+S(T) \;=\; \mathbb{E}\big[\, p \, p^{\top} \big],
+\qquad p = \mathrm{softmax}(z/T).
+$$
+
+$S_{cc'}$ is large exactly when the teacher routinely hesitates between $c$ and $c'$, and hesitation is not a defect here; it is the signal. Watch the estimate assemble from single outputs:
+
+<WhatALogitLeaks caption="Real teacher outputs from the run, one garment at a time. Left: a test example. Middle: the teacher's softened softmax at T = 4, the off-answer mass is what leaks. Right: the class kernel S accumulating as the running mean of p pᵀ, the highlighted row and column are the relations this one output just fed. Press Play: individual outputs are noisy, but by a couple hundred examples the shirt-family block and the shoe block stand out of the average. Computed live from the exported logits." />
+
+A matrix of pairwise resemblances between classes is a **similarity kernel**, and the previous post spent its whole length on what such a kernel is worth: a latent space is nothing but the spectral embedding of one. If that phrase is not yet in your bones, one felt image is enough to carry you through this post: diagonalize the similarity matrix and it hands you coordinates, place each class at its row of the top eigenvectors, and the dot products between those positions reproduce the similarities you started from; [Latent on the Spectrum](/blog/latent-on-the-spectrum/) builds the rest. So the teacher's outputs are not answers with some fuzz on them. They are a serialization of the teacher's class geometry, one example-sized packet at a time. Dark knowledge has a data type, and the data type is a kernel.
+
+## The knob on the leak
+
+If the outputs carry a kernel, the distillation temperature stops being a mysterious hyperparameter and becomes something you can watch. Cold softmax, nearly one-hot outputs, nearly no off-answer mass: the kernel degenerates toward the identity, classes are strangers, and almost nothing about their relations survives into $S$. Warm softmax: the relations stand out. Too hot: everything resembles everything, and the kernel washes toward uniform, which carries no information either.
+
+Drag the dial. The matrix below is recomputed live from the teacher's real logits at whatever $T$ you choose:
+
+<TemperatureLens caption="The class kernel S(T), recomputed live from the run's exported teacher logits as you drag the temperature. Cold (T near 0.5): near identity, mean off-diagonal similarity 0.015. The run's distillation temperature (T = 4): mean off-diagonal 0.30 and effective rank about 7, the shirt family and the shoe family are loud. Hot (T = 16 and beyond): off-diagonal 0.90 heading for uniform. The curves on the right trace both across the whole dial: temperature is the knob on how much geometry the outputs leak." />
+
+In the run's numbers: the mean off-diagonal of $S$ is **0.032** at $T=1$, **0.298** at $T=4$, and **0.902** at $T=16$, while the kernel's effective rank falls from **8.9** to **7.0** to **4.3**. The choice $T=4$ is not cosmetic. It selects *which kernel* the teacher hands over, a genuinely different geometry from the cold one, and everything the student inherits below is downstream of that choice.
+
+## Strip distillation to the kernel alone
+
+Here is the claim this picture forces. If what distillation transfers is the kernel, then the labels, the soft targets, even the per-class structure of the teacher's output should all be optional. A student trained on **nothing but pairwise relations** should still inherit a working geometry.
+
+That is a falsifiable statement, so `scripts/kernel_distill.py` runs it. Five networks, same data, one measuring stick:
+
+1. **Teacher**: the CNN above, trained on labels.
+2. **Soft targets (KD)**: a smaller student, standard distillation, KL to the teacher's $T=4$ outputs, no hard labels.
+3. **Relations only**: the same smaller student, trained with *no labels, no soft targets, no per-class anything*. For each batch, the teacher's softened outputs define a similarity for every pair, and the student's only job is to make its embedding geometry agree:
+
+$$
+\mathcal{L} \;=\; \frac{1}{|B|(|B|-1)} \sum_{i \neq j}
+\Big( \langle \hat e_i, \hat e_j \rangle - \langle \hat p_i, \hat p_j \rangle \Big)^{2},
+$$
+
+where $\hat e$ are the student's normalized embeddings and $\hat p$ the teacher's normalized soft outputs. The loss never mentions a class. It only ever says: *these two should be this similar.*
+
+4. **Random**: the untrained student, probed as-is. The floor.
+5. **True labels**: the same student architecture trained on the answer key. The ceiling.
+
+Since the relational student has no classifier head at all, competence is measured the same way for everyone: freeze the network, then probe its embedding with the labels (a linear probe, and a nearest-centroid probe). The labels appear only in the measuring stick, never in the student's gradient.
+
+Before the numbers, feel the mechanism. This panel trains a real relational student in your browser, by gradient descent, on the actual target Gram the run's teacher assigned to thirty garments:
+
+<KernelHandoff caption="The handoff, computed live. Left: the target, the Gram matrix the teacher's softened outputs assign to 30 garments (3 per class, class-colored strips on the edges; the blocks are the shirt and shoe families). Middle: the Gram of a tiny untrained student network. Press Play: gradient descent on the relational loss runs in the page, and the student's Gram develops the teacher's block structure without ever hearing a class name. Right: the mismatch falling." />
+
+## Where a label-free student lands
+
+So how much of the teacher's competence comes through a channel that thin? The honest expectation is "somewhere between random and labels," and where it lands *is* the measurement of how much of classification knowledge is geometry rather than answers.
+
+<InheritanceScale caption="The five runs on one axis (probe accuracy on the 10,000-image test set; switch between the linear and nearest-centroid probe). The shaded green span is everything label training can add over a random network; the orange fill is how much of it relations alone recover. Small dots are the relational student's other seeds. Hover a marker for what that run was allowed to see." />
+
+The numbers, from the run (seeds 0, 1, 2 for the relational student; seed 0 elsewhere):
+
+| run | training signal | linear probe |
+| --- | --- | --- |
+| teacher | labels | 88.1% |
+| soft targets (KD) | teacher's $p(T{=}4)$ | 85.8% |
+| **relations only** | **pairwise similarities** | **83.7 / 84.5 / 84.9%** |
+| true labels | the answer key | 87.0% |
+| random init | nothing | 77.5% |
+
+Read it honestly. The floor is high: a random CNN's features already probe at 77.5%, the same random-features effect the Arc C posts kept meeting, so nobody gets credit for the first three quarters of the scale. The interval that measures *training* runs from 77.5 to the label ceiling at 87.0, and the relations-only student lands at 83.7 to 84.9 across seeds: **about two thirds of everything label training could add, from a signal that never contained a label, an answer, or even a class.**
+
+Before celebrating, though, notice who the judge was. A linear probe is allowed to re-weight and shear the space however it likes to find the classes: it will happily rescue features that are merely *present*, recoverable along some direction, whether or not the space is actually arranged well. Maybe that is all relations buy, raw material a probe can salvage, not a geometry worth the name. If distillation truly transfers a geometry, the result should survive a ruler that is not allowed to fix anything.
+
+## The probe that isn't allowed to cheat
+
+Nearest centroid is that ruler. Freeze the embedding, average each class's embeddings into a single centroid, and classify every test image by whichever centroid sits closest. No learned weights, no re-weighting, no shear: either the classes sit in tight, well-placed clumps or the probe fails. It is the geometry-native measurement, and this time the expectation is lopsided. The label-trained student learned from the answer key itself; the relational student was never even told that classes exist. Surely the label student wins.
+
+| run | nearest centroid |
+| --- | --- |
+| teacher | 81.7% |
+| soft targets (KD) | 79.0% |
+| **relations only** | **81.2 / 81.0 / 81.4%** |
+| true labels | 80.0% |
+| random init | 62.0% |
+
+The relational student scores **81.2%**, *above* the label-trained student's 80.0% and essentially at the teacher's own 81.7%. The student that was only ever told how pairs relate arranges its classes better than the student that was told the answers. That is the sentence "distillation transfers a geometry" turned into a measurement.
+
+The inherited geometry even fails like the teacher. Rank every model's confusions on the test set: the relational student's confusion pattern correlates with the teacher's at **0.957** (the random control manages 0.712). The teacher's centroid probe sends stray Shirts mostly to T-shirt, Pullover, and Coat, at rates 0.26, 0.22, 0.15; the label-free student's rates are 0.24, 0.23, 0.17. It did not just learn where the classes are. It learned which mistakes are natural, which is exactly the "better mistakes" structure the previous post located in the kernel.
+
+## Which spectrum does the student grow into?
+
+There is one more thing to check, and it is the one that makes the whole arc click shut. If a latent space is the spectral embedding of a class kernel, then a student trained on a kernel should not just probe well. Its latent geometry should *become* some specific kernel's, eigenvalue by eigenvalue. But whose? Two candidates sit in this experiment, and they are not the same object: the teacher's own latent geometry, the private arrangement it actually thinks in, and $S(T{=}4)$, the version of it that went through the softmax and out onto the wire. Watch epoch by epoch, from the real checkpoints:
+
+<SpectrumInheritance caption="Eigenvalues of the student's latent class-mean Gram across the label-free run's epochs (orange, press Play), against the spectrum of the transferred kernel S(T = 4) (blue outline) and the teacher's own latent spectrum (dashed ticks). From a random init the student's bars grow into the blue outline, not the dashed one: the spectrum gap to S(4) closes to L1 0.24 while the gap to the teacher's private latent stays at 0.47. The student inherits the kernel that was actually handed over." />
+
+Before the student's number, settle what you expect. If anything in this experiment should agree with $S(4)$, it is the teacher: the kernel is a readout of the teacher's own mind, computed from nothing but its outputs, so the teacher's latent geometry should match it best and the student, a copy of a copy, should trail somewhere behind. Measured, the order flips. By the last epoch the student's class-mean Gram agrees with $S(4)$ at CKA **0.976**; the teacher's *own* latent Gram agrees with it at only 0.854.
+
+The resolution takes one turn: the softmax reshaped the teacher's private geometry on the way out (the temperature dial again), so $S(4)$ is not the teacher's mind but the teacher's message, and the student inherited the message, not the mind. The copy is more faithful to the wire than the author is. Its spectrum sits at L1 distance **0.24** from the transferred kernel's but **0.47** from the teacher's latent, while the KD and label students, which fit answers rather than relations, stay close to the teacher-latent shape instead (L1 0.06 and 0.03). Nothing in the relational loss mentions eigenvalues. The student converges onto the spectral embedding of the kernel it was fed because, as the previous post argued, that embedding is what "a latent space matching a similarity" *means*. Distillation is that theorem running as a training loop.
+
+## What this does not say
+
+The claim "distillation is kernel transfer" earns its caveats:
+
+- **The relational channel is thin but not free.** The student still needs the teacher's outputs *on the same inputs*; the kernel arrives example by example, so the transfer set matters, exactly as Hinton's held-out-3 experiment already showed. And our classic-KD baseline (85.8%) did not beat the label student (87.0%) here; on a small, clean dataset with abundant labels there is little for soft targets to add, and whether KD helps *top-line accuracy* is famously regime-dependent (Stanton et al., 2021). The point of this post is not that distillation beats labels. It is what distillation *moves* when it moves anything.
+- **The probes use labels.** The student never sees them, but the measurement does; "label-free" describes the training signal, not the evaluation.
+- **The floor is high and must be named.** Random features carry a lot of Fashion-MNIST by themselves (77.5% linear, 62.0% centroid). All fractions above are computed against that floor, not against chance, or the result would look more magical than it is.
+- **One dataset, one small architecture pair, three seeds.** The numbers are stable across the seeds we ran (83.7, 84.5, 84.9 linear), but this is a measurement on Fashion-MNIST, not a law of nature.
+- **Relational distillation is not new as a method**; matching pairwise structure is the RKD / similarity-preserving line of work (Park et al., 2019; Tung & Mori, 2019). What is different here is the question: those papers add relations to labels to climb a leaderboard, while this run *removes everything except* relations to isolate what they alone carry.
+
+## The picture, completed
+
+Three posts, one object. [The Welch-bound post](/blog/welch-bound-good-latent-space/) asked how class codes should pack, and [Latent on the Spectrum](/blog/latent-on-the-spectrum/) answered that a latent space is the spectral embedding of a class-similarity kernel, with the packing as its structureless special case. What was missing was motion: kernels were things a designer chose. This post watched one *travel*. A trained teacher serializes its kernel through its softened outputs, one example at a time; a student that matches nothing but those pairwise relations reconstructs the embedding on its side of the wire, closes about two thirds of the random-to-labels gap, out-organizes the label-trained student on the geometry-native probe, and grows the transferred kernel's spectrum, eigenvalue by eigenvalue.
+
+> Distillation works because the teacher's outputs define a class-similarity kernel, and a kernel is a geometry a student can be trained into. The labels tell a student where each example goes; the kernel tells it how the world hangs together. In this run, most of what label training builds could be rebuilt from the hanging-together alone. The teacher was never handing over an answer key. It was handing over the shape of the space the answers live in.
+
+And the temperature dial you dragged above is, in the end, the whole practical craft of distillation: choosing which geometry to put on the wire.
+
+<CiteAs
+  slug="distillation-is-kernel-transfer"
+  title="Distillation Is a Geometry, Not an Answer Key"
+  pubDate="2026-07-04"
+/>

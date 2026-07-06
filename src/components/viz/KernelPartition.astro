@@ -90,7 +90,12 @@ defineViz('kernelpartition', {
     for (let j = 0; j < nk * 2; j++) keys[j] = (krng() * 2 - 1) * 1.9;
 
     const P = GRID * GRID;
-    const S = scoreField(state.Xg, keys, nk, P, mode, m, state.seed);
+    // Cache the score field: it depends only on (mode, m, nk, seed), so a theme
+    // toggle, resize, or fullscreen repaint reuses it instead of rerunning the
+    // matmuls. A slider change legitimately busts the key and recomputes.
+    const fkey = mode + '|' + m + '|' + nk + '|' + state.seed;
+    if (state.fkey !== fkey) { state.S = scoreField(state.Xg, keys, nk, P, mode, m, state.seed); state.fkey = fkey; }
+    const S = state.S;
 
     // square plot region
     const side = Math.min(W - PAD * 2, H - PAD * 2 - 18);
@@ -121,7 +126,7 @@ defineViz('kernelpartition', {
     ctx.textAlign = 'center';
     text(ctx, labels[mode], W / 2, 2, colors, { align: 'center', size: 12, weight: '600', color: fg });
     const note = mode === 'favor' ? 'more features → cleaner cones' : mode === 'dot' ? 'exact: cones through the origin' : 'shifted, curved boundaries';
-    api.readout('ro', `${nk} keys · ${note} · jax-js`);
+    api.readout('ro', `${nk} keys · ${note} · live`);
   },
 });
 </script>

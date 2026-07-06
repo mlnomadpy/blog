@@ -52,9 +52,9 @@ import ForgetMatch from '../../components/viz/ForgetMatch.astro';
 
 ## A network you edit instead of train
 
-Why can you not just open an ordinary network and rewrite a class by hand? Because a standard neuron stores a direction $w$, and you cannot point at a direction: you cannot hand-write a useful one, read meaning off one, or edit anything by retyping it. Training is the only way in, since the weights mean nothing until gradient descent puts meaning there.
+Why can you not just open an ordinary network and rewrite a class by hand? The obstacle is the neuron itself. A standard neuron stores a direction $w$, and a direction is nothing you can point at: you cannot hand-write a useful one, read meaning off one, or edit anything by retyping it. Training is the only way in, since the weights mean nothing until gradient descent puts meaning there.
 
-A Yat unit stores a prototype $W_u$ instead, and scores an input by a kernel against it, $\phi_u(x) = (W_u^\top x + b)^2 / (\lVert x - W_u\rVert^2 + \varepsilon)$. The prototype sits in the same space as the data, so you can point at it: on Fashion-MNIST it is a 28x28 picture of a piece of clothing. A classifier is a bank of these prototypes and a readout where each one votes for its class. Built by hand from k-means centroids and a one-hot readout, with no gradient steps at all, it reaches **79%** on Fashion-MNIST.
+A Yat unit stores a prototype $W_u$ instead, and scores an input by a kernel against it, $\phi_u(x) = (W_u^\top x + b)^2 / (\lVert x - W_u\rVert^2 + \varepsilon)$. The prototype sits in the same space as the data, so you can point at it: on Fashion-MNIST it is a 28x28 picture of a piece of clothing. A classifier is a bank of these prototypes and a readout that records which class each one speaks for. Built by hand from k-means centroids, with no gradient steps at all, it reaches **79%** on Fashion-MNIST.
 
 Write that as vectors; the edits later are one line each off it. Stack the $K$ activations into $\phi(x) = (\phi_1(x), \dots, \phi_K(x)) \in \mathbb{R}^K_{\ge 0}$, and let the readout be a matrix $A \in \{0,1\}^{K \times C}$ with row $u$ one-hot at unit $u$'s class. The class scores are the readout applied to the activations,
 
@@ -62,7 +62,7 @@ $$
 s(x) = A^\top \phi(x) \in \mathbb{R}^C, \qquad s_c(x) = \sum_{u\,:\,\text{class}(u)=c} \phi_u(x), \qquad \hat y(x) = \arg\max_c\, s_c(x).
 $$
 
-Two things about that sum come back later. A class's score uses only its own prototypes; no other class appears in $s_c$. And the prototypes enter additively, one term each. Teaching adds terms, forgetting removes them, and everything else follows.
+One honest note before the sum does any work. The structure of that formula, each class scored from its own block of rows and no others, is what this whole post exploits; the quoted accuracies, though, come from a sharper decision rule inside the same blocks: score class $c$ by its *best-matching* prototype, $s_c(x) = \max_{u \in c} \phi_u(x)$, the nearest-prototype readout (`mode='max'` in the script). The [previous post](/blog/your-neuron-is-a-picture/) measured the gap: the linear sum-vote reaches 68%, the per-class max 79%. Everything below, teaching by appending rows, forgetting by deleting them, the invariance of every untouched class, holds under either rule, because both read a class from its own rows alone; the prototypes enter one term each, and teaching adds terms while forgetting removes them.
 
 First, though, how it decides. Pick an image below and the kernel against all 200 prototypes runs in your browser. Each atom is a prototype, brightening with resemblance; the readout carries those resemblances to the ten class outputs, and the loudest wins. The prediction is that vote, with nothing behind it.
 
@@ -70,19 +70,31 @@ First, though, how it decides. Pick an image below and the kernel against all 20
 
 ## Each class is one vector
 
-The kernel theory under this is in the [previous post](/blog/your-neuron-is-a-picture/): $\phi_u(x) = k(x, W_u)$ is a positive-definite kernel with an RKHS feature map $\Phi$, so $\phi_u(x) = \langle\Phi(x),\Phi(W_u)\rangle_{\mathcal H}$, and the centers sit in input space, which is what makes them pictures. One line of it is useful here. The sum over a class slides inside the inner product,
+Move one class, and the other nine cannot feel it. That is the property every edit in this post rides on, and it is one line of kernel algebra away. The theory is in the [previous post](/blog/your-neuron-is-a-picture/): $\phi_u(x) = k(x, W_u)$ is a positive-definite kernel with an RKHS feature map $\Phi$, so $\phi_u(x) = \langle\Phi(x),\Phi(W_u)\rangle_{\mathcal H}$, and the centers sit in input space, which is what makes them pictures. The line we need is what happens when the sum over a class slides inside the inner product,
 
 $$
 s_c(x)=\sum_{u\in c}\langle\Phi(x),\Phi(W_u)\rangle_{\mathcal H}=\langle\Phi(x),\,\mu_c\rangle_{\mathcal H},\qquad \mu_c:=\sum_{u\in c}\Phi(W_u).
 $$
 
-A class is now one vector $\mu_c\in\mathcal H$, the mean of its prototypes in feature space, and the network picks the nearest one, $\hat y(x)=\arg\max_c\langle\Phi(x),\mu_c\rangle$, a Parzen-window vote. Ten classes, ten independent vectors, a score linear in each. Move one $\mu_c$ and the other nine inner products do not change. That is the version of the post in one sentence; the rest is watching it happen.
+A class is now one vector $\mu_c\in\mathcal H$, the mean of its prototypes in feature space, and the sum-vote network picks the class whose vector matches best, $\hat y(x)=\arg\max_c\langle\Phi(x),\mu_c\rangle$, a Parzen-window vote (the nearest-prototype rule reads the same picture, just crediting the single closest $\Phi(W_u)$ in the bundle instead of the whole bundle). Ten classes, ten independent vectors, each built from its own prototypes and nothing else. Edit one $\mu_c$ and the other nine do not change. The rest of the post is watching that sentence happen.
 
 ## The network is a landscape of wells
 
 Everything so far has lived in a space with 784 axes, which is to say you cannot picture any of it. Here is the move that rescues the intuition, and it is not a metaphor I am reaching for; it is sitting in the formula. Look at the denominator, $1 / (\lVert x - W_u\rVert^2 + \varepsilon)$. That is a softened inverse-square law, the exact shape of gravity and of electrostatics, and the $\varepsilon$ is its softening length, the same constant an N-body simulation adds so the force stays finite when two bodies meet. So a prototype is a mass. It digs a well into the input space, and no matter how many dimensions that space has, you can now hold the whole thing in your head as one picture: a landscape of wells that things fall into.
 
-A bank of prototypes is then a landscape of wells, one cluster per class, and the class score is its field: $s_c(x) = \sum_{u\in c} \phi_u(x)$ sums class $c$'s wells the way a gravitational field sums the potentials of its masses. A point is classified by the deepest basin it can feel, $\hat y(x) = \arg\max_c s_c(x)$, and the boundary is the watershed where two fields come out even, $\{x : s_c(x) = s_{c'}(x)\}$. Far from every prototype the field stays bounded instead of blowing up, so a point that looks like nothing settles nowhere and the network can hold back. Drag the marker below across a ridge and its class flips.
+The correspondence is exact enough to write down, term for term, and it is worth having in front of you for the rest of the post:
+
+| in the network | in the physical picture |
+| --- | --- |
+| prototype $W_u$ | a mass sitting in the space |
+| activation $\phi_u(x)$ | the pull you feel from that mass |
+| $\varepsilon$ | the N-body softening length |
+| class score $s_c(x)$ | the field of class $c$'s masses |
+| classifying $x$ | falling into the deepest basin |
+| teaching a class | dropping in new masses, a well opens |
+| forgetting a class | removing them, the basin caves in |
+
+A bank of prototypes is then a landscape of wells, one cluster per class, and the class score is its field: $s_c(x) = \sum_{u\in c} \phi_u(x)$ sums class $c$'s wells the way a gravitational field sums the potentials of its masses (the nearest-prototype rule reads the same landscape by its single deepest well, which is why both rules tell the same story here). A point is classified by the deepest basin it can feel, $\hat y(x) = \arg\max_c s_c(x)$, and the boundary is the watershed where two fields come out even, $\{x : s_c(x) = s_{c'}(x)\}$. Far from every prototype the field stays bounded instead of blowing up, so a point that looks like nothing settles nowhere and the network can hold back. Drag the marker below across a ridge and its class flips.
 
 <AttractorField caption="The kernel as a field of attractors, in 2D where you can see it. Each prototype is a well with a 1/(r²+ε) pull, a softened inverse-square law (ε is the gravitational softening length). The plane is coloured by which basin wins, darkening to a watershed at the boundaries. Press “drop test particles” and they fall into the basins, coloured by the class they land in, which is the whole act of classification. Drag the white marker to feel the pull flip as it crosses a ridge. Click a well to delete it: its basin collapses and the neighbours flood in to reclaim the ground, while the rest of the landscape does not move. A 2D physics illustration of the same kernel the rest of the post runs on Fashion-MNIST." />
 
@@ -92,19 +104,19 @@ The two edits ahead are moves on this landscape. Teaching drops a new mass and o
 
 Give the network a hole, then watch how cheaply it fills. This hand-built classifier has only ever seen eight of the ten classes, twenty prototypes each for classes 0 through 7, and it has never laid eyes on a Bag or a Boot; on the classes it does know, it scores **77.8%**. So how do you teach it the two it is missing?
 
-Now teach it the two it is missing. Take twenty example images of Bag and twenty of Boot, drop them in as new prototypes, and give each a readout row so it can vote. Forty pictures placed, no optimizer, no backward pass, no epochs.
+The answer is a paste. Take twenty example images of Bag and twenty of Boot, drop them in as new prototypes, and give each a readout row naming its class. Forty pictures placed, no optimizer, no backward pass, no epochs.
 
 The model now recognizes **Bag at 95%** and **Boot at 94%**, classes it had never encountered a moment ago. And the classes it already knew barely flinch: accuracy on classes 0 through 7 moves from 77.8% to 75.6%, a two-point dip that comes only from the new prototypes occasionally sitting closer to an old test image, not from anything being overwritten. Overall, across all ten classes, it scores **79.4%**.
 
 A model built on all ten classes from the start scores **79.4%** too. Adding the two after the fact cost nothing, because for a list there is no "after the fact": a prototype placed last behaves exactly like one placed first.
 
-The algebra says why in a line. Teaching class $c$ appends rows $(W_c, e_c)$ to $(W, A)$, each new readout row one-hot at $c$. For any other class $c' \ne c$, the new units contribute $A_{u,c'}\,\phi_u(x) = 0$, so
+Why did nothing old move? One line of algebra. Teaching class $c$ appends rows $(W_c, e_c)$ to $(W, A)$, each new readout row one-hot at $c$. For any other class $c' \ne c$, the new units contribute $A_{u,c'}\,\phi_u(x) = 0$, so
 
 $$
 s_{c'}(x) \;\text{is unchanged, exactly,} \qquad s_c(x) \;\mapsto\; s_c(x) + \sum_{u \in \text{new}} \phi_u(x).
 $$
 
-Only the taught class's score moves. An old image gets relabelled only if the new $s_c$ now beats its previous winner, never because its own class was corrupted underneath it, which is the two-point dip and not a point more. And a sum does not remember the order of its terms, so teaching one class at a time and building all ten at once give the identical score function. Order-independence is just addition commuting, which was the fields superposing seen from the other side.
+Only the taught class's score moves (under the nearest-prototype rule, replace that added sum with a max over old and new rows; every other class's score is identical either way). An old image gets relabelled only if the new $s_c$ now beats its previous winner, never because its own class was corrupted underneath it, which is the two-point dip and not a point more. And neither a sum nor a max remembers the order its terms arrived in, so teaching one class at a time and building all ten at once give the identical score function. Order-independence is just addition commuting, which was the fields superposing seen from the other side.
 
 <TeachByExample caption="Teaching, made concrete. Left is the network's memory: ten labelled bins, empty to start, so it knows nothing and guesses every held-out test image (right) wrong. Click a class to teach it: you drop in that class's example pictures, no training, and every test image of that class flips from a red wrong guess to a green correct one at once. Knowledge here is just labelled example pictures, and teaching is adding some. Teach all ten and it recognizes 81% of a held-out sample, where a from-scratch build also lands (the text quotes 79.4% on the full test set)." />
 
@@ -114,13 +126,13 @@ Try it above: start with an empty memory that gets everything wrong, then teach 
 
 Now run it backwards. Take the full ten-class model and ask it to forget Sandals: not to score them worse, but to lose the capability, as if those examples had never been part of it.
 
-The edit is the obvious one. Find the twenty prototypes that vote for Sandal, delete them, delete their readout rows. That is the entire procedure.
+What edit could possibly amount to erasure? The obvious one. Find the twenty prototypes that vote for Sandal, delete them, delete their readout rows. That is the entire procedure.
 
 Sandal recall goes from **64% to 0%**. The class is gone; nothing in the network resembles a sandal anymore, so nothing can be classified as one. And the other nine classes go from **81.1% to 81.3%**, untouched, in fact a hair better, because the deleted prototypes are no longer around to occasionally steal a test image that belonged to someone else. The forgetting is exact and surgical. You removed precisely one capability and left the rest of the network bit-for-bit identical.
 
-The sum makes that provable. For any surviving class $c' \ne c$, the score $s_{c'}(x) = \sum_{u \in c'} \phi_u(x)$ never named one of class $c$'s rows, so deleting them does nothing to it: $s_{c'}$ is the function it was, term for term, while $s_c$ empties out. The other nine are not *approximately* preserved, the way a fine-tuned or gradient-scrubbed model leaves them. They are identical, and you can diff the weight matrices to see it. That is the line between approximate and exact unlearning: not "we lowered its influence and hope," but "the rows are gone, check."
+The partition makes that provable. For any surviving class $c' \ne c$, the score is built from class $c'$'s own rows, $s_{c'}(x) = \sum_{u \in c'} \phi_u(x)$, or their max under the nearest-prototype rule, and neither ever named one of class $c$'s rows, so deleting them does nothing to it: $s_{c'}$ is the function it was, term for term, while $s_c$ empties out. The other nine are not *approximately* preserved, the way a fine-tuned or gradient-scrubbed model leaves them. They are identical, and you can diff the weight matrices to see it; the [companion](/blog/edit-a-network-jax-flax-nnx/) does exactly that, asserting every surviving row bit-for-bit equal to what it was before the edit. That is the line between approximate and exact unlearning: not "we lowered its influence and hope," but "the rows are gone, check."
 
-<ForgetMatch caption="Why forgetting is exact, made visible. The network recognizes each test image (left) by the single prototype it most resembles (right): that match is the decision, and its class is the label. Click a class in the memory strip to delete it. The images that were recognized by that class lose their match and re-point to a surviving prototype, usually wrong now (shown in red, “re-routed”); every other image keeps the exact same match and label, untouched. Delete Sandal and only the sandals break, which is the whole claim: removing a class disturbs only what relied on it. Matches are computed live on jax-js." />
+<ForgetMatch caption="Why forgetting is exact, made visible. The network recognizes each test image (left) by the single prototype it most resembles (right): that match is the decision, and its class is the label. Click a class in the memory strip to delete it. The images that were recognized by that class lose their match and re-point to a surviving prototype, usually wrong now (shown in red, “re-routed”); every other image keeps the exact same match and label, untouched. Delete Sandal and only the sandals break, which is the whole claim: removing a class disturbs only what relied on it. Matches are computed live in your browser." />
 
 Delete any class above and only its line drops; the other nine hold flat. That is the claim, on screen.
 

@@ -38,7 +38,7 @@ import CiteAs from '../../components/CiteAs.astro';
 
 ## A kernel's eigenvalues are its spectral density
 
-On a periodic domain a translation-invariant kernel $k(x, y) = \kappa(x - y)$ is diagonal in the Fourier basis: its eigenfunctions are the modes $\cos(kx), \sin(kx)$, and its eigenvalues $\lambda_k$ are the Fourier transform of $\kappa$. So the whole price list is one FFT.
+The whole price list is one FFT. On a periodic domain a translation-invariant kernel $k(x, y) = \kappa(x - y)$ is diagonal in the Fourier basis: its eigenfunctions are the modes $\cos(kx), \sin(kx)$, and its eigenvalues $\lambda_k$ are the Fourier transform of $\kappa$.
 
 ```python
 import jax, jax.numpy as jnp
@@ -96,7 +96,7 @@ Under the Sobolev price list the charges shrink like $k^{-4} \cdot k^{2} = k^{-2
 
 ## The same corner, fit in two homes
 
-You can feel the difference without any spectra. Fit a tent by kernel ridge, with a Gaussian, a Yat (inverse-multiquadric), and a Sobolev (Laplace) kernel, and lower the penalty. The Sobolev fit sharpens into the corner; both smooth kernels, the Gaussian and the Yat, round it off forever, because a corner is in neither of their spaces at any price. The placed weight is the representer form, written here as a tiny Flax NNX module that holds the centers and coefficients and is never trained.
+You can feel the difference without any spectra. Fit a tent by kernel ridge, with a Gaussian, a Yat (inverse-multiquadric), and a Sobolev (Laplace) kernel, and lower the penalty. The Sobolev fit sharpens into the corner; both smooth kernels, the Gaussian and the Yat, round it off forever, because a corner is in neither of their spaces at any price. And notice that nothing here is trained: the weight is *placed*, the representer form written as a tiny Flax NNX module holding the centers and the solved coefficients.
 
 ```python
 from flax import nnx
@@ -152,9 +152,7 @@ Sharpen the cap, $\kappa(t) = e^{s(t - 1)}$, and its high degrees grow cheaper, 
 
 ## Where the Yat kernel actually sits
 
-So which home does this series' prototype move into? The Yat kernel is a squared alignment times an inverse-multiquadric distance gate, $k(x, W) = (\langle x, W\rangle + b)^2 / (\lVert x - W\rVert^2 + \varepsilon)$, and its smoothness is set by that gate. The numbers above are unambiguous: the inverse-multiquadric's eigenvalues decay *exponentially*, not like the Matern family's polynomial $k^{-2s}$. So the Yat kernel does not live in a Sobolev space, and a corner is not in its RKHS, the bill diverges, only slowly.
-
-What it is instead is the more useful thing for this series. Its eigenvalues fall slower than a Gaussian's, so its space is strictly larger, and it is universal for $\varepsilon > 0$: it can approximate any continuous target arbitrarily well. And on normalized inputs it is a zonal kernel of $\langle x, W\rangle$, so its weights are graded by spherical harmonics. The reason a Yat prototype can be a sharp, legible picture is not that its space is Sobolev-rough; it is that its denominator is a heavy inverse-square law in *space*, which is a different axis from frequency smoothness entirely: it buys locality, a bounded response, and a center that stays in input space. That locality, not roughness, is what makes the prototype a picture you can point at.
+So which home does this series' prototype move into? The [explainer](/blog/what-can-a-weight-be/) already placed it: not Sobolev, roomier than the Gaussian, universal for $\varepsilon > 0$, zonal on the sphere, its legibility bought by locality rather than roughness. What the code adds is the numbers behind that placement, the three decays side by side:
 
 ```python
 # the three decays, side by side: super-exponential, polynomial, exponential
@@ -166,7 +164,7 @@ for name, lam in [('Gaussian', lam_gauss), ('Sobolev', lam_sobol), ('Yat / IMQ',
 # Yat / IMQ  λ₈=8.7e-02  λ₁₆=5.4e-03  λ₃₂=2.5e-06     (exponential: smooth, universal, between)
 ```
 
-That is the honest answer to what a weight can be. It can be exactly as rough as the kernel's eigenvalues let it afford, on exactly the geometry the kernel is built around, and the Yat kernel chooses a smooth, universal, local home on the sphere, not a Sobolev one.
+Exponential decay, between the Gaussian's cliff and the Sobolev power law: smooth, universal, roomier than the Gaussian, and not Sobolev, exactly where the explainer placed it.
 
 ---
 

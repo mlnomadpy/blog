@@ -2,7 +2,7 @@
 title: "Self-Attention as Kernel Regression in JAX/Flax NNX"
 description: "A runnable companion to Attention is Explainable Because it is a Kernel: build scaled dot-product attention from scratch in Flax NNX, prove in code that it is exactly a Nadaraya–Watson kernel smoother, watch the separate q/k projections break positive-definiteness numerically, swap the exp-dot-product kernel for Gaussian, Yat, and linear kernels to see which keep the weights a convex partition of unity, read the temperature as a kernel bandwidth, and train a single head end-to-end to route to a marked token."
 seoDescription: "Self-attention as Nadaraya–Watson kernel regression in JAX/Flax NNX: build attention from scratch, assert the equivalence in code, then swap the kernel."
-pubDate: 2026-06-15T10:00:00-07:00
+pubDate: 2026-05-14T10:00:00-07:00
 draft: false
 tags: [ml, attention, kernels, interpretability, transformers, rkhs, jax, flax, nnx, implementation, nadaraya-watson, self-attention]
 references:
@@ -54,7 +54,7 @@ import CiteAs from '../../components/CiteAs.astro';
 
 ## Scaled dot-product attention, by hand
 
-A single attention head is three learned projections and a softmax. In `nnx.Linear` the kernel maps the last axis, so the module reads the same whether `x` is one token or a sequence.
+How much machinery does a head actually take? Three learned projections and a softmax, nothing else. In `nnx.Linear` the kernel maps the last axis, so the module reads the same whether `x` is one token or a sequence.
 
 ```python
 import jax
@@ -85,7 +85,7 @@ That is the whole object. `alpha` is a row-stochastic matrix, each row a distrib
 
 ## It is Nadaraya–Watson, and you can assert it
 
-The classical Nadaraya–Watson estimator predicts at a query by normalizing a kernel over observations and using it to weight the targets: $\hat f(x)=\sum_i \frac{K(x,x_i)}{\sum_j K(x,x_j)}\,y_i$. Write that estimator with no reference to attention, just a kernel, a normalizer, and a weighted sum of targets, and feed it the exp-dot-product kernel:
+So where is the 1964 estimator hiding in those eight lines? The classical Nadaraya–Watson estimator predicts at a query by normalizing a kernel over observations and using it to weight the targets: $\hat f(x)=\sum_i \frac{K(x,x_i)}{\sum_j K(x,x_j)}\,y_i$. Write that estimator with no reference to attention, just a kernel, a normalizer, and a weighted sum of targets, and feed it the exp-dot-product kernel:
 
 ```python
 def nadaraya_watson(q, k, v, kernel):
@@ -272,7 +272,7 @@ No supervision named the marker; the head discovered that the way to minimize th
 
 ## What this leaves out
 
-A real attention layer stacks many heads, carries a causal mask (a `jnp.tril` that sets the upper triangle to `-jnp.inf` before the softmax), and caches keys and values at inference. None of that touches the kernel reading: each head is its own Nadaraya–Watson smoother with its own learned kernel, and the mask just restricts which observations a query is allowed to see.
+Does any of this survive contact with a production layer? A real attention layer stacks many heads, carries a causal mask (a `jnp.tril` that sets the upper triangle to `-jnp.inf` before the softmax), and caches keys and values at inference. None of that touches the kernel reading: each head is its own Nadaraya–Watson smoother with its own learned kernel, and the mask just restricts which observations a query is allowed to see.
 
 The non-positive-definiteness is also not only a curiosity. It is exactly what the [linear-attention companion](/blog/linear-attention-jax-flax-nnx/) has to confront: to make attention cheap you replace the exp-dot-product kernel with an explicit feature map $\phi(q)^\top\phi(k)$, and the honesty of that approximation (Performer; Katharopoulos et al.) is a statement about how well a *positive-definite* surrogate stands in for a kernel that never was one. The smoother view is what makes that question askable.
 
@@ -285,7 +285,7 @@ The non-positive-definiteness is also not only a curiosity. It is exactly what t
 
 *References: Flax NNX [Module API](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html); the kernel lens on attention from [Tsai et al. (2019)](https://aclanthology.org/D19-1443/); Nadaraya–Watson regression from Nadaraya (1964) and Watson (1964); linear-attention feature maps from [Katharopoulos et al. (2020)](https://arxiv.org/abs/2006.16236) and [Choromanski et al. (2021)](https://arxiv.org/abs/2009.14794).*
 
-<CiteAs slug="attention-is-kernel-jax-flax-nnx" title="Self-Attention as Kernel Regression in JAX/Flax NNX" pubDate="2026-06-15T10:00:00-07:00" />
+<CiteAs slug="attention-is-kernel-jax-flax-nnx" title="Self-Attention as Kernel Regression in JAX/Flax NNX" pubDate="2026-05-14T10:00:00-07:00" />
 
 <style>{`
 .jax-fig { margin: 1.8rem auto; text-align: center; }

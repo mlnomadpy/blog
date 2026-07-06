@@ -117,7 +117,7 @@ defineViz('symskewscore', {
     let ddiff = 0; for (let i = 0; i < n; i++) ddiff = Math.max(ddiff, Math.abs(Mtot[i][i] - Msym[i][i]));
     text(ctx, `antisymmetric part is empty on the diagonal, self-score xᵢᵀBxᵢ = xᵢᵀSxᵢ (max diff ${ddiff.toFixed(3)}); only α drives the asymmetry`,
       box.x + 12, box.y + box.h - 16, colors, { size: 10, mono: true, color: colors.muted });
-    api.readout('rd', `max |s_ij − s_ji| = ${asym.toFixed(2)} · jax-js`);
+    api.readout('rd', `max |s_ij − s_ji| = ${asym.toFixed(2)} · live`);
   },
 });
 </script>

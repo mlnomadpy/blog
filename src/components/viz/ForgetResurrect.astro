@@ -1,0 +1,169 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 450 } = Astro.props;
+---
+<figure class="viz forgetres" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Silenced is not erased. The trained blob class is forgotten by masking its readout
+// row: recall drops to zero and the other classes' scores are literally the same
+// numbers (the same settled states read through the same surviving rows). But watch
+// the state space: the class's equilibria have not moved. The flow still carries the
+// class, gradient descent wove it into the one shared operator, and eight pasted
+// anchor rows read it right back out. All states and scores are solved live here.
+import { defineViz } from './engine/vizkit.js';
+import { gate, loadingText, T, frame, roundRect } from './engine/draw.js';
+import { loadReady, compute, solveAsync, CLS } from './yatdeqedit.js';
+
+const NAMES = ['moon 0', 'moon 1', 'blob (class 2)'];
+
+defineViz('forgetres', {
+  title: 'Mask the row and the class goes quiet. Its equilibria stay.',
+  height: 450,
+  controls: [
+    { type: 'select', name: 'stage', label: 'the model', value: 'full', reset: false,
+      options: [
+        { value: 'full', label: 'full model (3 trained classes)' },
+        { value: 'masked', label: 'forget class 2: mask its readout row' },
+        { value: 'res', label: 'masked, then paste 8 anchor rows' },
+      ] },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    gate(api, loadReady, (api, model) => {
+      const cmp = compute(model), Tt = model.test, P = model.params;
+      // solve every old-class test input to its equilibrium, once, live
+      const idx = [];
+      for (let i = 0; i < Tt.y.length; i++) if (Tt.y[i] < 3) idx.push(i);
+      const X = idx.map((i) => Tt.x[i]);
+      // solve every old-class input to equilibrium off the main thread, then read
+      // logits + resurrection scores from the settled states (cheap, stays here)
+      solveAsync(cmp, 'base', X, 70).then(({ z: Z, proj }) => {
+      if (!api.state) return;
+      const lg = Z.map((z) => P.C.map((row) => {
+        let s = 0; for (let d = 0; d < cmp.D; d++) s += row[d] * z[d];
+        return s;
+      }).map((v, c) => v + P.cb[c]));
+      // resurrection anchors: the equilibria of the first 8 class-2 inputs (held out of the recall)
+      const anchorsAt = [], evalMask = [];
+      for (let k = 0; k < idx.length; k++) {
+        const isC2 = Tt.y[idx[k]] === 2;
+        if (isC2 && anchorsAt.length < 8) { anchorsAt.push(k); evalMask.push(false); }
+        else evalMask.push(true);
+      }
+      const anc = anchorsAt.map((k) => Z[k]);
+      const b = P.b, eps = P.eps, alpha = model.edit.alpha;
+      const s2res = Z.map((z) => {
+        let best = -1e9;
+        for (const a of anc) {
+          let dot = 0, d2 = 0;
+          for (let d = 0; d < cmp.D; d++) { dot += z[d] * a[d]; const v = z[d] - a[d]; d2 += v * v; }
+          const k = (dot + b) * (dot + b) / (d2 + eps);
+          if (k > best) best = k;
+        }
+        return alpha * best;
+      });
+      api.state.M = { y: idx.map((i) => Tt.y[i]), proj, lg, s2res, anchorsAt, evalMask };
+      api.render();
+      });
+    });
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0) return;
+    if (!st.ready || !st.M) { loadingText(api, 'solving every input to its equilibrium…'); return; }
+    const M = st.M, stage = api.get('stage');
+
+    const decide = (i) => {
+      const l = M.lg[i];
+      if (stage === 'full') return l[2] >= l[0] && l[2] >= l[1] ? 2 : (l[1] > l[0] ? 1 : 0);
+      const p01 = l[1] > l[0] ? 1 : 0;
+      if (stage === 'masked') return p01;
+      return M.s2res[i] > Math.max(l[0], l[1]) ? 2 : p01;
+    };
+
+    const pad = 14, side = Math.min(W * 0.52, H - pad * 2 - 18);
+    const B = { x: pad, y: pad + 18, w: side, h: side };
+    T(ctx, colors, 'kicker');
+    ctx.fillText('state space: every input’s equilibrium, colored by the current prediction', B.x, B.y - 6);
+    frame(ctx, colors, B.x, B.y, B.w, B.h);
+    let xa = 1e9, xb = -1e9, ya = 1e9, yb = -1e9;
+    for (const p of M.proj) { xa = Math.min(xa, p[0]); xb = Math.max(xb, p[0]); ya = Math.min(ya, p[1]); yb = Math.max(yb, p[1]); }
+    const mx = (xb - xa) * 0.08, my = (yb - ya) * 0.08;
+    const qx = (x) => B.x + ((x - (xa - mx)) / (xb - xa + 2 * mx)) * B.w;
+    const qy = (y) => B.y + B.h - ((y - (ya - my)) / (yb - ya + 2 * my)) * B.h;
+    for (let i = 0; i < M.proj.length; i++) {
+      const pred = decide(i), wrong = pred !== M.y[i];
+      ctx.globalAlpha = 0.8; ctx.fillStyle = CLS[pred];
+      ctx.beginPath(); ctx.arc(qx(M.proj[i][0]), qy(M.proj[i][1]), 2.6, 0, 6.283); ctx.fill();
+      if (wrong) { ctx.globalAlpha = 1; ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 1.1; ctx.stroke(); }
+    }
+    ctx.globalAlpha = 1;
+    if (stage === 'res') for (const k of M.anchorsAt) {
+      ctx.strokeStyle = colors.fg; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.arc(qx(M.proj[k][0]), qy(M.proj[k][1]), 6, 0, 6.283); ctx.stroke();
+    }
+    T(ctx, colors, 'small', { color: colors.faint });
+    ctx.fillText(stage === 'masked' ? 'the class-2 cluster has not moved; nothing reads it'
+      : stage === 'res' ? 'circled: the 8 pasted anchor rows reading the cluster back out'
+        : 'the class-2 cluster, read by its trained row', B.x + 8, B.y + B.h - 8);
+
+    // ── right: recalls under the current row set, computed live ──
+    const S = { x: B.x + B.w + 24, y: B.y, w: W - pad - (B.x + B.w + 24) };
+    T(ctx, colors, 'title'); ctx.fillText('recall, live', S.x, S.y + 12);
+    let y = S.y + 28;
+    const recalls = [0, 1, 2].map((c) => {
+      let ok = 0, n = 0;
+      for (let i = 0; i < M.y.length; i++) {
+        if (M.y[i] !== c || !M.evalMask[i]) continue;
+        n++; if (decide(i) === c) ok++;
+      }
+      return ok / n;
+    });
+    for (let c = 0; c < 3; c++) {
+      T(ctx, colors, 'label', { color: colors.fg });
+      ctx.fillText(NAMES[c], S.x, y + 9);
+      const bx = S.x + 92, bw = S.w - 92 - 44;
+      ctx.fillStyle = colors.cellBg; ctx.fillRect(bx, y, bw, 11);
+      ctx.fillStyle = CLS[c]; ctx.globalAlpha = 0.85;
+      ctx.fillRect(bx, y, Math.max(0, bw * recalls[c]), 11); ctx.globalAlpha = 1;
+      ctx.strokeStyle = colors.border; ctx.strokeRect(bx + 0.5, y + 0.5, bw - 1, 10);
+      T(ctx, colors, 'small', { align: 'left' });
+      ctx.fillText((recalls[c] * 100).toFixed(1) + '%', bx + bw + 6, y + 9);
+      y += 22;
+    }
+
+    // the ledger card: what each kind of forgetting really is
+    y += 14;
+    const cardH = 118;
+    roundRect(ctx, S.x, y, S.w, cardH, 8);
+    ctx.fillStyle = colors.cellBg; ctx.fill(); ctx.strokeStyle = colors.border; ctx.stroke();
+    T(ctx, colors, 'kicker'); ctx.fillText('the two ledgers', S.x + 10, y + 16);
+    const lines = [
+      ['a class you pasted in', 'delete its rows: the operator is', 'restored bit for bit. Exact undo.'],
+      ['a class you trained in', 'mask its row: unreadable, scores of', 'the others are the same numbers.', 'But the flow still carries it: 8 rows', 'read it back at full recall.'],
+    ];
+    let ly = y + 32;
+    for (const blk of lines) {
+      T(ctx, colors, 'label', { color: colors.fg, weight: 'b' });
+      ctx.fillText(blk[0], S.x + 10, ly); ly += 14;
+      T(ctx, colors, 'label');
+      for (let i = 1; i < blk.length; i++) { ctx.fillText(blk[i], S.x + 10, ly); ly += 13; }
+      ly += 4;
+    }
+
+    const msg = stage === 'full' ? `class 2 read by its trained row: recall ${(recalls[2] * 100).toFixed(1)}%`
+      : stage === 'masked' ? `row masked: class 2 recall ${(recalls[2] * 100).toFixed(1)}%, classes 0/1 read the identical scores`
+        : `8 anchor rows pasted: class 2 recall ${(recalls[2] * 100).toFixed(1)}%, no training. Unreadable was never erased`;
+    api.readout('rd', msg);
+  },
+});
+</script>

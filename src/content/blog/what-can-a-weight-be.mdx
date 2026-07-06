@@ -46,7 +46,9 @@ The question is not idle, because two kernels can both make the weight a point a
 
 ## A kernel is a price list for roughness
 
-Every kernel hides the same skeleton. By Mercer's theorem it splits into a set of modes $\phi_i$, fixed shapes, each with a non-negative weight $\lambda_i$:
+What decides who gets in? Money, in effect. Picture every candidate weight arriving with a shopping list: it is assembled from a fixed catalog of basic shapes, and each shape has a posted price. Smooth, slow shapes are cheap; sharp, fast, wiggly ones are expensive, and how expensive depends on the kernel. The space admits exactly the weights that can afford their total bill. A kernel is, secretly, a price list for roughness.
+
+That picture is not a metaphor bolted on afterward; it is the literal content of Mercer's theorem. Every kernel splits into a set of modes $\phi_i$, fixed shapes, each with a non-negative weight $\lambda_i$:
 
 $$
 k(x, y) = \sum_i \lambda_i\, \phi_i(x)\, \phi_i(y).
@@ -58,13 +60,13 @@ $$
 \lVert f \rVert_{\mathcal{H}}^2 = \sum_i \frac{c_i^2}{\lambda_i}.
 $$
 
-Read that norm as a bill. To use mode $i$ with amplitude $c_i$ you pay $c_i^2/\lambda_i$. A mode with a large eigenvalue $\lambda_i$ is cheap; a mode with a tiny eigenvalue is ruinously expensive. The RKHS is exactly the set of functions whose total bill is finite, the functions you can *afford*. And since sharp features, corners and spikes, are built from the high-frequency modes, whether the weight can be rough comes down to one thing: **how fast the eigenvalues decay**. That single curve is the kernel's whole personality.
+That norm is the bill. To use mode $i$ with amplitude $c_i$ you pay $c_i^2/\lambda_i$. A mode with a large eigenvalue $\lambda_i$ is cheap; a mode with a tiny eigenvalue is ruinously expensive. The RKHS is exactly the set of functions whose total bill is finite, the functions you can *afford*. And since sharp features, corners and spikes, are built from the high-frequency modes, whether the weight can be rough comes down to one thing: **how fast the eigenvalues decay**. That single curve is the kernel's whole personality.
 
 <KernelPriceList client:visible caption="An audition. Five candidate weights, a smooth bump, a gentle wave, a corner, a jump, a spike, each tries to live in the chosen kernel's space. The verdict is its real RKHS norm: a finite bill is admitted, an infinite one means the weight is too rough for this space. Switch the kernel and the guest list changes. The Gaussian admits only the two analytic weights and bars every corner, jump and spike; the Yat kernel, smooth like the Gaussian, admits the same two and no more, only roomier and universal; the Sobolev kernel lets the corner and the spike back in but still rejects the true jump; the polynomial space holds only the pure wave; the bandlimited one takes anything below its cutoff. Choosing a kernel is choosing who gets in." />
 
 ## Sobolev: the home with room for a corner
 
-Start with the roomy case, because it is the one most worth wanting. A large family of kernels, the Matérn kernels of spatial statistics, the Laplace kernel $e^{-\lVert x-y\rVert}$, and the inverse-multiquadric, all have eigenvalues that decay like a *polynomial* in the frequency, $\lambda_k \sim (1 + \lVert\omega\rVert^2)^{-s}$. Slow decay means high frequencies are merely expensive, not banned.
+So which kernels let the weight be sharp? A large family of them, the Matérn kernels of spatial statistics, the Laplace kernel $e^{-\lVert x-y\rVert}$, and the inverse-multiquadric, all have eigenvalues that decay like a *polynomial* in the frequency, $\lambda_k \sim (1 + \lVert\omega\rVert^2)^{-s}$. Slow decay means high frequencies are merely expensive, not banned.
 
 That has an exact name. The RKHS of such a kernel is norm-equivalent to a **Sobolev space** $H^s$, the functions whose first $s$ derivatives are square-integrable:
 
@@ -98,11 +100,11 @@ Same skeleton as before, a price list over modes, but now the modes are the vibr
 
 ## The rest of the zoo, in one line each
 
-The same lens classifies every kernel you have met. A **polynomial** kernel keeps only finitely many modes alive, so its RKHS is finite-dimensional: the weight can only be a polynomial of bounded degree, and there is no room for anything finer. A **bandlimited**, or sinc, kernel sets its prices to a hard step, one below a cutoff frequency and zero above, so its RKHS is the bandlimited functions and the cutoff is an absolute wall. The **Brownian-motion** kernel $\min(s, t)$ sits at the opposite extreme, with such slow decay that its space contains genuinely jagged paths, the $H^1$ functions. In every case the story is the same sentence: the eigenvalue decay is the personality, and the personality is the only thing that matters.
+And the rest of the zoo? The same lens sorts every kernel you have met, one line each. A **polynomial** kernel keeps only finitely many modes alive, so its RKHS is finite-dimensional: the weight can only be a polynomial of bounded degree, and there is no room for anything finer. A **bandlimited**, or sinc, kernel sets its prices to a hard step, one below a cutoff frequency and zero above, so its RKHS is the bandlimited functions and the cutoff is an absolute wall. The **Brownian-motion** kernel $\min(s, t)$ sits at the opposite extreme, with such slow decay that its space contains genuinely jagged paths, the $H^1$ functions. In every case the story is the same sentence: the eigenvalue decay is the personality, and the personality is the only thing that matters.
 
 ## Where the prototype lives
 
-So when this series puts a prototype in the space, which home does it move into? The [Yat kernel](https://arxiv.org/abs/2605.03262) is a squared alignment $(\langle x, W\rangle + b)^2$ times an inverse-multiquadric distance gate $1/(\lVert x - W\rVert^2 + \varepsilon)$, and the gate sets its smoothness. It is tempting to call that gate Sobolev, but the eigenvalues say otherwise: the inverse-multiquadric's decay is *exponential*, faster than the Matérn family's polynomial $k^{-2s}$. So the Yat kernel does not live in a Sobolev space, and, strictly, a corner is not in its RKHS either; the bill just diverges slowly rather than fast.
+So when this series puts a prototype in the space, which home does it move into? The [Yat kernel](https://arxiv.org/abs/2605.03262) is a squared alignment $(\langle x, W\rangle + b)^2$ times an inverse-multiquadric distance gate $1/(\lVert x - W\rVert^2 + \varepsilon)$, and the gate sets its smoothness: the numerator is only a polynomial factor, and multiplying by a polynomial cannot change the decay class the gate imposes on the spectrum (the [paper](https://arxiv.org/abs/2605.03262) carries the full spectral argument). It is tempting to call that gate Sobolev, but the eigenvalues say otherwise: the inverse-multiquadric's decay is *exponential*, faster than the Matérn family's polynomial $k^{-2s}$. So the Yat kernel does not live in a Sobolev space, and, strictly, a corner is not in its RKHS either; the bill just diverges slowly rather than fast.
 
 What its home is instead is the more useful thing here. Its eigenvalues fall slower than a Gaussian's, so its space is strictly larger, and it is universal for $\varepsilon > 0$: it can approximate any continuous target as closely as you like. On normalized inputs it is a zonal kernel of $\langle x, W\rangle$, so its weights are graded by the spherical harmonics. And the property that makes a prototype a *picture* is on a different axis from frequency smoothness altogether: the inverse-square law in the gate is a heavy tail in space, which buys locality, a bounded response, and a center that stays in input space.
 

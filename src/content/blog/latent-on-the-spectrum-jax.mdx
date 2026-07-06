@@ -2,7 +2,7 @@
 title: "Latent on the Spectrum, in JAX"
 description: "A runnable companion to Latent on the Spectrum: build a codebook as the spectral embedding of a label kernel in JAX (classical MDS with square-root eigenvalue scaling), watch a flat spectrum become the simplex and a graded one become the horseshoe, measure kernel-target alignment, split a representation into its between-class prototype frame and within-class information spectrum, and watch neural collapse grind the information to zero."
 seoDescription: "Spectral codebooks in JAX: classical MDS, flat-to-simplex and graded-to-horseshoe spectra, kernel-target alignment, and the between/within-class split."
-pubDate: 2026-06-07T12:35:00-07:00
+pubDate: 2026-06-07T12:15:00-07:00
 draft: false
 tags: [ml, representation-learning, neural-collapse, simplex-etf, latent-space, spectral-embedding, kernel-methods, jax, implementation]
 references:
@@ -54,7 +54,7 @@ Everything here is plain JAX. The objects are tiny (a `C × C` label kernel, a h
 
 ## A codebook is the spectral embedding of a kernel
 
-Given a target similarity `S` between classes, the best `d`-dimensional codebook whose Gram matrix approximates `S` is read straight off the spectrum. Ignoring the unit-norm step for a moment, the best rank-`d` Gram is $U_d\Lambda_d U_d^\top$, and a coordinate matrix that realises it is $\Lambda_d^{1/2}U_d^\top$: the top-`d` eigenvectors **scaled by the square roots of their eigenvalues**. If we want cosine codes, we normalise afterward.
+How does a target similarity `S` between classes become actual coordinates? You read them off the spectrum. Ignoring the unit-norm step for a moment, the best rank-`d` Gram is $U_d\Lambda_d U_d^\top$, and a coordinate matrix that realises it is $\Lambda_d^{1/2}U_d^\top$: the top-`d` eigenvectors **scaled by the square roots of their eigenvalues**. If we want cosine codes, we normalise afterward.
 
 ```python
 import jax
@@ -91,13 +91,13 @@ flat   = jnp.eye(C) - jnp.ones((C, C)) / C                       # structureless
 blocks = (i[:, None] // 3 == i[None, :] // 3).astype(jnp.float32)  # 3 superclasses of 3: clusters
 graded = jnp.exp(-((i[:, None] - i[None, :]) / 2.2) ** 2)        # falls with class distance: the horseshoe
 
-for name, S in [("flat", flat), ("blocks", blocks), ("graded", graded - graded.mean())]:
+for name, S in [("flat", flat), ("blocks", blocks - blocks.mean()), ("graded", graded - graded.mean())]:
     codes = spectral_codebook(S, d=2)
     w = jnp.clip(jnp.linalg.eigh(S)[0][::-1], 0.0, None)
     print(name, "top-3 spectrum:", jnp.round(w[:3] / (w[0] + 1e-9), 2))
-# flat   -> [1.   1.   1.  ]  (no preferred direction -> even ring)
-# blocks -> [1.   ~.5  ~0  ]  (two dominant modes -> clusters)
-# graded -> [1.   ~.7  ~.3 ]  (a smooth tail -> a curved 1-D manifold, the horseshoe)
+# flat   -> [1.  1.  1. ]  (no preferred direction -> even ring)
+# blocks -> [1.  1.  0. ]  (two dominant modes, then nothing -> clusters)
+# graded -> [1.  0.7 0.3]  (a smooth tail -> a curved 1-D manifold, the horseshoe)
 ```
 
 The hero animation above is exactly this `spectral_codebook(S, 2)` evaluated along a dial from `flat` to `graded`, with each frame's eigenvectors orthogonally aligned to the previous so the morph is smooth.
@@ -127,7 +127,7 @@ A handful of modes already recover most of a graded kernel, which is the whole r
 
 ## The prototype frame and the information spectrum
 
-Now switch objects: from the *target* label kernel to a *trained* representation. Split a feature matrix into between-class and within-class covariance. The between-class part $\Sigma_B$ has rank at most `C-1` and spans the prototypes: it is the separation channel, the codebook. The within-class part $\Sigma_W$ is everything else: the gradations the codebook does not carry, the *information*.
+What does a *trained* representation keep of all this? Switch objects, from the target label kernel to a feature matrix, and split it into between-class and within-class covariance. The between-class part $\Sigma_B$ has rank at most `C-1` and spans the prototypes: it is the separation channel, the codebook. The within-class part $\Sigma_W$ is everything else: the gradations the codebook does not carry, the *information*.
 
 ```python
 def class_covariances(Z, y, C):
@@ -192,7 +192,7 @@ A production embedding would use far more classes, real data, and a deep encoder
 
 *References: classical MDS / kernel-target alignment from [Cristianini et al. (2002)](https://papers.nips.cc/paper/2001); the horseshoe from [Diaconis, Goel & Holmes (2008)](https://arxiv.org/abs/0811.1477); neural collapse from [Papyan et al. (2020)](https://arxiv.org/abs/2008.08186); dark knowledge from [Hinton et al. (2015)](https://arxiv.org/abs/1503.02531); the Welch bound from [Welch (1974)](https://doi.org/10.1109/TIT.1974.1055219).*
 
-<CiteAs slug="latent-on-the-spectrum-jax" title="Latent on the Spectrum, in JAX" pubDate="2026-06-07T12:35:00-07:00" />
+<CiteAs slug="latent-on-the-spectrum-jax" title="Latent on the Spectrum, in JAX" pubDate="2026-06-07T12:15:00-07:00" />
 
 <style>{`
 .jax-fig { margin: 1.8rem auto; text-align: center; }

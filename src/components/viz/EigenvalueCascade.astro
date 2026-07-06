@@ -1,0 +1,142 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 400 } = Astro.props;
+---
+<figure class="viz eig-cascade" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Eigenvalue cascade: left panel shows the eigenvalue spectrum of the Gaussian
+// kernel, right panel shows a gauge for the effective dimension d_eff = Σ λₖ/(λₖ+λ).
+// Drag λ and watch the high-frequency modes vanish from the tail first.
+import { defineViz } from './engine/vizkit.js';
+import { softPanel, roundRect, T, rgba, mix, parseColor } from './engine/draw.js';
+
+const K = 60;
+const ACC_RGB = parseColor('#b3661b');
+
+function eigs() {
+  const l = new Float64Array(K + 1);
+  for (let k = 1; k <= K; k++) l[k] = Math.exp(-0.5 * (0.55 * k) ** 2);
+  const n = l[1] || 1;
+  for (let k = 1; k <= K; k++) l[k] /= n;
+  return l;
+}
+
+function effDim(lam) {
+  const l = eigs();
+  let s = 0;
+  for (let k = 1; k <= K; k++) s += l[k] / (l[k] + lam);
+  return s;
+}
+
+defineViz('eig-cascade', {
+  title: 'The price list decides which modes survive',
+  height: 400,
+  controls: [
+    { type: 'range', name: 'lam', label: 'regularization λ', min: -3, max: 2, step: 0.05, value: -1, fmt: (v) => (10 ** v).toFixed(2) },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    api.state = {};
+    api.set('lam', -1);
+  },
+
+  draw(api) {
+    const { ctx, colors, size } = api;
+    const W = size.W, H = size.H;
+    if (W === 0) return;
+    ctx.clearRect(0, 0, W, H);
+    const lam = 10 ** api.get('lam');
+    const l = eigs();
+    const pad = 14, topH = 36;
+    const splitX = W * 0.62;
+
+    // title
+    T(ctx, colors, 'label');
+    ctx.fillText('each bar is the eigenvalue λₖ: the price of mode k. tight budget kills the tail first.', pad, pad + 13);
+
+    // LEFT: eigenvalue spectrum
+    const specLeft = pad, specW = splitX - pad - 10;
+    const specTop = pad + topH, specH = H - specTop - pad;
+    const barW = Math.max(1, specW / K - 1);
+
+    softPanel(ctx, specLeft, specTop, specW, specH, colors, { r: 8 });
+
+    const maxL = l[1] || 1;
+    for (let k = 1; k <= K; k++) {
+      const bx = specLeft + 8 + (k - 1) * (barW + 1);
+      const bh = (l[k] / maxL) * (specH - 24);
+      const by = specTop + specH - 10 - bh;
+      const alive = l[k] / (l[k] + lam) > 0.05;
+      ctx.fillStyle = alive ? rgba(ACC_RGB, 0.8) : rgba(parseColor(colors.muted), 0.3);
+      roundRect(ctx, bx, by, Math.max(0.5, barW), bh, 1.5);
+      ctx.fill();
+    }
+
+    // axis labels
+    T(ctx, colors, 'small', { align: 'left' });
+    ctx.fillText('mode k', specLeft + 6, specTop + specH + 4);
+    T(ctx, colors, 'small', { align: 'right' });
+    ctx.fillText('λₖ', specLeft + specW - 4, specTop + 14);
+
+    // RIGHT: effective dimension gauge
+    const gaugeLeft = splitX + 6, gaugeW = W - splitX - pad - 6;
+    const gaugeTop = pad + topH, gaugeH = H - gaugeTop - pad;
+
+    softPanel(ctx, gaugeLeft, gaugeTop, gaugeW, gaugeH, colors, { r: 8 });
+
+    const dEff = effDim(lam);
+    const maxDim = K;
+    const gaugePad = 16;
+    const gaugeBarX = gaugeLeft + gaugePad + 20;
+    const gaugeBarW = gaugeW - gaugePad * 2 - 24;
+    const gaugeBarTop = gaugeTop + 50;
+    const gaugeBarH = gaugeH - 100;
+
+    // gauge background
+    ctx.fillStyle = parseColor(colors.cellBg || colors.bg);
+    ctx.fillRect(gaugeBarX, gaugeBarTop, gaugeBarW, gaugeBarH);
+    ctx.strokeStyle = colors.border; ctx.lineWidth = 1;
+    ctx.strokeRect(gaugeBarX + 0.5, gaugeBarTop + 0.5, gaugeBarW - 1, gaugeBarH - 1);
+
+    // filled portion
+    const fillH = (dEff / maxDim) * gaugeBarH;
+    const fillTop = gaugeBarTop + gaugeBarH - fillH;
+    const grad = ctx.createLinearGradient(0, gaugeBarTop + gaugeBarH, 0, gaugeBarTop);
+    grad.addColorStop(0, rgba(ACC_RGB, 0.3));
+    grad.addColorStop(1, rgba(ACC_RGB, 0.9));
+    ctx.fillStyle = grad;
+    ctx.fillRect(gaugeBarX, fillTop, gaugeBarW, fillH);
+
+    // tick marks
+    ctx.fillStyle = colors.faint; ctx.font = '9px ui-monospace, monospace';
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (let d = 0; d <= maxDim; d += 10) {
+      const ty = gaugeBarTop + gaugeBarH - (d / maxDim) * gaugeBarH;
+      ctx.fillText(String(d), gaugeBarX - 4, ty);
+      ctx.strokeStyle = parseColor(colors.border); ctx.globalAlpha = 0.3;
+      ctx.beginPath(); ctx.moveTo(gaugeBarX, ty); ctx.lineTo(gaugeBarX + gaugeBarW, ty); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    // big number
+    T(ctx, colors, 'title', { align: 'center', color: colors.fg });
+    ctx.fillText(`${dEff.toFixed(1)}`, gaugeLeft + gaugeW / 2, gaugeTop + 20);
+    T(ctx, colors, 'small', { align: 'center' });
+    ctx.fillText('effective dimensions', gaugeLeft + gaugeW / 2, gaugeTop + 36);
+
+    // mode survival label
+    const aliveCount = Array.from({ length: K }, (_, k) => k + 1).filter((k) => l[k] / (l[k] + lam) > 0.05).length;
+    T(ctx, colors, 'small', { align: 'center' });
+    ctx.fillText(`${aliveCount} of ${K} modes alive`, gaugeLeft + gaugeW / 2, gaugeTop + gaugeH - 14);
+
+    api.readout('rd', `λ = ${lam.toFixed(2)} · d_eff = ${dEff.toFixed(1)} · ${aliveCount}/${K} modes above threshold`);
+  },
+});
+</script>

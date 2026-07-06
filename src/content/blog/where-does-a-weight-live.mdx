@@ -38,13 +38,13 @@ import PlaceableWeightRings from '../../components/viz/PlaceableWeightRings.astr
 
 A neuron writes down $w^\top x$ and we read it as though the weight and the input are together, in the same place, doing something to each other. They are not. They are strangers from two different worlds, and the dot product is the only word they share.
 
-Look at what each one actually is. Your input $x$ is a point you can put on a map: an image, a location in the data cloud, a thing you can see and point at. The weight $w$ is none of those. It is an arrow, a direction, a rule that says "project onto me and read off the shadow." You cannot ask where $w$ sits among your images, because it does not sit anywhere among them. It lives in a different space entirely, the space of directions, and it only ever touches the data sideways, as a length cast onto a line.
+The two do not even resemble each other. Your input $x$ is a point you can put on a map: an image, a location in the data cloud, a thing you can see and point at. The weight $w$ is none of those. It is an arrow, a direction, a rule that says "project onto me and read off the shadow." You cannot ask where $w$ sits among your images, because it does not sit anywhere among them. It lives in a different space entirely, the space of directions, and it only ever touches the data sideways, as a length cast onto a line.
 
 So here is the question this whole post is about. **Where does a weight live, and could you ever put it in the same space as your data, close enough to point at?** The answer is yes, and the thing that does it has an intimidating name, a reproducing kernel Hilbert space, but a very simple job: it gives the weight an address next to the data.
 
 ## Two readings of the same handle
 
-Drag the weight and the test point below. In the first reading, the weight is what it is in an ordinary neuron: a direction. To use it on an input you drop the input's shadow onto the arrow, and the number you get out is `w · x`. Notice that the weight is off on its own, anchored to the origin, pointing; it is nowhere near the data, and "how far is the weight from this point" has no answer.
+What would an address for a weight even mean? You can feel the answer with your hands before any math: drag the weight and the test point below. In the first reading, the weight is what it is in an ordinary neuron: a direction. To use it on an input you drop the input's shadow onto the arrow, and the number you get out is `w · x`. Notice that the weight is off on its own, anchored to the origin, pointing; it is nowhere near the data, and "how far is the weight from this point" has no answer.
 
 <TwoReadingsWeight client:visible caption="Read the weight as a direction (top option) and the only thing connecting it to the input is the dashed shadow, the projection w·x. Read it as a place (second option) and the same weight becomes a point sitting in the data, joined to the input by an honest distance. Drag both handles; switch the reading." />
 
@@ -52,7 +52,7 @@ Now switch the reading to "a place." The same handle is suddenly a point in the 
 
 ## Why "separate spaces" is the real problem
 
-The discomfort is worth making precise, because it is the thing the kernel will repair. In the ordinary picture there are two spaces. There is **input space**, where your data lives: every image is a point, distances between images mean something, you can cluster them and look at them. And there is **weight space**, where `w` lives: a space not of points but of rules, each one a way of slicing input space with a hyperplane.
+In the ordinary picture there are two spaces, and the discomfort of the last panel is the seam between them, the thing the kernel will have to repair. There is **input space**, where your data lives: every image is a point, distances between images mean something, you can cluster them and look at them. And there is **weight space**, where `w` lives: a space not of points but of rules, each one a way of slicing input space with a hyperplane.
 
 These are genuinely different. A point and a hyperplane-normal are not the same kind of thing, and there is no built-in notion of distance between them. You can compute $w^\top x$, but you cannot compute "the distance from the weight to this image," and you certainly cannot ask "which training images is the weight near?" The weight has no neighbors in the data. It is a functional, not a point, and the dot product is a thin little bridge thrown across a gap between two worlds that otherwise never touch.
 
@@ -72,7 +72,7 @@ Under the dot product the most-similar place is not a place at all; it sits at i
 
 ## The punchline: the weight is built from the data
 
-Here is the result that makes the shared space more than a nicety. When you actually fit a model in an RKHS, regularizing by the norm in $\mathcal{H}$, the optimal weight is not free to be any element of that huge space. The **representer theorem** says it must take the form
+So the weight finally has an address in $\mathcal{H}$. But $\mathcal{H}$ is enormous, often infinite-dimensional, so what is the optimal weight allowed to look like in a space that huge? Anything at all? No: when you actually fit a model in an RKHS, regularizing by the norm in $\mathcal{H}$, the optimal weight is not free to be any element of that space. The **representer theorem** says it must take the form
 
 $$
 f(x) = \sum_{i} \alpha_i\, k(x_i, x),
@@ -84,7 +84,7 @@ Build one yourself. Each point below carries a coefficient `αᵢ`; drag a point
 
 <RepresenterBuild client:visible caption="The weight as a recipe over the data. Each point's coefficient αᵢ (its fill color is the sign, its size is the magnitude) scales that point's kernel bump; the decision function is their sum and the boundary is where it crosses zero. Drag a point up or down to set its αᵢ by hand, or press 'fit the labels' for the representer-optimal solve. The weight never leaves the data's span." />
 
-This is the moment the two spaces become one. There is no longer a weight space sitting apart from input space, holding directions. There is one space, holding the data and, in their span, the weight. To read the weight you do not project; you ask $f(x) = \langle f, \phi(x)\rangle$, which is just $\sum_i \alpha_i\, k(x_i, x)$, the data voting on the query by similarity. Every evaluation of the weight is a similarity query against the points it was built from.
+This is the moment the two spaces become one. There is no longer a weight space sitting apart from input space, holding directions. There is one space, holding the data and, in their span, the weight. To read the weight you do not project; you ask $f(x) = \langle f, \phi(x)\rangle$, which is just $\sum_i \alpha_i\, k(x_i, x)$, the data voting on the query by similarity. Every evaluation of the weight is a similarity query against the points it was built from. Even the question the old geometry refused, "which training images is the weight near?", becomes a computation here: the kernel values $k(x_i, \cdot)$ against the training set, the Gram matrix, hold every such answer, and the [companion post](/blog/where-does-a-weight-live-jax-flax-nnx/) computes them in a few lines of JAX.
 
 If you want the physical picture the rest of this series runs on, it is exactly here: the centers $x_i$ are masses placed in the space, the coefficients $\alpha_i$ are their charges, and evaluating the weight at $x$ is reading the field those masses produce there. A direction has no location; a constellation of placed masses has nothing but location. We built one of those wells-and-masses landscapes by hand a few posts back, in [Your Network Is a List of Pictures](/blog/edit-a-network-by-hand/); what the RKHS adds is the guarantee that the *optimal* weight always has that form.
 

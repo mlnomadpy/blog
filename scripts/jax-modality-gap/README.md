@@ -55,12 +55,22 @@ within-class factor. Same data, same capacity — the objective decides.
 ## Experiment 2 — `gap.py`: the gap as a dynamic
 
 Two modalities of a 2-class signal, two small ReLU towers started from the **same
-initialization** (so there is no gap at step 0), trained with SigLIP. The gap is
-*opened* by the objective: it grows from ~0.3 to ~1.9 while matched-pair cosine
-falls just to the random line (close enough to keep the ranking, far enough to
-separate the cones). `gap.py` records embeddings across training and writes the
-animated `gap_dynamics.gif` (the post's hero) and the static `gap_cones.png`. The
-in-page gap viz (`ModalityGapLive.astro`) trains the same deep-tower setup live.
+initialization** (so there is no gap at step 0), trained with SigLIP (learnable
+logit scale, init 2.0; Adam, 1400 steps). The gap is *opened* by the objective:
+it grows from 0.27 to ~1.9 within the first hundred steps, while matched-pair
+cosine falls through zero (around step 12) and tracks the shuffled-pair baseline
+down into negative territory, ending at −0.78 with random at −0.88, negative in
+absolute terms but still ranked above random. `gap.py` records embeddings across
+training and writes the animated `gap_dynamics.gif` (the post's hero) and the
+static `gap_cones.png`. The in-page gap viz (`ModalityGapLive.astro`) trains the
+same deep-tower setup live.
+
+`python gap.py --sweep` trains the same setup with a **fixed** (untrained) logit
+scale at 1/τ ∈ {0.5, 1, 2, 4, 8}. The gap opens at every sharpness; soft
+temperatures open it widest (fully antipodal, gap → 2.0) but lose the ranking
+entirely (matched = random = −1.00), while sharpness preserves the
+matched-above-random margin (at 1/τ = 8: matched −0.49 vs random −0.66,
+gap 1.65). Temperature does not open the gap; it buys back the ranking.
 
 ## Files
 

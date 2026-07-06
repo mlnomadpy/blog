@@ -84,7 +84,7 @@ defineViz('infospectrum', {
     const collapsed = state.within < 0.1;
     text(ctx, collapsed ? 'neural collapse: Σ_W → 0, the information spectrum is erased' : `training step ${api.iter} · the information tail is collapsing`,
       box.x + 10, box.y + box.h - 16, colors, { size: 11, color: collapsed ? (colors.red || '#c2553a') : colors.fg });
-    api.readout('rd', `information retained ${infoPct.toFixed(0)}% · structure ${api.get('structure').toFixed(2)} · jax-js`);
+    api.readout('rd', `information retained ${infoPct.toFixed(0)}% · structure ${api.get('structure').toFixed(2)}`);
   },
 });
 </script>

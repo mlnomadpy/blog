@@ -1,0 +1,157 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 470 } = Astro.props;
+---
+<figure class="viz eqreshape" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The whole decision landscape, redrawn by a row edit. The input plane is solved to
+// equilibrium once (the real operator, live); the toggles then edit the READOUT rows:
+// teach = the eight anchor rows appear and a fourth territory exists, forget = class
+// 2's row is masked and its ground floods to the neighbours. The flow F never changes
+// here, which is why the map answers instantly: the same fixed points, read differently.
+import { defineViz } from './engine/vizkit.js';
+import { gate, loadingText, mix, parseColor, T, roundRect } from './engine/draw.js';
+import { loadReady, compute, makeRunner, CLS } from './yatdeqedit.js';
+
+const N = 88, K = 42;
+const LO = -2.6, HI = 2.6;
+
+defineViz('eqreshape', {
+  title: 'Edit the rows. The whole map answers.',
+  height: 470,
+  controls: [
+    { type: 'toggle', name: 'teach', label: 'teach class 3 (paste 8 anchor rows)', value: false },
+    { type: 'toggle', name: 'forget', label: 'forget class 2 (mask its row)', value: false },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    gate(api, loadReady, (api, model) => {
+      const cmp = compute(model), Tt = model.test;
+      const grid = new Array(N * N);
+      for (let r = 0; r < N; r++) for (let c = 0; c < N; c++)
+        grid[r * N + c] = [LO + (c / (N - 1)) * (HI - LO), HI - (r / (N - 1)) * (HI - LO)];
+      const rg = makeRunner(cmp, cmp.baseOp, grid).solve(K);
+      const gscores = rg.scores4(); rg.dispose();
+      const rt = makeRunner(cmp, cmp.baseOp, Tt.x).solve(K);
+      const tscores = rt.scores4(); rt.dispose();
+      api.state.M = { gscores, tscores, tx: Tt.x, ty: Tt.y,
+                      anchors: model.edit.anchors, teachX: model.teach_x,
+                      off: document.createElement('canvas'), key: '' };
+    });
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0) return;
+    if (!st.ready || !st.M) { loadingText(api, 'solving the input plane to equilibrium…'); return; }
+    const M = st.M, teach = !!api.get('teach'), forget = !!api.get('forget');
+
+    // decision under the current row set: argmax over the active scores
+    const decide = (s) => {
+      let best = -1, bv = -Infinity, second = -Infinity;
+      for (let c = 0; c < 4; c++) {
+        if (c === 2 && forget) continue;
+        if (c === 3 && !teach) continue;
+        if (s[c] > bv) { second = bv; bv = s[c]; best = c; }
+        else if (s[c] > second) second = s[c];
+      }
+      return [best, bv - second];
+    };
+
+    const pad = 14, side = Math.min(W - pad * 2 - 210, H - pad - 30);
+    const B = { x: pad, y: pad + 2, w: side, h: side };
+    const key = (teach ? 't' : '') + (forget ? 'f' : '') + '|' + colors.bg;
+    if (M.key !== key) {
+      M.key = key; const off = M.off; off.width = N; off.height = N;
+      const octx = off.getContext('2d'), img = octx.createImageData(N, N);
+      const bg = parseColor(colors.cellBg || colors.bg), cols = CLS.map(parseColor);
+      const win = new Int8Array(N * N);
+      for (let i = 0; i < N * N; i++) {
+        const [c, gap] = decide(M.gscores[i]); win[i] = c;
+        const t = Math.min(0.85, 0.22 + gap * 0.35);
+        const col = mix(bg, cols[c], t);
+        img.data[i * 4] = col[0] | 0; img.data[i * 4 + 1] = col[1] | 0; img.data[i * 4 + 2] = col[2] | 0; img.data[i * 4 + 3] = 255;
+      }
+      for (let r = 0; r < N; r++) for (let c = 0; c < N - 1; c++)
+        if (win[r * N + c] !== win[r * N + c + 1]) { const i = (r * N + c) * 4; img.data[i] = img.data[i + 1] = img.data[i + 2] = 252; img.data[i + 3] = 255; }
+      octx.putImageData(img, 0, 0);
+    }
+    ctx.imageSmoothingEnabled = true; ctx.drawImage(M.off, B.x, B.y, B.w, B.h);
+    ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.strokeRect(B.x + 0.5, B.y + 0.5, B.w - 1, B.h - 1);
+
+    const px = (x) => B.x + ((x - LO) / (HI - LO)) * B.w, py = (y) => B.y + ((HI - y) / (HI - LO)) * B.h;
+    // test points, dimmed when their class is currently unreadable
+    for (let i = 0; i < M.ty.length; i++) {
+      const c = M.ty[i];
+      if (c === 3 && !teach) continue;
+      ctx.globalAlpha = (c === 2 && forget) ? 0.35 : 0.85;
+      ctx.fillStyle = CLS[c]; ctx.beginPath(); ctx.arc(px(M.tx[i][0]), py(M.tx[i][1]), 2.2, 0, 6.283); ctx.fill();
+      ctx.strokeStyle = colors.bg; ctx.lineWidth = 0.5; ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    // the 8 teaching examples, marked when taught
+    if (teach) for (const p of M.teachX) {
+      ctx.strokeStyle = colors.fg; ctx.lineWidth = 1.3;
+      ctx.beginPath(); ctx.arc(px(p[0]), py(p[1]), 5, 0, 6.283); ctx.stroke();
+    }
+
+    // ── the rows card: knowledge as rows you can point at ──
+    const S = { x: B.x + B.w + 20, y: B.y + 2, w: W - pad - (B.x + B.w + 20) };
+    T(ctx, colors, 'title'); ctx.fillText('the readout rows', S.x, S.y + 12);
+    const names = ['class 0 (moon)', 'class 1 (moon)', 'class 2 (blob)', 'class 3 (taught)'];
+    let y = S.y + 26;
+    for (let c = 0; c < 4; c++) {
+      const active = !(c === 2 && forget) && !(c === 3 && !teach);
+      const rh = c === 3 ? 30 : 20;
+      roundRect(ctx, S.x, y, S.w, rh, 5);
+      ctx.fillStyle = colors.cellBg; ctx.fill();
+      ctx.strokeStyle = active ? CLS[c] : colors.border; ctx.lineWidth = active ? 1.4 : 1; ctx.stroke();
+      ctx.globalAlpha = active ? 1 : 0.4;
+      ctx.fillStyle = CLS[c]; ctx.fillRect(S.x + 6, y + 6, 8, 8);
+      T(ctx, colors, 'label', { color: active ? colors.fg : colors.faint });
+      ctx.fillText(names[c] + (c < 3 ? '  ·  trained' : '  ·  8 pasted rows'), S.x + 20, y + 14);
+      if (c === 3) {   // the anchor rows themselves, as ticks
+        for (let k = 0; k < 8; k++) { ctx.fillStyle = CLS[3]; ctx.fillRect(S.x + 20 + k * 14, y + 19, 10, 4); }
+      }
+      if (!active) { ctx.strokeStyle = colors.muted; ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.moveTo(S.x + 4, y + rh / 2); ctx.lineTo(S.x + S.w - 4, y + rh / 2); ctx.stroke(); }
+      ctx.globalAlpha = 1;
+      y += rh + 6;
+    }
+
+    // live per-class recall bars under the card
+    y += 8;
+    T(ctx, colors, 'title'); ctx.fillText('recall, computed live', S.x, y); y += 8;
+    const recalls = [0, 1, 2, 3].map((c) => {
+      let ok = 0, n = 0;
+      for (let i = 0; i < M.ty.length; i++) {
+        if (M.ty[i] !== c) continue; n++;
+        if (decide(M.tscores[i])[0] === c) ok++;
+      }
+      return n ? ok / n : 0;
+    });
+    for (let c = 0; c < 4; c++) {
+      const bw = Math.max(0, (S.w - 40) * recalls[c]);
+      ctx.fillStyle = colors.cellBg; ctx.fillRect(S.x, y + 4, S.w - 40, 9);
+      ctx.fillStyle = CLS[c]; ctx.globalAlpha = 0.85; ctx.fillRect(S.x, y + 4, bw, 9); ctx.globalAlpha = 1;
+      ctx.strokeStyle = colors.border; ctx.strokeRect(S.x + 0.5, y + 4.5, S.w - 40 - 1, 8);
+      T(ctx, colors, 'small', { align: 'left' });
+      ctx.fillText((recalls[c] * 100).toFixed(0) + '%', S.x + S.w - 34, y + 12);
+      y += 17;
+    }
+
+    const parts = [];
+    parts.push(teach ? 'class 3 recall ' + (recalls[3] * 100).toFixed(0) + '%' : 'class 3 unknown');
+    parts.push(forget ? 'class 2 masked, 0/1 untouched' : 'class 2 recall ' + (recalls[2] * 100).toFixed(0) + '%');
+    api.readout('rd', parts.join('  ·  '));
+  },
+});
+</script>

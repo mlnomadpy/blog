@@ -63,7 +63,9 @@ import LowRankBudget from '../../components/viz/LowRankBudget.astro';
 import RoPERelative from '../../components/viz/RoPERelative.astro';
 import CiteAs from '../../components/CiteAs.astro';
 
-The attention score is usually introduced as a dot product:
+Somewhere inside a trained transformer, one attention head is hunting for the previous occurrence of the token it is sitting on. Another wants the opening parenthesis that matches this closing one. Another wants the subject of this verb, or the name whose value should be copied forward. Each head wants **one relation**, a directed question with a specific kind of answer, not a general feeling of similarity.
+
+Yet the score that has to express all of this is usually introduced as a bare dot product:
 
 $$
 s_{ij}=q_i^\top k_j.
@@ -99,28 +101,28 @@ $$
 
 That is a fixed similarity in the residual stream's native coordinates. It asks: are these two token vectors already aligned?
 
-Sometimes that is useful, but it is too literal. The residual stream is a shared workspace. It contains lexical identity, position, syntax, local features, long-range features, partial predictions, and debris from other heads and MLPs. A head usually does not want "everything similar to me." It wants one relation: previous occurrence, matching delimiter, subject for this verb, value attached to this key, source token that should be copied.
+Sometimes that is useful, but it is too literal. The residual stream is a shared workspace. It contains lexical identity, position, syntax, local features, long-range features, partial predictions, and debris from other heads and MLPs. A head usually does not want "everything similar to me." It wants one of the relations from the opening: the previous occurrence, the matching delimiter, the value attached to this key, the source token that should be copied.
 
 A raw dot product cannot choose that relation inside the head. It inherits whatever geometry earlier layers happened to put into the residual stream.
 
 ## A shared projection learns a metric
 
-The first improvement is to project both sides the same way:
+Can one learned map fix that? The obvious repair is to project both sides the same way:
 
 $$
 s_{ij} = (W^\top x_i)^\top(W^\top x_j)
        = x_i^\top W W^\top x_j.
 $$
 
-Now the head has learned a metric. It can ignore irrelevant residual directions and amplify the subspace it cares about. This is already much better than the raw dot product.
+Now the head has learned a metric. It can mute the residual directions it does not care about, amplify the subspace it does, and measure similarity in coordinates of its own choosing instead of whatever geometry earlier layers left behind. For a moment this looks like everything a head could need: a private, learned notion of "relevant," one per head.
 
-But it is still symmetric:
+Try to spend it on a real relation, though, and it snaps. Take the induction relation, "attend to the position whose *predecessor* is my token." When the sequence reads `a b … a`, the final `a` should score highly against `b`, the token that followed the earlier `a`. But `b` should not score highly against `a` in return; `b`'s own question is about positions whose predecessor is `b`. No matter what $W$ learns, a shared projection cannot express that, because its score is symmetric by construction:
 
 $$
 s_{ij}=s_{ji}.
 $$
 
-The same representation is used for asking and answering: token $i$ scores against token $j$ exactly as $j$ scores against $i$. The compatibility *score* cannot be role-asymmetric.
+The same representation is used for asking and answering, so token $i$ scores against token $j$ exactly as $j$ scores against $i$. "Ask for my identity, answer with your predecessor" is a directed relation, and a symmetric score cannot point.
 
 That is a claim about the score, not the whole layer. The full attention operator can still be directional, the softmax normalizes per row, causal masking only looks backward, and values are written through a separate OV map. But the *score* a shared projection computes is symmetric, and a head usually needs the score itself to be directed.
 
@@ -128,13 +130,13 @@ That is a claim about the score, not the whole layer. The full attention operato
 
 ## Separate Q and K create roles
 
-With separate projections,
+The way out is to stop making one map do two jobs. With separate projections,
 
 $$
-s_{ij}=x_i^\top W_Q W_K^\top x_j.
+s_{ij}=x_i^\top W_Q W_K^\top x_j,
 $$
 
-The left side of the bilinear form is the **question** a token asks. The right side is the **address** a token advertises. Those are not the same job.
+the left side of the bilinear form is the **question** a token asks, and the right side is the **address** a token advertises. Those are not the same job.
 
 For example:
 
@@ -149,13 +151,13 @@ This is not a new idea. The bilinear score predates transformers: it is Luong et
 
 And the examples above are not hypothetical. They are documented circuits. The "repeated token asks for the token after its previous occurrence" relation is the **induction head** (Olsson et al., 2022), built from a previous-token head feeding a head whose query reads the current token and whose key reads each position's predecessor. The "name-mover" relation is the IOI circuit of Wang et al. (2022). Both are directed: the query role and the key role do different jobs, which is exactly what a non-symmetric $B$ allows.
 
-<InductionPattern caption="The induction head as a bilinear relation, made concrete. The query at each position reads the current token's identity; the key reads each position's previous token. So position i attends to positions whose predecessor matches the current token, the token that followed an earlier occurrence, and copies it as the prediction for the next token. The score QKᵀ, the causal mask, and the softmax all run in jax-js. The bright stripe one step below the matched positions is the induction pattern; it could never come from a symmetric similarity, because 'ask for my identity, answer with my predecessor' is a directed relation." />
+<InductionPattern caption="The induction head as a bilinear relation, made concrete. The query at each position reads the current token's identity; the key reads each position's previous token. So position i attends to positions whose predecessor matches the current token, the token that followed an earlier occurrence, and copies it as the prediction for the next token. The score QKᵀ, the causal mask, and the softmax all run live in your browser. The bright stripe one step below the matched positions is the induction pattern; it could never come from a symmetric similarity, because 'ask for my identity, answer with my predecessor' is a directed relation." />
 
 This is why the projections are not cosmetic. They are what make the score a relation rather than a similarity.
 
 ## The symmetric and antisymmetric parts
 
-There is a clean way to see exactly what separate $Q$ and $K$ add over a shared projection. Any matrix splits into a symmetric and an antisymmetric piece,
+So what exactly did separate $Q$ and $K$ buy over the shared projection? Linear algebra gives a surgical answer. Any matrix splits into a symmetric and an antisymmetric piece,
 
 $$
 B = \underbrace{\tfrac12\left(B+B^\top\right)}_{S}+\underbrace{\tfrac12\left(B-B^\top\right)}_{A},
@@ -171,27 +173,27 @@ The symmetric part $S$ is a signed metric; the antisymmetric part $A$ is pure di
 
 The split also explains a subtlety in the kernel view below. The self-score and, more generally, the quadratic form sees only the symmetric part: $x^\top B\,x = x^\top S\,x$, because the antisymmetric part vanishes on the diagonal. So a head's directedness is completely invisible if you only look at how a token scores against itself, it lives entirely off-diagonal, in $A$.
 
-<SymSkewScore caption="The score B = S + A on the same tokens, with S a learned symmetric metric and A the antisymmetric (directed) part. Dial the directedness α and the total score matrix goes from symmetric (a metric: rows and columns interchangeable) to visibly asymmetric, while the metric ellipse on the left is unchanged. In two dimensions the only antisymmetric form is the cross product, so the directed score is the oriented area between the two token vectors. Watch the diagonal: the self-scores never move, because xᵀBx = xᵀSx, directedness is purely off-diagonal. All three score matrices are jax-js matmuls." />
+<SymSkewScore caption="The score B = S + A on the same tokens, with S a learned symmetric metric and A the antisymmetric (directed) part. Dial the directedness α and the total score matrix goes from symmetric (a metric: rows and columns interchangeable) to visibly asymmetric, while the metric ellipse on the left is unchanged. In two dimensions the only antisymmetric form is the cross product, so the directed score is the oriented area between the two token vectors. Watch the diagonal: the self-scores never move, because xᵀBx = xᵀSx, directedness is purely off-diagonal. All three score matrices are computed live as you drag." />
 
 ## Bilinearity is the mechanism
 
-A bilinear score is linear in the querying token when the source token is fixed, and linear in the source token when the query is fixed:
+Why is such a simple form enough to carry a head's routing? Because a bilinear score is linear in each argument separately: fix the source token and it is linear in the asker, fix the asker and it is linear in the source:
 
 $$
 s(x,y)=x^\top B y.
 $$
 
-That gives a head three useful properties.
+That separateness gives a head three useful properties.
 
-**It is role-aware.** The two arguments are not interchangeable unless $B$ is symmetric. Attention can learn "A asks for B" without also learning "B asks for A."
+First, **roles**. The two arguments are not interchangeable unless $B$ is symmetric, so attention can learn "A asks for B" without also learning "B asks for A."
 
-**It is compositional.** If a token contains several features, the score is the sum of pairwise feature interactions selected by $B$. This lets one head score a particular cross-feature relation instead of a whole-token similarity.
+Second, **composition**. A token carrying several features does not get one monolithic score; the bilinear form sums exactly the pairwise feature interactions that $B$ selects, which lets one head score a particular cross-feature relation instead of a whole-token similarity.
 
-**It is low-rank by construction.** Since $B=W_QW_K^\top$, its rank is at most the head dimension $d_k$. The head does not learn every possible interaction in the residual stream. It learns a compressed relation: a small set of query features matched against a small set of key features.
+And third, a **built-in budget**. Since $B=W_QW_K^\top$, its rank is at most the head dimension $d_k$, so the head cannot learn every possible interaction in the residual stream. It learns a compressed relation: a small set of query features matched against a small set of key features.
 
 That last point is often treated as an efficiency detail, but it is also an inductive bias. Each head gets a limited relation budget. Multi-head attention works because different heads spend that budget on different bilinear relations.
 
-<LowRankBudget caption="Because B = W_Q W_Kᵀ, its rank is at most the head dimension d_k. Sweep d_k and the singular spectrum of B fills in one nonzero value at a time, the rest are forced to zero, so the head can match at most d_k query features against d_k key features. The token score matrix on the right sharpens as the budget grows. The factorization also costs 2·d_model·d_k parameters instead of d_model² for a full B, but the deeper point is the inductive bias: a bounded relational vocabulary per head. Singular values come from eigh(BᵀB) on the engine; the scores and softmax run in jax-js." />
+<LowRankBudget caption="Because B = W_Q W_Kᵀ, its rank is at most the head dimension d_k. Sweep d_k and the singular spectrum of B fills in one nonzero value at a time, the rest are forced to zero, so the head can match at most d_k query features against d_k key features. The token score matrix on the right sharpens as the budget grows. The factorization also costs 2·d_model·d_k parameters instead of d_model² for a full B, but the deeper point is the inductive bias: a bounded relational vocabulary per head. Singular values, scores, and softmax are all computed live in your browser." />
 
 ## What about position?
 
@@ -203,7 +205,7 @@ $$
 
 The product $R_i^\top R_j$ is a rotation by an angle proportional to $j-i$, so the score depends on the two positions only through their **relative** offset. The same query and key now score differently depending on the gap between the tokens. In many frequency mixtures this yields a distance-sensitive compatibility, with high-frequency planes decorrelating faster than low-frequency ones, though the exact profile depends on the content vectors and is not monotone in general. Position is not a separate additive signal here; it is a modulation of the relation itself.
 
-<RoPERelative caption="RoPE makes the bilinear score a function of relative position. Rotating qₘ by m·θ and kₙ by n·θ in each plane leaves a score that depends only on Δ = i − j (orange), instead of the constant q·k a position-free dot product would give (blue dashed). Summing planes with geometric frequencies typically concentrates the compatibility near Δ = 0, with high-frequency planes decorrelating faster, though the exact shape depends on the content vectors and need not be monotone. Reroll the query/key pair to see different relative-position profiles. The Δ-curve is evaluated in jax-js." />
+<RoPERelative caption="RoPE makes the bilinear score a function of relative position. Rotating qₘ by m·θ and kₙ by n·θ in each plane leaves a score that depends only on Δ = i − j (orange), instead of the constant q·k a position-free dot product would give (blue dashed). Summing planes with geometric frequencies typically concentrates the compatibility near Δ = 0, with high-frequency planes decorrelating faster, though the exact shape depends on the content vectors and need not be monotone. Reroll the query/key pair to see different relative-position profiles. The Δ-curve is evaluated live on each reroll." />
 
 ## The kernel view
 
@@ -286,7 +288,7 @@ s_{ij}=\kappa\big(f_Q(x_i),\,f_K(x_j)\big)
 s_{ij}=\big\langle \Phi_Q(x_i),\,\Phi_K(x_j)\big\rangle.
 $$
 
-The query map $f_Q$ still extracts what a token is asking for; the key map $f_K$ still extracts what it advertises. Only the comparison between them changes, no longer capped at a low-rank bilinear form, but a nonlinear, learnable, deliberately *role-asymmetric* compatibility. That is the real kernel version of attention: not a similarity kernel on tokens, but a compatibility kernel between roles. And it is the question these posts have been heading toward, can the QK relation be made nonlinear and richer while keeping the routing readable and cheap?
+The query map $f_Q$ still extracts what a token is asking for; the key map $f_K$ still extracts what it advertises. Only the comparison between them changes, no longer capped at a low-rank bilinear form, but a nonlinear, learnable, deliberately *role-asymmetric* compatibility. That is the real kernel version of attention: not a similarity kernel on tokens, but a compatibility kernel between roles. And it is the question these posts have been heading toward, can the QK relation be made nonlinear and richer while keeping the routing readable and cheap? That construction deserves a post of its own, and it will get one later in this series.
 
 <CiteAs
   slug="why-attention-needs-qk-projections"

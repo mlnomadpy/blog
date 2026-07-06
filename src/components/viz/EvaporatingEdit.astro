@@ -1,0 +1,172 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 460 } = Astro.props;
+---
+<figure class="viz evapedit" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Why an edit must live at every depth. Take the taught-class inputs and run the
+// hybrid network live: the EDITED operator for the first j turns, the base operator
+// for every turn after. The states drift toward the edited equilibria, and the moment
+// the base flow takes over, the contraction erases the excursion: the fixed point
+// lands back on the base equilibrium to solver precision, for ANY finite j. Only
+// j = every turn (the shared-operator paste itself) survives the limit.
+import { defineViz } from './engine/vizkit.js';
+import { gate, loadingText, T, frame } from './engine/draw.js';
+import { loadReady, compute, makeRunner, solveAsync, CLS } from './yatdeqedit.js';
+
+const K = 48, NPTS = 48;
+
+defineViz('evapedit', {
+  title: 'An edit at some depths is no edit at all.',
+  height: 460,
+  controls: [
+    { type: 'range', name: 'j', label: 'turns that use the edited operator', min: 0, max: K, step: 1, value: 12, int: true,
+      reset: false, fmt: (v) => (v >= K ? 'all' : 'first ' + v) },
+    { type: 'range', name: 'k', label: 'iteration', min: 0, max: K, step: 1, value: K, int: true,
+      reset: false, fmt: (v) => v, play: { period: 5200, loop: false } },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    gate(api, loadReady, (api, model) => {
+      const cmp = compute(model), Tt = model.test;
+      const X = [];
+      for (let i = 0; i < Tt.y.length && X.length < NPTS; i++) if (Tt.y[i] === 3) X.push(Tt.x[i]);
+      // the two destinations, solved once off the main thread: base equilibria and
+      // edited equilibria (the setup's two heavy solves)
+      Promise.all([solveAsync(cmp, 'base', X, 90), solveAsync(cmp, 'edit', X, 90)]).then(([bs, es]) => {
+      if (!api.state) return;
+      const B = { z: bs.z, p: bs.proj }, E = { z: es.z, p: es.proj };
+      const M = { cmp, X, B, E, j: -1, run: null, bnd: null };
+      let xa = 1e9, xb = -1e9, ya = 1e9, yb = -1e9;
+      const eat = (p) => { xa = Math.min(xa, p[0]); xb = Math.max(xb, p[0]); ya = Math.min(ya, p[1]); yb = Math.max(yb, p[1]); };
+      B.p.forEach(eat); E.p.forEach(eat);
+      const mx = (xb - xa) * 0.35 + 0.05, my = (yb - ya) * 0.35 + 0.05;
+      M.bnd = [xa - mx, xb + mx, ya - my, yb + my];
+      api.state.M = M;
+      rerunHybrid(M, api.get('j'));
+      api.render();
+      });
+    });
+  },
+
+  onControl(name, v, api) {
+    const M = api.state.M;
+    if (name === 'j' && M) { rerunHybrid(M, v); api.setControl('k', 0); }
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0) return;
+    if (!st.ready || !st.M || !st.M.run) { loadingText(api, 'solving both equilibria…'); return; }
+    const M = st.M, j = api.get('j'), k = Math.min(api.get('k'), K);
+    const R = M.run;
+
+    const pad = 14, gap = 26;
+    const leftW = Math.round((W - pad * 2 - gap) * 0.52);
+    const L = { x: pad, y: pad + 20, w: leftW, h: H - pad * 2 - 20 };
+    const P = { x: pad + leftW + gap, y: pad + 20, w: W - pad * 2 - gap - leftW, h: H - pad * 2 - 42 };
+
+    // ── left: state window, the batch drifting then snapping back ──
+    T(ctx, colors, 'kicker'); ctx.fillText('taught-class states (2-D window on 32 dimensions)', L.x, L.y - 6);
+    frame(ctx, colors, L.x, L.y, L.w, L.h);
+    const [xa, xb, ya, yb] = M.bnd;
+    const qx = (x) => L.x + ((x - xa) / (xb - xa)) * L.w;
+    const qy = (y) => L.y + L.h - ((y - ya) / (yb - ya)) * L.h;
+    for (let i = 0; i < M.B.p.length; i++) {          // destinations: base = gray rings, edited = orange rings
+      ctx.strokeStyle = colors.muted; ctx.globalAlpha = 0.55; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(qx(M.B.p[i][0]), qy(M.B.p[i][1]), 3.4, 0, 6.283); ctx.stroke();
+      ctx.strokeStyle = CLS[3]; ctx.globalAlpha = 0.5;
+      ctx.beginPath(); ctx.arc(qx(M.E.p[i][0]), qy(M.E.p[i][1]), 3.4, 0, 6.283); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    T(ctx, colors, 'small', { color: colors.muted });
+    ctx.fillText('○ base z*', L.x + 8, L.y + 14);
+    T(ctx, colors, 'small', { color: CLS[3] });
+    ctx.fillText('○ edited z*', L.x + 70, L.y + 14);
+    const cur = R.projs[k];
+    const inEdit = k < j;
+    for (let i = 0; i < cur.length; i++) {
+      ctx.fillStyle = inEdit ? CLS[3] : colors.fg; ctx.globalAlpha = 0.85;
+      ctx.beginPath(); ctx.arc(qx(cur[i][0]), qy(cur[i][1]), 2.6, 0, 6.283); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    T(ctx, colors, 'small', { color: inEdit ? CLS[3] : colors.fg });
+    ctx.fillText(inEdit ? 'turn ' + k + ': the EDITED operator is steering' : 'turn ' + k + ': the base operator is steering', L.x + 8, L.y + L.h - 8);
+
+    // ── right: mean distance to each destination, log scale ──
+    T(ctx, colors, 'kicker'); ctx.fillText('mean distance to each fixed point (log)', P.x, P.y - 6);
+    frame(ctx, colors, P.x, P.y, P.w, P.h);
+    const lo = -6, hi = 0.8;
+    const lg = (v) => Math.log10(Math.max(1e-6, v));
+    const rx = (i) => P.x + (i / K) * P.w;
+    const ry = (v) => P.y + P.h - ((lg(v) - lo) / (hi - lo)) * P.h;
+    ctx.font = '9px ui-monospace, monospace';
+    for (let e = lo; e <= 0; e += 2) {
+      const yy = ry(Math.pow(10, e));
+      ctx.strokeStyle = colors.border; ctx.globalAlpha = 0.4;
+      ctx.beginPath(); ctx.moveTo(P.x, yy); ctx.lineTo(P.x + P.w, yy); ctx.stroke(); ctx.globalAlpha = 1;
+      ctx.fillStyle = colors.faint; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      ctx.fillText('1e' + e, P.x - 3, yy);
+    }
+    // handover line at j
+    if (j > 0 && j < K) {
+      ctx.strokeStyle = colors.faint; ctx.setLineDash([4, 3]);
+      ctx.beginPath(); ctx.moveTo(rx(j), P.y); ctx.lineTo(rx(j), P.y + P.h); ctx.stroke(); ctx.setLineDash([]);
+      T(ctx, colors, 'small', { align: 'center', color: colors.faint });
+      ctx.fillText('handover', rx(j), P.y - 2 + 10);
+    }
+    const curve = (arr, col, upto) => { ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath();
+      for (let i = 0; i <= upto; i++) { const x = rx(i), y = ry(arr[i]); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.stroke(); };
+    ctx.globalAlpha = 0.3; curve(R.dBase, colors.muted, K); curve(R.dEdit, CLS[3], K); ctx.globalAlpha = 1;
+    curve(R.dBase, colors.muted, k); curve(R.dEdit, CLS[3], k);
+    T(ctx, colors, 'small', { align: 'left', color: colors.muted });
+    ctx.fillText('— to base z*', P.x + 8, P.y + 14);
+    T(ctx, colors, 'small', { align: 'left', color: CLS[3] });
+    ctx.fillText('— to edited z*', P.x + 8, P.y + 26);
+    T(ctx, colors, 'label', { align: 'left' });
+    ctx.fillText('iteration', P.x + P.w / 2 - 20, P.y + P.h + 16);
+
+    const endB = R.dBase[K], endE = R.dEdit[K];
+    if (j >= K) api.readout('rd', `every turn edited: the states rest at the edited equilibrium (mean dist ${endE.toExponential(1)})`);
+    else api.readout('rd', `edited for the first ${j} turns, then base: final mean dist to base z* = ${endB.toExponential(1)}. The edit evaporated.`);
+  },
+});
+
+// run the hybrid iteration: edited operator for the first j turns, base afterwards.
+// records the projected states and the mean distances to both destinations per turn.
+function rerunHybrid(M, j) {
+  if (M.j === j) return;
+  M.j = j;
+  const cmp = M.cmp, n = M.X.length;
+  const r = makeRunner(cmp, cmp.baseOp, M.X);
+  const dists = (Z) => {
+    let sb = 0, se = 0;
+    for (let i = 0; i < n; i++) {
+      let db = 0, de = 0;
+      for (let d = 0; d < cmp.D; d++) {
+        const vb = Z[i][d] - M.B.z[i][d], ve = Z[i][d] - M.E.z[i][d];
+        db += vb * vb; de += ve * ve;
+      }
+      sb += Math.sqrt(db); se += Math.sqrt(de);
+    }
+    return [sb / n, se / n];
+  };
+  const projs = [r.proj()], dBase = [], dEdit = [];
+  let [db, de] = dists(r.stateJS()); dBase.push(db); dEdit.push(de);
+  for (let k = 0; k < K; k++) {
+    r.step(k < j ? cmp.editOp : cmp.baseOp);
+    projs.push(r.proj());
+    [db, de] = dists(r.stateJS()); dBase.push(db); dEdit.push(de);
+  }
+  r.dispose();
+  M.run = { projs, dBase, dEdit };
+}
+</script>

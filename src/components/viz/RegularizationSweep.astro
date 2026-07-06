@@ -1,0 +1,178 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 480 } = Astro.props;
+---
+<figure class="viz reg-sweep" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Regularization sweep: one Gaussian kernel, six points, one slider for λ.
+// Drag λ and watch three things change at once: the decision boundary smooths,
+// the αᵢ coefficients shrink, and the effective dimension drops. The weight is
+// always the same representer sum; only the budget changes.
+import { defineViz } from './engine/vizkit.js';
+import { softPanel, areaCurve, roundRect, T, rgba, mix, parseColor } from './engine/draw.js';
+
+const DOM = 1.4, SIG = 0.55, HM = 80;
+const BLUE = '#4a7fb3', ORANGE = '#b3661b';
+const BLUE_RGB = parseColor(BLUE), ORANGE_RGB = parseColor(ORANGE);
+
+function pts() {
+  return [
+    { x: -0.9, y: 0.55, c: 0 }, { x: -0.15, y: 0.9, c: 0 }, { x: 0.8, y: 0.6, c: 0 },
+    { x: -0.7, y: -0.65, c: 1 }, { x: 0.2, y: -0.95, c: 1 }, { x: 0.95, y: -0.45, c: 1 },
+  ];
+}
+
+const kern = (ax, ay, bx, by) => Math.exp(-((ax - bx) ** 2 + (ay - by) ** 2) / (2 * SIG * SIG));
+
+function solve(P, lam) {
+  const n = P.length;
+  const A = [];
+  for (let i = 0; i < n; i++) {
+    A.push([]);
+    for (let j = 0; j < n; j++) A[i].push(kern(P[i].x, P[i].y, P[j].x, P[j].y) + (i === j ? lam : 0));
+    A[i].push(P[i].c ? -1 : 1);
+  }
+  for (let col = 0; col < n; col++) {
+    let piv = col;
+    for (let r = col + 1; r < n; r++) if (Math.abs(A[r][col]) > Math.abs(A[piv][col])) piv = r;
+    [A[col], A[piv]] = [A[piv], A[col]];
+    const d = A[col][col] || 1e-9;
+    for (let j = col; j <= n; j++) A[col][j] /= d;
+    for (let r = 0; r < n; r++) if (r !== col) { const f = A[r][col]; for (let j = col; j <= n; j++) A[r][j] -= f * A[col][j]; }
+  }
+  return A.map((row) => row[n]);
+}
+
+function effDim(lam) {
+  const K = 80;
+  let s = 0;
+  for (let k = 1; k <= K; k++) { const lk = Math.exp(-0.5 * (0.55 * k) ** 2); s += lk / (lk + lam); }
+  return s;
+}
+
+defineViz('reg-sweep', {
+  title: 'Drag the regularization knob: same sum, different budget',
+  height: 480,
+  controls: [
+    { type: 'range', name: 'lam', label: 'regularization λ', min: -3, max: 2, step: 0.05, value: -1, fmt: (v) => (10 ** v).toFixed(2) },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    const P = pts();
+    const al = solve(P, 0.1);
+    P.forEach((p, i) => { p.a = al[i]; p.aTarget = al[i]; });
+    api.state = { P, prevLam: -1 };
+    api.set('lam', -1);
+  },
+
+  onControl(name, v, api) {
+    if (name !== 'lam') return;
+    const st = api.state; if (!st) return;
+    const lam = 10 ** v;
+    const al = solve(st.P, lam);
+    st.P.forEach((p, i) => { st.P[i].aTarget = al[i]; });
+    st.prevLam = v;
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    ctx.clearRect(0, 0, W, H);
+    const pad = 14, topH = 34, barH = 70;
+    const plotH = H - pad - topH - barH - pad;
+    const side = Math.min(W - pad * 2, plotH);
+    const x0 = (W - side) / 2, y0 = pad + topH;
+    const sx = (wx) => x0 + (wx + DOM) / (2 * DOM) * side;
+    const sy = (wy) => y0 + (DOM - wy) / (2 * DOM) * side;
+    const wxOf = (px) => (px - x0) / side * 2 * DOM - DOM;
+    const wyOf = (py) => DOM - (py - y0) / side * 2 * DOM;
+
+    // title
+    T(ctx, colors, 'label'); ctx.fillText('the weight is always f(x) = Σ αᵢ k(xᵢ, x); only the spending limit changes', pad, pad + 13);
+
+    // lerp alpha toward target
+    for (const p of st.P) { p.a += (p.aTarget - p.a) * 0.18; }
+
+    // signed decision field
+    const f = (X, Y) => { let s = 0; for (const p of st.P) s += p.a * kern(p.x, p.y, X, Y); return s; };
+    let maxa = 1e-6;
+    for (let r = 0; r < HM; r++) for (let c = 0; c < HM; c++) {
+      const X = wxOf(x0 + (c + 0.5) * side / HM), Y = wyOf(y0 + (r + 0.5) * side / HM);
+      maxa = Math.max(maxa, Math.abs(f(X, Y)));
+    }
+    const bg = parseColor(colors.bg), cb = BLUE_RGB, co = ORANGE_RGB, cell = side / HM;
+    for (let r = 0; r < HM; r++) for (let c = 0; c < HM; c++) {
+      const X = wxOf(x0 + (c + 0.5) * cell), Y = wyOf(y0 + (r + 0.5) * cell);
+      const v = f(X, Y) / maxa;
+      const col = v >= 0 ? co : cb;
+      const a = 0.5 * Math.min(1, Math.abs(v));
+      ctx.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},${a})`;
+      ctx.fillRect(x0 + c * cell, y0 + r * cell, cell + 0.6, cell + 0.6);
+    }
+
+    // zero contour
+    ctx.strokeStyle = colors.fg; ctx.lineWidth = 1.4; ctx.globalAlpha = 0.7;
+    const NB = 140;
+    for (let r = 0; r < NB; r++) for (let c = 0; c < NB; c++) {
+      const X = wxOf(x0 + (c + 0.5) * side / NB), Y = wyOf(y0 + (r + 0.5) * side / NB);
+      const v = f(X, Y);
+      const vr = f(wxOf(x0 + (c + 1.5) * side / NB), Y);
+      const vd = f(X, wyOf(y0 + (r + 1.5) * side / NB));
+      if ((v > 0) !== (vr > 0) || (v > 0) !== (vd > 0)) {
+        ctx.fillStyle = colors.fg;
+        ctx.fillRect(x0 + (c + 0.5) * side / NB, y0 + (r + 0.5) * side / NB, 1.4, 1.4);
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // border
+    ctx.strokeStyle = colors.border; ctx.lineWidth = 1;
+    ctx.strokeRect(x0 + 0.5, y0 + 0.5, side - 1, side - 1);
+
+    // points with alpha ring
+    for (const p of st.P) {
+      const X = sx(p.x), Y = sy(p.y);
+      const R = 5 + 14 * Math.min(1, Math.abs(p.a));
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = p.a >= 0 ? ORANGE : BLUE;
+      ctx.beginPath(); ctx.arc(X, Y, Math.max(0, R), 0, 6.283); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 2.4; ctx.strokeStyle = p.c ? BLUE : ORANGE;
+      ctx.beginPath(); ctx.arc(X, Y, Math.max(0, R + 2.5), 0, 6.283); ctx.stroke();
+      ctx.fillStyle = colors.fg; ctx.font = '9px ui-monospace, monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(p.a.toFixed(1), X, Y);
+    }
+
+    // alpha bar chart at bottom
+    const barY = y0 + side + 10, barAreaH = barH - 8;
+    const barW = (W - pad * 2) / st.P.length - 6;
+    const maxAlpha = Math.max(...st.P.map((p) => Math.abs(p.a)), 0.01);
+    T(ctx, colors, 'small'); ctx.fillText('coefficient magnitudes |αᵢ|', pad, barY - 1);
+    for (let i = 0; i < st.P.length; i++) {
+      const p = st.P[i];
+      const bx = pad + i * (barW + 6);
+      const bh = (Math.abs(p.a) / maxAlpha) * (barAreaH - 14);
+      const by = barY + barAreaH - bh;
+      ctx.fillStyle = p.a >= 0 ? rgba(ORANGE_RGB, 0.75) : rgba(BLUE_RGB, 0.75);
+      roundRect(ctx, bx, by, barW, bh, 3); ctx.fill();
+      ctx.fillStyle = colors.muted; ctx.font = '8px ui-monospace, monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText(`x${i + 1}`, bx + barW / 2, barY + barAreaH + 2);
+    }
+
+    const lam = 10 ** api.get('lam');
+    const dEff = effDim(lam);
+    const nz = st.P.filter((p) => Math.abs(p.a) > 0.05).length;
+    api.readout('rd', `λ = ${lam.toFixed(2)} · d_eff = ${dEff.toFixed(1)} · ${nz}/${st.P.length} support vectors`);
+  },
+});
+</script>

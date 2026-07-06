@@ -83,7 +83,7 @@ defineViz('gramreconstruction', {
     text(ctx, `rank-m  K̂ = ΦΦᵀ  (m=${m})`, x0 + side + gap + side / 2, 1, colors, { align: 'center', size: 11.5, weight: '600', color: accent });
     drawGram(ctx, { x: x0, y: top, w: side, h: side }, K, colors);
     drawGram(ctx, { x: x0 + side + gap, y: top, w: side, h: side }, Khat, colors);
-    api.readout('ro', `m ${m} features · ‖K̂−K‖/‖K‖ ${(relErr * 100).toFixed(relErr < 0.1 ? 1 : 0)}% · jax-js`);
+    api.readout('ro', `m ${m} features · ‖K̂−K‖/‖K‖ ${(relErr * 100).toFixed(relErr < 0.1 ? 1 : 0)}% · live`);
   },
 });
 </script>

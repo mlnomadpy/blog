@@ -1,0 +1,82 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 380 } = Astro.props;
+---
+<figure class="viz kdspectrum" data-caption={caption} data-height={height} data-height-mobile="430" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The inheritance claim made spectral. Eigenvalues of the student's latent
+// class-mean Gram, epoch by epoch of the real label-free run, against the
+// spectrum of the kernel that was handed over, S(T), and the teacher's own
+// latent spectrum. Every bar is an exported eigenvalue from
+// scripts/kernel_distill.py checkpoints; the animation replays training.
+import { defineViz } from './engine/vizkit.js';
+import { gate, loadingText, T, frame, legend, axes, parseColor, rgba } from './engine/draw.js';
+import { loadKD } from './kdistill.js';
+
+defineViz('kdspectrum', {
+  title: 'The spectrum the student grows into',
+  height: 380,
+  controls: [
+    { type: 'range', name: 'ep', label: 'training epoch', min: 0, max: 8, step: 1, value: 0, int: true,
+      play: { period: 9000 }, fmt: (v) => (v === 0 ? 'init' : `${v}`) },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    gate(api, loadKD, (api, d) => { api.state.d = d; });
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (!st || !st.ready) { loadingText(api); return; }
+    const d = st.d, ep = api.get('ep');
+    const stu = ep === 0 ? d.spectra.random : d.spectra.kernelByEpoch[ep - 1];
+    const tgt = d.spectra.target, tch = d.spectra.teacher;
+    const ckaT = ep === 0 ? d.cka.toTarget.random : d.cka.targetByEpoch[ep - 1];
+
+    const pad = 14, top = 46, bot = 34;
+    const box = { x: pad + 30, y: top, w: W - pad * 2 - 40, h: H - top - bot };
+    const yMax = 0.7;
+    const { sx, sy } = axes(ctx, box, { xMin: -0.5, xMax: 9.5, yMin: 0, yMax, yTicks: [0, 0.3, 0.6], grid: true }, colors);
+
+    T(ctx, colors, 'kicker');
+    ctx.fillText('eigenvalues of the latent class-mean Gram, largest first (share of trace)', pad, 20);
+    legend(ctx, W - 205, 16, [
+      { color: colors.accent, label: ep === 0 ? 'student, untrained' : `student, epoch ${ep} (no labels)` },
+      { color: colors.blue, label: `transferred kernel S(T=${d.temp})` },
+      { color: colors.faint, label: 'teacher latent (reference)' },
+    ], colors, { gap: 13 });
+
+    const gw = box.w / 10;
+    for (let k = 0; k < 10; k++) {
+      const cx = sx(k), bw = Math.min(16, gw * 0.3);
+      // teacher latent: a thin faint tick behind everything
+      const yTch = sy(tch[k]);
+      ctx.strokeStyle = colors.faint; ctx.lineWidth = 1.4; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(cx - bw - 4, yTch); ctx.lineTo(cx + bw + 4, yTch); ctx.stroke(); ctx.setLineDash([]);
+      // the transferred kernel's spectrum: hollow blue bar (the target geometry)
+      const yTgt = sy(tgt[k]);
+      ctx.strokeStyle = colors.blue; ctx.lineWidth = 1.6;
+      ctx.strokeRect(cx - bw + 0.5, yTgt + 0.5, bw - 1, box.y + box.h - yTgt - 1);
+      // the student: filled accent bar, tweened between epochs
+      const v = api.tween('s' + k, stu[k], 380);
+      const ys = sy(v);
+      ctx.fillStyle = rgba(parseColor(colors.accent), 0.85);
+      ctx.fillRect(cx + 1, ys, bw, box.y + box.h - ys);
+      T(ctx, colors, 'small', { align: 'center', color: colors.faint });
+      ctx.fillText(`λ${k + 1}`, cx, box.y + box.h + 14);
+    }
+    frame(ctx, colors, box.x, box.y, box.w, box.h);
+
+    const l1t = stu.reduce((a, v, k) => a + Math.abs(v - tgt[k]), 0);
+    api.readout('rd', `epoch ${ep === 0 ? '0 (random init)' : ep}: agreement with the transferred kernel CKA ${ckaT.toFixed(3)}, spectrum gap L1 ${l1t.toFixed(2)}`);
+  },
+});
+</script>

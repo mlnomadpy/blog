@@ -124,6 +124,7 @@ function mountOne(root, specOrFactory) {
   let hasLoop = !!spec.step;       // true for physics viz (spec.step) or a timeline range (range.play)
   let timeline = null, lastTs = 0; // timeline: a range that a Play button auto-advances
   let playing = false, raf = 0, iter = 0, acc = 0, colors = readColors();
+  let didSetup = false, renderRaf = 0; // setup is deferred to first viewport entry; paints coalesce into one rAF
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const api = {
@@ -151,12 +152,18 @@ function mountOne(root, specOrFactory) {
     }
     const rect = canvas.getBoundingClientRect(); const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, spec.maxDpr || 2));
     api.size.W = rect.width; api.size.H = rect.height; canvas.width = Math.round(rect.width * dpr); canvas.height = Math.round(rect.height * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); };
-  const render = () => { if (api.size.W === 0) fit(); ctx.setTransform(1, 0, 0, 1, 0, 0); const dpr = canvas.width / api.size.W; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, api.size.W, api.size.H); api.iter = iter; spec.draw(api); };
+  // renderNow paints synchronously; it no-ops before the deferred setup has run
+  // (theme/resize observers can fire while the panel is still below the fold).
+  const renderNow = () => { if (!didSetup) return; if (api.size.W === 0) fit(); ctx.setTransform(1, 0, 0, 1, 0, 0); const dpr = canvas.width / api.size.W; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, api.size.W, api.size.H); api.iter = iter; spec.draw(api); };
+  // render (the public api.render, and every interaction/observer paint) coalesces
+  // into a single rAF, so a burst of pointermove/resize/theme events during a drag
+  // repaints at most once per frame instead of flooding the main thread.
+  const render = () => { if (renderRaf || !didSetup) return; renderRaf = requestAnimationFrame(() => { renderRaf = 0; renderNow(); }); };
   // ── transitions: api.tween(key, target, ms) eases a value toward target across
   // control changes and drives re-renders until it settles; snapped on (re)setup.
   let tweens = {}, tweenRaf = 0;
   const tnow = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : 0);
-  const driveTweens = () => { if (tweenRaf) return; const step = () => { tweenRaf = 0; render(); let active = false; for (const k in tweens) if (tweens[k].p < 1) active = true; if (active) tweenRaf = requestAnimationFrame(step); }; tweenRaf = requestAnimationFrame(step); };
+  const driveTweens = () => { if (tweenRaf) return; const step = () => { tweenRaf = 0; renderNow(); let active = false; for (const k in tweens) if (tweens[k].p < 1) active = true; if (active) tweenRaf = requestAnimationFrame(step); }; tweenRaf = requestAnimationFrame(step); };
   api.tween = (key, target, ms = 300) => {
     if (!Number.isFinite(target)) { tweens[key] = { to: target, val: target, p: 1 }; return target; }
     const now = tnow(); let t = tweens[key];
@@ -174,20 +181,20 @@ function mountOne(root, specOrFactory) {
     const dt = Math.min(ts - lastTs, 100); lastTs = ts;     // clamp dt so a backgrounded tab does not jump
     const tl = timeline, span = tl.max - tl.min || 1;
     tl.pos += span * (dt / tl.period) * speedMul * tl.dir;
-    if (tl.pos >= tl.max) { if (tl.loop === 'pingpong') { tl.pos = tl.max; tl.dir = -1; } else if (tl.loop) { tl.pos = tl.min + ((tl.pos - tl.min) % span); } else { tl.pos = tl.max; api.setControl(tl.name, tl.int ? Math.round(tl.pos) : tl.pos); render(); stop(); return; } }
+    if (tl.pos >= tl.max) { if (tl.loop === 'pingpong') { tl.pos = tl.max; tl.dir = -1; } else if (tl.loop) { tl.pos = tl.min + ((tl.pos - tl.min) % span); } else { tl.pos = tl.max; api.setControl(tl.name, tl.int ? Math.round(tl.pos) : tl.pos); renderNow(); stop(); return; } }
     else if (tl.pos <= tl.min && tl.dir < 0) { tl.pos = tl.min; tl.dir = 1; }
     api.setControl(tl.name, tl.int ? Math.round(tl.pos) : tl.pos);
   };
   const loop = (ts) => { if (!playing) return;
-    if (timeline && !spec.step) { advanceTimeline(ts); if (!playing) return; render(); raf = requestAnimationFrame(loop); return; }
+    if (timeline && !spec.step) { advanceTimeline(ts); if (!playing) return; renderNow(); raf = requestAnimationFrame(loop); return; }
     acc += (spec.stepsPerFrame || 1) * speedMul;
     while (acc >= 1) { spec.step(api); iter++; acc -= 1; if (spec.maxStep && iter >= spec.maxStep) { acc = 0; break; } }
-    render(); if (spec.maxStep && iter >= spec.maxStep) { stop(); return; } raf = requestAnimationFrame(loop); };
+    renderNow(); if (spec.maxStep && iter >= spec.maxStep) { stop(); return; } raf = requestAnimationFrame(loop); };
   const play = () => { if (!hasLoop) return;
     if (timeline && !spec.step) { if (timeline.pos >= timeline.max && timeline.loop !== 'pingpong') timeline.pos = timeline.min; timeline.dir = 1; }
     else if (spec.maxStep && iter >= spec.maxStep) doReset();
     lastTs = 0; playing = true; if (playBtn) playBtn.textContent = '❚❚ Pause'; raf = requestAnimationFrame(loop); };
-  const doReset = () => { stop(); doSetup(); render(); };
+  const doReset = () => { stop(); doSetup(); renderNow(); };
 
   let playBtn = null;
   for (const c of spec.controls || []) {
@@ -238,7 +245,7 @@ function mountOne(root, specOrFactory) {
     const shot = document.createElement('button');
     shot.type = 'button'; shot.className = 'vk-tool'; shot.textContent = '⇩';
     shot.title = 'Download this plot as PNG'; shot.setAttribute('aria-label', 'Download plot as PNG');
-    shot.onclick = () => { render(); downloadCanvas(canvas, `${root.classList[1] || 'viz'}-${Date.now()}.png`); showToast(root, 'PNG saved'); };
+    shot.onclick = () => { renderNow(); downloadCanvas(canvas, `${root.classList[1] || 'viz'}-${Date.now()}.png`); showToast(root, 'PNG saved'); };
     tools.appendChild(shot);
     if (root.requestFullscreen || root.webkitRequestFullscreen) {
       const fs = document.createElement('button');
@@ -261,25 +268,43 @@ function mountOne(root, specOrFactory) {
     bar.appendChild(help);
   }
 
-  doSetup();
+  // setup() is deferred to first viewport entry (see the IntersectionObserver
+  // below), so nothing computes at page load; a page of panels stays responsive
+  // and each panel does its work only as it scrolls near.
+  const ensureSetup = () => { if (didSetup) return; fit(); doSetup(); didSetup = true; renderNow(); };
+
   // keyboard shortcuts on the focusable figure root: space=play/pause, s=step, r=reset
   root.addEventListener('keydown', (e) => {
-    if (e.key === ' ' && hasLoop) { e.preventDefault(); playing ? stop() : play(); }
-    else if ((e.key === 's' || e.key === 'S') && spec.step) { stop(); stepN(1); render(); }
-    else if ((e.key === 'r' || e.key === 'R') && spec.step) { doReset(); }
+    if (e.key === ' ' && hasLoop) { e.preventDefault(); ensureSetup(); playing ? stop() : play(); }
+    else if ((e.key === 's' || e.key === 'S') && spec.step) { ensureSetup(); stop(); stepN(1); renderNow(); }
+    else if ((e.key === 'r' || e.key === 'R') && spec.step) { ensureSetup(); doReset(); }
   });
-  new MutationObserver(() => { colors = readColors(); render(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-  new ResizeObserver(() => { fit(); render(); }).observe(canvas);
+
+  // Observers hold closures over this panel; disconnect them once its canvas
+  // leaves the DOM (Astro view transitions swap nodes) so they do not pile up.
+  const observers = [];
+  const alive = () => { if (canvas.isConnected) return true; observers.forEach((o) => o.disconnect()); document.removeEventListener('fullscreenchange', onFullscreen); document.removeEventListener('webkitfullscreenchange', onFullscreen); return false; };
+
+  const themeObs = new MutationObserver(() => { if (!alive()) return; colors = readColors(); render(); });
+  themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  const resizeObs = new ResizeObserver(() => { if (!alive()) return; fit(); render(); });
+  resizeObs.observe(canvas);
   let kicked = false;
-  const onFullscreen = () => { colors = readColors(); fit(); render(); };
+  const onFullscreen = () => { colors = readColors(); fit(); renderNow(); };
   document.addEventListener('fullscreenchange', onFullscreen);
   document.addEventListener('webkitfullscreenchange', onFullscreen);
-  new IntersectionObserver((e) => {
+  // Preload margin: setup fires when the panel is within ~400px of the viewport,
+  // so its first paint is ready by the time it scrolls in, without doing the work
+  // for every panel up front.
+  const io = new IntersectionObserver((e) => {
+    if (!alive()) return;
     if (e[0].isIntersecting) {
-      fit(); render();
+      if (!didSetup) ensureSetup(); else { fit(); renderNow(); }
       if (spec.step && spec.autoplay !== false && !reduceMotion && !kicked) { kicked = true; play(); }
     } else stop();
-  }, { rootMargin: '0px' }).observe(canvas);
+  }, { rootMargin: '400px 0px' });
+  io.observe(canvas);
+  observers.push(themeObs, resizeObs, io);
 }
 
 export function defineViz(className, spec) {

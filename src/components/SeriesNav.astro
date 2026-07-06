@@ -1,0 +1,162 @@
+---
+// Collapsible series navigation strip shown under the post header.
+// Collapsed, it is a one-line eyebrow ("Part 3 of 6 · The Prototype Network");
+// expanded, it lists every explainer in the series in reading order. The
+// current post is highlighted and not a link. On a JAX-companion page the
+// list is the explainer series, with this post's explainer marked.
+interface SeriesItem {
+  slug: string;
+  title: string;
+  current: boolean;
+  /** True on companion pages for the item that is this post's explainer. */
+  explainerOfCurrent: boolean;
+}
+interface Series {
+  title: string;
+  part: number;
+  total: number;
+  items: SeriesItem[];
+}
+interface Props { series?: Series }
+const { series } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+{series && (
+  <details class="series-nav">
+    <summary>
+      <span class="sn-strip">
+        <span class="sn-part">Part {series.part} of {series.total}</span>
+        <span class="sn-sep" aria-hidden="true">·</span>
+        <span class="sn-series">{series.title}</span>
+      </span>
+      <span class="sn-chevron" aria-hidden="true">
+        <svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M2.5 4.5 6 8l3.5-3.5" />
+        </svg>
+      </span>
+    </summary>
+    <ol class="sn-list">
+      {series.items.map((it, i) => (
+        <li class:list={[{ current: it.current }]}>
+          {it.current ? (
+            <span class="sn-item" aria-current="page">
+              <span class="sn-num">{i + 1}</span>
+              <span class="sn-title">{it.title}</span>
+              <span class="sn-note">you are here</span>
+            </span>
+          ) : (
+            <a class="sn-item" href={`${base}/${it.slug}/`}>
+              <span class="sn-num">{i + 1}</span>
+              <span class="sn-title">{it.title}</span>
+              {it.explainerOfCurrent && <span class="sn-note">this post's explainer</span>}
+            </a>
+          )}
+        </li>
+      ))}
+    </ol>
+  </details>
+)}
+
+<style>
+  .series-nav {
+    margin: 0 0 1.1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-sunken);
+    overflow: hidden;
+  }
+  summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.55rem 0.9rem;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+    transition: background var(--transition-fast);
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary:hover { background: color-mix(in srgb, var(--accent) 6%, var(--bg-sunken)); }
+  .sn-strip {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    min-width: 0;
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+  }
+  .sn-part { color: var(--accent); white-space: nowrap; }
+  .sn-sep { color: var(--fg-faint); }
+  .sn-series {
+    color: var(--fg-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sn-chevron {
+    flex: none;
+    display: inline-flex;
+    color: var(--fg-faint);
+    transition: transform var(--transition-fast), color var(--transition-fast);
+  }
+  summary:hover .sn-chevron { color: var(--accent); }
+  .series-nav[open] .sn-chevron { transform: rotate(180deg); }
+
+  .sn-list {
+    list-style: none;
+    margin: 0;
+    padding: 0.25rem 0.9rem 0.55rem;
+    border-top: 1px dashed var(--border);
+  }
+  .sn-list li { margin: 0; }
+  .sn-item {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    padding: 0.32rem 0;
+    text-decoration: none;
+    color: inherit;
+  }
+  .sn-num {
+    flex: none;
+    width: 1.1rem;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--fg-faint);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .sn-title {
+    font-family: var(--serif);
+    font-size: 0.93rem;
+    line-height: 1.4;
+    color: var(--fg-muted);
+    transition: color var(--transition-fast);
+  }
+  a.sn-item:hover .sn-title { color: var(--accent); }
+  li.current .sn-num { color: var(--accent); }
+  li.current .sn-title { color: var(--fg); font-weight: 600; }
+  .sn-note {
+    flex: none;
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--accent);
+    border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+    border-radius: 4px;
+    padding: 0.06rem 0.38rem;
+    white-space: nowrap;
+    align-self: center;
+  }
+
+  @media (max-width: 600px) {
+    .sn-series { white-space: normal; }
+    .sn-strip { flex-wrap: wrap; row-gap: 0.15rem; }
+    .sn-note { display: none; }
+    li.current .sn-note { display: inline-block; }
+  }
+</style>

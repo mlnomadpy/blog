@@ -228,6 +228,9 @@ const id = `kp-${Math.random().toString(36).slice(2, 9)}`;
     let protos = [];
     let sigma = 0.5;
     let kernelName = 'gauss';
+    // cached field raster: reused across repaints where no field-determining input
+    // (prototype positions/α, sigma, kernel, theme) changed.
+    const fieldCache = { key: null, canvas: null, vals: null, HM: 0 };
 
     const Kgauss = (x1, y1, x2, y2, s) => Math.exp(-((x1 - x2) ** 2 + (y1 - y2) ** 2) / (2 * s * s));
     const Kyat   = (x1, y1, x2, y2, s) => {
@@ -382,38 +385,55 @@ const id = `kp-${Math.random().toString(36).slice(2, 9)}`;
       // Diverging heatmap of f(x), only if there are prototypes
       if (protos.length > 0) {
         const HM = 80;
-        const vals = new Float32Array(HM * HM);
-        let absMax = 0;
-        for (let py = 0; py < HM; py++) {
-          const yw = yWorld(plotY + (py / HM) * plotH);
-          for (let px = 0; px < HM; px++) {
-            const xw = xWorld(plotX + (px / HM) * plotW);
-            const v = f(xw, yw);
-            vals[py * HM + px] = v;
-            const a = Math.abs(v);
-            if (a > absMax) absMax = a;
+        // The scalar field f(x,y) = Σᵤ αᵤ K(x, Wᵤ) depends only on the prototype
+        // positions/α, sigma, kernel, and dataset domain (fixed) — NOT on the plot
+        // pixel size or the hovered cursor. So the HM×HM raster and its coloured
+        // bitmap are cached on a field key and only recomputed when a
+        // field-determining input actually changes (a prototype drag, an α slider,
+        // sigma, kernel, or theme). Idle repaints, resizes, and fullscreen become a
+        // single drawImage instead of HM² kernel sums. The `vals` array is kept for
+        // the marching-squares contour below, which reuses the same raster.
+        const protoKey = protos.map((p) => p.x.toFixed(4) + ',' + p.y.toFixed(4) + ',' + p.alpha.toFixed(4)).join(';');
+        const fieldKey = kernelName + '|' + sigma + '|' + protoKey + '|' + colors.bgSunken + '|' + colors.accent + '|' + colors.fg;
+        if (fieldCache.key !== fieldKey) {
+          const vals = new Float32Array(HM * HM);
+          let absMax = 0;
+          for (let py = 0; py < HM; py++) {
+            const yw = yWorld(plotY + (py / HM) * plotH);
+            for (let px = 0; px < HM; px++) {
+              const xw = xWorld(plotX + (px / HM) * plotW);
+              const v = f(xw, yw);
+              vals[py * HM + px] = v;
+              const a = Math.abs(v);
+              if (a > absMax) absMax = a;
+            }
           }
+          const bgCol = parseColor(colors.bgSunken);
+          const posCol = parseColor(colors.accent);
+          const negCol = parseColor(colors.fg);
+          const cap = absMax > 0 ? absMax : 1;
+          const off = fieldCache.canvas || (fieldCache.canvas = document.createElement('canvas'));
+          off.width = HM; off.height = HM;
+          const octx = off.getContext('2d');
+          const img = octx.createImageData(HM, HM);
+          for (let i = 0; i < HM * HM; i++) {
+            const v = vals[i];
+            const t = Math.min(1, Math.pow(Math.abs(v) / cap, 0.55));
+            const target = v >= 0 ? posCol : negCol;
+            const o = i * 4;
+            img.data[o] = Math.round(bgCol[0] + (target[0] - bgCol[0]) * t * 0.85);
+            img.data[o + 1] = Math.round(bgCol[1] + (target[1] - bgCol[1]) * t * 0.85);
+            img.data[o + 2] = Math.round(bgCol[2] + (target[2] - bgCol[2]) * t * 0.85);
+            img.data[o + 3] = 255;
+          }
+          octx.putImageData(img, 0, 0);
+          fieldCache.key = fieldKey;
+          fieldCache.vals = vals;
+          fieldCache.HM = HM;
         }
-        const bgCol = parseColor(colors.bgSunken);
-        const posCol = parseColor(colors.accent);
-        const negCol = parseColor(colors.fg);
-        const cap = absMax > 0 ? absMax : 1;
-        const img = ctx.createImageData(HM, HM);
-        for (let i = 0; i < HM * HM; i++) {
-          const v = vals[i];
-          const t = Math.min(1, Math.pow(Math.abs(v) / cap, 0.55));
-          const target = v >= 0 ? posCol : negCol;
-          const o = i * 4;
-          img.data[o] = Math.round(bgCol[0] + (target[0] - bgCol[0]) * t * 0.85);
-          img.data[o + 1] = Math.round(bgCol[1] + (target[1] - bgCol[1]) * t * 0.85);
-          img.data[o + 2] = Math.round(bgCol[2] + (target[2] - bgCol[2]) * t * 0.85);
-          img.data[o + 3] = 255;
-        }
-        const tmp = document.createElement('canvas');
-        tmp.width = HM; tmp.height = HM;
-        tmp.getContext('2d').putImageData(img, 0, 0);
+        const vals = fieldCache.vals;
         ctx.imageSmoothingEnabled = true;
-        ctx.drawImage(tmp, plotX, plotY, plotW, plotH);
+        ctx.drawImage(fieldCache.canvas, plotX, plotY, plotW, plotH);
 
         // Decision boundary: contour at f(x) = 0 via marching squares (coarse).
         ctx.strokeStyle = colors.fg;

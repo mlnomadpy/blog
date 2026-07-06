@@ -1,0 +1,219 @@
+---
+title: "Your Skip Connection Is Half of Newton"
+description: "A residual block x + F(x) is one forward-Euler step: depth is time, the block is a velocity, position moves directly. That is half of Newtonian mechanics. A planet does not update position from force; force updates velocity, velocity updates position, and that split is why orbits are stable. So what does the missing half cost a deep network? We let the physics make three predictions about trained networks, then check all three live in the page. One of them comes back stranger than we wrote it."
+seoTitle: "Skip Connections Are Half of Newton: Momentum ResNets"
+seoDescription: "A residual block is one forward-Euler step: half of Newton. What does the missing velocity ledger cost a trained network? Three predictions, checked live."
+pubDate: 2026-07-04
+draft: false
+companion: momentum-resnet-jax-flax-nnx
+tags: [ml, resnet, neural-ode, momentum-resnet, dynamical-systems, symplectic-integrators, depth, architecture, physics]
+references:
+  - authors: "Chen, R. T. Q., Rubanova, Y., Bettencourt, J., Duvenaud, D."
+    year: 2018
+    title: "Neural Ordinary Differential Equations"
+    venue: "NeurIPS 2018"
+    arxiv: "1806.07366"
+  - authors: "Sander, M. E., Ablin, P., Blondel, M., Peyré, G."
+    year: 2021
+    title: "Momentum Residual Neural Networks"
+    venue: "ICML 2021"
+    arxiv: "2102.07870"
+  - authors: "Greydanus, S., Dzamba, M., Yosinski, J."
+    year: 2019
+    title: "Hamiltonian Neural Networks"
+    venue: "NeurIPS 2019"
+    arxiv: "1906.01563"
+  - authors: "Dupont, E., Doucet, A., Teh, Y. W."
+    year: 2019
+    title: "Augmented Neural ODEs"
+    venue: "NeurIPS 2019"
+    arxiv: "1904.01681"
+  - authors: "Haber, E., Ruthotto, L."
+    year: 2017
+    title: "Stable Architectures for Deep Neural Networks"
+    venue: "Inverse Problems 34(1)"
+    arxiv: "1705.03341"
+  - authors: "E, W."
+    year: 2017
+    title: "A Proposal on Machine Learning via Dynamical Systems"
+    venue: "Communications in Mathematics and Statistics 5"
+    url: "https://link.springer.com/article/10.1007/s40304-017-0103-z"
+  - authors: "Hairer, E., Lubich, C., Wanner, G."
+    year: 2006
+    title: "Geometric Numerical Integration: Structure-Preserving Algorithms for Ordinary Differential Equations"
+    venue: "Springer, 2nd ed."
+    url: "https://link.springer.com/book/10.1007/3-540-30666-8"
+keywords:
+  - skip connections
+  - residual networks
+  - forward Euler
+  - leapfrog integrator
+  - symplectic integrator
+  - momentum ResNet
+  - neural ODE
+  - depth as time
+  - second-order dynamics
+  - invertible networks
+  - energy drift
+  - augmented neural ODE
+---
+import OrbitIntegrator from '../../components/viz/OrbitIntegrator.astro';
+import StabilityCliff from '../../components/viz/StabilityCliff.astro';
+import DepthTrajectories from '../../components/viz/DepthTrajectories.astro';
+import InertiaDial from '../../components/viz/InertiaDial.astro';
+import RewindExact from '../../components/viz/RewindExact.astro';
+import CiteAs from '../../components/CiteAs.astro';
+
+Why doesn't the Moon fall into the Earth? It is falling. Every second of every orbit, gravity pulls it straight toward us, and nothing ever pushes it back out. The reason it misses is bookkeeping: the force does not move the Moon. The force changes the Moon's *velocity*, and the velocity moves the Moon. Two ledgers, updated in turn. Sideways speed plus inward pull equals a circle, forever. Collapse the two ledgers into one, let the pull move the position directly, and the orbit is gone.
+
+Now look at the most successful architectural idea in deep learning. A residual block computes
+
+$$
+x_{l+1} = x_l + F(x_l),
+$$
+
+take the state, add an update, repeat. Read it as a physicist and it is unmistakable: this is **forward Euler**, the oldest numerical integrator there is, marching the state $x$ through time with the block $F$ as its velocity field. Depth is time. The skip connection is the integrator.
+
+But notice what is missing. The block's output moves the position *directly*. There is no second ledger. No velocity that accumulates, no inertia that carries the state through a step where the field momentarily points the wrong way. A residual network is a universe where force acts on position, which is to say: half of Newton.
+
+This post takes that sentence literally and follows it to the end. Not as a metaphor: the correspondence is exact, the same update rules applied to different vector fields, and that exactness means the physics gets to make *predictions* about networks before we train a single one. We will let it make three, then check all three on real trained networks, live. One of the three will come back stranger than predicted, and the strangeness turns out to be the sharpest evidence in the post. Every number comes from one script, `scripts/momentum_resnet.py`, and every trajectory you will see is either a real ODE integrated in your browser as you watch, or the actual hidden states of a really-trained network. Nothing is staged.
+
+## Two integrators, one planet
+
+What does the missing ledger cost? Physics answered this long before deep learning existed, because physics has been discretizing dynamics on computers since the 1940s and kept ruining orbits.
+
+Write the honest second-order law with the state split in two, position and velocity:
+
+$$
+\dot{x} = v, \qquad \dot{v} = a(x),
+$$
+
+and discretize it the naive way, both updates from the same stale state:
+
+$$
+x_{t+1} = x_t + \Delta t\, v_t, \qquad v_{t+1} = v_t + \Delta t\, a(x_t).
+$$
+
+That is forward Euler. Now change almost nothing. Update the velocity by half a step, move the position with the *fresh* velocity, finish the velocity with the new force:
+
+$$
+v_{t+\frac12} = v_t + \tfrac{\Delta t}{2} a(x_t), \qquad
+x_{t+1} = x_t + \Delta t\, v_{t+\frac12}, \qquad
+v_{t+1} = v_{t+\frac12} + \tfrac{\Delta t}{2} a(x_{t+1}).
+$$
+
+That is **leapfrog**, the integrator behind every serious orbital and molecular simulation. Same step size, same force, same cost per step: two extra force evaluations' worth of reordering. The difference is that leapfrog is *symplectic*, it preserves the phase-space volume the true dynamics preserves, and so its energy error stays bounded forever instead of accumulating (Hairer, Lubich and Wanner have a whole book on why). Euler, by contrast, adds a little energy on the outside of every curve. It cannot help it: it always moves along the *old* direction a moment too long.
+
+What should that do to a planet? It should spiral out. Each orbit, Euler injects a sliver of energy, the ellipse swells, and eventually the planet unbinds and leaves. Not because gravity was wrong, because the bookkeeping was.
+
+Here is that exact experiment, a real two-body problem with $GM = 1$, integrated in your browser as you watch. Same planet, same launch, same step size, only the update order differs.
+
+<OrbitIntegrator caption="The physics fact, computed live: one planet on the same elliptical orbit (dashed), integrated with forward Euler (left) and leapfrog (right) at the step size you choose. The strip below tracks the relative energy error of both runs. Euler pumps energy in and spirals out; push dt up and it unbinds entirely. Leapfrog's energy error oscillates but never drifts. Press play and leave it running; the divergence is the point." />
+
+The script's measured version of the same fact, at step size $\Delta t = 0.02$ for 20 orbits: Euler's energy has drifted by +68% while leapfrog's worst momentary deviation is 0.016%; Euler's farthest point has swollen from the true apoapsis of 1.0 out to 3.37 (on an orbit whose semi-major axis is 0.84), and the two simulated planets, which started identical, are 2.6 length units apart. At $\Delta t = 0.05$ the Euler drift reaches +76% while leapfrog still holds 0.10%. Same force, same step size. The stability lives entirely in *where the update is written down*.
+
+## The dictionary, and what it predicts
+
+So the claim "a ResNet is an integrator" had better be exact, or none of this transfers. It is exact, and it is worth pinning down as a table, because the whole post runs on it:
+
+| residual network | numerical integrator |
+| --- | --- |
+| layer index $l$ | time $t$ |
+| hidden state $x_l$ | position |
+| residual branch $F(x_l)$ | the vector field being integrated |
+| skip connection $x_l + F(x_l)$ | one forward-Euler step, $\Delta t = 1$ |
+| stacking $L$ blocks | integrating for total time $T = L\,h$ |
+| a velocity state $v_l$ (usually absent) | the momentum ledger |
+| its damping $\mu$ | friction / how long inertia is remembered |
+
+This reading is not mine; it is the founding observation of a whole research thread. E (2017) and Haber and Ruthotto (2017) proposed treating deep networks as discretized dynamical systems; Chen et al. (2018) took the limit and got Neural ODEs, where the network *is* the vector field and depth is a continuous time you hand to an off-the-shelf integrator. The difference from the planet is only what generates the field: gravity is $-r/\lVert r\rVert^3$, a residual branch is a trained two-layer MLP. The integrator neither knows nor cares.
+
+And that is what makes the correspondence useful rather than decorative: everything numerical analysis knows about Euler's missing ledger becomes a *forecast* about plain residual networks. Three forecasts, concretely.
+
+**Prediction 1: no inertia, no smoothness.** Euler trajectories are kinked; each step forgets the direction of the last one, so the path turns as sharply as the local field does. A network whose block output moves the state directly should trace jagged hidden trajectories, while one with a velocity ledger should trace smooth, orbit-like ones, because consecutive steps share the accumulated velocity.
+
+**Prediction 2: a first-order flow cannot cross itself.** This one is topological, and it is the sharpest. As depth grows at fixed total time, a plain residual net converges to a first-order flow, and the map a flow induces is a *homeomorphism*: trajectories of $\dot x = F(x)$ cannot cross, so the map cannot tear space or pass one region through another. Put a class *inside* a ring of another class, in a 2-D state space, and no first-order flow can pull it out; the surrounding class walls it in at every angle (this is exactly the obstruction Dupont et al. (2019) built Augmented Neural ODEs to escape). A deep plain residual net, refining toward that flow, should fail the task, though what "fail" means will turn out to matter. Newton's actual state, meanwhile, is $(x, v)$, position *and* velocity. Doubling the state means two trajectories may pass through the same position with different velocities, so in the position shadow, paths cross freely. Orbits do it constantly. A network with a velocity ledger faces no such wall.
+
+**Prediction 3: the second-order net can be run backward.** Leapfrog and its cousins are time-reversible: flip the velocity and the same rule retraces its steps exactly. The corresponding network fact would be that from the final $(x_L, v_L)$ alone you can reconstruct every earlier hidden state, and the input, with no stored activations. A plain residual block has no such inverse: $x + F(x)$ discards exactly the information you would need.
+
+If the correspondence is real, all three should show up in trained networks. Time to train some.
+
+## One architecture, one knob
+
+How do you add the second ledger to a residual network without changing anything else? Like this (Sander et al., 2021, the momentum residual network):
+
+$$
+v_{l+1} = \mu\, v_l + (1 - \mu)\, F_l(x_l), \qquad x_{l+1} = x_l + h\, v_{l+1}, \qquad v_0 = 0.
+$$
+
+The block writes into a velocity; the velocity moves the state. And the design has a lovely property: set $\mu = 0$ and it collapses, exactly, to $x_{l+1} = x_l + h\,F_l(x_l)$, the plain residual network. One architecture, one scalar dial from Euler to Newton. The parameter counts match by construction ($\mu$ is a fixed hyperparameter, not trained), so any difference we measure is the ledger and nothing else.
+
+The experiment, all in `scripts/momentum_resnet.py`, is built so you can *see* the dynamics rather than take my word:
+
+- The residual stream has **width 2**. Every hidden trajectory in this post is the literal hidden state, drawn in its own coordinates. No projection, no shadow.
+- Blocks are per-layer (untied): $F_l(x) = W_2^{(l)} \tanh(W_1^{(l)} x + b_1^{(l)}) + b_2^{(l)}$, hidden width 16.
+- Total integration time is held fixed at $T = L\,h = 8$, so depth $L \in \{8, 32, 128\}$ refines the same flow with steps $h = 1, 0.25, 0.0625$. Depth 8 at $h = 1$ *is* the standard ResNet block.
+- Three 2-D tasks: two moons (easy), two interleaved spirals (hard but topologically free), and **concentric rings**, a disk of one class fully enclosed by an annulus of the other, the task Prediction 2 says a deep first-order flow must fail.
+- Three seeds per configuration, 4000 full-batch Adam steps, and a linear readout on the final 2-D state.
+
+Everything in that list is bookkeeping except the last task. Rings is the one the theorem has already ruled on: a deep plain net cannot get it exactly right, because the inner class is walled in at every angle. Three seeds wait at every depth, and the theorem does not get a vote on what gradient descent actually does.
+
+## The cliff that refused to appear
+
+What happened? On two moons, nothing: both update rules sit between 99.85% and 100% accuracy at every depth. The velocity ledger is not a general-purpose upgrade, and it would be dishonest to sell it as one. Euler is a fine integrator when the flow is easy and the step is small.
+
+The rings task is where the physics said the trouble must live. And here the experiment turned on us: **there is no cliff**. At depth 128, steps of $h = 0.0625$, the plain net scores 99.85% on rings, a tenth of a point under the momentum net's 99.95% at identical parameter count. Handed a task its continuum limit supposedly cannot do, gradient descent all but did it anyway.
+
+<StabilityCliff caption="Test accuracy against depth for the plain residual net (orange) and the momentum net (blue), three seeds each (band = min to max), total integration time fixed so deeper means smaller steps; the y axis zooms to where the data lives. There is no cliff: the two rules tie to within a point on every task. The fine print sits at the ceiling. Once the plain net is deep enough to be an honest flow (32 and 128 blocks), its band on the rings task never touches 100% again, while the momentum net pins it there. All numbers from scripts/momentum_resnet.py; switch tasks with the selector." />
+
+All but. So was the theorem wrong, or were we? Reread Prediction 2 the way a mathematician would. Trajectories cannot cross, the map cannot tear space, and therefore a first-order planar flow feeding a linear readout can never get the rings task *exactly* right. That is the whole claim, and nothing in it outlaws 99%: a homeomorphism is free to squeeze the surrounding ring into a thin filament and hide almost all of its probability mass, and therefore almost all of its mistakes, inside it. We read "cannot do the task" and imagined a collapse. The theorem never promised a collapse. It promised a ceiling.
+
+And the ceiling is exactly where every run put it. At depth 8 the plain net is not yet a flow (steps of $h = 1$ can jump the wall; non-crossing does not bind a coarse discrete map), and it posts a perfect 100.0% in two seeds of three. At depths 32 and 128, where it refines into an honest flow, it never touches 100% again in any seed; its best runs stall at 99.76% and 99.95%. The momentum net scores 100.0% in all three seeds at depth 8 and again at depth 32. The plain net is doing exactly what a cornered homeomorphism must: hide its forbidden mistakes in the filament and pay a stray handful of fresh test points as rent, forever. The 1890s uniqueness theorem behind non-crossing did not predict the collapse we expected; it predicted the *ceiling* we found. On the spirals the ledger shows up as reliability instead: at depth 128 the plain net's three seeds spread from 92.9% to 98.3%, while the momentum net's sit within six tenths of a point of each other (97.7% to 98.3%).
+
+So the scoreboard underdetermines the story: two networks can both sit near 99.9 and be doing violently different things. Watch the hidden states themselves, because with a width-2 stream we actually can.
+
+<DepthTrajectories caption="Real hidden trajectories of the two trained depth-32 networks, no projection: the residual stream is width 2 by design, so this plane is the network's entire hidden space. Left, the plain net (mu = 0); right, the momentum net (mu = 0.9). Slide depth to carry the test points through the layers; the path-length, turning-angle and accuracy readouts are from the training run. On rings the two mechanisms are night and day: the plain net folds and squeezes, a fresh kink at every layer, while the momentum net's inner class coasts out across the other class's territory on smooth crossing paths, the way orbits do." />
+
+The trajectory statistics quantify Prediction 1. At depth 32 on rings, the plain net's mean hidden path turns 53° per layer; the momentum net's turns 10°. Their total path lengths are nearly the same, 15.9 stream units against 14.7, so the momentum net is not taking a shortcut; it makes the same-length journey without the kinks. The momentum trajectories look like what they are: paths of a thing with inertia, coasting through turns, overshooting slightly, curving back. The plain net's look like Euler: each layer a fresh decision, no memory of direction.
+
+## Turning the dial
+
+If $\mu = 0$ and $\mu = 0.9$ finish a tenth of a point apart on the scoreboard, is the ledger doing anything in between, or is the dial secretly a switch? We trained the same rings architecture at $\mu \in \{0, 0.3, 0.6, 0.9\}$ and exported the exact weights; the panel below re-runs the real forward dynamics in your browser, decision field, boundary contour, live accuracy on 256 held-out points, every time you move the slider.
+
+<InertiaDial caption="Four networks, identical in everything but the velocity-memory mu, really trained on the rings task; their exported weights are re-integrated live in your browser to paint the class-probability field (orange = inner class, blue = outer), the decision contour, the accuracy over 256 held-out points, and six real hidden trajectories. Every net closes a contour around the inner disk; what the dial changes is the dynamics that build it. Turn mu up and watch the probe paths trade their zigzag for a glide." />
+
+The scores barely move as the dial turns: 99.8%, 99.3%, 100%, 100% on the script's 2048-point test set. What moves is underneath. The same closed contour gets built by a zigzag at $\mu = 0$ and a glide at $\mu = 0.9$, at fixed parameter count, so the dial is not buying capacity; it is continuously changing *what kind of path the state is allowed to take*. And a path is not just scenery. It turns out to decide something no scoreboard has a column for: whether the network can remember its own past.
+
+## Running the network backward
+
+And Prediction 3, the strangest one. Rearrange the momentum update and it solves for the past:
+
+$$
+x_l = x_{l+1} - h\, v_{l+1}, \qquad v_l = \frac{v_{l+1} - (1-\mu) F_l(x_l)}{\mu}.
+$$
+
+No stored activations, no approximation: from the final position *and velocity*, the whole trajectory unwinds. This is the network inheriting time-reversibility from its integrator, and it is the property Sander et al. built Momentum ResNets around, because a network you can invert is a network you can train without caching activations, at almost no memory cost in depth. The script checks it on the trained depth-32 rings net: run exactly backward from $(x_{32}, v_{32})$, the dynamics reconstruct all 64 probe inputs to a worst-case error of $3.7 \times 10^{-4}$ at $\mu = 0.9$.
+
+Then the check does something better than succeed: it fails informatively. The same algebra on the net trained at $\mu = 0.3$ returns a reconstruction error of $3.7 \times 10^{10}$. Nothing is wrong with the formula; the arithmetic is the problem. Every backward step divides by $\mu$, so whatever rounding the forward pass left behind is amplified by $1/\mu$ per layer: a factor of 29 across 32 layers at $\mu = 0.9$, a factor of $5 \times 10^{16}$ at $\mu = 0.3$ (and at $\mu = 0.6$ the measured error is 54, right where that arithmetic puts it). This, too, is physics you already know. The damping $\mu$ is the friction dial, and friction is precisely what makes real systems forget their past: a lightly damped dynamics can be rewound, a heavily damped one has burned its history, and the floating point is only the messenger delivering the news. Friction is the thief of memory.
+
+<RewindExact caption="Time reversibility, computed live: ten test points are carried forward through the trained momentum net (solid paths), then the browser is handed only the final position and velocity of each and runs the update rule backward. The hollow rings are the reconstructed states landing back on the forward path, layer by layer, and the readout tracks the worst reconstruction error. A plain residual block discards the information this rewind needs; there is no formula to run x + F(x) backward. The rewind runs at mu = 0.9, where the ledger's memory is long enough for the arithmetic to survive the trip; the error here sits near 1e-13 because the browser integrates in double precision, while the script's single-precision forward pass lands at 3.7e-4, the same amplification of a different noise floor." />
+
+Try to do this to the plain net and you hit the missing ledger immediately. Inverting $x_{l+1} = x_l + F(x_l)$ means solving a nonlinear equation per layer, with no guarantee a solution is unique, because the update overwrote its own input. The velocity state is not just inertia; it is the receipt that makes the computation un-doable.
+
+## Half a law was still a good law
+
+None of this says skip connections were a mistake. Quite the opposite: the reason residual networks won is precisely that they made depth behave like *time* instead of like composition, small steps on a stream instead of repeated overwriting, and Euler is the correct first thing to try. For most of what deep networks do, the flow is tame, the effective step is small, and the first-order ledger is enough; our two-moons column is exactly that story, and honest.
+
+But the correspondence is a dictionary, not a slogan, and dictionaries keep paying. Once depth is time and the block is a field, every structure-preserving integrator is a candidate architecture: the velocity ledger gives crossing trajectories, bounded drift and exact reversibility (Sander et al., 2021); making the field a gradient of a learned Hamiltonian gives networks that conserve energy by construction (Greydanus et al., 2019); and the whole zoo of symplectic, reversible, adaptive-step methods is sitting in the numerical-analysis literature, already debugged, waiting to be read as network designs.
+
+A skip connection is half of Newton. The other half is a second column in the ledger, and a planet's worth of stability comes with it.
+
+---
+
+*The experiment behind every number in this post is `scripts/momentum_resnet.py` (JAX + optax; the Kepler integrations, the depth sweep, the trajectory statistics and the inversion check), which exports the trained weights and trajectories that the panels above re-integrate live.*
+
+<CiteAs
+  slug="skip-connections-are-half-of-newton"
+  title="Your Skip Connection Is Half of Newton"
+  pubDate={frontmatter.pubDate}
+/>

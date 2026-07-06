@@ -153,9 +153,16 @@ a = jax.vmap(read.weights)(xs)                    # [100, 6]
 
 assert (a >= 0).all()                             # nonnegative
 assert jnp.allclose(a.sum(-1), 1.0, atol=1e-5)    # sum to one
-# every output lies inside the convex hull of the output prototypes:
+# the actual hull check: y must be exactly the convex mix a @ r, and no
+# supporting halfplane of the prototypes may be violated (a point outside
+# the hull would beat every prototype in some direction)
 ys = jax.vmap(read)(xs)
-print("readout coords stay within prototype span:", float(jnp.abs(ys).max()))
+protos = read.r[...]
+assert jnp.allclose(ys, a @ protos, atol=1e-5)
+dirs = jax.random.normal(jax.random.key(4), (256, 2))
+assert ((ys @ dirs.T) <= (protos @ dirs.T).max(0) + 1e-5).all()
+print("all", len(xs), "readouts verified inside the prototype hull")
+# all 100 readouts verified inside the prototype hull
 ```
 
 ### Nonnegative is not the same as positive definite
@@ -223,6 +230,13 @@ print("same y, different shares:", a1, a2)
 
 The honest readout of a contribution number is therefore: it describes *this* coefficient vector, the one the layer happened to produce, not a canonical property recoverable from the output.
 
+And those two decompositions are only the endpoints. Because the set of valid decompositions is convex, every interpolation $(1-t)\,a_1 + t\,a_2$ is another exact convex decomposition of the same $y$. The animation below sweeps through the whole family, recomputing $a(t)\,R$ in JAX each frame and tracking the largest deviation of $y$ it ever sees.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/convex-readout-nonid.gif" alt="The coefficient bars morph through a family of valid convex decompositions while the output point y stands provably still, with a live max deviation readout at numerical zero" loading="lazy" width="1100" height="520" />
+  <figcaption>Non-identifiability, animated from the code above. The shares morph through the family of valid convex decompositions of the same $y$ (the dashed outlines are the two sparse endpoints, each using only three prototypes); every frame is checked to satisfy $a_u \ge 0$, $\sum_u a_u = 1$, $a\,R = y$. The point $y$ never moves: the running readout of $\max\,\lvert y(t) - y(0)\rvert$ stays at $2.8\times 10^{-17}$, numerical zero. "How much did $r_3$ contribute?" answers anywhere from 0% to 40%, all equally correct.</figcaption>
+</figure>
+
 ## Training, briefly
 
 Each block is an `nnx.Module`, so they all train the same way. The kernel readout learns its input prototypes, output prototypes, and bandwidth jointly.
@@ -246,18 +260,19 @@ def train_step(model, optimizer, batch):
     return loss
 ```
 
-The detector bank stops being an arbitrary feature extractor and becomes a similarity to named input prototypes; the readout stops being a hopeful interpretation and becomes the actual mechanism: convex by construction, not by accident.
+The detector bank stops being an arbitrary feature extractor and becomes a similarity to named input prototypes; the readout stops being a hopeful interpretation and becomes the actual mechanism.
 
 ## Rendering the GIFs
 
-Both animations are generated with Python, JAX, and matplotlib: the computation in JAX, the drawing in matplotlib:
+The animations are generated with Python, JAX, and matplotlib: the computation in JAX, the drawing in matplotlib:
 
 ```bash
 python scripts/render_convex_readout_gif.py          # the kernel readout tracing the hull
 python scripts/render_convex_readout_regimes_gif.py  # the four activation regimes
+python scripts/render_convex_readout_nonid_gif.py    # one y, many decompositions
 ```
 
-The first renderer moves a query along a path through the input space, computes the normalized Gaussian weights and the readout each frame, and keeps a trail of $y$; the second evaluates the four nonlinearities on one oscillating score vector and places each readout against the prototype hull. They are visual audits, not benchmarks: the point is to watch convexity hold (or break) as the inputs move.
+The first renderer moves a query along a path through the input space, computes the normalized Gaussian weights and the readout each frame, and keeps a trail of $y$; the second evaluates the four nonlinearities on one oscillating score vector and places each readout against the prototype hull; the third morphs the coefficient vector through the family of valid convex decompositions and verifies, frame by frame, that the output never moves. They are visual audits, not benchmarks: the point is to watch convexity hold (or break) as the inputs move.
 
 ## What this leaves out
 

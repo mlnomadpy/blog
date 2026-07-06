@@ -2,7 +2,7 @@
 title: "Where a Weight Lives, in JAX/Flax NNX"
 seoTitle: "The Representer Weight in JAX/Flax NNX"
 description: "A runnable companion: build the representer-theorem weight in JAX. A positive-definite kernel, the Gram matrix, a single linear solve for the coefficients, and the weight comes out as a combination of the data, f = sum alpha_i k(x_i, .). A linear weight cannot separate nested rings; the placed kernel weight does, read purely through the kernel as a similarity-weighted vote of the data."
-seoDescription: "Build the representer-theorem weight in JAX: a kernel, a Gram solve, and the weight is a combination of the data. A line fails on rings; the placed weight does not."
+seoDescription: "Build the representer weight in JAX: a kernel, a Gram solve, and the weight is a combination of the data. A line fails on rings; the placed weight does not."
 pubDate: 2026-06-25T10:00:00-07:00
 draft: false
 tags: [ml, kernels, rkhs, representer-theorem, jax, flax, nnx, implementation, yat, deep-learning]
@@ -38,7 +38,7 @@ import CiteAs from '../../components/CiteAs.astro';
 
 ## The kernel, and the space it builds
 
-A reproducing kernel is any positive-definite similarity, and the whole RKHS hangs off it. We use the radial basis kernel, a bump that is largest when two points coincide and decays with their distance. In JAX it is one expression, and it gives the inner product $\langle \phi(x), \phi(y)\rangle$ without ever forming $\phi$.
+Where does the shared space come from? One function: a reproducing kernel is any positive-definite similarity, and the whole RKHS hangs off it. We use the radial basis kernel, a bump that is largest when two points coincide and decays with their distance. In JAX it is one expression, and it gives the inner product $\langle \phi(x), \phi(y)\rangle$ without ever forming $\phi$.
 
 ```python
 import jax, jax.numpy as jnp
@@ -55,7 +55,7 @@ That `gram(X, X)` is the entire geometry of the data in the RKHS: entry `(i, j)`
 
 ## The weight is a solve, not a search
 
-The representer theorem promises the optimal weight is $f(x) = \sum_i \alpha_i\, k(x_i, x)$, a combination of the data. So fitting the weight is not a gradient descent through some separate weight space; it is solving for the coefficients $\alpha_i$ that make the combination match the labels. With a ridge penalty that is a single linear system, $(G + \lambda I)\,\alpha = y$.
+So where is the weight in all this? The representer theorem promises the optimal one is $f(x) = \sum_i \alpha_i\, k(x_i, x)$, a combination of the data. Fitting the weight is therefore not a gradient descent through some separate weight space; it is solving for the coefficients $\alpha_i$ that make the combination match the labels. With a ridge penalty that is a single linear system, $(G + \lambda I)\,\alpha = y$.
 
 ```python
 def kernel_ridge(X, y, lam=0.4):                       # the representer coefficients
@@ -72,7 +72,7 @@ The vector `alpha` that comes back *is* the weight, expressed in the only basis 
 
 ## Why the shared space is worth it
 
-A weight that lives among the data, rather than off in a space of directions, can do something a direction cannot: bend around nested classes. Two concentric rings are the cleanest case. The best linear weight is a single direction with a threshold, and `sklearn`'s logistic regression finds it, but no direction separates an inner disk from an outer ring, so it sits at chance. The kernel weight, the same `α` solve, wraps a closed boundary around the inner ring.
+The explainer closed on the claim that a placed weight can bend around nested classes where any direction sits at chance; here is that claim as two numbers. The best linear weight is found by scikit-learn's logistic regression (the one non-JAX import in this post; everything kernel is plain JAX), and it lands at a coin flip, because no direction separates an inner disk from an outer ring. The kernel weight, the same `α` solve, wraps a closed boundary around the inner ring.
 
 ```python
 from sklearn.datasets import make_circles
@@ -90,7 +90,7 @@ print(f"line: {100*lin.score(X, y):.0f}%   kernel: {100*(k_pred == ys).mean():.0
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/weight-lives-rings.gif" alt="Two panels on nested rings: the best linear weight reaches 50 percent while the placed kernel weight reaches 100 percent, its circular boundary forming" loading="lazy" width="946" height="517" />
-  <figcaption>The same rings, two weights. On the left the best linear weight, a direction, lands at 50%: no angle separates classes that are nested rather than side by side. On the right the kernel weight, a combination placed among the data, closes a boundary around the inner ring and reaches 100%. Both accuracies are from the run above. Rendered by <code>scripts/render_weight_lives_gifs.py</code>.</figcaption>
+  <figcaption>The same rings, two weights. On the left the best linear weight, a direction, lands at 50%: no angle separates classes that are nested rather than side by side. On the right the kernel weight, a combination placed among the data, closes a boundary around the inner ring and reaches 100%. The animated counters ease from 50% up to the endpoints; the endpoint accuracies, 50% and 100%, are the real measurements from the run above. Rendered by <code>scripts/render_weight_lives_gifs.py</code>.</figcaption>
 </figure>
 
 ## How the placed weight reads a point

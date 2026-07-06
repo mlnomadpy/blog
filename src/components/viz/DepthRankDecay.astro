@@ -1,0 +1,235 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 380 } = Astro.props;
+---
+<figure class="viz depthrankdecay" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { heatmapField, axes, legend, dot, text, frame, fmt } from './engine/draw.js';
+import { drag } from './engine/pointer.js';
+
+// A stack of random ReLU layers (width 8), probed at a draggable 2D input
+// point. Left: the input plane shaded by how much rank the end-to-end
+// Jacobian has lost at each point (2 − effective rank), with the pullback
+// ellipse (the image of a small circle of inputs) drawn at the probe.
+// Right: the two singular values of the end-to-end Jacobian and its
+// effective rank at every depth 1..LMAX. All the linear algebra is exact
+// and tiny: J is (width × 2), so J^T J is 2×2 and the spectrum is
+// closed-form. Everything recomputes live on interaction; no animation loop.
+
+const WIDTH = 8, LMAX = 12, RANGE = 1.5, RES_SCALE = 0.5;
+
+const rng32 = (seed) => { let s = (seed * 2654435761 + 7) >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; };
+const randn = (rng) => { let u = 0, v = 0; while (u === 0) u = rng(); while (v === 0) v = rng(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+
+// He-initialised weights; small random biases so the fold pattern varies over the plane.
+const makeNet = (seed) => {
+  const rng = rng32(seed);
+  const layers = [];
+  for (let l = 0; l < LMAX; l++) {
+    const fanIn = l === 0 ? 2 : WIDTH;
+    const std = Math.sqrt(2 / fanIn);
+    const W = new Float64Array(WIDTH * fanIn);
+    for (let i = 0; i < W.length; i++) W[i] = randn(rng) * std;
+    const b = new Float64Array(WIDTH);
+    for (let i = 0; i < WIDTH; i++) b[i] = randn(rng) * 0.3;
+    layers.push({ W, b, fanIn });
+  }
+  return layers;
+};
+
+// Forward pass + end-to-end Jacobian at (px, py), up to depth L.
+// Plain:    h ← relu(W h + b),          J ← D W J
+// Residual: h ← h + s·relu(W h + b),    J ← J + s·D W J   (blocks l ≥ 1)
+// Returns per-depth {s1, s2, vx, vy}: singular values of J and the input-space
+// direction of the top one (right singular vector of J, eigenvector of J^T J).
+const probe = (layers, px, py, L, residual) => {
+  let h = [px, py];
+  let j1 = [1, 0], j2 = [0, 1]; // columns of J over the current hidden dim
+  const out = [];
+  for (let l = 0; l < L; l++) {
+    const { W, b, fanIn } = layers[l];
+    const z = new Float64Array(WIDTH), wj1 = new Float64Array(WIDTH), wj2 = new Float64Array(WIDTH);
+    for (let i = 0; i < WIDTH; i++) {
+      let s = b[i], a1 = 0, a2 = 0;
+      for (let k = 0; k < fanIn; k++) { const w = W[i * fanIn + k]; s += w * h[k]; a1 += w * j1[k]; a2 += w * j2[k]; }
+      z[i] = s; wj1[i] = a1; wj2[i] = a2;
+    }
+    const useRes = residual && l > 0;
+    const nh = new Float64Array(WIDTH), nj1 = new Float64Array(WIDTH), nj2 = new Float64Array(WIDTH);
+    for (let i = 0; i < WIDTH; i++) {
+      const g = z[i] > 0 ? 1 : 0;
+      if (useRes) { nh[i] = h[i] + RES_SCALE * g * z[i]; nj1[i] = j1[i] + RES_SCALE * g * wj1[i]; nj2[i] = j2[i] + RES_SCALE * g * wj2[i]; }
+      else { nh[i] = g * z[i]; nj1[i] = g * wj1[i]; nj2[i] = g * wj2[i]; }
+    }
+    h = nh; j1 = nj1; j2 = nj2;
+    let a = 0, bb = 0, c = 0;
+    for (let i = 0; i < WIDTH; i++) { a += j1[i] * j1[i]; bb += j1[i] * j2[i]; c += j2[i] * j2[i]; }
+    const tr = (a + c) / 2, disc = Math.sqrt(Math.max(0, ((a - c) / 2) ** 2 + bb * bb));
+    const l1 = Math.max(0, tr + disc), l2 = Math.max(0, tr - disc);
+    let vx, vy;
+    if (Math.abs(bb) > 1e-12) { vx = bb; vy = l1 - a; } else if (a >= c) { vx = 1; vy = 0; } else { vx = 0; vy = 1; }
+    const nv = Math.hypot(vx, vy) || 1;
+    out.push({ s1: Math.sqrt(l1), s2: Math.sqrt(l2), vx: vx / nv, vy: vy / nv });
+  }
+  return out;
+};
+
+// Effective rank via spectrum entropy: exp(−Σ pᵢ ln pᵢ), pᵢ = σᵢ²/Σσ². In [0, 2] here.
+const erank = (s1, s2) => {
+  const e1 = s1 * s1, e2 = s2 * s2, tot = e1 + e2;
+  if (tot <= 0) return 0;
+  let H = 0;
+  for (const e of [e1, e2]) { const p = e / tot; if (p > 1e-12) H -= p * Math.log(p); }
+  return Math.exp(H);
+};
+
+const fmtSig = (v) => (v >= 0.01 || v === 0 ? v.toFixed(2) : v.toExponential(1));
+
+defineViz('depthrankdecay', (root) => {
+  // per-instance memory that survives control-driven redraws
+  let seed = 1;
+  const point = { x: 0.55, y: 0.4 };
+  let dragOn = false;
+
+  return {
+    height: +root.dataset.height || 380,
+    autoplay: false,
+    controls: [
+      { type: 'range', name: 'depth', label: 'depth L', min: 1, max: LMAX, step: 1, int: true, value: 6, reset: false, fmt: (v) => String(v) },
+      { type: 'toggle', name: 'res', label: 'residual connections', value: false },
+      { type: 'button', name: 'reseed', label: 'New weights' },
+      { type: 'readout', name: 'ro' },
+    ],
+    onAction(name, api) {
+      if (name !== 'reseed') return;
+      seed += 1;
+      api.state.net = makeNet(seed);
+      api.state.seed = seed;
+    },
+    setup(api) {
+      const st = api.state;
+      st.net = makeNet(seed);
+      st.seed = seed;
+      drag(api.canvas, {
+        cursor: 'crosshair',
+        onStart: (p) => {
+          const m = api.state.lmap;
+          dragOn = !!m && p.x >= m.x && p.x <= m.x + m.side && p.y >= m.y && p.y <= m.y + m.side;
+          if (dragOn) moveProbe(p);
+        },
+        onMove: (p) => { if (dragOn) moveProbe(p); },
+        onEnd: () => { dragOn = false; },
+      });
+      const moveProbe = (p) => {
+        const m = api.state.lmap; if (!m) return;
+        const x = ((p.x - m.x) / m.side) * 2 * RANGE - RANGE;
+        const y = RANGE - ((p.y - m.y) / m.side) * 2 * RANGE;
+        point.x = Math.max(-RANGE, Math.min(RANGE, x));
+        point.y = Math.max(-RANGE, Math.min(RANGE, y));
+        api.render();
+      };
+    },
+    draw(api) {
+      const { ctx, colors, size, state: st } = api;
+      const W = size.W, H = size.H;
+      if (!W || !st.net) return;
+      const depth = api.get('depth');
+      const res = !!api.get('res');
+
+      // ── left: input plane, rank-lost shading, probe + pullback ellipse ──
+      const pad = 6, labelH = 16;
+      const side = Math.max(10, Math.min(H - pad * 2 - labelH, W * 0.46));
+      const lb = { x: pad, y: pad + (H - labelH - side) / 2, w: side, h: side, side };
+      st.lmap = { x: lb.x, y: lb.y, side };
+      const version = `${depth}|${res ? 1 : 0}|${st.seed}`;
+      heatmapField(ctx, lb, (u, v) => {
+        const x = -RANGE + u * 2 * RANGE, y = RANGE - v * 2 * RANGE;
+        const sp = probe(st.net, x, y, depth, res);
+        const s = sp[depth - 1];
+        return 2 - erank(s.s1, s.s2);
+      }, 44, colors, { version, gamma: 1, cap: 2 });
+      frame(ctx, colors, lb.x, lb.y, lb.w, lb.h);
+
+      const toPx = (x, y) => [lb.x + ((x + RANGE) / (2 * RANGE)) * side, lb.y + ((RANGE - y) / (2 * RANGE)) * side];
+      const spectra = probe(st.net, point.x, point.y, LMAX, res);
+      const cur = spectra[depth - 1];
+      const [cx, cy] = toPx(point.x, point.y);
+
+      // pullback ellipse: axes along the right singular vectors, radii ∝ σ (real ratio)
+      const rMax = side * 0.16;
+      const scl = cur.s1 > 1e-12 ? rMax / cur.s1 : 0;
+      const r1 = Math.max(0, cur.s1 * scl), r2 = Math.max(0, cur.s2 * scl);
+      const ang = -Math.atan2(cur.vy, cur.vx); // canvas y is flipped
+      if (r1 > 0) {
+        ctx.save();
+        ctx.translate(cx, cy); ctx.rotate(ang);
+        ctx.beginPath(); ctx.ellipse(0, 0, r1, Math.max(0.6, r2), 0, 0, 2 * Math.PI);
+        ctx.fillStyle = 'rgba(74, 127, 179, 0.22)'; ctx.fill();
+        ctx.strokeStyle = '#4a7fb3'; ctx.lineWidth = 1.6; ctx.stroke();
+        ctx.restore();
+      }
+      dot(ctx, cx, cy, 4.2, colors.accent);
+      ctx.strokeStyle = colors.bg; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(cx, cy, 4.2, 0, 2 * Math.PI); ctx.stroke();
+
+      text(ctx, 'input plane · drag the probe', lb.x + 6, lb.y + 5, colors, { size: 10, mono: true, color: colors.muted });
+      text(ctx, 'shading: rank lost by depth L (accent = crushed)', lb.x, lb.y + lb.h + 5, colors, { size: 10, color: colors.faint });
+
+      // ── right: σ spectrum (log) and effective rank, vs depth ──
+      const rx = lb.x + lb.w + 44, rw = W - rx - 14;
+      if (rw < 60) return;
+      const halfH = (H - pad * 2 - 46) / 2;
+      const topBox = { x: rx, y: pad + 16, w: rw, h: halfH };
+      const botBox = { x: rx, y: pad + 16 + halfH + 30, w: rw, h: halfH };
+
+      // top: log10 σ1, σ2 across depth
+      const lg = (v) => Math.log10(Math.max(v, 1e-6));
+      let yMin = Infinity, yMax = -Infinity;
+      for (const s of spectra) { yMin = Math.min(yMin, lg(s.s2), lg(s.s1)); yMax = Math.max(yMax, lg(s.s1)); }
+      yMin = Math.floor(Math.min(yMin, -1)); yMax = Math.ceil(Math.max(yMax, 1));
+      const yTicks = [];
+      for (let t = yMin; t <= yMax; t++) if ((yMax - yMin) <= 6 || t % 2 === 0) yTicks.push(t);
+      text(ctx, 'singular values of the end-to-end Jacobian (log₁₀)', topBox.x, topBox.y - 13, colors, { size: 10.5, color: colors.muted });
+      const mTop = axes(ctx, topBox, { xMin: 1, xMax: LMAX, yMin, yMax, xTicks: [1, 4, 8, 12], yTicks, fmtY: (v) => String(v), grid: true }, colors);
+      const plotSeries = (m, vals, color) => {
+        ctx.strokeStyle = color; ctx.lineWidth = 1.8; ctx.beginPath();
+        vals.forEach((v, i) => { const x = m.sx(i + 1), y = m.sy(v); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+        ctx.stroke();
+      };
+      plotSeries(mTop, spectra.map((s) => lg(s.s1)), colors.accent);
+      plotSeries(mTop, spectra.map((s) => lg(s.s2)), '#4a7fb3');
+      dot(ctx, mTop.sx(depth), mTop.sy(lg(cur.s1)), 3.4, colors.accent);
+      dot(ctx, mTop.sx(depth), mTop.sy(lg(cur.s2)), 3.4, '#4a7fb3');
+      legend(ctx, topBox.x + 8, topBox.y + 10, [
+        { color: colors.accent, label: 'σ₁ (largest)' },
+        { color: '#4a7fb3', label: 'σ₂ (smallest)' },
+      ], colors, { gap: 13 });
+
+      // bottom: effective rank across depth
+      text(ctx, 'effective rank of the end-to-end Jacobian', botBox.x, botBox.y - 13, colors, { size: 10.5, color: colors.muted });
+      const mBot = axes(ctx, botBox, { xMin: 1, xMax: LMAX, yMin: 0, yMax: 2.1, xTicks: [1, 4, 8, 12], yTicks: [0, 1, 2], fmtY: (v) => String(v), grid: true }, colors);
+      ctx.setLineDash([3, 4]); ctx.strokeStyle = colors.faint;
+      ctx.beginPath(); ctx.moveTo(mBot.sx(1), mBot.sy(2)); ctx.lineTo(mBot.sx(LMAX), mBot.sy(2)); ctx.stroke();
+      ctx.setLineDash([]);
+      const er = spectra.map((s) => erank(s.s1, s.s2));
+      plotSeries(mBot, er, '#3a8f5e');
+      dot(ctx, mBot.sx(depth), mBot.sy(er[depth - 1]), 3.6, '#3a8f5e');
+      text(ctx, 'full rank = 2', mBot.sx(LMAX) - 4, mBot.sy(2) + 3, colors, { size: 9.5, align: 'right', color: colors.faint });
+      // depth marker in both plots
+      ctx.strokeStyle = colors.muted; ctx.globalAlpha = 0.45; ctx.setLineDash([2, 3]);
+      ctx.beginPath(); ctx.moveTo(mTop.sx(depth), topBox.y); ctx.lineTo(mTop.sx(depth), topBox.y + topBox.h); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(mBot.sx(depth), botBox.y); ctx.lineTo(mBot.sx(depth), botBox.y + botBox.h); ctx.stroke();
+      ctx.setLineDash([]); ctx.globalAlpha = 1;
+
+      api.readout('ro', `L ${depth} · σ₁ ${fmtSig(cur.s1)} · σ₂ ${fmtSig(cur.s2)} · eff-rank ${fmt(er[depth - 1], 2)}`);
+    },
+  };
+});
+</script>

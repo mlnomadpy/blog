@@ -140,7 +140,7 @@ defineViz('kernelquadrant', {
     text(ctx, cur.psd ? `λ_min ${cur.lmin.toFixed(3)} ≥ 0  PSD ✓` : `λ_min ${cur.lmin.toFixed(3)} < 0  not PSD ✗`,
       gb.x + 6, gb.y + gb.h - 14, colors, { size: 10.5, mono: true, color: cur.psd ? yesCol : noCol });
 
-    api.readout('rd', `${cur.name.split('  ')[0]} · nonneg ${cur.nonneg ? 'y' : 'n'} · PSD ${cur.psd ? 'y' : 'n'} · jax-js`);
+    api.readout('rd', `${cur.name.split('  ')[0]} · nonneg ${cur.nonneg ? 'y' : 'n'} · PSD ${cur.psd ? 'y' : 'n'}`);
   },
 });
 </script>

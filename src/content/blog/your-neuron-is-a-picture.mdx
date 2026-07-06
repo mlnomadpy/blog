@@ -45,7 +45,7 @@ import MistakeWall from '../../components/viz/MistakeWall.astro';
 import InitMatters from '../../components/viz/InitMatters.astro';
 import NoTrainClassifier from '../../components/viz/NoTrainClassifier.astro';
 
-A neuron is one number it computes about its input. For most of the history of the field that number has been
+Ask a trained network to show you one thing it knows, one thing you could point at, and it cannot. Not because the knowledge is missing, but because of what a neuron is. A neuron is one number it computes about its input, and for most of the history of the field that number has been
 
 $$
 h_u(x) \;=\; \sigma\!\left(w_u^{\top} x\right),
@@ -66,10 +66,10 @@ This is the Yat unit from the [last post](/blog/what-a-finite-kernel-buys-an-mlp
 The gap between those two formulas is the entire post, and it has three consequences, each of which you can play with below.
 
 1. **The neuron becomes a picture.** If $w_u \in \mathbb{R}^{784}$ lives where $28\times28$ images live, then reshaping it *is* an image. You read the unit by looking at it.
-2. **The network classifies before you train it.** A bank of labeled prototypes with a hard-wired readout is already a working classifier, with zero gradient steps.
+2. **Training stops being where the story starts.** A prototype is a labeled example, and that raises a question the middle of this post answers: how much can the network already do before the first gradient step?
 3. **Every decision is legible.** Prediction, neuron, class, mistake, boundary: all of it is "this looks like that," and each is readable on its own.
 
-For something to point at, I trained a one-hidden-layer Yat-MLP on Fashion-MNIST, $784 \to 50 \to 10$, prototypes seeded from training images, no convolutions. It reaches **82.6%**; a same-shaped ReLU MLP reaches **85.9%**. Three points is the price. Here is what it buys.
+For something to point at, I trained a one-hidden-layer Yat-MLP on Fashion-MNIST, $784 \to 50 \to 10$, prototypes seeded from training images, no convolutions. That model, the one every interactive panel below runs live, reached **82.6%** against a same-shaped ReLU MLP's **85.9%**; its weights and run record ship with this post in `public/yat-fmnist/`, and `scripts/yat_fmnist_export.py` re-evaluates the shipped weights at 82.5% on the full test set. Three points is the price. Here is what it buys.
 
 ## Every neuron is a picture
 
@@ -77,13 +77,13 @@ The two networks are nearly twins: same shape, same data, three points apart in 
 
 <ProtoGallery caption="Left: the 50 hidden units of a Yat-kernel MLP, each a prototype that lives in pixel space, so each is a picture, bordered by the class it votes for. Right: the 50 first-layer filters of a same-sized ReLU MLP, weight vectors with no reason to look like anything, and they don't. Same data, comparable accuracy, shown side by side." />
 
-There is a precise reason the left side is legible, and it is the representer theorem. The Yat unit is a positive-definite kernel, $\phi_u(x) = k(w_u, x)$, so it carries a reproducing-kernel Hilbert space $\mathcal{H}$: a feature map $\Phi : \mathbb{R}^{784} \to \mathcal{H}$ with
+Why is the left side legible? The honest route to the answer passes through a fact that should make it seem impossible. The Yat unit is a positive-definite kernel, $\phi_u(x) = k(w_u, x)$, so it carries a reproducing-kernel Hilbert space $\mathcal{H}$: a feature map $\Phi : \mathbb{R}^{784} \to \mathcal{H}$ with
 
 $$
 k(w_u, x) \;=\; \langle\, \Phi(w_u),\, \Phi(x) \,\rangle_{\mathcal{H}},
 $$
 
-and the network's function lives in $\mathcal{H}$, which is large and possibly infinite-dimensional (Bouhsine, 2026, proves this kernel universal). The decisive fact is what the *parameters* are. By the representer theorem you never store anything in $\mathcal{H}$; the function is indexed entirely by its centers $w_u$, and those live in the input space $\mathbb{R}^{784}$, the very space the data lives in. The computation happens in the Hilbert space; the things you keep and look at stay in image space. $x$ and $w_u$ are the same kind of object, so a prototype is just another image.
+and the network's function lives in $\mathcal{H}$, which is large and, for this kernel, genuinely infinite-dimensional (Bouhsine, 2026, proves it universal). An infinite-dimensional function, stored as fifty pictures? That is the tension the representer theorem resolves, and it resolves it exactly: you never store anything in $\mathcal{H}$. The function is indexed entirely by its centers $w_u$, and those live in the input space $\mathbb{R}^{784}$, the very space the data lives in. The computation happens in the Hilbert space; the things you keep and look at stay in image space. $x$ and $w_u$ are the same kind of object, so a prototype is just another image.
 
 A linear neuron's weight is in $\mathbb{R}^{784}$ too, numerically, but it is used as a *functional*, $x \mapsto \langle w, x\rangle$: an element of the dual space, blind to everything orthogonal to $w$. It points along a direction; it does not sit at a location. The kernel is exactly the step that turns the weight from a co-vector into a point, $\langle w, \cdot\rangle \rightsquigarrow k(w, \cdot)$, and a point in image space is an image. That one substitution is the difference between the two galleries.
 
@@ -99,13 +99,13 @@ $$
 
 a working Yat-MLP that has seen exactly zero gradient steps. It labels an input by which prototype-pictures it most resembles. This looks like that, with nothing trained.
 
-Slide the prototypes up below and watch the test accuracy climb on its own. With twenty hand-picked pictures per class and a one-hot readout, it reaches **68%** on Fashion-MNIST, and the nearest-prototype version **79%**, none of it trained.
+Slide the prototypes up below and watch the test accuracy climb on its own. With twenty k-means centroids per class, summaries computed from the training images rather than anything learned, and a one-hot readout, the sum-vote reaches **68.5%** on Fashion-MNIST, and reading each class by its single best-matching prototype reaches **79.4%**, none of it trained (`scripts/yat_fmnist_export.py` prints both).
 
 <NoTrainClassifier caption="A Yat-MLP assembled by hand, with no training. The prototypes are k-means centroids of the training images (an engineered selection); the readout is hard-wired so each prototype votes for its class. Slide to add prototypes per class and the test accuracy rises by itself. The architecture is already a kernel classifier, so it reasons by resemblance from the start. Sum-vote is the actual linear readout; nearest-prototype is the ceiling a max would reach." />
 
-This reframes the whole thing. The network is not a black box that training fills with meaning. It is case-based reasoning, and it already classifies the moment its prototypes are real examples. Training does not *create* the ability; it *sharpens* it, nudging the prototypes and learning a smarter-than-one-hot readout, carrying that 68% up to the 82.6% the trained model reached above. The [JAX companion](/blog/yat-mlp-fmnist-jax-flax-nnx/) builds and trains exactly this.
+This reframes the whole thing. The network is not a black box that training fills with meaning. It is case-based reasoning, and it already classifies the moment its prototypes are real examples. Training does not *create* the ability; it *sharpens* it, nudging the prototypes and learning a smarter-than-one-hot readout, carrying that hand-built score up to the 82.6% the trained model reached above. The [JAX companion](/blog/yat-mlp-fmnist-jax-flax-nnx/) builds and trains exactly this.
 
-That hand-built model is not just a curiosity; it is a *warm start*, and it pays off exactly where black boxes struggle. With only 40 images per class, the engineered prototypes already score 65.5% before a single gradient step, and fine-tuning from there reaches 75.3%, against 72.0% for the same network started from random weights. Because you choose the prototypes, you can also choose to over-represent the classes you care about: on a split where two classes are starved to 30 examples each, warming up with one centroid-vote per class lifts rare-class recall from 48% to 59% (mean over five runs) while nudging overall accuracy up too. Gradient descent does not have to discover that the rare classes exist; the readout already tells it, and it only has to refine the boundary. White-box construction is not only an explanation after the fact, it is a way to put your prior knowledge into the weights before training starts.
+If the construction works this well cold, what happens when training starts from it instead of from noise? The hand-built model becomes a *warm start*, and it pays off exactly where black boxes struggle. With only 40 training images per class, placed k-means prototypes score 65.9% before a single gradient step, and fine-tuning from there reaches 74.9%, against 70.1% for the same network trained from a random start. Because you choose the prototypes, you can also choose to represent the classes you care about: on a split where Pullover and Sneaker are starved to 30 training images each, warm-starting with placed centroids lifts their recall from 12% to 33% and overall accuracy from 70.0% to 75.9% (mean over five runs; `scripts/yat_fmnist_export.py` again). Gradient descent does not have to discover that the rare classes exist; the readout already tells it, and it only has to refine the boundary. White-box construction is not only an explanation after the fact, it is a way to put your prior knowledge into the weights before training starts.
 
 And because the network reasons by resemblance, every part of it is readable by looking. The rest of the post is that: its predictions, its neurons, its classes, its mistakes, and the boundaries between the things it knows.
 
@@ -113,7 +113,7 @@ And because the network reasons by resemblance, every part of it is readable by 
 
 A legible unit is worth little if the prediction built from it is still a black box. The test of interpretability is not the weights at rest; it is the moment the model makes a call. So put the question to it directly: why this class, for this input? The answer is already inside the forward pass, because the output is a vote and you can read the ballots. Normalize the activations into weights $a_u(x) = \phi_u(x) / \sum_v \phi_v(x)$, with $\sum_u a_u(x) = 1$, and the prediction is a convex combination of the prototypes' votes: this input is *40% that shirt, 25% that pullover*, and the class is whoever the matched pictures elect. There is no separate explainer; the bars *are* the computation.
 
-Switch the input to MNIST digits, which this model has never seen, and the explanation collapses: every $\phi_u(x)$ is small, $\max_u \phi_u(x) < \tau$, and the network says "I don't recognize this" rather than confidently calling a 7 a sandal. A ReLU MLP has no such floor; off its training distribution it extrapolates a confident answer for anything. Knowing when it does not know is just the kernel being local.
+Switch the input to MNIST digits, which this model has never seen, and the explanation collapses: every $\phi_u(x)$ is small, the strongest match drops below a threshold, $\max_u \phi_u(x) < \tau$, and the network says "I don't recognize this" rather than confidently calling a 7 a sandal. For the shipped model $\tau = 47.59$, the value recorded with its weights in `public/yat-fmnist/`; it is easy to place because the two distributions barely overlap, a median max-match of 231 on Fashion-MNIST test images against 30 on MNIST digits (`scripts/yat_fmnist_export.py` recomputes all three). A ReLU MLP has no such floor; off its training distribution it extrapolates a confident answer for anything. Knowing when it does not know is just the kernel being local.
 
 <ExplainPicker caption="Pick a Fashion-MNIST item and the Yat-MLP's prediction is decomposed live into its similarity to each prototype, every one a picture you can see. The output class is the prototypes' vote. Switch the input to MNIST digits (out of distribution): the matches collapse and the model abstains. All kernel activations are computed in your browser from the trained weights." />
 
@@ -143,9 +143,9 @@ When a network is wrong, it usually leaves you guessing why. This one hands you 
 
 ## Where the pictures come from
 
-None of this is a method bolted onto the network. It follows from one design choice: the Yat unit measures the input against a *center* in input space rather than projecting it onto a direction. A center is a point in the same space as the data, so on images it is an image, on audio it would be a sound, on tabular data a named exemplar. The interpretability lives wherever the data is interpretable.
+So does the kernel hand you the pictures for free? Here is the experiment that says no, and it is the most instructive one in the post. Train the same network with the prototypes initialized from noise instead of examples and it classifies just as well, while the prototypes stay noise, all the way to convergence. Everything you have been scrolling through was decided before training started: legibility is chosen at initialization, and training never revisits the choice.
 
-But the kernel only makes a picture *possible*; it does not hand you one. Train the same network with the prototypes initialized from noise instead of examples and it classifies just as well, while the prototypes stay noise. Legibility comes from the prototypes living where the data lives, which a cheap data initialization seeds and the kernel's locality preserves. The kernel buys you a unit that *can* be a picture; anchoring it to the data is what makes it one.
+That splits the credit precisely. The design choice, a unit that measures the input against a *center* in input space rather than projecting it onto a direction, is what makes a picture *possible*: a center is a point in the same space as the data, so on images it is an image, on audio it would be a sound, on tabular data a named exemplar, and the interpretability lives wherever the data is interpretable. But the kernel does not hand you the picture. Legibility comes from the prototypes living where the data lives, which a cheap data initialization seeds and the kernel's locality preserves. The kernel buys you a unit that *can* be a picture; anchoring it to the data, at init, is what makes it one.
 
 <InitMatters caption="Two Yat-MLPs, identical except for how the prototypes were initialized: from training examples (left) or from noise (right). They reach the same accuracy, and only the left one is legible. The kernel makes a picture possible; living on the data manifold makes the picture actual." />
 

@@ -96,7 +96,7 @@ defineViz('randomfourierbuild', {
     ctx.fillStyle = muted; ctx.fillText('mean of m cosines', lx + 22, ly + 15);
 
     const rmse = m > 0 ? Math.sqrt(sse / (M + 1)) : 0;
-    api.readout('ro', `m ${m} features · RMSE ${rmse.toFixed(3)} · jax-js`);
+    api.readout('ro', `m ${m} features · RMSE ${rmse.toFixed(3)} · live`);
   },
 });
 </script>

@@ -90,7 +90,7 @@ defineViz('featurelift', {
     const qx = sx(y); ctx.strokeStyle = accent; ctx.lineWidth = 1; ctx.setLineDash([3, 4]); ctx.beginPath(); ctx.moveTo(qx, cTop); ctx.lineTo(qx, cBot); ctx.stroke(); ctx.setLineDash([]);
     ctx.fillStyle = accent; ctx.beginPath(); ctx.arc(qx, syc(kEst), 5, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = fg; ctx.lineWidth = 1.4; ctx.stroke();
 
-    api.readout('ro', `drag y · φ(0)·φ(y) ${kEst.toFixed(3)} vs exp ${kTrue.toFixed(3)} · jax-js`);
+    api.readout('ro', `drag y · φ(0)·φ(y) ${kEst.toFixed(3)} vs exp ${kTrue.toFixed(3)} · live`);
   },
 });
 </script>

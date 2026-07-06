@@ -89,7 +89,7 @@ defineViz('lowrankbudget', {
       box.x + 14, box.y + box.h - 30, colors, { size: 10.5, mono: true, color: colors.fg });
     text(ctx, 'each head buys a limited set of query↔key feature pairings; multi-head spends the budget on different relations',
       box.x + 14, box.y + box.h - 14, colors, { size: 10, mono: true, color: colors.muted });
-    api.readout('rd', `rank ${dk} · ${params} params (${(100 * params / full).toFixed(0)}% of full) · jax-js`);
+    api.readout('rd', `rank ${dk} · ${params} params (${(100 * params / full).toFixed(0)}% of full) · live`);
   },
 });
 </script>

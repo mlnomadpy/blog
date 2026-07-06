@@ -3,6 +3,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import { getCollection } from 'astro:content';
 import { SITE_TITLE, SITE_DESCRIPTION, SITE_TAGLINE } from '../consts';
 import { postFilter, buildPairs } from '../utils/posts';
+import { seriesForSlug } from '../data/series';
 
 const posts = (await getCollection('blog', postFilter))
   .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
@@ -12,6 +13,17 @@ const posts = (await getCollection('blog', postFilter))
 const { companionOf, mainOf } = buildPairs(posts);
 const stripId = (s: string) => s.replace(/\.(md|mdx)$/, '');
 const topLevel = posts.filter((p) => !mainOf.has(stripId(p.id)));
+
+// Series chip for archive rows: "<series short label> · <part>", where the
+// part number counts only visible (draft-filtered) explainers of that series.
+const visibleSlugs = new Set(posts.map((p) => stripId(p.id)));
+const seriesChip = (post: (typeof posts)[number]) => {
+  const id = stripId(post.id);
+  const def = seriesForSlug(id);
+  if (!def) return undefined;
+  const part = def.slugs.filter((s) => visibleSlugs.has(s)).indexOf(id) + 1;
+  return part > 0 ? { label: def.short, part } : undefined;
+};
 
 const byYear = topLevel.reduce<Record<number, typeof posts>>((acc, p) => {
   const y = p.data.pubDate.getFullYear();
@@ -55,6 +67,7 @@ const blogPosts = posts.slice(0, 10).map((p) => ({
         <ul>
           {byYear[year].map((post) => {
             const companion = companionOf.get(stripId(post.id));
+            const chip = seriesChip(post);
             return (
               <li class={companion ? 'has-companion' : undefined}>
                 <a class="row" href={`${base}/${post.id}/`}>
@@ -64,6 +77,7 @@ const blogPosts = posts.slice(0, 10).map((p) => ({
                   <span class="row-title">
                     {post.data.draft && <span class="draft-badge">draft</span>}
                     {post.data.title}
+                    {chip && <span class="series-chip">{chip.label} · {chip.part}</span>}
                   </span>
                 </a>
                 {companion && (
@@ -181,6 +195,21 @@ const blogPosts = posts.slice(0, 10).map((p) => ({
     transition: color var(--transition-fast);
   }
   .row:hover .row-title { color: var(--accent); }
+  .series-chip {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.64rem;
+    letter-spacing: 0.06em;
+    color: var(--fg-faint);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.05rem 0.4rem;
+    margin-left: 0.55rem;
+    white-space: nowrap;
+    vertical-align: 0.12em;
+    transition: color var(--transition-fast), border-color var(--transition-fast);
+  }
+  .row:hover .series-chip { color: var(--fg-muted); border-color: var(--border-strong); }
   .draft-badge {
     display: inline-block;
     font-family: var(--mono);

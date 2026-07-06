@@ -92,7 +92,8 @@ defineViz('yatmlplearn', {
       return ng.add(ng.matmul(ker, A), c);                    // (N,1) logit
     };
 
-    api.state = { N, K, data, bounds, Xd, Yneg, W, A, c, adam, forward, epsOf, loss: 0, acc: 0 };
+    api.state = { N, K, data, bounds, Xd, Yneg, W, A, c, adam, forward, epsOf, loss: 0, acc: 0,
+      ver: 0, off: document.createElement('canvas'), img: null };
   },
 
   step(api) {
@@ -101,6 +102,7 @@ defineViz('yatmlplearn', {
     const loss = ng.mulk(ng.sumAll(ng.softplus(ng.mul(logit, st.Yneg))), 1 / st.N);
     ng.backward(loss);
     st.adam.step();
+    st.ver++;                                                 // a training step invalidates the cached decision field
     st.loss = loss.d[0];
     let ok = 0; for (let i = 0; i < st.N; i++) { const p = logit.d[i] > 0 ? 1 : 0; if (p === st.data.lab[i]) ok++; }
     st.acc = ok / st.N;
@@ -133,28 +135,37 @@ defineViz('yatmlplearn', {
     };
 
     // ── decision field (diverging heatmap: class 0 ↔ class 1) ──
+    // Rasterized to a persistent HM×HM offscreen canvas, then stretched into the
+    // plot. The field depends only on the trained params (bumped via st.ver each
+    // step), eps, the plot geometry and the theme, not on any hover state, so it is
+    // cached and only rebuilt when one of those changes: while training it recomputes
+    // every step; when paused, repaints reuse the bitmap. Pixel-identical.
     const bg = parseColor(colors.bg);
     const cls1 = parseColor(colors.accent);     // label 1
     const cls0 = parseColor(colors.blue);       // label 0
-    const img = ctx.createImageData(HM, HM);
-    for (let py = 0; py < HM; py++) {
-      const yw = wy(y0 + (py / (HM - 1)) * plotH);
-      for (let px = 0; px < HM; px++) {
-        const xw = wx(x0 + (px / (HM - 1)) * plotW);
-        const v = predict(xw, yw);
-        const t = Math.min(1, Math.abs(Math.tanh(v * 0.9)));
-        const tgt = v >= 0 ? cls1 : cls0;
-        const o = (py * HM + px) * 4;
-        img.data[o] = Math.round(bg[0] + (tgt[0] - bg[0]) * t * 0.8);
-        img.data[o + 1] = Math.round(bg[1] + (tgt[1] - bg[1]) * t * 0.8);
-        img.data[o + 2] = Math.round(bg[2] + (tgt[2] - bg[2]) * t * 0.8);
-        img.data[o + 3] = 255;
+    const fieldKey = st.ver + '|' + eps + '|' + plotW + 'x' + plotH + '|' + colors.bg + '|' + colors.accent + '|' + colors.blue;
+    if (st._fieldKey !== fieldKey) {
+      const img = st.img || (st.img = ctx.createImageData(HM, HM));
+      for (let py = 0; py < HM; py++) {
+        const yw = wy(y0 + (py / (HM - 1)) * plotH);
+        for (let px = 0; px < HM; px++) {
+          const xw = wx(x0 + (px / (HM - 1)) * plotW);
+          const v = predict(xw, yw);
+          const t = Math.min(1, Math.abs(Math.tanh(v * 0.9)));
+          const tgt = v >= 0 ? cls1 : cls0;
+          const o = (py * HM + px) * 4;
+          img.data[o] = Math.round(bg[0] + (tgt[0] - bg[0]) * t * 0.8);
+          img.data[o + 1] = Math.round(bg[1] + (tgt[1] - bg[1]) * t * 0.8);
+          img.data[o + 2] = Math.round(bg[2] + (tgt[2] - bg[2]) * t * 0.8);
+          img.data[o + 3] = 255;
+        }
       }
+      const off = st.off; off.width = HM; off.height = HM;
+      off.getContext('2d').putImageData(img, 0, 0);
+      st._fieldKey = fieldKey;
     }
-    const tmp = document.createElement('canvas'); tmp.width = HM; tmp.height = HM;
-    tmp.getContext('2d').putImageData(img, 0, 0);
     ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(tmp, x0, y0, plotW, plotH);
+    ctx.drawImage(st.off, x0, y0, plotW, plotH);
     ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.strokeRect(x0 + 0.5, y0 + 0.5, plotW - 1, plotH - 1);
 
     // ── data points ──

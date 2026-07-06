@@ -1,0 +1,144 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 440 } = Astro.props;
+---
+<figure class="viz risklandscape" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The kernel puts patients in a landscape. This is a 2D shadow of the RKHS
+// feature space: each test patient placed by its kernel activations, colored by
+// predicted log-risk, with the prototypes marked. Cohorts sit in basins; the
+// steep side of the map is where risk climbs. Hover a patient to read it.
+// A projection of a high-dimensional space, but the structure is real.
+// Data: scripts/yat_deepsurv.py -> embedding.json.
+import { defineViz } from './engine/vizkit.js';
+import { gate, loadingText, axes, T as Ty, fmt, mix, rgba, parseColor } from './engine/draw.js';
+import { localPoint } from './engine/pointer.js';
+
+defineViz('risklandscape', {
+  title: 'Patients in a risk landscape.',
+  height: 440,
+  controls: [
+    { type: 'toggle', name: 'protos', label: 'prototypes', value: true },
+    { type: 'toggle', name: 'events', label: 'mark deaths', value: false },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    api.state.hover = -1;
+    gate(api, () => import('./deepsurv.js').then((m) => m.loadEmbed()), (api, d) => {
+      api.state.d = d;
+      const xs = d.patients.map((p) => p[0]), ys = d.patients.map((p) => p[1]);
+      const pad = 0.08;
+      const xr = [Math.min(...xs), Math.max(...xs)], yr = [Math.min(...ys), Math.max(...ys)];
+      const dx = (xr[1] - xr[0]) * pad, dy = (yr[1] - yr[0]) * pad;
+      api.state.xr = [xr[0] - dx, xr[1] + dx];
+      api.state.yr = [yr[0] - dy, yr[1] + dy];
+      const rs = d.risk;
+      api.state.rlo = Math.min(...rs); api.state.rhi = Math.max(...rs);
+      bind(api);
+    });
+  },
+
+  onControl(name, value, api) { api.render(); },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    if (!st.ready) { loadingText(api); return; }
+    const d = st.d;
+
+    const pad = 14, top = 20, bottom = 38;
+    const bx = pad, by = top, bw = W - 2 * pad, bh = H - top - bottom;
+    const A = axes(ctx, { x: bx, y: by, w: bw, h: bh }, {
+      xMin: st.xr[0], xMax: st.xr[1], yMin: st.yr[0], yMax: st.yr[1],
+      xTicks: [], yTicks: [], border: true,
+    }, colors);
+
+    // risk -> color: blue (low) through faint to accent (high)
+    const lo = st.rlo, hi = st.rhi;
+    const cLo = parseColor(colors.blue), cMid = parseColor(colors.cellBg), cHi = parseColor(colors.accent);
+    const riskColor = (r) => {
+      const t = Math.max(0, Math.min(1, (r - lo) / (hi - lo + 1e-9)));
+      return t < 0.5 ? rgba(mix(cLo, cMid, t * 2), 1) : rgba(mix(cMid, cHi, (t - 0.5) * 2), 1);
+    };
+
+    st._pts = [];
+    let hoverPt = null;
+    d.patients.forEach((p, i) => {
+      const px = A.sx(p[0]), py = A.sy(p[1]);
+      st._pts.push({ x: px, y: py, i });
+      if (i === st.hover) { hoverPt = { px, py, i }; return; }  // painted last, on top
+      const isDeath = api.get('events') && d.event[i] === 1;
+      ctx.fillStyle = riskColor(d.risk[i]);
+      ctx.globalAlpha = 0.82;
+      ctx.beginPath(); ctx.arc(px, py, 3.2, 0, 7); ctx.fill();
+      if (isDeath) { ctx.strokeStyle = colors.fg; ctx.lineWidth = 1; ctx.stroke(); }
+      ctx.globalAlpha = 1;
+    });
+
+    if (api.get('protos')) {
+      d.prototypes.forEach((q, u) => {
+        const px = A.sx(q[0]), py = A.sy(q[1]);
+        const raise = d.proto_readout[u] >= 0;
+        ctx.strokeStyle = raise ? colors.accent : colors.blue;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(px, py, 6, 0, 7); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(px - 3, py); ctx.lineTo(px + 3, py);
+        ctx.moveTo(px, py - 3); ctx.lineTo(px, py + 3); ctx.stroke();
+      });
+    }
+
+    // hovered patient on top of everything, so a dense cluster never overdraws it
+    if (hoverPt) {
+      const i = hoverPt.i;
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = riskColor(d.risk[i]);
+      ctx.beginPath(); ctx.arc(hoverPt.px, hoverPt.py, 5.5, 0, 7); ctx.fill();
+      ctx.strokeStyle = colors.fg; ctx.lineWidth = 1.4; ctx.stroke();
+    }
+
+    // legend
+    Ty(ctx, colors, 'small', { color: colors.blue });
+    ctx.fillText('low risk', bx + 4, by + bh + 12);
+    Ty(ctx, colors, 'small', { align: 'right', color: colors.accent });
+    ctx.fillText('high risk', bx + bw - 4, by + bh + 12);
+    Ty(ctx, colors, 'small', { align: 'center', color: colors.muted });
+    ctx.fillText(`2D shadow of the kernel feature space  (PCA, ${(100 * d.explained_var.reduce((a, b) => a + b, 0)).toFixed(0)}% of variance)`, bx + bw / 2, by + bh + 26);
+
+    const h = st.hover;
+    if (h >= 0) {
+      api.readout('rd', `patient #${h}: log-risk ${fmt(d.risk[h], 2)}, ${d.event[h] ? 'died' : 'censored'} at ${d.time[h].toFixed(0)} mo. Its place is fixed by which prototypes it resembles.`);
+    } else {
+      api.readout('rd', `${d.patients.length} held-out patients placed by kernel similarity; color is predicted log-risk. Rings are prototypes (orange raises risk, blue protects). Hover a patient.`);
+    }
+  },
+});
+
+function bind(api) {
+  if (api.canvas.dataset.rlBound) return; api.canvas.dataset.rlBound = '1';
+  api.canvas.addEventListener('pointermove', (e) => {
+    const st = api.state; if (!st || !st._pts) return;
+    const p = localPoint(api.canvas, e);
+    const dist2 = (q) => (q.x - p.x) ** 2 + (q.y - p.y) ** 2;
+    let best = -1, bd = 64;                 // 8px pick radius
+    for (const q of st._pts) { const dd = dist2(q); if (dd < bd) { bd = dd; best = q.i; } }
+    // Stickiness: in a dense cluster many dots sit within the pick radius, so the
+    // nearest flips on sub-pixel moves and the highlight jitters. Keep the current
+    // patient while the cursor stays near it (13px) unless another is clearly
+    // closer, so the highlight moves deliberately rather than flickering.
+    if (best !== st.hover && st.hover >= 0) {
+      const cur = st._pts.find((q) => q.i === st.hover);
+      if (cur) { const cd = dist2(cur); if (cd < 169 && cd < bd * 2.25) best = st.hover; }
+    }
+    if (best !== st.hover) { st.hover = best; api.render(); }
+  });
+  api.canvas.addEventListener('pointerleave', () => { if (api.state) { api.state.hover = -1; api.render(); } });
+}
+</script>

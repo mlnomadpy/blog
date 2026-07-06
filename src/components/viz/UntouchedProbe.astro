@@ -1,0 +1,227 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 470 } = Astro.props;
+---
+<figure class="viz untouchedprobe" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The invariance claim, measured instead of asserted. Drag a probe anywhere in the
+// input plane; the browser solves its equilibrium twice, once under the base operator
+// and once under the operator with the pasted rows (the certified dynamics edit), and
+// reports the REAL displacement of its fixed point, the score change, and the settle
+// counts. "Measure every old input" runs the same pair of solves over all old-class
+// test points and plots the honest distribution of ‖Δz*‖: mostly tiny, not zero.
+import { defineViz } from './engine/vizkit.js';
+import { gate, loadingText, T, fmt, frame } from './engine/draw.js';
+import { drag } from './engine/pointer.js';
+import { loadReady, compute, makeRunner, CLS } from './yatdeqedit.js';
+
+const LO = -2.6, HI = 2.6, K = 70, TOL = 1e-4;
+const DLO = -4, DHI = 0.6;                       // log10 range of the ‖Δz*‖ strip
+
+defineViz('untouchedprobe', {
+  title: 'Drag a probe. Its two fixed points, measured live.',
+  height: 470,
+  controls: [
+    { type: 'button', name: 'pop', label: 'measure every old-class test input' },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    api.state.geom = null;
+    gate(api, loadReady, (api, model) => {
+      const cmp = compute(model);
+      const M = { cmp, model, probe: [-1.15, -0.35], res: null, pop: null,
+                  popBusy: false, busy: false, queued: false };
+      api.state.M = M;
+      solveProbe(M);
+      const toData = (p) => {
+        const g = api.state.geom; if (!g) return null;
+        const x = LO + ((p.x - g.x) / g.w) * (HI - LO);
+        const y = HI - ((p.y - g.y) / g.h) * (HI - LO);
+        if (x < LO - 0.3 || x > HI + 0.3 || y < LO - 0.3 || y > HI + 0.3) return null;
+        return [Math.max(LO, Math.min(HI, x)), Math.max(LO, Math.min(HI, y))];
+      };
+      const move = (p) => {
+        const d = toData(p); if (!d) return;
+        M.probe = d;
+        if (M.busy) { M.queued = true; return; }
+        M.busy = true;
+        setTimeout(() => { solveProbe(M); M.busy = false; api.render();
+          if (M.queued) { M.queued = false; move({ x: -1e9 }); } }, 0);
+      };
+      drag(api.canvas, {
+        cursor: 'crosshair',
+        onStart: (p) => { const d = toData(p); if (d) { M.probe = d; solveProbe(M); api.render(); } },
+        onMove: (p) => { if (p.x > -1e8) move(p); else { solveProbe(M); api.render(); } },
+      });
+    });
+  },
+
+  onAction(name, api) {
+    const M = api.state.M;
+    if (name !== 'pop' || !M || M.pop || M.popBusy) return;
+    M.popBusy = true; api.render();
+    setTimeout(() => {
+      const cmp = M.cmp, Tt = M.model.test;
+      const idx = [], Xold = [];
+      for (let i = 0; i < Tt.y.length; i++) if (Tt.y[i] < 3) { idx.push(i); Xold.push(Tt.x[i]); }
+      const zb = solveBatch(cmp, cmp.baseOp, Xold);
+      const ze = solveBatch(cmp, cmp.editOp, Xold);
+      const C = M.model.params.C;
+      const dz = [], ds = [];
+      for (let i = 0; i < Xold.length; i++) {
+        let s = 0; for (let d = 0; d < cmp.D; d++) { const v = ze[i][d] - zb[i][d]; s += v * v; }
+        dz.push(Math.sqrt(s));
+        let m = 0;
+        for (let c = 0; c < C.length; c++) {
+          let lb = 0, le = 0;
+          for (let d = 0; d < cmp.D; d++) { lb += C[c][d] * zb[i][d]; le += C[c][d] * ze[i][d]; }
+          m = Math.max(m, Math.abs(le - lb));
+        }
+        ds.push(m);
+      }
+      const srt = [...dz].sort((a, b) => a - b);
+      M.pop = { dz, y: idx.map((i) => Tt.y[i]),
+                med: srt[Math.floor(srt.length / 2)], max: srt[srt.length - 1],
+                dsmax: Math.max(...ds) };
+      M.popBusy = false; api.render();
+    }, 30);
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0) return;
+    if (!st.ready || !st.M) { loadingText(api, 'loading the two operators…'); return; }
+    const M = st.M, Tt = M.model.test;
+
+    const pad = 14, side = Math.min(W * 0.46, H - pad * 2 - 18);
+    const B = { x: pad, y: pad + 18, w: side, h: side };            // input plane
+    st.geom = B;
+    const rx0 = B.x + B.w + 24, rw = W - pad - rx0;
+    const P = { x: rx0, y: pad + 18, w: rw, h: Math.round((H - pad * 2 - 78) * 0.62) };   // state window
+    const S = { x: rx0, y: P.y + P.h + 44, w: rw, h: H - pad - 8 - (P.y + P.h + 44) };    // Δz* strip
+
+    // ── left: the input plane ──
+    T(ctx, colors, 'kicker'); ctx.fillText('input space, drag the probe', B.x, B.y - 6);
+    frame(ctx, colors, B.x, B.y, B.w, B.h);
+    const px = (x) => B.x + ((x - LO) / (HI - LO)) * B.w, py = (y) => B.y + ((HI - y) / (HI - LO)) * B.h;
+    for (let i = 0; i < Tt.y.length; i++) {
+      ctx.globalAlpha = Tt.y[i] === 3 ? 0.25 : 0.45; ctx.fillStyle = CLS[Tt.y[i]];
+      ctx.beginPath(); ctx.arc(px(Tt.x[i][0]), py(Tt.x[i][1]), 1.9, 0, 6.283); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    for (const a of M.model.teach_x) {   // where the 8 pasted rows came from
+      ctx.strokeStyle = CLS[3]; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(px(a[0]), py(a[1]), 4.4, 0, 6.283); ctx.stroke();
+    }
+    const pr = M.probe;
+    ctx.strokeStyle = colors.fg; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.arc(px(pr[0]), py(pr[1]), 7, 0, 6.283); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(px(pr[0]) - 11, py(pr[1])); ctx.lineTo(px(pr[0]) + 11, py(pr[1]));
+    ctx.moveTo(px(pr[0]), py(pr[1]) - 11); ctx.lineTo(px(pr[0]), py(pr[1]) + 11); ctx.stroke();
+
+    // ── right top: the state window, two solves ──
+    T(ctx, colors, 'kicker'); ctx.fillText('state space (2-D window): the same probe, both operators', P.x, P.y - 6);
+    frame(ctx, colors, P.x, P.y, P.w, P.h);
+    const bd = M.bnd || (M.bnd = cloudBounds(Tt.proj));
+    const qx = (x) => P.x + 6 + ((x - bd[0]) / (bd[1] - bd[0])) * (P.w - 12);
+    const qy = (y) => P.y + 6 + (P.h - 12) - ((y - bd[2]) / (bd[3] - bd[2])) * (P.h - 12);
+    for (let i = 0; i < Tt.proj.length; i++) {
+      ctx.globalAlpha = 0.12; ctx.fillStyle = CLS[Tt.y[i]];
+      ctx.beginPath(); ctx.arc(qx(Tt.proj[i][0]), qy(Tt.proj[i][1]), 2.1, 0, 6.283); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    const R = M.res;
+    if (R) {
+      const path = (tr, col, wgt) => { ctx.strokeStyle = col; ctx.globalAlpha = 0.75; ctx.lineWidth = wgt;
+        ctx.beginPath(); tr.forEach((p, i) => i ? ctx.lineTo(qx(p[0]), qy(p[1])) : ctx.moveTo(qx(p[0]), qy(p[1]))); ctx.stroke(); ctx.globalAlpha = 1; };
+      path(R.trajB, colors.muted, 1.4); path(R.trajE, CLS[3], 1.6);
+      const zb = R.trajB[R.trajB.length - 1], ze = R.trajE[R.trajE.length - 1];
+      ctx.setLineDash([3, 3]); ctx.strokeStyle = colors.fg; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(qx(zb[0]), qy(zb[1])); ctx.lineTo(qx(ze[0]), qy(ze[1])); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = colors.muted; ctx.beginPath(); ctx.arc(qx(zb[0]), qy(zb[1]), 4.4, 0, 6.283); ctx.fill();
+      ctx.fillStyle = CLS[3]; ctx.beginPath(); ctx.arc(qx(ze[0]), qy(ze[1]), 4.4, 0, 6.283); ctx.fill();
+      T(ctx, colors, 'small', { align: 'left' });
+      ctx.fillText('base z*', qx(zb[0]) + 7, qy(zb[1]) + 3);
+      T(ctx, colors, 'small', { color: CLS[3], align: 'left' });
+      ctx.fillText('edited z*', qx(ze[0]) + 7, qy(ze[1]) - 5);
+    }
+
+    // ── right bottom: the honest ‖Δz*‖ distribution ──
+    T(ctx, colors, 'kicker');
+    ctx.fillText('‖Δz*‖ of every old-class test input (log scale)', S.x, S.y - 6);
+    frame(ctx, colors, S.x, S.y, S.w, S.h);
+    const lx = (v) => S.x + 6 + ((Math.log10(Math.max(1e-4, v)) - DLO) / (DHI - DLO)) * (S.w - 12);
+    for (const e of [-4, -3, -2, -1, 0]) {
+      const x = S.x + 6 + ((e - DLO) / (DHI - DLO)) * (S.w - 12);
+      ctx.strokeStyle = colors.border; ctx.globalAlpha = 0.5;
+      ctx.beginPath(); ctx.moveTo(x, S.y); ctx.lineTo(x, S.y + S.h); ctx.stroke(); ctx.globalAlpha = 1;
+      T(ctx, colors, 'small', { align: 'center' }); ctx.fillText('1e' + e, x, S.y + S.h + 11);
+    }
+    if (M.pop) {
+      for (let i = 0; i < M.pop.dz.length; i++) {
+        const yy = S.y + 6 + ((i * 7919) % 1000) / 1000 * (S.h - 12);
+        ctx.globalAlpha = 0.5; ctx.fillStyle = CLS[M.pop.y[i]];
+        ctx.beginPath(); ctx.arc(lx(M.pop.dz[i]), yy, 2, 0, 6.283); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      T(ctx, colors, 'small', { align: 'left', color: colors.fg });
+      ctx.fillText('median ' + M.pop.med.toExponential(1) + '   max ' + fmt(M.pop.max, 2), S.x + 8, S.y + 12);
+    } else {
+      T(ctx, colors, 'small', { color: colors.faint, align: 'center' });
+      ctx.fillText(M.popBusy ? 'solving every old input twice…' : 'press the button to solve all old inputs under both operators', S.x + S.w / 2, S.y + S.h / 2);
+    }
+    if (R) {   // this probe on the strip
+      ctx.fillStyle = colors.fg;
+      const x = lx(R.dz), y = S.y + S.h / 2;
+      ctx.beginPath(); ctx.moveTo(x, y - 6); ctx.lineTo(x + 5, y); ctx.lineTo(x, y + 6); ctx.lineTo(x - 5, y); ctx.closePath(); ctx.fill();
+    }
+
+    if (R) {
+      const same = R.predB === R.predE;
+      api.readout('rd', `probe: ‖Δz*‖ ${R.dz.toExponential(1)} · max |Δscore| ${R.ds.toExponential(1)} · settles in ${R.kB}→${R.kE} turns · ${same ? 'prediction unchanged' : 'prediction FLIPS to the taught class'}`);
+    }
+  },
+});
+
+function cloudBounds(proj) {
+  let xa = 1e9, xb = -1e9, ya = 1e9, yb = -1e9;
+  for (const p of proj) { xa = Math.min(xa, p[0]); xb = Math.max(xb, p[0]); ya = Math.min(ya, p[1]); yb = Math.max(yb, p[1]); }
+  const mx = (xb - xa) * 0.1, my = (yb - ya) * 0.1;
+  return [xa - mx, xb + mx, ya - my, yb + my];
+}
+
+function solveBatch(cmp, op, X) {
+  const r = makeRunner(cmp, op, X).solve(K);
+  const Z = r.stateJS(); r.dispose(); return Z;
+}
+
+// one probe, two operators: trajectories in the PCA window + settle counts + Δ readouts
+function solveProbe(M) {
+  const cmp = M.cmp, C = M.model.params.C;
+  const run = (op) => {
+    const r = makeRunner(cmp, op, [M.probe]);
+    const traj = [r.proj()[0]]; let kSettle = K;
+    for (let k = 0; k < K; k++) {
+      const rn = r.stepR(op)[0]; traj.push(r.proj()[0]);
+      if (rn < TOL && kSettle === K) kSettle = k + 1;
+    }
+    const z = r.stateJS()[0]; const s4 = r.scores4()[0]; r.dispose();
+    return { traj, kSettle, z, s4 };
+  };
+  const rb = run(cmp.baseOp), re = run(cmp.editOp);
+  let dz = 0; for (let d = 0; d < cmp.D; d++) { const v = re.z[d] - rb.z[d]; dz += v * v; }
+  let ds = 0; for (let c = 0; c < C.length; c++) ds = Math.max(ds, Math.abs(re.s4[c] - rb.s4[c]));
+  const argmax = (a) => a.indexOf(Math.max(...a));
+  M.res = { trajB: rb.traj, trajE: re.traj, dz: Math.sqrt(dz), ds,
+            kB: rb.kSettle, kE: re.kSettle,
+            predB: argmax(rb.s4.slice(0, 3)), predE: argmax(re.s4) };
+}
+</script>

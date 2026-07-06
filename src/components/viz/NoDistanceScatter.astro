@@ -1,0 +1,159 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 330 } = Astro.props;
+---
+<figure class="viz nodistscatter" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+import { defineViz } from './engine/vizkit.js';
+import { text, axes, scatter, PALETTE } from './engine/draw.js';
+import { np, nn, withJax, drawJaxLoading } from './engine/jax.js';
+
+// Does the layer's own similarity score predict what the layer does to a pair?
+// Two REAL random-weight forward passes over the same random input pairs, no
+// training anywhere. Left: a bank of m kernel units φ(x)_u = exp(-‖x-W_u‖²/2D)
+// with random centers drawn like the data; output distance ‖φ(x)-φ(x')‖ plotted
+// against the pair's kernel score k(x,x'). In the RKHS the identity
+// ‖Φ(x)-Φ(x')‖² = 2-2k(x,x') is exact; the finite random-center layer tracks it
+// as a tight monotone band (Spearman ρ ≈ -0.9, tightening with m). Right: a
+// ReLU MLP f(x) = W₂σ(W₁x+b₁) with random weights; output distance plotted
+// against x·x', the only pairwise number an affine primitive offers (ρ ≈ -0.3).
+// All forward passes run live (matmul-based, vectorised); nothing is precomputed.
+const P = 220, D = 4, OUT = 8, BW = 2 * D;
+
+const lcg = (s) => () => { s = (s * 1103515245 + 12345) % 2147483648; return s / 2147483648; };
+const gauss = (rng) => {
+  let u = 0, v = 0;
+  while (u === 0) u = rng();
+  while (v === 0) v = rng();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+};
+const gaussMat = (rng, r, c, scale = 1) =>
+  Array.from({ length: r }, () => Array.from({ length: c }, () => gauss(rng) * scale));
+
+// Input pairs at a spread of similarities: x' = ρx + √(1-ρ²)ε with ρ ~ U(0,1),
+// and independent per-vector scales so the dot product does not determine distance.
+const samplePairs = (seed) => {
+  const rng = lcg(seed);
+  const X1 = [], X2 = [];
+  for (let i = 0; i < P; i++) {
+    const rho = rng(), s1 = 0.6 + 0.8 * rng(), s2 = 0.6 + 0.8 * rng();
+    const g = Array.from({ length: D }, () => gauss(rng));
+    const e = Array.from({ length: D }, () => gauss(rng));
+    X1.push(g.map((v) => v * s1));
+    X2.push(g.map((v, k) => (rho * v + Math.sqrt(1 - rho * rho) * e[k]) * s2));
+  }
+  return { X1, X2 };
+};
+
+// (P,m) squared distances from rows of X to rows of C, via ‖x‖²+‖c‖²-2x·c.
+const sqDists = (Xjs, Cjs, m) => {
+  const X = np.array(Xjs), C = np.array(Cjs);
+  const xx = np.sum(X.ref.mul(X.ref), 1);
+  const cc = np.sum(C.ref.mul(C.ref), 1);
+  const xc = np.matmul(X, np.swapaxes(C, 0, 1));
+  return np.subtract(np.add(np.reshape(xx, [P, 1]), np.reshape(cc, [1, m])), xc.mul(2));
+};
+
+const rowNorms = (Ajs, Bjs) => {           // ‖aᵢ - bᵢ‖ per row, computed in np
+  const Dm = np.subtract(np.array(Ajs), np.array(Bjs));
+  return np.sum(Dm.ref.mul(Dm), 1).js().map(Math.sqrt);
+};
+
+const pearson = (xs, ys) => {
+  const n = xs.length;
+  let mx = 0, my = 0;
+  for (let i = 0; i < n; i++) { mx += xs[i]; my += ys[i]; }
+  mx /= n; my /= n;
+  let sxy = 0, sxx = 0, syy = 0;
+  for (let i = 0; i < n; i++) { const a = xs[i] - mx, b = ys[i] - my; sxy += a * b; sxx += a * a; syy += b * b; }
+  return sxy / Math.sqrt(sxx * syy || 1);
+};
+// Spearman: rank correlation, the right measure for a monotone (nonlinear) relation
+const spearman = (xs, ys) => {
+  const rank = (a) => { const idx = a.map((_, i) => i).sort((p, q) => a[p] - a[q]); const r = new Array(a.length); idx.forEach((v, i) => { r[v] = i; }); return r; };
+  return pearson(rank(xs), rank(ys));
+};
+
+const recompute = (api) => {
+  const st = api.state;
+  const m = Math.round(api.get('units'));
+  const { X1, X2 } = st.pairs;
+  const rng = lcg(st.seed * 7919 + 17);
+  // ── kernel layer: φ(x)_u = exp(-‖x-W_u‖²/BW), m random centers drawn like the data ──
+  const W = Array.from({ length: m }, () => {
+    const s = 0.6 + 0.8 * rng();
+    return Array.from({ length: D }, () => gauss(rng) * s);
+  });
+  const phi1 = np.exp(sqDists(X1, W, m).mul(-1 / BW)).js();
+  const phi2 = np.exp(sqDists(X2, W, m).mul(-1 / BW)).js();
+  const dpair = np.subtract(np.array(X1), np.array(X2));
+  const kx = np.exp(np.sum(dpair.ref.mul(dpair), 1).mul(-1 / BW)).js();
+  const ky = rowNorms(phi1, phi2).map((v) => v / Math.sqrt(m));
+  // ── ReLU MLP: f(x) = W₂ σ(W₁x + b₁), same m hidden units ──
+  const W1T = gaussMat(rng, D, m, 1 / Math.sqrt(D));
+  const b1 = [Array.from({ length: m }, () => gauss(rng) * 0.5)];
+  const W2T = gaussMat(rng, m, OUT, 1 / Math.sqrt(m));
+  const fwd = (Xjs) => np.matmul(nn.relu(np.add(np.matmul(np.array(Xjs), np.array(W1T)), np.array(b1))), np.array(W2T)).js();
+  const f1 = fwd(X1), f2 = fwd(X2);
+  const dx = np.sum(np.array(X1).mul(np.array(X2)), 1).js();
+  const dy = rowNorms(f1, f2).map((v) => v / Math.sqrt(OUT));
+  st.data = { kx, ky, dx, dy, rL: spearman(kx, ky), rR: spearman(dx, dy) };
+};
+
+defineViz('nodistscatter', {
+  height: 330,
+  controls: [
+    { type: 'button', name: 'resample', label: 'resample' },
+    { type: 'range', name: 'units', label: 'units per layer', min: 16, max: 96, step: 8, value: 64, int: true, reset: false },
+    { type: 'readout', name: 'ro' },
+  ],
+  onControl(name, value, api) { if (name === 'units' && api.state.jaxReady) recompute(api); },
+  onAction(name, api) {
+    if (name === 'resample' && api.state.jaxReady) { api.state.seed += 1; api.state.pairs = samplePairs(api.state.seed); recompute(api); }
+  },
+  setup(api) {
+    api.state.seed = 11;
+    api.state.pairs = samplePairs(api.state.seed);
+    withJax(api, recompute);
+  },
+  draw(api) {
+    const { ctx, colors, size, state } = api; const W = size.W, H = size.H; if (W === 0) return;
+    if (!state.jaxReady || !state.data) return drawJaxLoading(api);
+    const { kx, ky, dx, dy, rL, rR } = state.data;
+    const padL = 36, gap = 52, padT = 24, padB = 36;
+    const pw = Math.max(10, (W - padL - gap - 10) / 2), ph = H - padT - padB;
+    const boxL = { x: padL, y: padT, w: pw, h: ph };
+    const boxR = { x: padL + pw + gap, y: padT, w: pw, h: ph };
+    const nice = (v) => Math.ceil(v * 10) / 10 || 0.1;
+    const yMaxL = nice(Math.max(...ky)), yMaxR = nice(Math.max(...dy));
+    const xSpanR = Math.max(Math.abs(Math.min(...dx)), Math.abs(Math.max(...dx))) * 1.05 || 1;
+
+    text(ctx, 'kernel layer', boxL.x + boxL.w / 2, 4, colors, { align: 'center', size: 11.5, weight: '600', color: colors.fg });
+    text(ctx, 'ReLU MLP', boxR.x + boxR.w / 2, 4, colors, { align: 'center', size: 11.5, weight: '600', color: colors.fg });
+
+    const mL = axes(ctx, boxL, { xMin: 0, xMax: 1, yMin: 0, yMax: yMaxL, xTicks: [0, 0.5, 1], yTicks: [0, yMaxL], grid: true }, colors);
+    const mR = axes(ctx, boxR, { xMin: -xSpanR, xMax: xSpanR, yMin: 0, yMax: yMaxR, xTicks: [-Math.round(xSpanR), 0, Math.round(xSpanR)], yTicks: [0, yMaxR], grid: true, zero: true }, colors);
+
+    const ptsL = kx.map((v, i) => [v, ky[i]]);
+    const ptsR = dx.map((v, i) => [v, dy[i]]);
+    scatter(ctx, ptsL, { sx: mL.sx, sy: mL.sy, r: 2.4, alpha: 0.55, colorAt: () => colors.accent });
+    scatter(ctx, ptsR, { sx: mR.sx, sy: mR.sy, r: 2.4, alpha: 0.55, colorAt: () => PALETTE[1] });
+
+    text(ctx, 'kernel score k(x, x′)', boxL.x + boxL.w / 2, boxL.y + boxL.h + 14, colors, { align: 'center', size: 10, color: colors.muted });
+    text(ctx, 'dot product x · x′', boxR.x + boxR.w / 2, boxR.y + boxR.h + 14, colors, { align: 'center', size: 10, color: colors.muted });
+    ctx.save(); ctx.translate(12, boxL.y + boxL.h / 2); ctx.rotate(-Math.PI / 2);
+    text(ctx, 'output distance', 0, 0, colors, { align: 'center', baseline: 'middle', size: 10, color: colors.muted });
+    ctx.restore();
+    text(ctx, `ρ ${rL.toFixed(2)}`, boxL.x + boxL.w - 6, boxL.y + 6, colors, { align: 'right', size: 10.5, mono: true, color: colors.accent });
+    text(ctx, `ρ ${rR.toFixed(2)}`, boxR.x + boxR.w - 6, boxR.y + 6, colors, { align: 'right', size: 10.5, mono: true, color: PALETTE[1] });
+
+    api.readout('ro', `${P} pairs · ${Math.round(api.get('units'))} units · ρ(kernel) ${rL.toFixed(2)} · ρ(relu) ${rR.toFixed(2)} · live`);
+  },
+});
+</script>

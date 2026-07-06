@@ -57,13 +57,13 @@ import SharedInfoCurve from '../../components/viz/SharedInfoCurve.astro';
 import SimplexPacking from '../../components/viz/SimplexPacking.astro';
 import CiteAs from '../../components/CiteAs.astro';
 
-A standard assumption in contrastive learning holds that pushing negative pairs to cosine similarity $-1$ achieves "maximal difference." This is wrong, and the cost has been substantial.
+Suppose you are training a contrastive model, and you want two embeddings, a photo of a dog and a paragraph of tax law, to end up as different as possible. Where on the cosine axis do you send them? Every instinct says $-1$: the scale runs from $+1$ for identical down to $-1$ for opposite, so maximal difference should live at the bottom. That instinct is wired into the losses behind CLIP, SimCLR, and most of modern contrastive learning, whose gradients push every negative pair toward opposition.
 
-Two unit vectors $\mathbf{u}, \mathbf{v}$ with $\cos\theta(\mathbf{u}, \mathbf{v}) = -1$ are antiparallel, $\mathbf{v} = -\mathbf{u}$, and antiparallel means linearly dependent. They span a single one-dimensional subspace; knowing $\mathbf{u}$ determines $\mathbf{v}$ exactly. In every algebraic, geometric, and information-theoretic sense they are the same direction with a sign flip. Two vectors at $\cos = -1$ are not different. They are redundant.
+But look at what a pair at cosine $-1$ actually is. Two unit vectors $\mathbf{u}, \mathbf{v}$ with $\cos\theta(\mathbf{u}, \mathbf{v}) = -1$ are antiparallel, $\mathbf{v} = -\mathbf{u}$, and antiparallel means linearly dependent. They span a single one-dimensional subspace; knowing $\mathbf{u}$ determines $\mathbf{v}$ exactly. In every algebraic, geometric, and information-theoretic sense they are the same direction with a sign flip. Two vectors at $\cos = -1$ are not different. They are redundant.
 
-The correct geometry of difference is **orthogonality**. Vectors with $\cos\theta = 0$ are linearly independent: their span has dimension two, the projection of one onto the other is zero, and neither can be reconstructed from the other. Orthogonality is where genuinely new information lives.
+The geometry of difference is **orthogonality**. Vectors with $\cos\theta = 0$ are linearly independent: their span has dimension two, the projection of one onto the other is zero, and neither can be reconstructed from the other. Orthogonality is where genuinely new information lives.
 
-The rest of this post makes the consequence concrete. CLIP's InfoNCE loss implicitly targets opposition; SigLIP's sigmoid loss equilibrates at orthogonality; cross-entropy classification has always targeted orthogonality; the simplex packing result tells us why every multi-class problem above $n = 2$ should be reaching for orthogonality rather than opposition. The cosine scale has three landmarks, not two, and the field spent years engineering around the missing landmark.
+If that is right, then some of the most influential losses of the past decade have been asking their embeddings for the wrong thing. The question worth chasing is what that mistake actually cost, and which losses quietly avoided it.
 
 ## The cosine scale has three landmarks
 
@@ -79,7 +79,7 @@ The "difference" axis runs from $\pm 1$ (dependent) to $0$ (independent), not fr
 
 <OppositionVsOrthogonality caption="Drag the green tip around the unit circle. When v lines up with ±u (cos θ = ±1), the span of (u, v) collapses to a single line, the two vectors are linearly dependent. Anywhere else, the span fills the plane and the dimension is 2. The two cases that look 'most different' on the cosine axis (the parallel and antiparallel snap-points) are the two cases where the span is degenerate. Orthogonality is the configuration that actually carries new information." />
 
-The information argument is the cleanest way to see it. Define directional mutual information as $I_\text{dir}(\mathbf{u}; \mathbf{v}) = \cos^2 \theta$, the fraction of $\mathbf{v}$'s variance explained by $\mathbf{u}$. Both parallel and antiparallel give $\cos^2 = 1$: each one is reconstructable from the other up to a sign. Only orthogonality gives $\cos^2 = 0$: neither carries any information about the other.
+The information argument is the cleanest way to see it. As a working measure for this post (not an established quantity, but a natural one), define the directional information $I_\text{dir}(\mathbf{u}; \mathbf{v}) = \cos^2 \theta$, the fraction of $\mathbf{v}$'s variance explained by $\mathbf{u}$. Both parallel and antiparallel give $\cos^2 = 1$: each one is reconstructable from the other up to a sign. Only orthogonality gives $\cos^2 = 0$: neither carries any information about the other.
 
 <SharedInfoCurve caption="Three quantities on the cosine axis. The similarity cos θ (accent solid) bottoms out at 180°. Shared information cos²θ (dashed) is the actual redundancy measure, it is maximized at both 0° and 180°, so 'opposite' and 'identical' are equally redundant. The independence curve 1 − cos²θ (dotted) peaks at exactly 90°. Drag along the chart to read the three values at any angle." />
 
@@ -89,9 +89,9 @@ $$
 \boxed{\;\text{max difference} \;\Longleftrightarrow\; \cos^2 \theta = 0 \;\Longleftrightarrow\; \mathbf{u} \perp \mathbf{v}\;}
 $$
 
-## CLIP optimizes for the wrong target
+## Where does CLIP send its negatives?
 
-OpenAI's CLIP is trained with InfoNCE, a softmax contrastive loss over a batch of $N$ image-text pairs:
+The natural first test is the loss behind the most famous embedding space in the field. OpenAI's CLIP is trained with InfoNCE, a softmax contrastive loss over a batch of $N$ image-text pairs:
 
 $$
 \mathcal{L}_\text{CLIP} = -\frac{1}{N}\sum_i \log \frac{\exp(\mathrm{sim}_{ii}/\tau)}{\sum_k \exp(\mathrm{sim}_{ik}/\tau)}.
@@ -99,13 +99,15 @@ $$
 
 The gradient with respect to any negative similarity is strictly positive: the loss decreases monotonically as that similarity decreases. Cosine similarity is bounded below by $-1$, so the global minimum of every negative term is antiparallel alignment. CLIP wants every pair of unlike concepts to be linearly dependent on each other.
 
-This is geometrically impossible at scale. In $\mathbb{R}^d$, the maximum number of mutually antiparallel unit-vector pairs is exactly $d$, one pair per coordinate axis. CLIP's 512-dimensional embedding space carries at most 512 binary oppositions. ImageNet has 1,000 classes; the real world has millions of concepts. A loss demanding $\cos = -1$ for every negative is asking for a configuration that does not exist in the space it's being computed in.
+This is not merely hard at scale; it is unsatisfiable outright. Antiparallelism is not a resource a bigger space supplies more of: the Gram matrix of $k$ unit vectors with every pairwise cosine equal to $-1$ has a negative eigenvalue as soon as $k > 2$, so no more than two vectors can be pairwise opposite in *any* dimension. What a $d$-dimensional space does supply is $d$ mutually orthogonal antipodal pairs, one per axis of an orthonormal basis, which is why CLIP's 512-dimensional embedding space carries at most 512 binary oppositions. ImageNet has 1,000 classes; the real world has millions of concepts. A loss demanding $\cos = -1$ for every negative is asking for a configuration that does not exist in the space it's being computed in.
 
-The computational cost follows from the same mistake. Random unit vectors in $\mathbb{S}^{d-1}$ concentrate near cosine zero with variance $1/d$, for $d = 512$, the standard deviation of a random pair's cosine is around $0.044$. The loss's gradient is dominated by the rare negatives that happen to lie far enough from the equator to register; most of the batch contributes near-zero signal. To accumulate enough gradient, CLIP was trained with $N = 32{,}768$ pairs per step, an $N \times N$ similarity matrix at ${\sim}4$ GB per device, and a multi-year engineering effort in distributed training, gradient caching, and memory-efficient attention. The engineering was needed because the geometry was wrong.
+So does CLIP end up somewhere terrible? No, and the distinction matters. Separate where the loss *lands* from how it *gets there*. Because the all-pairs-at-$-1$ configuration is unreachable, what the softmax family actually converges to is the regular simplex, the near-optimal packing derived below, so the equilibrium is fine. The cost lives in the dynamics: the per-pair gradient keeps pointing at $-1$ with no notion of "far enough," and the optimiser spends its steps, and its batches, pushing toward a target the geometry cannot honour. I trace this equilibrium-versus-dynamics split through the whole contrastive lineage, loss by loss on live points, in [*Untangling the Moons*](/blog/untangling-the-moons/).
 
-## SigLIP gets it right
+The computational bill of those dynamics is easy to itemise. Random unit vectors in $\mathbb{S}^{d-1}$ concentrate near cosine zero with variance $1/d$, for $d = 512$, the standard deviation of a random pair's cosine is around $0.044$. The loss's gradient is dominated by the rare negatives that happen to lie far enough from the equator to register; most of the batch contributes near-zero signal. To accumulate enough gradient, CLIP was trained with $N = 32{,}768$ pairs per step, an $N \times N$ similarity matrix at ${\sim}4$ GB per device, and a multi-year engineering effort in distributed training, gradient caching, and memory-efficient attention. The geometry is not the sole reason those batches help, large batches also surface hard negatives and tame gradient variance, but it is one steady drain among them, and the one this post can state exactly: part of that engineering paid for a target the space could never deliver.
 
-Google's SigLIP replaces the softmax with a pairwise sigmoid:
+## What would a stopping point look like?
+
+If the damage is in the open-ended push, the fix should be a loss that knows when a negative is far enough, and one loss in the lineage has exactly that. Google's SigLIP replaces the softmax with a pairwise sigmoid:
 
 $$
 \mathcal{L}_\text{SigLIP} = \sum_{i, j} \log\!\big(1 + \exp\big(-y_{ij}(\mathrm{sim}_{ij}/\tau - b)\big)\big),
@@ -143,9 +145,9 @@ For $n \ge 3$ the optimal configuration moves rapidly toward orthogonality. $n =
 
 ## What changes if you get the target right
 
-Every method that targets orthogonality (SigLIP, plain cross-entropy) shares two properties: it aligns with the natural concentration of measure on $\mathbb{S}^{d-1}$, and it achieves comparable or better accuracy with substantially less compute. Every method that targets opposition (SimCLR, CLIP, SupCon) requires enormous batches to overcome the geometric tension between its objective and the high-dimensional sphere it is operating on.
+So what does getting the target right buy? The methods that target orthogonality (SigLIP, plain cross-entropy) share two properties: they align with the natural concentration of measure on $\mathbb{S}^{d-1}$, and they reach comparable or better accuracy with substantially less compute. The methods whose gradients chase opposition (SimCLR, CLIP, SupCon) run with enormous batches, and while batch size earns its keep in other ways too, more hard negatives, lower gradient variance, part of what those batches pay for is the standing tension between the objective and the sphere it lives on.
 
-The thesis, in one sentence: the geometry of difference is not opposition; it is orthogonality. The most influential contrastive losses of the past five years spent enormous engineering effort compensating for a single geometric mistake, and the loss that did not make the mistake was sitting beside them the whole time, in the form of plain cross-entropy.
+The thesis, in one sentence: the geometry of difference is not opposition; it is orthogonality. The equilibrium was never the problem, the simplex these losses settle into is nearly optimal; the problem is a gradient that never knows where to stop. The most influential contrastive losses of the past five years spent real engineering effort compensating for that geometric mistake, one factor among several behind their appetite for compute, and the loss that did not make the mistake was sitting beside them the whole time, in the form of plain cross-entropy.
 
 <CiteAs
   slug="opposite-is-not-different"
