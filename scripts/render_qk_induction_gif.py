@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""Render a GIF of a bilinear induction head: query reads the current token, key
-reads each position's previous token, so i attends to the token after an earlier
-copy of token i. The query position sweeps the sequence."""
+"""Render a static PNG of a bilinear induction head: query reads the current
+token, key reads each position's previous token, so i attends to the token after
+an earlier copy of token i.
+
+The whole causal attention matrix is one static object — every row is visible at
+once, and the induction stripe is fully readable in a single frame — so this
+renders one figure, highlighting the clearest query row (the latest "b")."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-import imageio.v2 as imageio
 import jax
 import jax.numpy as jnp
 import matplotlib
@@ -20,12 +23,9 @@ from PIL import Image  # noqa: E402
 jax.config.update("jax_enable_x64", True)
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT_GIF = ROOT / "public" / "qk-induction.gif"
-OUT_PREVIEW = ROOT / "public" / "qk-induction-preview.png"
+OUT_PNG = ROOT / "public" / "qk-induction.png"
 
 W, H = 1100, 520
-FPS = 9
-HOLD = 7
 
 BG = "#fbfaf6"
 PANEL = "#ffffff"
@@ -39,7 +39,7 @@ SEQ = ["a", "b", "c", "a", "b", "c", "a", "b"]
 IDX = np.array([VOCAB.index(t) for t in SEQ])
 N = len(SEQ)
 TAU = 0.18
-FRAMES = (N - 1) * HOLD
+QI = N - 1  # highlight the clearest induction row: the latest "b"
 
 
 def attention():
@@ -58,8 +58,7 @@ def attention():
 A, PRED = attention()
 
 
-def draw_frame(frame: int) -> np.ndarray:
-    qi = 1 + (frame // HOLD) % (N - 1)
+def draw_frame(qi: int) -> np.ndarray:
 
     fig = plt.figure(figsize=(W / 100, H / 100), dpi=100, facecolor=BG)
     fig.text(0.5, 0.945, "A bilinear head that implements induction", ha="center", color=INK, fontsize=18, weight="bold")
@@ -119,16 +118,9 @@ def draw_frame(frame: int) -> np.ndarray:
 
 
 def main() -> None:
-    frames = []
-    for frame in range(FRAMES):
-        frames.append(draw_frame(frame))
-        if frame == (N - 2) * HOLD:  # the last query (clearest induction) for the preview
-            Image.fromarray(frames[-1]).save(OUT_PREVIEW)
-        if (frame + 1) % 14 == 0:
-            print(f"rendered {frame + 1}/{FRAMES} frames")
-    imageio.mimsave(OUT_GIF, frames, duration=1 / FPS, loop=0, palettesize=128, subrectangles=True)
-    print(f"wrote {OUT_GIF}")
-    print(f"wrote {OUT_PREVIEW}")
+    rgba = draw_frame(QI)
+    Image.fromarray(rgba).save(OUT_PNG)
+    print(f"wrote {OUT_PNG}")
 
 
 if __name__ == "__main__":

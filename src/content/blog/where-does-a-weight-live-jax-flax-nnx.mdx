@@ -89,8 +89,8 @@ print(f"line: {100*lin.score(X, y):.0f}%   kernel: {100*(k_pred == ys).mean():.0
 ```
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/blog/weight-lives-rings.gif" alt="Two panels on nested rings: the best linear weight reaches 50 percent while the placed kernel weight reaches 100 percent, its circular boundary forming" loading="lazy" width="946" height="517" />
-  <figcaption>The same rings, two weights. On the left the best linear weight, a direction, lands at 50%: no angle separates classes that are nested rather than side by side. On the right the kernel weight, a combination placed among the data, closes a boundary around the inner ring and reaches 100%. The animated counters ease from 50% up to the endpoints; the endpoint accuracies, 50% and 100%, are the real measurements from the run above. Rendered by <code>scripts/render_weight_lives_gifs.py</code>.</figcaption>
+  <img src="/blog/weight-lives-rings.png" alt="Two panels on nested rings: the best linear weight reaches 50 percent while the placed kernel weight reaches 100 percent with a circular boundary" loading="lazy" width="946" height="517" />
+  <figcaption>The same rings, two weights. On the left the best linear weight, a direction, lands at 50%: no angle separates classes that are nested rather than side by side. On the right the kernel weight, a combination placed among the data, closes a boundary around the inner ring and reaches 100%. The accuracies, 50% and 100%, are the real measurements from the run above. Rendered by <code>scripts/render_weight_lives_gifs.py</code>.</figcaption>
 </figure>
 
 ## How the placed weight reads a point

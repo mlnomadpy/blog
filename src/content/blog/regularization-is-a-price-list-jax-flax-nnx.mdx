@@ -1,0 +1,162 @@
+---
+title: "The Price List, in JAX/Flax NNX"
+seoTitle: "Regularization as a Price List in JAX/Flax NNX"
+description: "A runnable companion to the price-list post: kernel ridge in JAX, the representer solve (K + lambda I) alpha = y, the RKHS-norm bill alpha^T K alpha, the effective dimension d_eff = sum lambda_k/(lambda_k + lambda) from the Gram spectrum, and a generalization sweep that draws the U-curve. Every number and every figure is from one analytic solve, no gradient descent."
+seoDescription: "Kernel ridge in JAX: the representer solve, the RKHS-norm bill, the effective dimension from the Gram spectrum, and the generalization U-curve, all from one real run."
+pubDate: 2026-07-02T10:00:00-07:00
+draft: false
+tags: [ml, kernels, rkhs, representer-theorem, regularization, generalization, eigenvalues, jax, flax, nnx, implementation]
+references:
+  - authors: "Schölkopf, B., Herbrich, R., Smola, A. J."
+    year: 2001
+    title: "A Generalized Representer Theorem"
+    venue: "COLT 2001"
+  - authors: "Steinwart, I., Christmann, A."
+    year: 2008
+    title: "Support Vector Machines"
+    venue: "Springer"
+  - authors: "Bartlett, P. L., Mendelson, S."
+    year: 2002
+    title: "Rademacher and Gaussian Complexities: Risk Bounds and Structural Results"
+    venue: "JMLR"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+keywords:
+  - kernel ridge regression JAX
+  - RKHS norm regularization code
+  - effective dimension eigenvalue JAX
+  - representer theorem generalization
+  - Flax NNX kernel ridge
+---
+import CiteAs from '../../components/CiteAs.astro';
+
+*The [explainer](/blog/regularization-is-a-price-list/) argued that the RKHS norm is a price list: every kernel splits into modes priced by eigenvalues, a weight pays for the modes it uses, and regularization is just tightening the budget. This is the implementation. A Gaussian kernel in a few lines of JAX, the representer solve $(K + \lambda I)\,\alpha = y$, the bill $\alpha^\top K \alpha$, the effective dimension $d_{\text{eff}} = \sum_k \lambda_k/(\lambda_k + \lambda)$ read off the Gram spectrum, and a sweep over $\lambda$ that draws the generalization U-curve. There is no gradient descent anywhere: kernel ridge on a small dataset is one linear solve plus one eigendecomposition. Every number below is from that run; the script is `scripts/regularization_pricelist.py` and the GIFs are `scripts/render_reg_gifs.py`.*
+
+## The kernel and the solve
+
+Where is the budget in the code? It is a single scalar in a single solve. The whole machine is a Gaussian kernel, its Gram matrix on the training points, and the ridge system $(K + \lambda I)\,\alpha = y$. That system is the representer weight $f(x) = \sum_i \alpha_i\, k(x_i, x)$ solved in one shot, and the only thing $\lambda$ does is inflate the diagonal, which shrinks every coefficient at once.
+
+```python
+import jax, jax.numpy as jnp
+
+SIG = 0.45
+
+@jax.jit
+def gram(A, B):                                       # k(xᵢ, yⱼ) for every pair
+    d2 = ((A[:, None, :] - B[None, :, :]) ** 2).sum(-1)
+    return jnp.exp(-d2 / (2 * SIG ** 2))
+
+def kernel_ridge(K, y, lam):                          # the representer solve, no descent
+    return jnp.linalg.solve(K + lam * jnp.eye(len(K)), y)
+```
+
+The vector `alpha` that comes back *is* the weight, one charge per training point. Turn $\lambda$ up and the whole vector deflates. On a 1-D regression toy (a noisy damped sine, 40 training points, a clean test grid of 400) that deflation is the fit going from ferocious wiggle to smooth, while two readouts fall with it: the RKHS bill and the effective dimension.
+
+<figure class="jax-fig">
+  <img src="/blog/reg-knob.gif" alt="A 1-D kernel ridge fit stiffening from a wiggly interpolation to a smooth curve as lambda grows, with the RKHS bill and effective dimension readouts falling" loading="lazy" width="640" height="540" />
+  <figcaption>Turn the budget knob. As $\lambda$ grows the ridge fit (orange) stops chasing every noisy point and settles onto the true signal (grey). The two bars are the real readouts of the solve: the RKHS bill $\lVert f\rVert_{\mathcal H}^2 = \alpha^\top K \alpha$ and the effective dimension $d_{\text{eff}}$. The bill falls from $63.4$ at the loosest budget to under $3$ near the sweet spot; the effective dimension falls from $18.8$ toward $0.4$. Same points, same sum, only the spending limit changes. Rendered by <code>scripts/render_reg_gifs.py</code>.</figcaption>
+</figure>
+
+## The bill you pay for the weight
+
+So what is the bill, exactly? The explainer's whole argument is that "expensive" is a real number you can compute from nothing but the kernel: the squared RKHS norm of the solution is $\alpha^\top K \alpha$. It is one line, and it is the quantity $\lambda$ is capping.
+
+```python
+def rkhs_norm_sq(K, alpha):                           # ‖f‖²_H, the bill
+    return float(alpha @ (K @ alpha))
+```
+
+That single number falls monotonically as $\lambda$ tightens: the ferocious fit spends $63.4$, the fit at the generalization sweet spot spends $2.5$, and the over-tight fit spends almost nothing, $0.003$. The bill is the budget spent, and the knob is literally the spending limit.
+
+## The price list: eigenvalues and the effective dimension
+
+But a single cap does not tell you *which* modes get cut. That is set by the eigenvalues of the Gram matrix, the posted prices, and one symmetric eigendecomposition hands you the whole list.
+
+```python
+eigs = jnp.linalg.eigvalsh(K)[::-1]                   # the price list, descending
+
+def eff_dim(eigs, lam):                               # modes that survive the budget
+    return float(jnp.sum(eigs / (eigs + lam)))
+```
+
+Each mode contributes $\lambda_k/(\lambda_k + \lambda)$, a survival weight that is near $1$ when the mode is cheap relative to the budget and near $0$ when it is not. Summed, that is the effective dimension: the number of directions the weight is actually allowed to use. Watch the budget evict the tail first, the expensive high-frequency modes going dark before the cheap smooth ones even dim.
+
+<figure class="jax-fig">
+  <img src="/blog/reg-eviction.gif" alt="Eigenvalue bars of the Gram matrix, each tinted by its survival weight, with the small tail eigenvalues fading first as lambda grows" loading="lazy" width="660" height="500" />
+  <figcaption>The spectrum eviction. Each bar is an eigenvalue $\lambda_k$, the price of one mode; the bright orange bars survive the budget and the fading ones are being evicted, brightness set by the real survival weight $\lambda_k/(\lambda_k + \lambda)$. As $\lambda$ grows the small tail eigenvalues, the expensive wiggly modes, go dark first, and $d_{\text{eff}} = \sum_k \lambda_k/(\lambda_k+\lambda)$ counts what is left. Rendered by <code>scripts/render_reg_gifs.py</code>.</figcaption>
+</figure>
+
+## The points-to-modes bridge
+
+The representer weight is written one *point* at a time; the price list charges one *mode* at a time. The two currencies exchange through the Gram eigenvectors. Writing $K = \sum_k \lambda_k\, u_k u_k^\top$, the discrete Mercer modes are $\phi_k(x_i) = u_k[i]$, a bump's shopping list is $k(x_i, \cdot) = \sum_k \lambda_k\, \phi_k(x_i)\, \phi_k$, and buying the combination $f = \sum_i \alpha_i\, k(x_i, \cdot)$ purchases mode $k$ in amount $c_k = \lambda_k \sum_i \alpha_i\, \phi_k(x_i)$.
+
+```python
+evals, U = jnp.linalg.eigh(K)                         # K = Σ λₖ uₖ uₖᵀ
+c = evals * (U.T @ alpha)                             # cₖ = λₖ (uₖ · α), the mode purchase
+bill_modes  = float(jnp.sum(c ** 2 / evals))          # Σ cₖ²/λₖ  ...
+bill_direct = float(alpha @ (K @ alpha))              # ... equals αᵀKα, exactly
+```
+
+The two bills agree to machine precision in the run: $4.3051$ priced by modes, $4.3051$ priced by points, a relative error of $2 \times 10^{-9}$. It is one weight, quoted in two currencies. A bump does not walk in empty-handed: it carries a fixed shopping list of modes, and $\alpha$ only chooses how many copies of each list to buy.
+
+<figure class="jax-fig">
+  <img src="/blog/reg-bridge.png" alt="Two bar panels: a single kernel bump's fixed list of mode amounts, and the mode coefficients the whole solved weight buys" loading="lazy" width="680" height="520" />
+  <figcaption>The points-to-modes bridge, in two panels. The top bars are one bump's fixed shopping list, $\lambda_k\, \phi_k(x_1)$, a little of every mode in proportions pinned by where its point sits. The bottom bars are $c_k = \lambda_k \sum_i \alpha_i\, \phi_k(x_i)$, what the whole solved weight actually buys once $\alpha$ chooses the copies. Same weight, priced by modes instead of by points. Rendered by <code>scripts/render_reg_gifs.py</code>.</figcaption>
+</figure>
+
+Once the weight is priced by modes, the bill breaks down line by line: each mode adds $c_k^2/\lambda_k$ to the RKHS norm, the expensive lines dominating, up to the same real total $\alpha^\top K \alpha$.
+
+<figure class="jax-fig">
+  <img src="/blog/reg-bill.png" alt="Bars of each mode's cost c_k squared over lambda_k, ordered largest first, with a cumulative curve reaching the real total" loading="lazy" width="660" height="500" />
+  <figcaption>Where the RKHS bill comes from. Each bar is a mode's line on the bill, $c_k^2/\lambda_k$, ordered largest first; the curve is the running total, which reaches the real $\alpha^\top K \alpha = 4.31$, the same number the direct one-line formula returns. A handful of modes carry almost the whole bill: the top mode alone is $29\%$ of it, the top five are $73\%$. Rendered by <code>scripts/render_reg_gifs.py</code>.</figcaption>
+</figure>
+
+## The honest shrink: graded, never zero
+
+The explainer was careful on one point and this companion keeps it: kernel ridge is not a support-vector machine. It solves $(K + \lambda I)\,\alpha = y$, and unlike a hinge loss it never sets a coefficient exactly to zero. Tightening $\lambda$ shrinks every $\alpha_i$ smoothly, just at very different rates, so what you get is a graded hierarchy, not a hard roster of survivors. On the six-point, two-class miniature from the explainer, the coefficients start at $|\alpha_i| \in \{1.27, 0.66, 1.16, 1.11, 0.46, 1.10\}$ and, at the tightest budget, all sink toward a common floor with a minimum of $0.01$, still strictly positive.
+
+```python
+for lam in lambdas:                                   # the sweep, one solve each
+    alpha = kernel_ridge(K, y, lam)
+    abs_alpha = jnp.abs(alpha)                         # all shrink, none hit zero
+```
+
+<figure class="jax-fig">
+  <img src="/blog/reg-shrink.gif" alt="Six coefficient bars all sinking smoothly as lambda tightens, the two redundant points slipping under a dashed reading-aid line first, none reaching zero" loading="lazy" width="660" height="500" />
+  <figcaption>The honest shrink. Every $|\alpha_i|$ bar sinks smoothly as $\lambda$ tightens, and the two redundant points (whose lists a neighbor can substitute) slip under the dashed line first. The line is a reading aid, not a mechanism: nothing is ever set to zero, the running minimum stays strictly positive. This is graded shrinkage, not the hard sparsity of an SVM. Rendered by <code>scripts/render_reg_gifs.py</code>.</figcaption>
+</figure>
+
+## Why smooth generalizes: the sweep
+
+None of this matters unless the tight budget actually generalizes better, so the last thing the run does is sweep $\lambda$ across five orders of magnitude and measure train and test error at each. That sweep draws the U-curve, and it is the whole point of the post.
+
+```python
+for lam in lambdas:
+    alpha = kernel_ridge(K_train, y_train, lam)
+    train_mse = jnp.mean((K_train @ alpha - y_train) ** 2)
+    test_mse  = jnp.mean((K_test  @ alpha - y_test)  ** 2)   # K_test is test-to-train
+```
+
+At a loose budget the fit chases the noise and test error sits above train (test MSE $0.028$); at an over-tight budget it underfits and test error explodes (test MSE $0.23$); in between, at $\lambda^\star = 0.42$, test error bottoms out at $0.011$, where the effective dimension is $9.8$ of the $40$ available modes. The sweet spot is not where the training error is lowest; it is where the price list has capped the capacity to just what the signal needs.
+
+<figure class="jax-fig">
+  <img src="/blog/reg-ucurve.png" alt="A generalization U-curve: train and test MSE versus log lambda, with the sweet spot at the test minimum marked" loading="lazy" width="660" height="500" />
+  <figcaption>The generalization U-curve, from the real sweep. Train MSE (blue) rises steadily as the budget tightens; test MSE (orange) dips to a minimum then climbs sharply into underfitting. The marked sweet spot is $\lambda^\star = 0.42$, where test error bottoms at $0.011$ and $d_{\text{eff}} = 9.8$. Tightening $\lambda$ lowers the effective dimension, which lowers the capacity, which shrinks the gap: the price list is the mechanism, not a metaphor for it. Rendered by <code>scripts/render_reg_gifs.py</code>.</figcaption>
+</figure>
+
+That is the price list made runnable. One kernel, one solve, one scalar budget. The eigenvalues post the prices, the effective dimension counts what the budget can afford, the bill is $\alpha^\top K \alpha$, and the U-curve is the payoff: the weight generalizes not because it is a free combination of the data but because it is a combination the price list can afford.
+
+---
+
+*The representer theorem is [Schölkopf, Herbrich and Smola (2001)](https://link.springer.com/chapter/10.1007/3-540-44581-1_27); the eigenvalue-price-list framing is standard RKHS theory in [Steinwart and Christmann (2008)](https://link.springer.com/book/10.1007/978-0-387-77242-4); the effective-dimension complexity bound is [Bartlett and Mendelson (2002)](https://jmlr.org/papers/v3/bartlett02a.html); the input-space-center kernel this series builds on is [Bouhsine (2026)](https://arxiv.org/abs/2605.03262). The conceptual companion is [Why Regularization Is a Price List](/blog/regularization-is-a-price-list/).*
+
+<CiteAs slug="regularization-is-a-price-list-jax-flax-nnx" title="The Price List, in JAX/Flax NNX" pubDate="2026-07-02T10:00:00-07:00" />
+
+<style>{`
+.jax-fig { margin: 1.8rem auto; text-align: center; }
+.jax-fig img { max-width: 560px; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; background: #fbf8f1; }
+.jax-fig-wide img { max-width: 880px; }
+.jax-fig figcaption { margin-top: 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--fg-muted); max-width: 64ch; margin-left: auto; margin-right: auto; }
+`}</style>

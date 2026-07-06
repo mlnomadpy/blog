@@ -1,15 +1,17 @@
-"""Three faithful GIFs for the "Where Does a Weight Live?" JAX companion.
+"""Faithful figures for the "Where Does a Weight Live?" JAX companion.
 
-Each animates a real computation, no synthetic metaphors:
+Two GIFs animate a real computation and one still figure shows a static
+comparison; no synthetic metaphors:
 
   1. weight-lives-representer.gif  a real kernel-ridge weight assembling from the
                                    data, term by term: f = sum_i alpha_i k(x_i, .)
                                    accumulates and its boundary forms; accuracy is
                                    the real partial-sum accuracy.
-  2. weight-lives-rings.gif        nested circles: the best linear weight (logistic
-                                   regression, a direction) sweeps and stays near
+  2. weight-lives-rings.png        (static figure) nested circles: the best linear
+                                   weight (logistic regression, a direction) stays at
                                    chance, while the kernel weight (a placed
-                                   combination) separates them. Real accuracies.
+                                   combination) separates them. Real accuracies, no
+                                   temporal process, so a still figure.
   3. weight-lives-lift.gif         the kernel lift made literal: circles rise by
                                    z = ||x||^2 until a flat plane (a weight you can
                                    place) cuts inner from outer. Real separation.
@@ -47,6 +49,12 @@ def save_gif(path, frames, fps, hold=14):
     Image.fromarray(frames[-1]).save(str(path).replace('.gif', '-preview.png'))
     imageio.mimsave(path, frames + [frames[-1]] * hold, duration=1 / fps, loop=0,
                     palettesize=128, subrectangles=True)
+    print(f'wrote {path} ({os.path.getsize(path)//1024} KB)')
+
+
+def save_png(path, fig):
+    fig.savefig(path, dpi=110, facecolor=BG)
+    plt.close(fig)
     print(f'wrote {path} ({os.path.getsize(path)//1024} KB)')
 
 
@@ -101,9 +109,12 @@ def gif_representer():
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# GIF 2 — rings: a direction (best line) vs a placed kernel weight
+# FIGURE 2 — rings: a direction (best line) vs a placed kernel weight.
+# A static comparison: two fitted readouts on the same nested rings. Nothing here
+# is a temporal process — the endpoint accuracies (50% and 100%) are the whole
+# story — so this is a still figure, not an animation.
 # ═══════════════════════════════════════════════════════════════════════════
-def gif_rings():
+def png_rings():
     X, y = make_circles(260, noise=0.07, factor=0.4, random_state=0); ys = np.where(y == 1, 1.0, -1.0)
     Xj = jnp.asarray(X, jnp.float32)
     # the kernel weight: real kernel-ridge, separates the rings
@@ -115,40 +126,30 @@ def gif_rings():
     # the best linear weight: logistic regression on raw x,y (a direction)
     lin = LogisticRegression().fit(X, y); lin_acc = 100 * lin.score(X, y)
     w = lin.coef_[0]; b = lin.intercept_[0]
-    NF = 36
-    frames = []
-    for fi in range(NF):
-        t = ease(min(fi, NF - 1) / (NF - 1))
-        fig = plt.figure(figsize=(8.6, 4.7), dpi=110, facecolor=BG)
-        fig.text(0.5, 0.95, 'A direction cannot, a placed weight can', ha='center', fontsize=14, weight='bold')
-        fig.text(0.5, 0.90, 'the same nested rings, read by the best linear weight (a direction) and by the kernel weight (a placed combination)',
-                 ha='center', fontsize=8.4, color=MUTED)
-        for side, kind in enumerate(['line', 'kernel']):
-            ax = fig.add_axes([0.04 + side * 0.50, 0.07, 0.44, 0.76]); ax.set_facecolor(PANEL)
-            ax.set_xticks([]); ax.set_yticks([]); ax.set_xlim(-1.6, 1.6); ax.set_ylim(-1.6, 1.6); ax.set_aspect('equal')
-            for s in ax.spines.values(): s.set_color(LINE)
-            if kind == 'line':
-                # sweep a rotating linear boundary to its fitted position; accuracy stays low
-                ang0 = t * (np.arctan2(-w[0], w[1]))
-                # draw best-fit line and tinted half-planes
-                xs = np.array([-1.6, 1.6])
-                if abs(w[1]) > 1e-6:
-                    ys_line = -(w[0] * xs + b) / w[1]
-                    ax.plot(xs, ys_line, color=INK, lw=1.8 * t + 0.2)
-                zz = (w[0] * gx + w[1] * gy + b)
-                ax.contourf(gx, gy, np.sign(zz), levels=[-2, 0, 2], colors=[B_COL, A_COL], alpha=0.10)
-                acc_show = lin_acc * t + 50 * (1 - t)
-                ttl = f'a direction · {acc_show:.0f}%'
-            else:
-                ax.contourf(gx, gy, kfield * t, levels=22, cmap='RdBu_r', alpha=0.80, vmin=-np.abs(kfield).max(), vmax=np.abs(kfield).max())
-                if t > 0.15: ax.contour(gx, gy, kfield, levels=[0], colors=[INK], linewidths=1.8)
-                acc_show = kacc * t + 50 * (1 - t)
-                ttl = f'a placed weight · {acc_show:.0f}%'
-            ax.scatter(X[:, 0], X[:, 1], s=12, c=[A_COL if v > 0 else B_COL for v in ys], alpha=0.85, linewidths=0, zorder=3)
-            col = GOOD if (kind == 'kernel') else MUTED
-            ax.set_title(ttl, fontsize=11, color=col, weight='bold', pad=5)
-        frames.append(fig_rgba(fig))
-    save_gif(PUB / 'weight-lives-rings.gif', frames, fps=14, hold=18)
+    fig = plt.figure(figsize=(8.6, 4.7), dpi=110, facecolor=BG)
+    fig.text(0.5, 0.95, 'A direction cannot, a placed weight can', ha='center', fontsize=14, weight='bold')
+    fig.text(0.5, 0.90, 'the same nested rings, read by the best linear weight (a direction) and by the kernel weight (a placed combination)',
+             ha='center', fontsize=8.4, color=MUTED)
+    for side, kind in enumerate(['line', 'kernel']):
+        ax = fig.add_axes([0.04 + side * 0.50, 0.07, 0.44, 0.76]); ax.set_facecolor(PANEL)
+        ax.set_xticks([]); ax.set_yticks([]); ax.set_xlim(-1.6, 1.6); ax.set_ylim(-1.6, 1.6); ax.set_aspect('equal')
+        for s in ax.spines.values(): s.set_color(LINE)
+        if kind == 'line':
+            xs = np.array([-1.6, 1.6])
+            if abs(w[1]) > 1e-6:
+                ys_line = -(w[0] * xs + b) / w[1]
+                ax.plot(xs, ys_line, color=INK, lw=2.0)
+            zz = (w[0] * gx + w[1] * gy + b)
+            ax.contourf(gx, gy, np.sign(zz), levels=[-2, 0, 2], colors=[B_COL, A_COL], alpha=0.10)
+            ttl = f'a direction · {lin_acc:.0f}%'
+        else:
+            ax.contourf(gx, gy, kfield, levels=22, cmap='RdBu_r', alpha=0.80, vmin=-np.abs(kfield).max(), vmax=np.abs(kfield).max())
+            ax.contour(gx, gy, kfield, levels=[0], colors=[INK], linewidths=1.8)
+            ttl = f'a placed weight · {kacc:.0f}%'
+        ax.scatter(X[:, 0], X[:, 1], s=12, c=[A_COL if v > 0 else B_COL for v in ys], alpha=0.85, linewidths=0, zorder=3)
+        col = GOOD if (kind == 'kernel') else MUTED
+        ax.set_title(ttl, fontsize=11, color=col, weight='bold', pad=5)
+    save_png(PUB / 'weight-lives-rings.png', fig)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -199,6 +200,6 @@ def gif_vote():
 
 if __name__ == '__main__':
     gif_representer()
-    gif_rings()
+    png_rings()
     gif_vote()
     print('WEIGHT_LIVES_GIFS_DONE')

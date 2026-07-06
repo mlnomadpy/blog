@@ -63,7 +63,7 @@ lam_imq   = spectrum(1.0 / (grid**2 + eps))            # λₖ ∝ exp(−√ε�
 The Gaussian's eigenvalues fall off a cliff, so its space holds only the smoothest, analytic weights. The Sobolev kernel's fall like a gentle power, $\lambda_k \sim k^{-2}$, leaving room for rougher functions. The inverse-multiquadric, which is the Yat kernel's distance gate, falls off exponentially: faster than the Sobolev kernel, slower than the Gaussian, sitting squarely between them.
 
 <figure class="jax-fig">
-  <img src="/blog/weight-be-spectra.gif" alt="The eigenvalue decay of three kernels on a log scale, drawing themselves: Gaussian a steep cliff, Sobolev a gentle nearly-flat slope, inverse-multiquadric a straight line in between" loading="lazy" width="660" height="500" />
+  <img src="/blog/weight-be-spectra.png" alt="The eigenvalue decay of three kernels on a log scale: Gaussian a steep cliff, Sobolev a gentle nearly-flat slope, inverse-multiquadric a straight line in between" loading="lazy" width="660" height="500" />
   <figcaption>The three price lists. On a log scale a super-exponential decay (Gaussian) is a plunging parabola, a polynomial decay (Sobolev) is nearly flat, and an exponential decay (the inverse-multiquadric, the Yat denominator) is a straight line, sitting between the two. The decay is the whole personality of the kernel. Rendered by <code>scripts/render_weight_be_gifs.py</code>.</figcaption>
 </figure>
 
@@ -90,7 +90,7 @@ def bill(lam_k):                                       # the running RKHS norm �
 Under the Sobolev price list the charges shrink like $k^{-4} \cdot k^{2} = k^{-2}$, so the bill converges: the corner is in the space. Under the Gaussian the charges explode like $k^{-4}\,e^{\sigma^2 k^2 / 2}$, so the bill runs to infinity fast. And under the inverse-multiquadric the charges grow like $k^{-4}\,e^{\sqrt{\varepsilon}\,k}$: the bill still diverges, just slowly. A corner is not in the Yat kernel's space either, only it takes many more modes to notice.
 
 <figure class="jax-fig">
-  <img src="/blog/weight-be-bill.gif" alt="A corner's running RKHS bill on a log scale: the Sobolev curve stays flat and finite, the Gaussian shoots to an unaffordable ceiling within about 20 modes, the inverse-multiquadric climbs slowly and crosses the ceiling near 90 modes" loading="lazy" width="660" height="500" />
+  <img src="/blog/weight-be-bill.png" alt="A corner's cumulative RKHS bill on a log scale: the Sobolev curve stays flat and finite, the Gaussian shoots to an unaffordable ceiling within about 20 modes, the inverse-multiquadric climbs slowly and crosses the ceiling near 90 modes" loading="lazy" width="660" height="500" />
   <figcaption>A corner's bill, mode by mode. Only the Sobolev bill stays finite (the corner is admitted). The Gaussian's bill reaches the unaffordable ceiling within about twenty modes; the Yat / inverse-multiquadric bill climbs slowly and crosses it near ninety. A corner is too rough for both, but the Yat space is far roomier than the Gaussian's. Rendered by <code>scripts/render_weight_be_gifs.py</code>.</figcaption>
 </figure>
 

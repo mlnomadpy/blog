@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
-"""Render a tweet-ready GIF for the gravity/attention bookkeeping analogy.
+"""Render a static PNG figure for the gravity/attention bookkeeping analogy.
 
 The math is computed with JAX:
 - gravity: direct softened N-body accelerations and a particle-mesh Poisson solve
 - attention: exact softmax scores and a finite-feature linear-attention state
+
+The payload is the compute comparison (all-pairs ledger vs shared field/state),
+which is a static fact at a fixed N; a single frame carries it in full, so this
+renders one figure rather than an animation.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-import imageio.v2 as imageio
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
@@ -21,12 +24,10 @@ from PIL import Image
 jax.config.update("jax_enable_x64", True)
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT_GIF = ROOT / "public" / "gravity-attention-bookkeeping.gif"
-OUT_PREVIEW = ROOT / "public" / "gravity-attention-bookkeeping-preview.png"
+OUT_PNG = ROOT / "public" / "gravity-attention-bookkeeping.png"
 
 W, H = 1280, 720
-FPS = 16
-FRAMES = 64
+FRAME = 0
 N_GRAV = 44
 N_TOK = 48
 M_FEAT = 12
@@ -188,7 +189,7 @@ def draw_cost_card(ax, left_label: str, left_value: float, left_sub: str, right_
 
 
 def draw_frame(frame: int) -> np.ndarray:
-    t = frame / FPS
+    t = frame / 16.0
     pos, mass = gravity_positions(t)
     accel = direct_gravity_accel(pos, mass)
     phi = field_potential(pos, mass)
@@ -291,17 +292,9 @@ def draw_frame(frame: int) -> np.ndarray:
 
 
 def main() -> None:
-    frames = []
-    for frame in range(FRAMES):
-        frames.append(draw_frame(frame))
-        if frame == 0:
-            Image.fromarray(frames[-1]).save(OUT_PREVIEW)
-        if (frame + 1) % 8 == 0:
-            print(f"rendered {frame + 1}/{FRAMES} frames")
-
-    imageio.mimsave(OUT_GIF, frames, duration=1 / FPS, loop=0, palettesize=128, subrectangles=True)
-    print(f"wrote {OUT_GIF}")
-    print(f"wrote {OUT_PREVIEW}")
+    rgba = draw_frame(FRAME)
+    Image.fromarray(rgba).save(OUT_PNG)
+    print(f"wrote {OUT_PNG}")
 
 
 if __name__ == "__main__":

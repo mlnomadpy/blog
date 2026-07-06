@@ -494,38 +494,15 @@ def collapse_ratio(z, labels, c):
     return within / (total + 1e-8)
 
 
-def render_class_collapse(out, fps=15):
-    key = jax.random.key(12)
-    c, m = 3, 34
-    angles = jnp.array([0.0, 2 * jnp.pi / 3, 4 * jnp.pi / 3])
-    centers = jnp.stack([jnp.cos(angles), jnp.sin(angles)], axis=1)
-    labels = jnp.repeat(jnp.arange(c), m)
-    noise = jax.random.normal(key, (c * m, 2))
-    frames = []
-    for i in range(72):
-        a = i / 71
-        sigma = 0.58 * (1 - a) + 0.035 * a
-        z = centers[labels] + sigma * noise
-        means = class_means(z, labels, c)
-        cr = float(collapse_ratio(z, labels, c))
-        wv = float(jnp.mean(jnp.sum((z - means[labels]) ** 2, axis=-1)))
-        frames.append(draw_class_collapse_frame(np.asarray(z), np.asarray(means), np.asarray(labels), cr, wv, i))
-    frames += [frames[-1]] * int(fps * 1.4)
-    path = os.path.join(out, "class-collapse.gif")
-    os.makedirs(out, exist_ok=True)
-    imageio.mimsave(path, frames, fps=fps, loop=0, subrectangles=True)
-    print(f"class-collapse: {len(frames)} frames -> {path} ({os.path.getsize(path) / 1024:.0f} KB)")
+# NOTE: metrics 1 (collapse) and 2 (rank) are *not* optimizations — they are
+# controlled contrasts that define the two audit numbers before any descent runs.
+# Collapse dials the within-class noise scale; rank dials a minor-axis squash.
+# There is no learning dynamics to watch, so these ship as static before/after
+# figures (a real training run is not being animated), while the descent GIFs
+# (simplex/welch/benign) remain animated because motion carries the trajectory.
 
 
-def draw_class_collapse_frame(z, means, labels, cr, wv, i, dpi=110):
-    W, H = 1140, 600
-    fig, bg = new_canvas(W, H, dpi)
-    kicker(bg, 40, H - 30, "REQUIREMENT 01 · ALIGNMENT · JAX")
-    bg.text(40, H - 60, "Are same-class points tightening?", fontsize=23, color=FG, fontweight="bold", va="center", ha="left")
-    bg.text(40, H - 92, "Collapse is measurable before we ever mention the simplex or the Welch bound.", fontsize=12.5, color=MUTED, va="center", ha="left")
-    top = H - 130
-
-    ax = panel_card(bg, fig, W, H, 40, 40, 660, top - 40, "embeddings · colour = class", corner=f"frame {i}")
+def _scatter_classes(ax, z, means, labels):
     ax.set_aspect("equal")
     ax.set_xlim(-1.95, 1.95)
     ax.set_ylim(-1.72, 1.72)
@@ -533,60 +510,104 @@ def draw_class_collapse_frame(z, means, labels, cr, wv, i, dpi=110):
     ax.axvline(0, color=BORDER, lw=1, alpha=0.6)
     for cls in np.unique(labels):
         pts = z[labels == cls]
-        ax.scatter(pts[:, 0], pts[:, 1], s=26, color=PALETTE[int(cls)], alpha=0.6, edgecolor="white", linewidth=0.4)
-        ax.scatter(means[int(cls), 0], means[int(cls), 1], s=180, color=PALETTE[int(cls)], edgecolor="white", linewidth=1.7, zorder=4)
+        ax.scatter(pts[:, 0], pts[:, 1], s=22, color=PALETTE[int(cls)], alpha=0.6, edgecolor="white", linewidth=0.4)
+        ax.scatter(means[int(cls), 0], means[int(cls), 1], s=150, color=PALETTE[int(cls)], edgecolor="white", linewidth=1.7, zorder=4)
+
+
+def render_class_collapse(out):
+    """Static: the collapse metric is a contrast, not a process. Loose clouds vs.
+    condensed codes around the same fixed class means, with the two numbers the
+    audit reports (collapse ratio, within-class variance) at each extreme."""
+    key = jax.random.key(12)
+    c, m = 3, 34
+    angles = jnp.array([0.0, 2 * jnp.pi / 3, 4 * jnp.pi / 3])
+    centers = jnp.stack([jnp.cos(angles), jnp.sin(angles)], axis=1)
+    labels = jnp.repeat(jnp.arange(c), m)
+    noise = jax.random.normal(key, (c * m, 2))
+
+    def state(sigma):
+        z = centers[labels] + sigma * noise
+        means = class_means(z, labels, c)
+        cr = float(collapse_ratio(z, labels, c))
+        wv = float(jnp.mean(jnp.sum((z - means[labels]) ** 2, axis=-1)))
+        return np.asarray(z), np.asarray(means), cr, wv
+
+    loose = state(0.58)
+    tight = state(0.035)
+
+    W, H = 1140, 600
+    fig, bg = new_canvas(W, H)
+    kicker(bg, 40, H - 30, "REQUIREMENT 01 · ALIGNMENT · JAX")
+    bg.text(40, H - 60, "Are same-class points tightening?", fontsize=23, color=FG, fontweight="bold", va="center", ha="left")
+    bg.text(40, H - 92, "Collapse is measurable before we ever mention the simplex or the Welch bound.", fontsize=12.5, color=MUTED, va="center", ha="left")
+    top = H - 130
+    pw = (700 - 20) / 2
+    for k, (data, tag) in enumerate([(loose, "loose"), (tight, "condensed")]):
+        z, means, cr, wv = data
+        px = 40 + k * (pw + 20)
+        ax = panel_card(bg, fig, W, H, px, 40, pw, top - 40, tag, corner=f"cr {data[2]:.3f}")
+        _scatter_classes(ax, z, means, labels)
 
     rx, rw = 724, W - 724 - 40
     ch = (top - 40 - 18) / 2
-    stat_card(bg, rx, 40 + ch + 18, rw, ch, "collapse ratio", f"{cr:.3f}", "within ÷ total variance", ACCENT, cr < 0.08)
-    stat_card(bg, rx, 40, rw, ch, "within-class variance", f"{wv:.3f}", "→ 0 as classes tighten", BLUE, wv < 0.04)
-    return finish(fig)
-
-
-def render_rank_collapse(out, fps=15):
-    key = jax.random.key(19)
-    base = jax.random.normal(key, (420, 2))
-    frames = []
-    for i in range(72):
-        a = i / 71
-        squash = np.exp(np.log(1.0) * (1 - a) + np.log(0.045) * a)
-        z = base * jnp.array([1.0, squash])
-        er = float(effective_rank(z))
-        frames.append(draw_rank_frame(np.asarray(z), er, squash, i))
-    frames += [frames[-1]] * int(fps * 1.4)
-    path = os.path.join(out, "rank-collapse.gif")
+    stat_card(bg, rx, 40 + ch + 18, rw, ch, "collapse ratio", f"{tight[2]:.3f}", f"{loose[2]:.2f} loose → tight  (within ÷ total)", ACCENT, tight[2] < 0.08)
+    stat_card(bg, rx, 40, rw, ch, "within-class variance", f"{tight[3]:.3f}", f"{loose[3]:.2f} → 0 as classes tighten", BLUE, tight[3] < 0.04)
+    buf = finish(fig)
+    path = os.path.join(out, "class-collapse.png")
     os.makedirs(out, exist_ok=True)
-    imageio.mimsave(path, frames, fps=fps, loop=0, subrectangles=True)
-    print(f"rank-collapse: {len(frames)} frames -> {path} ({os.path.getsize(path) / 1024:.0f} KB)")
+    imageio.imwrite(path, buf)
+    print(f"class-collapse: static -> {path} ({os.path.getsize(path) / 1024:.0f} KB)")
 
 
-def draw_rank_frame(z, er, squash, i, dpi=110):
-    W, H = 1140, 600
-    fig, bg = new_canvas(W, H, dpi)
-    kicker(bg, 40, H - 30, "REQUIREMENT 02 · RANK · JAX")
-    bg.text(40, H - 60, "Is the space using both axes?", fontsize=23, color=FG, fontweight="bold", va="center", ha="left")
-    bg.text(40, H - 92, "A separated-looking embedding can still waste a whole dimension.", fontsize=12.5, color=MUTED, va="center", ha="left")
-    top = H - 130
-
-    ax = panel_card(bg, fig, W, H, 40, 40, 660, top - 40, "embeddings + covariance axes", corner=f"frame {i}")
+def _scatter_rank(ax, z):
     ax.set_aspect("equal")
     ax.set_xlim(-3.3, 3.3)
     ax.set_ylim(-3.3, 3.3)
     ax.axhline(0, color=BORDER, lw=1, alpha=0.6)
     ax.axvline(0, color=BORDER, lw=1, alpha=0.6)
-    ax.scatter(z[:, 0], z[:, 1], s=15, color=ACCENT, alpha=0.4, edgecolor="none")
+    ax.scatter(z[:, 0], z[:, 1], s=13, color=ACCENT, alpha=0.4, edgecolor="none")
     cov = np.cov(z.T)
     vals, vecs = np.linalg.eigh(cov)
     for k, color in enumerate([BLUE, GREEN]):
         v = vecs[:, k] * np.sqrt(max(vals[k], 0)) * 2.2
         ax.plot([-v[0], v[0]], [-v[1], v[1]], color=color, lw=3.2, alpha=0.9, solid_capstyle="round")
 
+
+def render_rank_collapse(out):
+    """Static: rank is a contrast too. A round cloud (rank ~2) vs. the same cloud
+    squashed onto one axis (rank ~1). Effective rank catches the lost dimension."""
+    key = jax.random.key(19)
+    base = jax.random.normal(key, (420, 2))
+
+    def state(squash):
+        z = base * jnp.array([1.0, squash])
+        return np.asarray(z), float(effective_rank(z))
+
+    full = state(1.0)
+    squashed = state(0.045)
+
+    W, H = 1140, 600
+    fig, bg = new_canvas(W, H)
+    kicker(bg, 40, H - 30, "REQUIREMENT 02 · RANK · JAX")
+    bg.text(40, H - 60, "Is the space using both axes?", fontsize=23, color=FG, fontweight="bold", va="center", ha="left")
+    bg.text(40, H - 92, "A separated-looking embedding can still waste a whole dimension.", fontsize=12.5, color=MUTED, va="center", ha="left")
+    top = H - 130
+    pw = (700 - 20) / 2
+    for k, (data, tag) in enumerate([(full, "both axes"), (squashed, "one axis dead")]):
+        z, er = data
+        px = 40 + k * (pw + 20)
+        ax = panel_card(bg, fig, W, H, px, 40, pw, top - 40, tag, corner=f"rank {data[1]:.2f}")
+        _scatter_rank(ax, z)
+
     rx, rw = 724, W - 724 - 40
     ch = (top - 40 - 18) / 2
-    er_color = GREEN if er > 1.9 else (ACCENT if er > 1.2 else RED)
-    stat_card(bg, rx, 40 + ch + 18, rw, ch, "effective rank", f"{er:.2f}", "of 2 dimensions", er_color, er > 1.9)
-    stat_card(bg, rx, 40, rw, ch, "squash factor", f"{squash:.3f}", "minor-axis scale", BLUE, False)
-    return finish(fig)
+    stat_card(bg, rx, 40 + ch + 18, rw, ch, "effective rank", f"{squashed[1]:.2f}", f"{full[1]:.2f} round → 1 squashed  (of 2)", RED, False)
+    stat_card(bg, rx, 40, rw, ch, "energy in minor axis", "0.05", "1.00 → 0.05: second direction dies", BLUE, False)
+    buf = finish(fig)
+    path = os.path.join(out, "rank-collapse.png")
+    os.makedirs(out, exist_ok=True)
+    imageio.imwrite(path, buf)
+    print(f"rank-collapse: static -> {path} ({os.path.getsize(path) / 1024:.0f} KB)")
 
 
 def final_config(mode, c, d, seed, steps=900):
@@ -645,9 +666,9 @@ def main():
     if "benign" in want:
         render_benign_landscape(args.out, fps=args.fps)
     if "class" in want:
-        render_class_collapse(args.out, fps=args.fps)
+        render_class_collapse(args.out)
     if "rank" in want:
-        render_rank_collapse(args.out, fps=args.fps)
+        render_rank_collapse(args.out)
 
 
 if __name__ == "__main__":

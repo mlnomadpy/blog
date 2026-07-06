@@ -1,18 +1,23 @@
-"""Three teaching GIFs for the train-the-features JAX/Flax NNX companion.
+"""Figures for the train-the-features JAX/Flax NNX companion.
 
-Each animates a *process*, not a slideshow, and uses the series' physics: a
-representation is a warm gas that crystallises into ordered class droplets as the
-backbone trains, read the whole time by a head that is never trained.
+Two of these are GIFs because motion carries information no single frame gives:
+a real 2D feature cloud reorganising over real training epochs, read the whole
+time by a head that is never trained. The rest are static figures from the same
+real run, because their content is a result, not a process.
 
-  1. train-crystallize.gif    the test-feature cloud condenses, frame by frame
-                              (Procrustes-tweened between epochs), from a tangle
-                              into separated class droplets; a built head reads it.
-  2. train-two-heads.gif      two accuracy curves draw themselves: the built head
-                              is good immediately, the trained head climbs to catch
-                              it, and ends only a point or two ahead.
-  3. train-free-lunch.gif     a random, never-trained backbone, yet its features
-                              pour through the built head and sort into the right
-                              bins at 72.7% where chance is 10%.
+  GIFs (a real temporal process):
+    train-crystallize.gif   the test-feature cloud condenses over training epochs
+                            (Procrustes-tweened between them), from a tangle into
+                            separated class droplets; a built head reads it.
+    train-errors-melt.gif   the same cloud, each point coloured by the never-trained
+                            built head's real verdict; misses melt as the backbone
+                            sharpens (206 -> ~90).
+
+  Static PNGs (a result, one real run):
+    train-two-heads.png     both accuracy curves, built vs trained, across epochs.
+    train-head-swap.png     three heads on one frozen backbone, side by side.
+    train-free-lunch.png    random-backbone features sorted by a coin vs the built
+                            head into ten class bins (10% vs 72.7%).
 
 Every number is from this run; same pipeline as scripts/jax_train_features.py.
 Run: python scripts/render_train_features_gifs.py
@@ -44,9 +49,14 @@ def fig_rgba(fig):
 
 
 def save_gif(path, frames, fps, hold=16):
-    Image.fromarray(frames[-1]).save(str(path).replace('.gif', '-preview.png'))
     imageio.mimsave(path, frames + [frames[-1]] * hold, duration=1 / fps, loop=0,
                     palettesize=128, subrectangles=True)
+    print(f'wrote {path} ({os.path.getsize(path)//1024} KB)')
+
+
+def save_png(path, fig):
+    fig.savefig(path, dpi=fig.dpi, facecolor=BG)
+    plt.close(fig)
     print(f'wrote {path} ({os.path.getsize(path)//1024} KB)')
 
 
@@ -178,144 +188,105 @@ def gif_crystallize():
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# GIF 2 — two heads racing: built head good at once, trained head climbs to it
+# FIG 2 (static) — two heads, read off the same backbone across epochs. Both
+#   curves at once: the built head starts high, the trained head climbs to it.
 # ═══════════════════════════════════════════════════════════════════════════
-def gif_two_heads():
+def png_two_heads():
     xs = np.arange(EPOCHS + 1)
     ba, ta = np.array(built_acc), np.array(train_acc)
-    # dense interpolation for a smooth self-drawing curve
-    dense = np.linspace(0, EPOCHS, 120)
-    bd = np.interp(dense, xs, ba); td = np.interp(dense, xs, ta)
-    frames = []
-    NF = 84
-    for fi in range(NF):
-        k = int(ease(fi / (NF - 1)) * len(dense))
-        k = max(2, k)
-        fig = plt.figure(figsize=(6.6, 5.0), dpi=120, facecolor=BG)
-        fig.text(0.5, 0.95, 'Two heads, read off the same backbone as it trains',
-                 ha='center', fontsize=13.5, weight='bold')
-        fig.text(0.5, 0.905, 'the built head is good immediately; training a head only ever buys a point or two more',
-                 ha='center', fontsize=9.0, color=MUTED)
-        ax = fig.add_axes([0.11, 0.12, 0.84, 0.74]); ax.set_facecolor(PANEL)
-        ax.set_xlim(-0.15, EPOCHS + 0.15); ax.set_ylim(0, 100)
-        ax.set_xlabel('epoch (backbone training)', color=MUTED, fontsize=10)
-        ax.set_ylabel('test accuracy', color=MUTED, fontsize=10)
-        ax.tick_params(colors=MUTED, labelsize=9)
-        for s in ax.spines.values(): s.set_color(LINE)
-        ax.axhline(10, color=MUTED, lw=0.7, ls=':'); ax.text(EPOCHS, 12, 'chance', color=MUTED, fontsize=8, ha='right')
-        dd = dense[:k]
-        # gap shading
-        ax.fill_between(dd, bd[:k], td[:k], color='#7bbf5a', alpha=0.10)
-        ax.plot(dd, td[:k], color='#c77d2a', lw=2.4, label='trained head')
-        ax.plot(dd, bd[:k], color='#7bbf5a', lw=2.4, label='built head (never trained)')
-        ax.scatter([dd[-1]], [td[k - 1]], s=44, color='#c77d2a', zorder=5, edgecolors=BG)
-        ax.scatter([dd[-1]], [bd[k - 1]], s=44, color='#7bbf5a', zorder=5, edgecolors=BG)
-        ax.text(dd[-1] + 0.04, td[k - 1], f'{td[k-1]:.0f}', color='#c77d2a', fontsize=9, va='center')
-        ax.text(dd[-1] + 0.04, bd[k - 1] - 4, f'{bd[k-1]:.0f}', color='#7bbf5a', fontsize=9, va='center')
-        ax.legend(loc='lower right', frameon=True, fontsize=9.5, facecolor=PANEL, edgecolor=LINE, labelcolor=INK)
-        frames.append(fig_rgba(fig))
-    save_gif(PUB / 'train-two-heads.gif', frames, fps=18, hold=20)
+    fig = plt.figure(figsize=(6.6, 5.0), dpi=120, facecolor=BG)
+    fig.text(0.5, 0.95, 'Two heads, read off the same backbone as it trains',
+             ha='center', fontsize=13.5, weight='bold')
+    fig.text(0.5, 0.905, 'the built head is good immediately; training a head only ever buys a point or two more',
+             ha='center', fontsize=9.0, color=MUTED)
+    ax = fig.add_axes([0.11, 0.12, 0.84, 0.74]); ax.set_facecolor(PANEL)
+    ax.set_xlim(-0.15, EPOCHS + 0.15); ax.set_ylim(0, 100)
+    ax.set_xlabel('epoch (backbone training)', color=MUTED, fontsize=10)
+    ax.set_ylabel('test accuracy', color=MUTED, fontsize=10)
+    ax.tick_params(colors=MUTED, labelsize=9)
+    for s in ax.spines.values(): s.set_color(LINE)
+    ax.axhline(10, color=MUTED, lw=0.7, ls=':'); ax.text(EPOCHS, 12, 'chance', color=MUTED, fontsize=8, ha='right')
+    ax.fill_between(xs, ba, ta, color='#7bbf5a', alpha=0.10)
+    ax.plot(xs, ta, color='#c77d2a', lw=2.4, marker='o', ms=5, label='trained head')
+    ax.plot(xs, ba, color='#7bbf5a', lw=2.4, marker='o', ms=5, label='built head (never trained)')
+    ax.text(xs[-1] + 0.04, ta[-1], f'{ta[-1]:.0f}', color='#c77d2a', fontsize=9, va='center')
+    ax.text(xs[-1] + 0.04, ba[-1] - 4, f'{ba[-1]:.0f}', color='#7bbf5a', fontsize=9, va='center')
+    ax.text(0.04, ba[0] + 3, f'{ba[0]:.0f}% before any training', color='#7bbf5a', fontsize=8.5)
+    ax.legend(loc='lower right', frameon=True, fontsize=9.5, facecolor=PANEL, edgecolor=LINE, labelcolor=INK)
+    save_png(PUB / 'train-two-heads.png', fig)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# GIF 3 — the free lunch: random backbone features still sort into the right bins
+# FIG 3 (static) — the free lunch: the same random-backbone features sorted into
+#   ten class bins by a coin flip (left) vs the built Yat head (right). Each dot is
+#   coloured by its true class, so a dot in a same-coloured column is a hit. The
+#   headline % are the real full-test-set numbers.
 # ═══════════════════════════════════════════════════════════════════════════
-def gif_free_lunch():
-    N = 240
+def png_free_lunch():
+    N = 260
     sel = np.random.RandomState(3).permutation(len(VIZ))[:N]
     true = labv[sel]; built = rand_pred[sel]
     chance = np.random.RandomState(5).randint(0, 10, N)   # the naive expectation
-    # display the real full-test headline figures; the dots are an illustrative sample
-    builtacc = built_acc[0]; chanceacc = 10.0
-    # bin x-centres along the bottom; particles fall from a hopper into their predicted bin
+    builtacc = built_acc[0]; chanceacc = 10.0             # real full-test-set figures
     binx = np.linspace(0.06, 0.94, 10)
-    order = np.argsort(true)                               # release roughly by class for a clean stream
-    sel = sel[order]; true = true[order]; built = built[order]; chance = chance[order]
+    order = np.argsort(true)
+    true = true[order]; built = built[order]; chance = chance[order]
 
-    def stack_targets(predbins):
+    def stack(predbins):
         cnt = np.zeros(10, int); tx = np.zeros(N); ty = np.zeros(N)
         for i in range(N):
-            b = predbins[i]; tx[i] = binx[b] + (np.random.RandomState(i).rand() - 0.5) * 0.06
-            ty[i] = 0.05 + 0.011 * cnt[b]; cnt[b] += 1
+            b = predbins[i]; tx[i] = binx[b] + (np.random.RandomState(i).rand() - 0.5) * 0.055
+            ty[i] = 0.07 + 0.0135 * cnt[b]; cnt[b] += 1
         return tx, ty
 
-    np.random.seed(0)
-    txB, tyB = stack_targets(built); txC, tyC = stack_targets(chance)
-    sx = np.random.RandomState(7).rand(N) * 0.88 + 0.06    # hopper spread at top
-
-    NF = 88
-    frames = []
-    for fi in range(NF):
-        prog = ease(fi / (NF - 1))
-        nrel = int(prog * N * 1.25)
-        fig = plt.figure(figsize=(8.8, 4.8), dpi=110, facecolor=BG)
-        fig.text(0.5, 0.95, 'A backbone that never saw a gradient, and its features still sort',
-                 ha='center', fontsize=13.5, weight='bold')
-        fig.text(0.5, 0.905, 'the same random features poured through two heads: a coin (left) vs the built Yat head (right)',
-                 ha='center', fontsize=9.0, color=MUTED)
-        for side, (tx, ty, acc, ttl, who) in enumerate([
-                (txC, tyC, chanceacc, 'a coin flip (what you’d expect)', chance),
-                (txB, tyB, builtacc, 'the built head (the free lunch)', built)]):
-            ax = fig.add_axes([0.04 + side * 0.50, 0.07, 0.44, 0.76]); ax.set_facecolor(PANEL)
-            ax.set_xlim(0, 1); ax.set_ylim(0, 1); ax.set_xticks([]); ax.set_yticks([])
-            for s in ax.spines.values(): s.set_color(LINE)
-            # bin floor labels
-            for b in range(10):
-                ax.add_patch(plt.Rectangle((binx[b] - 0.043, 0), 0.086, 0.035, color=COL[b], alpha=0.5))
-            # falling / landed particles
-            for i in range(min(nrel, N)):
-                local = ease(np.clip((nrel - i) / 22, 0, 1))
-                cx = sx[i] + (tx[i] - sx[i]) * local
-                cy = 0.95 + (ty[i] - 0.95) * local
-                correct = who[i] == true[i]
-                ax.scatter([cx], [cy], s=18, color=COL[true[i]],
-                           edgecolors='#7bbf5a' if correct and local > 0.9 else 'none',
-                           linewidths=0.8, alpha=0.9, zorder=3)
-            ax.set_title(ttl, fontsize=10, color=MUTED, pad=4)
-            shown_acc = acc * ease(np.clip(nrel / N, 0, 1))
-            ax.text(0.5, 0.92, f'{shown_acc:.0f}% in the right bin', ha='center', fontsize=12,
-                    color='#7bbf5a' if side == 1 else MUTED, weight='bold')
-        frames.append(fig_rgba(fig))
-    save_gif(PUB / 'train-free-lunch.gif', frames, fps=16)
+    txB, tyB = stack(built); txC, tyC = stack(chance)
+    fig = plt.figure(figsize=(8.8, 4.8), dpi=110, facecolor=BG)
+    fig.text(0.5, 0.95, 'A backbone that never saw a gradient, and its features still sort',
+             ha='center', fontsize=13.5, weight='bold')
+    fig.text(0.5, 0.905, 'the same random features sorted into ten class bins: a coin (left) vs the built Yat head (right)',
+             ha='center', fontsize=9.0, color=MUTED)
+    for side, (tx, ty, acc, ttl, who) in enumerate([
+            (txC, tyC, chanceacc, 'a coin flip (what you’d expect)', chance),
+            (txB, tyB, builtacc, 'the built head (the free lunch)', built)]):
+        ax = fig.add_axes([0.04 + side * 0.50, 0.07, 0.44, 0.76]); ax.set_facecolor(PANEL)
+        ax.set_xlim(0, 1); ax.set_ylim(0, 1); ax.set_xticks([]); ax.set_yticks([])
+        for s in ax.spines.values(): s.set_color(LINE)
+        for b in range(10):
+            ax.add_patch(plt.Rectangle((binx[b] - 0.043, 0), 0.086, 0.045, color=COL[b], alpha=0.5))
+        for i in range(N):
+            correct = who[i] == true[i]
+            ax.scatter([tx[i]], [ty[i]], s=20, color=COL[true[i]],
+                       edgecolors='#7bbf5a' if correct else 'none',
+                       linewidths=0.9, alpha=0.9, zorder=3)
+        ax.set_title(ttl, fontsize=10, color=MUTED, pad=4)
+        ax.text(0.5, 0.93, f'{acc:.0f}% in the right bin', ha='center', fontsize=12,
+                color='#7bbf5a' if side == 1 else MUTED, weight='bold')
+    save_png(PUB / 'train-free-lunch.png', fig)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# GIF 4 — the head is furniture: three heads on the SAME frozen trained features
+# FIG 4 (static) — the head is furniture: three heads on the SAME frozen trained
+#   backbone, side by side. The features carry the accuracy; the head barely moves it.
 # ═══════════════════════════════════════════════════════════════════════════
-def gif_head_swap():
+def png_head_swap():
     heads = [('random linear head\n(untrained)', rand_head_acc, '#c2553a'),
              ('built Yat head\n(placed, not trained)', built_acc[-1], '#7bbf5a'),
              ('trained linear head\n(gradient-trained)', train_acc[-1], '#c77d2a')]
-    HOLD, SWAP = 16, 12
-    frames = []
-    order = [0, 1, 2]
-    cur = 0.0
-    seq = []                                            # (from_idx, to_idx, t)
-    for k in range(len(order)):
-        for _ in range(HOLD): seq.append((order[k], order[k], 1.0))
-        if k < len(order) - 1:
-            for s in range(SWAP): seq.append((order[k], order[k + 1], ease((s + 1) / SWAP)))
-    for (fi, (a, b, t)) in enumerate(seq):
-        acc = heads[a][1] * (1 - t) + heads[b][1] * t
-        lab = heads[b][0] if t > 0.5 else heads[a][0]
-        col = heads[b][2] if t > 0.5 else heads[a][2]
-        fig = plt.figure(figsize=(6.8, 5.0), dpi=120, facecolor=BG)
-        fig.text(0.5, 0.95, 'The classifier is furniture you place', ha='center', fontsize=14, weight='bold')
-        fig.text(0.5, 0.905, 'one frozen backbone, three heads bolted on: the features carry the accuracy, the head barely moves it',
-                 ha='center', fontsize=8.8, color=MUTED)
-        ax = fig.add_axes([0.13, 0.13, 0.82, 0.72]); ax.set_facecolor(PANEL)
-        ax.set_xlim(0, 1); ax.set_ylim(0, 100); ax.set_xticks([])
-        ax.set_ylabel('test accuracy', color=MUTED, fontsize=10); ax.tick_params(colors=MUTED, labelsize=9)
-        for s in ax.spines.values(): s.set_color(LINE)
-        ax.axhline(10, color=MUTED, lw=0.7, ls=':'); ax.text(0.98, 12, 'chance', color=MUTED, fontsize=8, ha='right')
-        ax.bar([0.5], [acc], width=0.42, color=col, alpha=0.92)
-        ax.text(0.5, acc + 3, f'{acc:.1f}%', ha='center', fontsize=15, color=col, weight='bold')
-        ax.text(0.5, -8, lab, ha='center', fontsize=11, color=INK, clip_on=False)
-        # small dots marking the three resting values for context
-        for hi, (_, hv, hc) in enumerate(heads):
-            ax.scatter([0.08 + hi * 0.02], [hv], s=24, color=hc, alpha=0.5)
-        frames.append(fig_rgba(fig))
-    save_gif(PUB / 'train-head-swap.gif', frames, fps=14, hold=18)
+    fig = plt.figure(figsize=(6.8, 5.0), dpi=120, facecolor=BG)
+    fig.text(0.5, 0.95, 'The classifier is furniture you place', ha='center', fontsize=14, weight='bold')
+    fig.text(0.5, 0.905, 'one frozen backbone, three heads bolted on: the features carry the accuracy, the head barely moves it',
+             ha='center', fontsize=8.8, color=MUTED)
+    ax = fig.add_axes([0.13, 0.18, 0.82, 0.67]); ax.set_facecolor(PANEL)
+    xs = np.arange(3)
+    ax.set_xlim(-0.6, 2.6); ax.set_ylim(0, 100); ax.set_xticks([])
+    ax.set_ylabel('test accuracy', color=MUTED, fontsize=10); ax.tick_params(colors=MUTED, labelsize=9)
+    for s in ax.spines.values(): s.set_color(LINE)
+    ax.axhline(10, color=MUTED, lw=0.7, ls=':'); ax.text(2.55, 12, 'chance', color=MUTED, fontsize=8, ha='right')
+    for i, (lab, acc, col) in enumerate(heads):
+        ax.bar([i], [acc], width=0.62, color=col, alpha=0.92)
+        ax.text(i, acc + 2.5, f'{acc:.1f}%', ha='center', fontsize=13.5, color=col, weight='bold')
+        ax.text(i, -9, lab, ha='center', fontsize=9.5, color=INK, clip_on=False)
+    save_png(PUB / 'train-head-swap.png', fig)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -351,11 +322,11 @@ def gif_errors_melt():
 
 
 if __name__ == '__main__':
-    gif_crystallize()
-    gif_two_heads()
-    gif_free_lunch()
-    gif_head_swap()
-    gif_errors_melt()
+    gif_crystallize()      # KEEP: real cloud reorganising over training epochs
+    gif_errors_melt()      # KEEP: real per-point verdicts over training epochs
+    png_two_heads()        # static: a result (both curves), not a process
+    png_free_lunch()       # static: a result (final sort into bins), not a process
+    png_head_swap()        # static: three fixed values, side by side
     print(f'BUILT {[round(x,1) for x in built_acc]}')
     print(f'TRAINED {[round(x,1) for x in train_acc]}')
     print(f'RANDHEAD {round(rand_head_acc,1)}')

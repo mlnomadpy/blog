@@ -1,15 +1,24 @@
-"""Three teaching GIFs for the hand-built JAX/Flax NNX companion.
+"""Figures for the hand-built JAX/Flax NNX companion.
 
-Each animates a *process*, not a slideshow, and reuses the series' one physical
-world (the Yat denominator is a softened inverse-square well; classification is
-falling into the deepest basin).
+Only one of these is a GIF, because only one is a real temporal process: k-means
+Lloyd iterations, where the prototypes actually move frame to frame and the
+convergence is the point. Everything else is a fixed computation (a convolution,
+a pooling, a kernel shape, a garment's ten class scores), so it is a static figure
+from the same real run, not a motion faked onto a result.
 
-  1. handbuilt-orient-rose.gif   edges peel off the image and sort, by angle,
-                                 into six orientation bins (a filling rose).
-  2. handbuilt-coarsegrain.gif   the full-resolution detector maps cool into a
-                                 7x7 block grid, then flatten into the 343 vector.
-  3. handbuilt-yat-well.gif      a test garment's feature-particle rolls down the
-                                 Yat potential into the nearest prototype well.
+  GIF (a real iterative process):
+    handbuilt-kmeans.gif      real Lloyd iterations placing prototypes in the
+                              feature clouds of three classes; the markers migrate.
+
+  Static PNGs (a fixed computation, one real run):
+    handbuilt-sobel.png       image -> gx, gy -> gradient field, the whole conv.
+    handbuilt-orient-rose.png the garment's edges and its orientation histogram.
+    handbuilt-coarsegrain.png full detector maps, their 7x7 pooled versions, and
+                              the resulting 343-number feature vector.
+    handbuilt-yat-well.png    four real garments and their real ten-class Yat-score
+                              landscapes; the star sits in the deepest well.
+    handbuilt-kernel-shape.png the Yat kernel at the model's real eps, as a 2D
+                              field and a 1D cut, vs true 1/r^2 and a Gaussian.
 
 Reuses public/handbuilt/handbuilt.json (prototypes, vote, mu, sd, eps) and pulls
 a few raw Fashion-MNIST images for the gradient fields. Every number is from the
@@ -85,184 +94,132 @@ def fig_rgba(fig):
 
 
 def save_gif(path, frames, fps, hold=14):
-    Image.fromarray(frames[-1]).save(str(path).replace('.gif', '-preview.png'))
     frames = frames + [frames[-1]] * hold
     imageio.mimsave(path, frames, duration=1 / fps, loop=0, palettesize=128, subrectangles=True)
     print(f'wrote {path} ({os.path.getsize(path)//1024} KB)')
 
 
+def save_png(path, fig):
+    fig.savefig(path, dpi=fig.dpi, facecolor=BG)
+    plt.close(fig)
+    print(f'wrote {path} ({os.path.getsize(path)//1024} KB)')
+
+
 # ═══════════════════════════════════════════════════════════════════════════
-# GIF 1 — orientation rose: edges sort by angle into six bins
+# FIG 1 (static) — orientation: the garment's strong edges (left, drawn as oriented
+#   strokes coloured by bin) and the orientation histogram they sum to (right).
 # ═══════════════════════════════════════════════════════════════════════════
-def gif_orient_rose():
+def png_orient_rose():
     img = grab(8, 0)                                   # a Bag: clean strong edges
     gx, gy, mag, ang, chans, pooled = pipeline(img)
-    # pick the strongest edge pixels as the migrating particles
     thr = np.quantile(mag, 0.985)
     ys, xs = np.where(mag >= thr)
     order = np.argsort(-mag[ys, xs])[:90]
     ys, xs = ys[order], xs[order]
-    a = ang[ys, xs]; m = mag[ys, xs]
+    a = ang[ys, xs]
     binof = np.clip((a / (np.pi / NB)).astype(int), 0, NB - 1)
-    # image coords -> left-panel axes coords (0..1), y flipped
     sx0 = xs / 27.0; sy0 = 1 - ys / 27.0
-    # target: stack inside each bin's wedge on the right rose, at increasing radius
     rose_cx, rose_cy = 0.5, 0.5
-    counts = np.zeros(NB, int)
-    tx = np.zeros(len(a)); ty = np.zeros(len(a)); tr = np.zeros(len(a)); tth = np.zeros(len(a))
+
+    fig = plt.figure(figsize=(8.6, 4.5), dpi=110, facecolor=BG)
+    fig.text(0.5, 0.93, 'A hand-built detector: sorting edges by their orientation',
+             ha='center', fontsize=14, weight='bold')
+    fig.text(0.5, 0.865, 'each strong edge belongs to the bin nearest its angle; the rose on the right is the garment’s edge signature',
+             ha='center', fontsize=9.5, color=MUTED)
+    axL = fig.add_axes([0.04, 0.08, 0.40, 0.74]); axL.set_facecolor(PANEL)
+    axR = fig.add_axes([0.52, 0.08, 0.44, 0.74]); axR.set_facecolor(PANEL); axR.set_aspect('equal')
+    axL.imshow(img, cmap='gray', extent=[0, 1, 0, 1], vmin=0, vmax=1, alpha=0.62, zorder=0)
+    axL.set_xlim(0, 1); axL.set_ylim(0, 1); axL.set_xticks([]); axL.set_yticks([])
+    axL.set_title('the picture + its edges', fontsize=10, color=MUTED, pad=4)
+    axR.set_xlim(0, 1); axR.set_ylim(0, 1); axR.set_xticks([]); axR.set_yticks([])
+    axR.set_title('orientation rose (6 bins)', fontsize=10, color=MUTED, pad=4)
+    for s in list(axL.spines.values()) + list(axR.spines.values()): s.set_color(LINE)
+
+    # the oriented edge strokes on the garment, coloured by their bin
     for i in range(len(a)):
-        b = binof[i]; rank = counts[b]; counts[b] += 1
-        th = CENTERS[b] + (np.pi / NB) * 0.5                # wedge centre angle (0..pi)
-        rad = 0.10 + 0.030 * rank                           # stack outward
-        # mirror to full circle for a symmetric rose (edges are undirected)
-        tth[i] = th; tr[i] = rad
-        tx[i] = rose_cx + rad * np.cos(th); ty[i] = rose_cy + rad * np.sin(th)
+        dx = 0.02 * np.cos(a[i]); dy = 0.02 * np.sin(a[i])
+        axL.plot([sx0[i] - dx, sx0[i] + dx], [sy0[i] - dy, sy0[i] + dy],
+                 color=CHAN_COL[binof[i]], lw=1.3, alpha=0.9, solid_capstyle='round', zorder=3)
 
-    N_FLY, N_GROW, N_INTRO = 30, 18, 8
-    total = N_INTRO + N_FLY + N_GROW
-    frames = []
-    for fi in range(total):
-        fig = plt.figure(figsize=(8.6, 4.5), dpi=110, facecolor=BG)
-        fig.text(0.5, 0.93, 'A hand-built detector: sorting edges by their orientation',
-                 ha='center', fontsize=14, weight='bold')
-        fig.text(0.5, 0.865, 'every strong edge in the picture flies to the bin nearest its angle; the rose is the garment’s edge signature',
-                 ha='center', fontsize=9.5, color=MUTED)
-        axL = fig.add_axes([0.04, 0.08, 0.40, 0.74]); axL.set_facecolor(PANEL)
-        axR = fig.add_axes([0.52, 0.08, 0.44, 0.74]); axR.set_facecolor(PANEL); axR.set_aspect('equal')
-        axL.imshow(img, cmap='gray', extent=[0, 1, 0, 1], vmin=0, vmax=1, alpha=0.62, zorder=0)
-        axL.set_xlim(0, 1); axL.set_ylim(0, 1); axL.set_xticks([]); axL.set_yticks([])
-        axL.set_title('the picture + its edges', fontsize=10, color=MUTED, pad=4)
-        axR.set_xlim(0, 1); axR.set_ylim(0, 1); axR.set_xticks([]); axR.set_yticks([])
-        axR.set_title('orientation rose (6 bins)', fontsize=10, color=MUTED, pad=4)
-        for s in list(axL.spines.values()) + list(axR.spines.values()): s.set_color(LINE)
+    # rose guide wedges + tick labels
+    for b in range(NB):
+        th0 = np.degrees(CENTERS[b]); th1 = np.degrees(CENTERS[b] + np.pi / NB)
+        axR.add_patch(Wedge((rose_cx, rose_cy), 0.40, th0, th1, width=0.40,
+                            facecolor=CHAN_COL[b], alpha=0.07, edgecolor=LINE, lw=0.5, zorder=0))
+        lab_th = CENTERS[b] + np.pi / (2 * NB)
+        axR.text(rose_cx + 0.45 * np.cos(lab_th), rose_cy + 0.45 * np.sin(lab_th),
+                 f'{int(round(np.degrees(CENTERS[b])))}°', ha='center', va='center',
+                 fontsize=8, color=CHAN_COL[b])
 
-        # rose guide wedges + tick labels
-        for b in range(NB):
-            th0 = np.degrees(CENTERS[b]); th1 = np.degrees(CENTERS[b] + np.pi / NB)
-            axR.add_patch(Wedge((rose_cx, rose_cy), 0.40, th0, th1, width=0.40,
-                                facecolor=CHAN_COL[b], alpha=0.07, edgecolor=LINE, lw=0.5, zorder=0))
-            lab_th = CENTERS[b] + np.pi / (2 * NB)
-            axR.text(rose_cx + 0.45 * np.cos(lab_th), rose_cy + 0.45 * np.sin(lab_th),
-                     f'{int(round(np.degrees(CENTERS[b])))}°', ha='center', va='center',
-                     fontsize=8, color=CHAN_COL[b])
-
-        # phase progress
-        if fi < N_INTRO:
-            pf = 0.0; gf = 0.0
-        elif fi < N_INTRO + N_FLY:
-            pf = ease((fi - N_INTRO) / N_FLY); gf = 0.0
-        else:
-            pf = 1.0; gf = ease((fi - N_INTRO - N_FLY) / N_GROW)
-
-        # draw migrating edge segments (left -> right), colored by bin
-        for i in range(len(a)):
-            # stagger departures across the fly phase for a flowing look
-            local = np.clip(pf * 1.6 - (i / len(a)) * 0.6, 0, 1)
-            local = ease(local)
-            cx = sx0[i] + (tx[i] - sx0[i]) * local
-            cy = sy0[i] + (ty[i] - sy0[i]) * local
-            col = CHAN_COL[binof[i]]
-            if local < 0.5:                                  # still an oriented edge stroke
-                dx = 0.025 * np.cos(a[i]); dy = 0.025 * np.sin(a[i])
-                ax = axL if local < 0.04 else axR
-                # draw on the panel it currently sits in (approx: left until it crosses)
-                axR.plot([cx - dx, cx + dx], [cy - dy, cy + dy], color=col,
-                         lw=1.3, alpha=0.30 + 0.5 * local, solid_capstyle='round', zorder=3)
-            else:
-                axR.scatter([cx], [cy], s=12, color=col, alpha=0.5 * (1 - gf), linewidths=0, zorder=1)
-        # also keep the edge strokes on the left image until they fly
-        for i in range(len(a)):
-            if pf < 0.5:
-                dx = 0.02 * np.cos(a[i]); dy = 0.02 * np.sin(a[i])
-                axL.plot([sx0[i] - dx, sx0[i] + dx], [sy0[i] - dy, sy0[i] + dy],
-                         color=CHAN_COL[binof[i]], lw=1.2, alpha=0.85 * (1 - pf),
-                         solid_capstyle='round', zorder=3)
-
-        # grown petals (final histogram) once edges have landed
-        if gf > 0:
-            tot = np.array([(binof == b).sum() for b in range(NB)], float)
-            tot = tot / (tot.max() + 1e-9)
-            for b in range(NB):
-                th0 = np.degrees(CENTERS[b]); th1 = np.degrees(CENTERS[b] + np.pi / NB)
-                axR.add_patch(Wedge((rose_cx, rose_cy), 0.10 + 0.30 * tot[b] * gf, th0, th1,
-                                    facecolor=CHAN_COL[b], alpha=0.55, edgecolor=INK, lw=0.6, zorder=2))
-        frames.append(fig_rgba(fig))
-    save_gif(PUB / 'handbuilt-orient-rose.gif', frames, fps=11)
+    # the histogram petals: real per-bin edge mass
+    tot = np.array([(binof == b).sum() for b in range(NB)], float)
+    tot = tot / (tot.max() + 1e-9)
+    for b in range(NB):
+        th0 = np.degrees(CENTERS[b]); th1 = np.degrees(CENTERS[b] + np.pi / NB)
+        axR.add_patch(Wedge((rose_cx, rose_cy), 0.10 + 0.30 * tot[b], th0, th1,
+                            facecolor=CHAN_COL[b], alpha=0.55, edgecolor=INK, lw=0.6, zorder=2))
+    save_png(PUB / 'handbuilt-orient-rose.png', fig)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# GIF 2 — coarse-graining: full maps cool into a 7x7 grid, flatten to 343
+# FIG 2 (static) — coarse-graining: the full-resolution detector maps (top), their
+#   7x7 pooled versions (middle), and the 343-number feature vector they flatten to.
 # ═══════════════════════════════════════════════════════════════════════════
-def gif_coarsegrain():
+def png_coarsegrain():
     img = grab(0, 1)                                   # a T-shirt
     gx, gy, mag, ang, chans, pooled = pipeline(img)
     ps = 28 // GRID                                    # 4
-    # per-channel normalised full map and a block-expanded pooled map
     full = chans[:, :GRID * ps, :GRID * ps]
     full = full / (full.reshape(7, -1).max(1)[:, None, None] + 1e-9)
     poolN = pooled / (pooled.reshape(7, -1).max(1)[:, None, None] + 1e-9)
     block = np.repeat(np.repeat(poolN, ps, 1), ps, 2)  # [7,28,28] blocky
     names = HB['detectors']
 
-    N_COOL, N_FLAT = 26, 22
-    total = 8 + N_COOL + N_FLAT
-    frames = []
-    for fi in range(total):
-        fig = plt.figure(figsize=(8.8, 4.6), dpi=110, facecolor=BG)
-        fig.text(0.5, 0.93, 'Coarse-graining: from full-resolution maps to 343 named numbers',
-                 ha='center', fontsize=14, weight='bold')
-        fig.text(0.5, 0.865, 'each detector map cools into a 7×7 grid of patch averages; the 7×7×7 cells flatten into one feature vector',
-                 ha='center', fontsize=9.5, color=MUTED)
-        if fi < 8:
-            cool = 0.0; flat = 0.0
-        elif fi < 8 + N_COOL:
-            cool = ease((fi - 8) / N_COOL); flat = 0.0
-        else:
-            cool = 1.0; flat = ease((fi - 8 - N_COOL) / N_FLAT)
+    fig = plt.figure(figsize=(8.8, 5.4), dpi=110, facecolor=BG)
+    fig.text(0.5, 0.95, 'Coarse-graining: from full-resolution maps to 343 named numbers',
+             ha='center', fontsize=14, weight='bold')
+    fig.text(0.5, 0.905, 'each detector map (top) averages over a 7×7 grid of patches (middle); the 7×7×7 cells flatten into one feature vector',
+             ha='center', fontsize=9.5, color=MUTED)
+    fig.text(0.022, 0.735, 'full', ha='center', va='center', rotation=90, fontsize=8.5, color=MUTED)
+    fig.text(0.022, 0.515, '7×7\npooled', ha='center', va='center', rotation=90, fontsize=8.5, color=MUTED)
+    for ci in range(7):
+        # top row: full-resolution maps
+        axt = fig.add_axes([0.05 + ci * 0.133, 0.64, 0.118, 0.19]); axt.set_facecolor(PANEL)
+        axt.imshow(full[ci], cmap='magma', vmin=0, vmax=1, interpolation='bilinear')
+        axt.set_xticks([]); axt.set_yticks([])
+        for s in axt.spines.values(): s.set_color(CHAN_COL[ci]); s.set_linewidth(1.4)
+        axt.set_title(names[ci], fontsize=7.5, color=CHAN_COL[ci], pad=2)
+        # middle row: the 7x7 pooled (blocky) map
+        axm = fig.add_axes([0.05 + ci * 0.133, 0.42, 0.118, 0.19]); axm.set_facecolor(PANEL)
+        axm.imshow(block[ci], cmap='magma', vmin=0, vmax=1, interpolation='nearest')
+        axm.set_xticks([]); axm.set_yticks([])
+        for s in axm.spines.values(): s.set_color(CHAN_COL[ci]); s.set_linewidth(1.0)
+        for g in range(1, GRID):
+            axm.axhline(g * ps - 0.5, color=BG, lw=0.6); axm.axvline(g * ps - 0.5, color=BG, lw=0.6)
 
-        # top row: the 7 maps interpolating full -> blocky
-        cur = (1 - cool) * full + cool * block
-        for ci in range(7):
-            ax = fig.add_axes([0.045 + ci * 0.133, 0.46, 0.118, 0.30]); ax.set_facecolor(PANEL)
-            ax.imshow(cur[ci], cmap='magma', vmin=0, vmax=1, interpolation='nearest' if cool > 0.5 else 'bilinear')
-            ax.set_xticks([]); ax.set_yticks([])
-            for s in ax.spines.values(): s.set_color(CHAN_COL[ci]); s.set_linewidth(1.4)
-            ax.set_title(names[ci], fontsize=7.5, color=CHAN_COL[ci], pad=2)
-            if cool > 0.25:                                 # grid lines appear as it cools
-                for g in range(1, GRID):
-                    ax.axhline(g * ps - 0.5, color=BG, lw=0.6, alpha=cool)
-                    ax.axvline(g * ps - 0.5, color=BG, lw=0.6, alpha=cool)
-
-        # bottom: the 343-vector bar, filling in as cells flatten
-        axv = fig.add_axes([0.045, 0.10, 0.91, 0.22]); axv.set_facecolor(PANEL)
-        axv.set_xlim(0, 343); axv.set_ylim(0, 1); axv.set_yticks([])
-        vals = poolN.reshape(7, GRID * GRID)               # [7,49]
-        nshow = int(flat * 343)
-        for ci in range(7):
-            base = ci * 49
-            xs = np.arange(49)
-            show = np.clip(nshow - base, 0, 49)
-            if show > 0:
-                axv.bar(base + xs[:show], vals[ci, :show], width=1.0,
-                        color=CHAN_COL[ci], alpha=0.9, align='edge')
-        for ci in range(1, 7):
-            axv.axvline(ci * 49, color=LINE, lw=0.8)
-        axv.set_xticks([24 + ci * 49 for ci in range(7)])
-        axv.set_xticklabels(names, fontsize=7.5, color=MUTED)
-        axv.set_title('the feature vector φ(x): 343 numbers, one per (detector, patch)',
-                      fontsize=9.5, color=MUTED, pad=3)
-        for s in axv.spines.values(): s.set_color(LINE)
-        frames.append(fig_rgba(fig))
-    save_gif(PUB / 'handbuilt-coarsegrain.gif', frames, fps=12)
+    # bottom: the 343-vector bar, real pooled values
+    axv = fig.add_axes([0.05, 0.10, 0.90, 0.22]); axv.set_facecolor(PANEL)
+    axv.set_xlim(0, 343); axv.set_ylim(0, 1); axv.set_yticks([])
+    vals = poolN.reshape(7, GRID * GRID)               # [7,49]
+    for ci in range(7):
+        base = ci * 49
+        axv.bar(base + np.arange(49), vals[ci], width=1.0, color=CHAN_COL[ci], alpha=0.9, align='edge')
+    for ci in range(1, 7):
+        axv.axvline(ci * 49, color=LINE, lw=0.8)
+    axv.set_xticks([24 + ci * 49 for ci in range(7)])
+    axv.set_xticklabels(names, fontsize=7.5, color=MUTED)
+    axv.set_title('the feature vector φ(x): 343 numbers, one per (detector, patch)',
+                  fontsize=9.5, color=MUTED, pad=3)
+    for s in axv.spines.values(): s.set_color(LINE)
+    save_png(PUB / 'handbuilt-coarsegrain.png', fig)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# GIF 3 — the Yat well: ten wells along the class axis, each well's depth is the
-#          garment's REAL Yat score for that class. The feature vector already
-#          fixes all ten depths, so the garment sits in its deepest well from the
-#          start (no fake trajectory). The only motion is the real scores forming.
+# FIG 3 (static) — the Yat well: four real garments, each with the ten-class
+#   Yat-score landscape its features fix. The star sits in the deepest well.
+#   Three clean hits + one honest miss, all real scores.
 # ═══════════════════════════════════════════════════════════════════════════
-def gif_yat_well():
+def png_yat_well():
     protos = np.array(HB['protos'], np.float32)        # [200,343] z-scored
     vote = np.array(HB['vote']); eps = HB['eps']; B = HB['B']
     samples = HB['samples']
@@ -275,11 +232,11 @@ def gif_yat_well():
         k = dot ** 2 / d2
         return np.array([k[vote == c].max() for c in range(10)])
 
-    WSIG = 0.34                                         # half-width of a drawn well
-    xs = np.arange(10.0)                                # one well per class on the x-axis
+    WSIG = 0.34
+    xs = np.arange(10.0)
     xgrid = np.linspace(-0.7, 9.7, 600)
 
-    def profile(depth):                                 # smooth multi-well potential V(x) <= 0
+    def profile(depth):
         bumps = depth[None, :] * np.exp(-((xgrid[:, None] - xs[None, :]) / WSIG) ** 2 / 2)
         return -bumps.max(1)
 
@@ -294,151 +251,123 @@ def gif_yat_well():
     miss = [d for d in demos if d[2] != lab[d[0]]]
     chosen = hits[:3] + (miss[:1] if miss else hits[3:4])
 
-    GROW, HOLD = 22, 12
-    frames = []
+    fig = plt.figure(figsize=(9.6, 6.6), dpi=110, facecolor=BG)
+    fig.text(0.5, 0.965, 'The head is a landscape of ten Yat wells', ha='center', fontsize=14, weight='bold')
+    fig.text(0.5, 0.925, 'each well’s depth is the garment’s real Yat score for that class; its features place the star in the deepest one',
+             ha='center', fontsize=8.8, color=MUTED)
+    cellw, cellh = 0.465, 0.375
+    origins = [(0.045, 0.50), (0.525, 0.50), (0.045, 0.055), (0.525, 0.055)]
     for di, (si, s, pred) in enumerate(chosen):
-        # real per-class scores -> relative well depths (ordering and gaps are real)
         d = (s - s.min()) / (s.max() - s.min() + 1e-9)
-        depthF = 0.12 + 0.88 * d                        # floor so the shallow wells stay visible
+        depth = 0.12 + 0.88 * d
+        V = profile(depth)
         img = grab(int(lab[si]), di)
-        for fi in range(GROW + HOLD):
-            g = ease(min(fi, GROW) / GROW)              # scores resolve from a shallow baseline
-            depth = (0.12 + (depthF - 0.12) * g)
-            V = profile(depth)
-            fig = plt.figure(figsize=(7.8, 5.2), dpi=110, facecolor=BG)
-            fig.text(0.5, 0.95, 'The head is a landscape of ten Yat wells', ha='center', fontsize=14, weight='bold')
-            fig.text(0.5, 0.905, 'each well’s depth is this garment’s real Yat score for that class; its features already place it in the deepest one',
-                     ha='center', fontsize=8.6, color=MUTED)
-            ax = fig.add_axes([0.07, 0.16, 0.74, 0.70]); ax.set_facecolor(PANEL)
-            ax.set_xlim(-0.7, 9.7); ax.set_ylim(-1.18, 0.16)
-            ax.plot(xgrid, V, color=MUTED, lw=1.6, zorder=2)
-            ax.fill_between(xgrid, V, 0.16, color='#000000', alpha=0.0)
-            ax.fill_between(xgrid, V, -1.18, color='#1d1a14', zorder=1)
-            ax.axhline(0, color=LINE, lw=0.8)
-            for c in range(10):
-                win = c == pred
-                ax.scatter([xs[c]], [-depth[c]], s=120 if win else 48,
-                           color=CLASS_COL[c], edgecolors='white' if win else BG,
-                           linewidths=1.6 if win else 0.6, zorder=4)
-            # the garment: a single point that already sits at the bottom of its deepest well
-            ax.scatter([xs[pred]], [-depth[pred]], s=210, marker='*', color='white',
-                       edgecolors=BG, linewidths=1.4, zorder=5)
-            ax.set_xticks(xs); ax.set_xticklabels(CLASSES, rotation=40, ha='right', fontsize=8, color=MUTED)
-            ax.set_yticks([]); ax.set_ylabel('Yat score (well depth)', color=MUTED, fontsize=9)
-            for sp in ax.spines.values(): sp.set_color(LINE)
-            # garment thumbnail
-            axt = fig.add_axes([0.83, 0.55, 0.14, 0.21]); axt.imshow(img, cmap='gray', vmin=0, vmax=1)
-            axt.set_xticks([]); axt.set_yticks([])
-            for sp in axt.spines.values(): sp.set_color(LINE)
-            axt.set_title(f'true:\n{CLASSES[int(lab[si])]}', fontsize=8.5, color=INK, pad=2)
-            ok = pred == lab[si]
-            msg = f'deepest well: {CLASSES[pred]}  ' + ('✓ correct' if ok else '✗ a miss (the honest 83.3%)')
-            fig.text(0.5, 0.03, msg, ha='center', fontsize=11.5,
-                     color='#7bbf5a' if ok else '#e08a6a', weight='bold')
-            frames.append(fig_rgba(fig))
-    save_gif(PUB / 'handbuilt-yat-well.gif', frames, fps=13, hold=12)
+        ox, oy = origins[di]
+        ax = fig.add_axes([ox, oy + 0.045, cellw - 0.11, cellh - 0.10]); ax.set_facecolor(PANEL)
+        ax.set_xlim(-0.7, 9.7); ax.set_ylim(-1.18, 0.16)
+        ax.plot(xgrid, V, color=MUTED, lw=1.5, zorder=2)
+        ax.fill_between(xgrid, V, -1.18, color='#1d1a14', zorder=1)
+        ax.axhline(0, color=LINE, lw=0.8)
+        for c in range(10):
+            win = c == pred
+            ax.scatter([xs[c]], [-depth[c]], s=95 if win else 38,
+                       color=CLASS_COL[c], edgecolors='white' if win else BG,
+                       linewidths=1.4 if win else 0.6, zorder=4)
+        ax.scatter([xs[pred]], [-depth[pred]], s=180, marker='*', color='white',
+                   edgecolors=BG, linewidths=1.3, zorder=5)
+        ax.set_xticks(xs); ax.set_xticklabels(CLASSES, rotation=40, ha='right', fontsize=6.5, color=MUTED)
+        ax.set_yticks([]); ax.set_ylabel('Yat score', color=MUTED, fontsize=8)
+        for sp in ax.spines.values(): sp.set_color(LINE)
+        # garment thumbnail
+        axt = fig.add_axes([ox + cellw - 0.12, oy + cellh - 0.14, 0.085, 0.11])
+        axt.imshow(img, cmap='gray', vmin=0, vmax=1); axt.set_xticks([]); axt.set_yticks([])
+        for sp in axt.spines.values(): sp.set_color(LINE)
+        axt.set_title(f'true:\n{CLASSES[int(lab[si])]}', fontsize=7, color=INK, pad=2)
+        ok = pred == lab[si]
+        msg = f'deepest: {CLASSES[pred]}  ' + ('✓ correct' if ok else '✗ a miss (the honest 83.3%)')
+        fig.text(ox + (cellw - 0.11) / 2, oy, msg, ha='center', fontsize=9,
+                 color='#7bbf5a' if ok else '#e08a6a', weight='bold')
+    save_png(PUB / 'handbuilt-yat-well.png', fig)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# GIF 4 — the Sobel convolution: a real 3x3 kernel sweeps the image and builds
-#          the gradient field (gx, gy -> magnitude + angle). All real convolution.
+# FIG 4 (static) — the Sobel convolution: image, gx, gy, and the gradient field
+#   (magnitude + angle arrows). One fixed computation, shown whole.
 # ═══════════════════════════════════════════════════════════════════════════
-def gif_sobel_gradient():
+def png_sobel_gradient():
     img = grab(0, 2)                                    # a T-shirt
     gx = convolve(img, SX, mode='nearest'); gy = convolve(img, SY, mode='nearest')
     mag = np.sqrt(gx ** 2 + gy ** 2); ang = np.mod(np.arctan2(gy, gx), np.pi)
-    H = 28
-    # sweep order: row-major kernel positions
-    order = [(r, c) for r in range(H) for c in range(H)]
-    NSTEP = 40                                          # reveal in chunks
-    frames = []
-    # arrow subsample for the field
-    step = 2
-    for fi in range(NSTEP + 14):
-        prog = ease(min(fi, NSTEP) / NSTEP)
-        nrev = int(prog * len(order))
-        revealed = np.zeros((H, H), bool)
-        for (r, c) in order[:nrev]: revealed[r, c] = True
-        fig = plt.figure(figsize=(8.8, 3.6), dpi=110, facecolor=BG)
-        fig.text(0.5, 0.92, 'A hand-built detector starts as a convolution', ha='center', fontsize=14, weight='bold')
-        fig.text(0.5, 0.83, 'two Sobel kernels sweep the image to give the gradient gₓ, g_y at every pixel, then its magnitude and angle',
-                 ha='center', fontsize=9, color=MUTED)
-        titles = ['image', 'gₓ (Sobel-x)', 'g_y (Sobel-y)', 'gradient field']
-        for pi in range(4):
-            ax = fig.add_axes([0.035 + pi * 0.245, 0.10, 0.20, 0.62]); ax.set_facecolor(PANEL)
-            ax.set_xticks([]); ax.set_yticks([])
-            for s in ax.spines.values(): s.set_color(LINE)
-            ax.set_title(titles[pi], fontsize=9, color=MUTED, pad=3)
-            if pi == 0:
-                ax.imshow(img, cmap='gray', vmin=0, vmax=1)
-                # the sweeping 3x3 kernel window
-                if nrev < len(order):
-                    r, c = order[min(nrev, len(order) - 1)]
-                    ax.add_patch(plt.Rectangle((c - 1.5, r - 1.5), 3, 3, fill=False, ec='#36d6c4', lw=1.6))
-            elif pi == 1:
-                ax.imshow(np.where(revealed, gx, np.nan), cmap='coolwarm', vmin=-4, vmax=4)
-            elif pi == 2:
-                ax.imshow(np.where(revealed, gy, np.nan), cmap='coolwarm', vmin=-4, vmax=4)
-            else:
-                ax.imshow(np.where(revealed, mag, np.nan), cmap='magma', vmin=0, vmax=4)
-                ys, xs = np.mgrid[0:H:step, 0:H:step]
-                u = np.cos(ang[::step, ::step]); v = -np.sin(ang[::step, ::step])
-                m = (mag[::step, ::step] > 0.8) & revealed[::step, ::step]
-                ax.quiver(xs[m], ys[m], u[m], v[m], color='#36d6c4', scale=34, width=0.006, alpha=0.8)
-                ax.set_xlim(-0.5, H - 0.5); ax.set_ylim(H - 0.5, -0.5)
-        frames.append(fig_rgba(fig))
-    save_gif(PUB / 'handbuilt-sobel.gif', frames, fps=13)
+    H = 28; step = 2
+    fig = plt.figure(figsize=(8.8, 3.6), dpi=110, facecolor=BG)
+    fig.text(0.5, 0.92, 'A hand-built detector starts as a convolution', ha='center', fontsize=14, weight='bold')
+    fig.text(0.5, 0.83, 'two Sobel kernels give the gradient gₓ, g_y at every pixel, then its magnitude and angle',
+             ha='center', fontsize=9, color=MUTED)
+    titles = ['image', 'gₓ (Sobel-x)', 'g_y (Sobel-y)', 'gradient field']
+    for pi in range(4):
+        ax = fig.add_axes([0.035 + pi * 0.245, 0.10, 0.20, 0.62]); ax.set_facecolor(PANEL)
+        ax.set_xticks([]); ax.set_yticks([])
+        for s in ax.spines.values(): s.set_color(LINE)
+        ax.set_title(titles[pi], fontsize=9, color=MUTED, pad=3)
+        if pi == 0:
+            ax.imshow(img, cmap='gray', vmin=0, vmax=1)
+        elif pi == 1:
+            ax.imshow(gx, cmap='coolwarm', vmin=-4, vmax=4)
+        elif pi == 2:
+            ax.imshow(gy, cmap='coolwarm', vmin=-4, vmax=4)
+        else:
+            ax.imshow(mag, cmap='magma', vmin=0, vmax=4)
+            ys, xs = np.mgrid[0:H:step, 0:H:step]
+            u = np.cos(ang[::step, ::step]); v = -np.sin(ang[::step, ::step])
+            m = mag[::step, ::step] > 0.8
+            ax.quiver(xs[m], ys[m], u[m], v[m], color='#36d6c4', scale=34, width=0.006, alpha=0.8)
+            ax.set_xlim(-0.5, H - 0.5); ax.set_ylim(H - 0.5, -0.5)
+    save_png(PUB / 'handbuilt-sobel.png', fig)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# GIF 5 — the Yat kernel itself: a softened inverse-square well, bounded and
-#          peaked, against a Gaussian and an unbounded dot product. Real formula.
+# FIG 5 (static) — the Yat kernel: a softened inverse-square well as a 2D field
+#   and a 1D cut, at one representative ε, against true 1/r² and a Gaussian.
 # ═══════════════════════════════════════════════════════════════════════════
-def gif_kernel_shape():
+def png_kernel_shape():
     B = 0.5
     mu = np.array([1.0, 0.0])                           # a prototype off-origin
-    gN = 220
+    eps = 0.15                                          # one representative softening
+    gN = 260
     gv = np.linspace(-1.2, 2.6, gN); gw = np.linspace(-1.9, 1.9, gN)
     GX, GY = np.meshgrid(gv, gw); P = np.stack([GX.ravel(), GY.ravel()], 1)
     dot = P @ mu + B; dist2 = ((P - mu) ** 2).sum(1)
-    # 1D cross-section PERPENDICULAR to mu (x = mu_x): z.mu is constant, so this
-    # isolates the distance term and the kernel is a clean radial well.
     t = np.linspace(-1.9, 1.9, 400)
     cdot = (mu @ mu) + B                                # constant along the perpendicular line
-    EPS_SEQ = np.geomspace(0.9, 0.05, 19)              # softening shrinks
-    frames = []
-    for fi, eps in enumerate(EPS_SEQ):
-        yat = (dot ** 2 / (dist2 + eps)).reshape(gN, gN)
-        lyat = cdot ** 2 / (t ** 2 + eps)                          # softened inverse-square
-        linv = cdot ** 2 / (t ** 2 + 1e-3)                         # true inverse-square (blows up)
-        lrbf = (cdot ** 2 / eps) * np.exp(-t ** 2 / (2 * (eps ** 0.5) ** 2))   # matched-peak Gaussian
-        ymax = cdot ** 2 / eps * 1.15
-        fig = plt.figure(figsize=(8.6, 4.2), dpi=98, facecolor=BG)
-        fig.text(0.5, 0.93, 'The Yat kernel: a softened inverse-square well', ha='center', fontsize=14, weight='bold')
-        fig.text(0.5, 0.85, 'k(z, μ) = (z·μ + b)² / (‖z − μ‖² + ε): peaked at the prototype, finite there because ε softens the singularity, heavy-tailed where a Gaussian dies',
-                 ha='center', fontsize=8.0, color=MUTED)
-        axH = fig.add_axes([0.04, 0.09, 0.42, 0.68]); axH.set_facecolor(PANEL)
-        axH.imshow(yat, extent=[-1.2, 2.6, -1.9, 1.9], origin='lower', cmap='magma',
-                   vmin=0, vmax=np.percentile(yat, 99.0))
-        axH.scatter([mu[0]], [mu[1]], s=70, color='#36d6c4', edgecolors='white', linewidths=1.2, zorder=3)
-        axH.text(mu[0], mu[1] + 0.26, 'prototype μ', color='#36d6c4', fontsize=8.5, ha='center')
-        axH.axvline(mu[0], color='#36d6c4', lw=0.8, ls=':', alpha=0.6)   # the cross-section line
-        axH.set_xticks([]); axH.set_yticks([]); axH.set_title('k(z, μ) over the plane', fontsize=9, color=MUTED, pad=3)
-        for s in axH.spines.values(): s.set_color(LINE)
-        axC = fig.add_axes([0.57, 0.16, 0.39, 0.58]); axC.set_facecolor(PANEL)
-        axC.plot(t, np.minimum(linv, ymax * 1.5), color='#c2553a', lw=1.3, ls=':', label='true 1/r²  (blows up)')
-        axC.plot(t, lrbf, color='#5a9fd0', lw=1.6, ls='--', label='Gaussian (thin tails)')
-        axC.plot(t, lyat, color='#e0a45a', lw=2.6, label='Yat (finite peak, heavy tails)')
-        axC.axvline(0, color='#36d6c4', lw=0.7, ls=':')
-        axC.set_ylim(0, ymax); axC.set_xticks([])
-        axC.set_xlabel('distance from μ (perpendicular cut)', color=MUTED, fontsize=8.5)
-        axC.set_ylabel('kernel value', color=MUTED, fontsize=8.5); axC.tick_params(colors=MUTED, labelsize=7)
-        axC.legend(loc='upper right', fontsize=7.2, facecolor=PANEL, edgecolor=LINE, labelcolor=INK)
-        axC.set_title(f'ε = {eps:.2f}   (softening knob)', fontsize=9, color=INK, pad=3)
-        for s in axC.spines.values(): s.set_color(LINE)
-        frames.append(fig_rgba(fig))
-    frames = frames + frames[::-1]                     # breathe in and out
-    save_gif(PUB / 'handbuilt-kernel-shape.gif', frames, fps=16, hold=2)
+    yat = (dot ** 2 / (dist2 + eps)).reshape(gN, gN)
+    lyat = cdot ** 2 / (t ** 2 + eps)                          # softened inverse-square
+    linv = cdot ** 2 / (t ** 2 + 1e-3)                         # true inverse-square (blows up)
+    lrbf = (cdot ** 2 / eps) * np.exp(-t ** 2 / (2 * (eps ** 0.5) ** 2))   # matched-peak Gaussian
+    ymax = cdot ** 2 / eps * 1.15
+    fig = plt.figure(figsize=(8.6, 4.2), dpi=110, facecolor=BG)
+    fig.text(0.5, 0.93, 'The Yat kernel: a softened inverse-square well', ha='center', fontsize=14, weight='bold')
+    fig.text(0.5, 0.85, 'k(z, μ) = (z·μ + b)² / (‖z − μ‖² + ε): peaked at the prototype, finite there because ε softens the singularity, heavy-tailed where a Gaussian dies',
+             ha='center', fontsize=8.0, color=MUTED)
+    axH = fig.add_axes([0.04, 0.09, 0.42, 0.68]); axH.set_facecolor(PANEL)
+    axH.imshow(yat, extent=[-1.2, 2.6, -1.9, 1.9], origin='lower', cmap='magma',
+               vmin=0, vmax=np.percentile(yat, 99.0))
+    axH.scatter([mu[0]], [mu[1]], s=70, color='#36d6c4', edgecolors='white', linewidths=1.2, zorder=3)
+    axH.text(mu[0], mu[1] + 0.26, 'prototype μ', color='#36d6c4', fontsize=8.5, ha='center')
+    axH.axvline(mu[0], color='#36d6c4', lw=0.8, ls=':', alpha=0.6)   # the cross-section line
+    axH.set_xticks([]); axH.set_yticks([]); axH.set_title('k(z, μ) over the plane', fontsize=9, color=MUTED, pad=3)
+    for s in axH.spines.values(): s.set_color(LINE)
+    axC = fig.add_axes([0.57, 0.16, 0.39, 0.58]); axC.set_facecolor(PANEL)
+    axC.plot(t, np.minimum(linv, ymax * 1.5), color='#c2553a', lw=1.3, ls=':', label='true 1/r²  (blows up)')
+    axC.plot(t, lrbf, color='#5a9fd0', lw=1.6, ls='--', label='Gaussian (thin tails)')
+    axC.plot(t, lyat, color='#e0a45a', lw=2.6, label='Yat (finite peak, heavy tails)')
+    axC.axvline(0, color='#36d6c4', lw=0.7, ls=':')
+    axC.set_ylim(0, ymax); axC.set_xticks([])
+    axC.set_xlabel('distance from μ (perpendicular cut)', color=MUTED, fontsize=8.5)
+    axC.set_ylabel('kernel value', color=MUTED, fontsize=8.5); axC.tick_params(colors=MUTED, labelsize=7)
+    axC.legend(loc='upper right', fontsize=7.2, facecolor=PANEL, edgecolor=LINE, labelcolor=INK)
+    axC.set_title(f'ε = {eps:.2f}   (the placed softening)', fontsize=9, color=INK, pad=3)
+    for s in axC.spines.values(): s.set_color(LINE)
+    save_png(PUB / 'handbuilt-kernel-shape.png', fig)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -514,10 +443,10 @@ def gif_kmeans_prototypes():
 
 
 if __name__ == '__main__':
-    gif_orient_rose()
-    gif_coarsegrain()
-    gif_yat_well()
-    gif_sobel_gradient()
-    gif_kernel_shape()
-    gif_kmeans_prototypes()
+    png_orient_rose()          # static: a fixed histogram, not a process
+    png_coarsegrain()          # static: a fixed pooling, not a process
+    png_yat_well()             # static: fixed per-class scores, not a process
+    png_sobel_gradient()       # static: a fixed convolution, not a process
+    png_kernel_shape()         # static: a math plot at the placed ε
+    gif_kmeans_prototypes()    # KEEP: real Lloyd iterations, prototypes migrate
     print('HANDBUILT_GIFS_DONE')

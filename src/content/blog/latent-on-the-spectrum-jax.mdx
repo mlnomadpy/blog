@@ -46,8 +46,8 @@ import CiteAs from '../../components/CiteAs.astro';
 
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/blog/spectral-codebook.gif" alt="Animated spectral embedding of a label kernel morphing from an even ring to a horseshoe as the kernel spectrum goes from flat to peaked" loading="eager" width="1100" height="520" />
-  <figcaption>A codebook is the spectral embedding of a label kernel, computed live in JAX. As the kernel goes from flat (structureless) to graded (similarity falls off with class distance), its eigenspectrum peaks and the top two modes morph the codebook from an even ring (the simplex) into the horseshoe of classical MDS. The embedding and the spectrum are both `jnp.linalg.eigh`.</figcaption>
+  <img src="/blog/spectral-codebook.png" alt="Spectral embedding of a label kernel: a flat kernel gives an even ring (the simplex, flat spectrum), a graded kernel gives a horseshoe (peaked spectrum), shown side by side with their eigenspectra" loading="eager" width="1100" height="520" />
+  <figcaption>A codebook is the spectral embedding of a label kernel, computed in JAX. A flat (structureless) kernel has a flat spectrum and its top two modes give an even ring, the simplex; a graded kernel (similarity falls off with class distance) has a peaked spectrum and the same two modes give the horseshoe of classical MDS. The embedding and the spectrum are both `jnp.linalg.eigh`.</figcaption>
 </figure>
 
 Everything here is plain JAX. The objects are tiny (a `C × C` label kernel, a handful of features) so the linear algebra is legible.
@@ -100,7 +100,7 @@ for name, S in [("flat", flat), ("blocks", blocks - blocks.mean()), ("graded", g
 # graded -> [1.  0.7 0.3]  (a smooth tail -> a curved 1-D manifold, the horseshoe)
 ```
 
-The hero animation above is exactly this `spectral_codebook(S, 2)` evaluated along a dial from `flat` to `graded`, with each frame's eigenvectors orthogonally aligned to the previous so the morph is smooth.
+The hero figure above is exactly this `spectral_codebook(S, 2)` evaluated on the `flat` and `graded` kernels, with the two embeddings orthogonally aligned so the contrast is legible.
 
 ## Kernel-target alignment
 
@@ -116,11 +116,11 @@ gram = codes @ codes.T                                   # the codebook's own si
 print(alignment(gram, graded - graded.mean()))           # high: the 2-D code already captures the kernel
 ```
 
-Raise `d` and the alignment climbs toward 1 as the codebook is allowed to reproduce more of the kernel's spectrum. The figure below sweeps that budget directly: for each `d` it rebuilds the rank-`d` Gram from the top eigenmodes and lays the reconstruction next to the target kernel, with `alignment` and `gram_error` charting the spend.
+Raise `d` and the alignment climbs toward 1 as the codebook is allowed to reproduce more of the kernel's spectrum. The figure below shows that budget directly: for a few values of `d` it rebuilds the rank-`d` Gram from the top eigenmodes and lays the reconstruction next to the target kernel, with `alignment` and `gram_error` charted across every budget.
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/blog/mds-reconstruction.gif" alt="Animated rank-d reconstruction of a graded label kernel sharpening into the target as the budget d grows, with kernel-target alignment rising and reconstruction error falling" loading="lazy" width="1100" height="520" />
-  <figcaption>How many modes to spend, computed live in JAX. For each budget `d` the rank-`d` Gram matrix (the top `d` eigenmodes of the label kernel) is laid beside the target. As `d` grows the reconstruction sharpens back into the kernel, `alignment` climbs toward 1, and `gram_error` falls toward 0: the error you carry is exactly the tail of the spectrum you chose not to spend on.</figcaption>
+  <img src="/blog/mds-reconstruction.png" alt="Rank-d reconstruction of a graded label kernel at d = 1, 3, and 10 beside the target, with kernel-target alignment rising and reconstruction error falling across the full budget d" loading="lazy" width="1100" height="520" />
+  <figcaption>How many modes to spend, computed in JAX. The rank-`d` Gram matrix (the top `d` eigenmodes of the label kernel) is laid beside the target for `d` = 1, 3, and 10. As `d` grows the reconstruction sharpens back into the kernel; the curves show `alignment` climbing toward 1 and `gram_error` falling across every budget: the error you carry is exactly the tail of the spectrum you chose not to spend on.</figcaption>
 </figure>
 
 A handful of modes already recover most of a graded kernel, which is the whole reason a low-dimensional codebook works: the kernel's mass lives in its top eigenvalues, and the rest is a tail you can drop.
@@ -167,22 +167,22 @@ a = soft_assignment(z, mu)        # e.g. [0.70, 0.27, 0.02, 0.01]: "mostly cat, 
 Sharpen `tau → 0` and the vector collapses to one-hot, and the relation between classes is erased, exactly the effect label smoothing and a low temperature have. The information is the off-one-hot mass. On a *graded* codebook the point is visible in the geometry: a feature near class `k` lends its mass to `k`'s neighbours on the horseshoe, so the assignment encodes which classes are similar, and cooling the temperature burns that structure away.
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/blog/dark-knowledge.gif" alt="Animated softmax temperature sweep over a graded codebook: a feature's soft assignment spreads onto neighbouring classes when warm and collapses to a one-hot spike when cold" loading="lazy" width="1100" height="520" />
-  <figcaption>Dark knowledge is the off-one-hot mass, computed live in JAX. A feature (★) sits near class 6 on a graded horseshoe codebook; its `soft_assignment` is shown as marker sizes (left) and bars (right). Warm: the mass spreads onto the geometric neighbours (5, 7, 8), encoding class similarity, with a high dark-knowledge mass and entropy. Cool the temperature and it collapses to a one-hot spike on class 6: the relation between classes is erased and the dark-knowledge mass goes to 0.</figcaption>
+  <img src="/blog/dark-knowledge.png" alt="A feature's soft assignment over a graded codebook at two temperatures: warm spreads onto neighbouring classes, cold collapses to a one-hot spike" loading="lazy" width="1100" height="520" />
+  <figcaption>Dark knowledge is the off-one-hot mass, computed in JAX. A feature (★) sits near class 6 on a graded horseshoe codebook; its `soft_assignment` is shown as marker sizes (left of each pair) and bars (right). Warm (τ = 0.90): the mass spreads onto the geometric neighbours (5, 7, 8), encoding class similarity, with dark-knowledge mass 0.77 and high entropy. Cold (τ = 0.03): it collapses to a one-hot spike on class 6, the relation between classes erased and the dark-knowledge mass at 0.</figcaption>
 </figure>
 
-## Rendering the GIFs
+## Rendering the figures
 
-All four animations are generated with Python, JAX, and matplotlib: the linear algebra in JAX, the drawing in matplotlib:
+All four figures are generated with Python, JAX, and matplotlib: the linear algebra in JAX, the drawing in matplotlib. Three are static contrasts (a kernel dial, a budget, a temperature are knobs, not processes); only neural collapse is a real training run, so only it animates:
 
 ```bash
-python scripts/render_spectral_codebook_gif.py     # flat -> simplex -> horseshoe morph
-python scripts/render_mds_reconstruction_gif.py    # rank-d Gram rebuild, alignment up / error down
-python scripts/render_information_collapse_gif.py  # neural collapse of the Σ_W spectrum
-python scripts/render_dark_knowledge_gif.py        # temperature sweep, soft assignment -> one-hot
+python scripts/render_spectral_codebook_gif.py     # static: flat ring vs graded horseshoe
+python scripts/render_mds_reconstruction_gif.py    # static: rank-d Gram rebuild, alignment / error vs d
+python scripts/render_information_collapse_gif.py  # animated: neural collapse of the Σ_W spectrum
+python scripts/render_dark_knowledge_gif.py        # static: warm vs cold soft assignment
 ```
 
-The first sweeps a label kernel from flat to graded, recomputing `spectral_codebook(S, 2)` and the eigenspectrum each frame (with Procrustes alignment between frames so the morph is smooth). The second sweeps the budget `d`, rebuilding the rank-`d` Gram and recomputing `alignment` and `gram_error`. The third trains a small encoder and recomputes `class_covariances` each frame. The fourth fixes a graded codebook and sweeps the softmax temperature, recomputing `soft_assignment` each frame. None is a benchmark; they are visual audits of the spectrum.
+The first computes `spectral_codebook(S, 2)` and the eigenspectrum for the flat and graded kernels (Procrustes-aligned so the contrast reads). The second rebuilds the rank-`d` Gram and recomputes `alignment` and `gram_error` across every budget `d`. The third actually trains a small encoder, recomputing `class_covariances` every few optimizer steps so you watch the collapse happen. The fourth fixes a graded codebook and evaluates `soft_assignment` at a warm and a cold temperature. None is a benchmark; they are visual audits of the spectrum.
 
 ## What this leaves out
 

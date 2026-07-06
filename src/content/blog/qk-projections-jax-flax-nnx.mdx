@@ -169,8 +169,8 @@ print(vocab[int(pred[-1].argmax())])   # -> "c": after the latest "b", predict "
 ```
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/blog/qk-induction.gif" alt="Animated induction head: the query position sweeps a repeated-token sequence and attends to the token after an earlier copy of the current token" loading="lazy" width="1100" height="520" />
-  <figcaption>The same computation, swept across query positions in JAX. Each query reads its own token's identity; each key reads its position's predecessor. So the query attends to positions one step after an earlier copy of itself and copies what came next: the latest <code>b</code> predicts <code>c</code>. The bright stripe is a directed relation no symmetric score could produce.</figcaption>
+  <img src="/blog/qk-induction.png" alt="Induction head: the causal attention matrix, with the latest query row highlighted, attends to the token after an earlier copy of the current token" loading="lazy" width="1100" height="520" />
+  <figcaption>The same computation in JAX, with the latest query row highlighted. Each query reads its own token's identity; each key reads its position's predecessor. So the query attends to positions one step after an earlier copy of itself and copies what came next: the latest <code>b</code> predicts <code>c</code>. The bright stripe is a directed relation no symmetric score could produce.</figcaption>
 </figure>
 
 In a real model `q` and `k` are not one-hot embeddings but the outputs of `W_Q` and `W_K`; the induction circuit is just a particular $B$ that pairs *current-token* query features against *previous-token* key features. The asymmetry ("ask for my identity, answer with my predecessor") is exactly what a non-symmetric $B$ allows and a shared projection forbids.

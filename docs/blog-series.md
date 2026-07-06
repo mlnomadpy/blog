@@ -5,7 +5,7 @@ conventions we write to, the story arc of the active (Yat-kernel) series, a
 ledger of which concepts are already "spent" so we stop re-explaining them, and
 the open threads for future posts.
 
-_Last updated: 2026-07-08 (narrative-audit fixes applied to all drafts; everything published except modality-gap-complementary and simo2-geometry-by-construction). `D` = draft._
+_Last updated: 2026-07-08 (six new JAX companions published; systemic GIF audit: 38 disguised-chart GIFs converted to static figures, 79 real-process GIFs remain; every live post except what-an-mlp-knows now has a live companion). `D` = draft._
 
 ---
 
@@ -54,7 +54,7 @@ post); keep that file in sync with this catalog when a post publishes.
 | live | welch-bound-good-latent-space | welch-bound-jax-analysis |
 | live | latent-on-the-spectrum | latent-on-the-spectrum-jax |
 | live | three-states-of-information | three-states-of-information-jax |
-| live | distillation-is-kernel-transfer | -- (companion planned; the arc capstone) |
+| live | distillation-is-kernel-transfer | distillation-is-kernel-transfer-jax-flax-nnx |
 | **D** | modality-gap-complementary | -- |
 | **D** | simo2-geometry-by-construction | -- |
 
@@ -76,7 +76,7 @@ capstone (the Yat prototype story returned to the transformer).
 | live | where-does-a-weight-live | where-does-a-weight-live-jax-flax-nnx |
 | live | what-can-a-weight-be | what-can-a-weight-be-jax-flax-nnx |
 | live | mlp-block-is-a-representer-theorem | mlp-block-is-a-representer-theorem-jax-flax-nnx |
-| live | regularization-is-a-price-list | -- (companion planned) |
+| live | regularization-is-a-price-list | regularization-is-a-price-list-jax-flax-nnx |
 
 ### Arc C: the Yat kernel / prototype neuron (the active story)
 | status | explainer | companion |
@@ -86,11 +86,11 @@ capstone (the Yat prototype story returned to the transformer).
 | live | edit-a-network-by-hand | edit-a-network-jax-flax-nnx |
 | live | train-the-features | train-the-features-jax-flax-nnx |
 | live | you-dont-have-to-train-the-features | handbuilt-features-jax-flax-nnx |
-| live | depth-by-construction | -- (companion planned) |
-| live | calibration-of-a-bounded-net | -- (companion planned) |
+| live | depth-by-construction | depth-by-construction-jax-flax-nnx |
+| live | calibration-of-a-bounded-net | calibration-of-a-bounded-net-jax-flax-nnx |
 | live | a-risk-model-that-names-its-reasons | a-risk-model-that-names-its-reasons-jax-flax-nnx |
-| live | your-network-is-a-fixed-point | -- (companion still wanted; published without it by user decision 2026-07-08) |
-| live | edit-a-fixed-point | -- (companion planned) |
+| live | your-network-is-a-fixed-point | your-network-is-a-fixed-point-jax-flax-nnx |
+| live | edit-a-fixed-point | edit-a-fixed-point-jax-flax-nnx |
 
 ### Arc D: networks as integrators (new, opened 2026-07-04)
 The standing move: numerical analysis as an architecture catalog. Each

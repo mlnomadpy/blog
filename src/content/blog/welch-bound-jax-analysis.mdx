@@ -117,8 +117,8 @@ Before asking whether the class means form a simplex, ask the simpler question:
 did each class become a point?
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/blog/jax-welch/class-collapse.gif" alt="Three colored classes tightening from loose clouds into class centroids while collapse ratio and within-class variance fall" loading="eager" width="1140" height="600" />
-  <figcaption>Metric 1: collapse. The class means are already in a triangular arrangement; the only thing changing is within-class spread. The collapse ratio and within-class variance fall as each class condenses to its code.</figcaption>
+  <img src="/blog/jax-welch/class-collapse.png" alt="Two panels: three colored classes as loose clouds, then condensed to their class centroids, with collapse ratio and within-class variance shown at each extreme" loading="eager" width="1140" height="600" />
+  <figcaption>Metric 1: collapse. The class means sit in the same triangular arrangement in both panels; only the within-class spread differs. The collapse ratio and within-class variance drop from loose clouds (left) to condensed codes (right).</figcaption>
 </figure>
 
 The direct metric is within-class variance:
@@ -154,8 +154,8 @@ A model can make clusters look separated while secretly wasting dimensions. The
 next audit asks whether the embedding really occupies the axes available to it.
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/blog/jax-welch/rank-collapse.gif" alt="A 2D point cloud is gradually squashed into a line while effective rank falls from about 2 to about 1" loading="lazy" width="1140" height="600" />
-  <figcaption>Metric 2: rank. The cloud is still spread out horizontally, but the second direction dies. Effective rank catches the lost dimension.</figcaption>
+  <img src="/blog/jax-welch/rank-collapse.png" alt="Two panels: a round 2D point cloud using both axes, then the same cloud squashed onto one axis, with effective rank near 2 and near 1 respectively" loading="lazy" width="1140" height="600" />
+  <figcaption>Metric 2: rank. The right cloud is still spread out horizontally, but the second direction is dead. Effective rank falls from about 2 to about 1 and catches the lost dimension.</figcaption>
 </figure>
 
 The covariance eigenvalues tell you where the energy went:
@@ -383,7 +383,7 @@ G = jax.device_get(gram(class_means(z, y, c)))
 Plot that matrix during training. If the off-diagonal entries become uniform,
 the story is happening.
 
-## Regenerate The GIFs
+## Regenerate The Figures
 
 The renderer lives in `scripts/jax-welch-geometry/`:
 
@@ -393,10 +393,12 @@ pip install -r requirements.txt
 python generate.py
 ```
 
-It validates each descent against theory, then writes five files:
+It validates each descent against theory, then writes five files. The two audit
+metrics are controlled contrasts, so they ship as static figures; the three
+descents are real optimizations, so they animate:
 
-- `public/jax-welch/class-collapse.gif`
-- `public/jax-welch/rank-collapse.gif`
+- `public/jax-welch/class-collapse.png`
+- `public/jax-welch/rank-collapse.png`
 - `public/jax-welch/simplex-descent.gif`
 - `public/jax-welch/welch-descent.gif`
 - `public/jax-welch/benign-landscape.gif`

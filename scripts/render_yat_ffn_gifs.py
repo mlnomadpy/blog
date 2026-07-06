@@ -7,17 +7,18 @@ exact numpy forward pass that the whitebox script asserted matches Flax to <1e-3
 pixel that moves is a real number from that trained model: real generations, real kernel
 weights, real slot contributions. Nothing is retrained and nothing is fabricated.
 
-GIFs (all written to public/):
-  yat-ffn-memory.gif      READ:      the 256 memory slots as a 16x16 grid lighting up,
-                                     slot by slot, during a real generation.
-  yat-ffn-attribution.gif ATTRIBUTE: one next-token logit assembled slot by slot, with
-                                     the remaining gap ticking down to 0.00 (exact sum).
-  yat-ffn-gain-sweep.gif  EDIT:      the gain sweep on the newline slot unrolled; a real
-                                     200-char generation types out at every gain while
-                                     the newline fraction curve draws itself.
-  yat-ffn-abstain.gif     ABSTAIN:   a string that degrades from Shakespeare into random
-                                     characters; each token tints by its live peak kernel
-                                     weight as a readout marches along.
+Figures (all written to public/). Two are GIFs — real temporal processes (a live
+generation, a real intervention sweep); two are still PNGs — fixed decompositions
+whose whole story is the finished figure:
+  yat-ffn-memory.gif      READ:      (GIF) the 256 memory slots as a 16x16 grid lighting
+                                     up, slot by slot, during a real generation.
+  yat-ffn-attribution.png ATTRIBUTE: (PNG) one next-token logit as an exact sum of
+                                     per-slot pushes; the remainder is 0.00 (exact sum).
+  yat-ffn-gain-sweep.gif  EDIT:      (GIF) the gain sweep on the newline slot; a real
+                                     200-char generation at every gain (coherent → flooded).
+  yat-ffn-abstain.png     ABSTAIN:   (PNG) a string that degrades from Shakespeare into
+                                     random characters; each token tints by its peak
+                                     kernel weight from one real forward pass.
 
 Run: python3 scripts/render_yat_ffn_gifs.py [memory|attribution|gainsweep|abstain ...]
 """
@@ -214,6 +215,15 @@ def save_gif(name, frames, fps, hold=12):
     return out
 
 
+def save_png(name, fig):
+    out = PUB / f"{name}.png"
+    fig.savefig(out, dpi=100, facecolor=BG)
+    plt.close(fig)
+    kb = out.stat().st_size / 1024
+    print(f"wrote {out.name}: {kb:.0f} KB")
+    return out
+
+
 # ── sanity: the loaded export reproduces the whitebox script's numbers ───────
 def sanity():
     for u in [198, 145, 248]:
@@ -314,9 +324,11 @@ def gif_memory():
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# GIF 2: ATTRIBUTE. One next-token logit assembled slot by slot, gap -> 0.00.
+# FIGURE 2: ATTRIBUTE (static). One next-token logit as an exact sum of per-slot
+# pushes. This is a fixed decomposition — the whole story is the finished bar
+# chart and the exact 0.00 remainder — so it is a still figure, not an animation.
 # ═════════════════════════════════════════════════════════════════════════════
-def gif_attribution():
+def png_attribution():
     prompt = "ROMEO:\nWhat"
     x = residual_into_ffn(P, encode(prompt), LAST)[-1]
     kw = yat_kw(x[None], P["blocks"][LAST]["ffn"])[0]
@@ -338,67 +350,49 @@ def gif_attribution():
     n_bars = len(values)
     xmax = max(max(values), target) * 1.18
     xmin = min(0.0, min(values) * 1.3) - 0.02 * xmax
+    run = float(sum(values))
+    gap = abs(target - run)
 
     Wpx, Hpx = 880, 560
-    frames = []
-    GROW = 6                                     # frames per bar
-    for step in range(n_bars * GROW + 8):
-        if step < 8:                             # intro: context + empty axes
-            done, t = -1, 0.0
-        else:
-            done, t = divmod(step - 8, GROW)
-            t = ease((t + 1) / GROW)
-        fig = plt.figure(figsize=(Wpx / 100, Hpx / 100), dpi=100, facecolor=BG)
-        fig.text(0.5, 0.955, "One next-token logit, assembled slot by slot",
-                 ha="center", color=INK, fontsize=15, weight="bold")
-        fig.text(0.5, 0.909,
-                 f"context …'ROMEO:¶What'  →  the FFN most promotes '{ITOS[nxt]}';  "
-                 "each bar is one slot's exact share, k(Wᵤ, x)·(vᵤ·U[:,'e'])",
-                 ha="center", color=MUTED, fontsize=9.5)
+    fig = plt.figure(figsize=(Wpx / 100, Hpx / 100), dpi=100, facecolor=BG)
+    fig.text(0.5, 0.955, "One next-token logit, an exact sum of slot pushes",
+             ha="center", color=INK, fontsize=15, weight="bold")
+    fig.text(0.5, 0.909,
+             f"context …'ROMEO:¶What'  →  the FFN most promotes '{ITOS[nxt]}';  "
+             "each bar is one slot's exact share, k(Wᵤ, x)·(vᵤ·U[:,'e'])",
+             ha="center", color=MUTED, fontsize=9.5)
 
-        ax = fig.add_axes([0.40, 0.14, 0.55, 0.70])
-        ax.set_facecolor(PANEL)
-        ax.set_xlim(xmin, xmax)
-        ax.set_ylim(n_bars - 0.4, -0.6)
-        ax.set_yticks([])
-        ax.tick_params(colors=MUTED, labelsize=8)
-        for sp in ax.spines.values():
-            sp.set_color(LINE)
-        ax.axvline(0, color=LINE, lw=0.8)
-        ax.axvline(target, color=GOOD, lw=1.4, ls="--")
-        ax.text(target, -0.52, f" full FFN push {target:.2f}", color=GOOD, fontsize=8.5,
-                ha="left", va="bottom")
+    ax = fig.add_axes([0.40, 0.14, 0.55, 0.70])
+    ax.set_facecolor(PANEL)
+    ax.set_xlim(xmin, xmax)
+    ax.set_ylim(n_bars - 0.4, -0.6)
+    ax.set_yticks([])
+    ax.tick_params(colors=MUTED, labelsize=8)
+    for sp in ax.spines.values():
+        sp.set_color(LINE)
+    ax.axvline(0, color=LINE, lw=0.8)
+    ax.axvline(target, color=GOOD, lw=1.4, ls="--")
+    ax.text(target, -0.52, f" full FFN push {target:.2f}", color=GOOD, fontsize=8.5,
+            ha="left", va="bottom")
 
-        run = 0.0
-        for j in range(n_bars):
-            if j < done:
-                w = values[j]
-            elif j == done:
-                w = values[j] * t
-            else:
-                w = 0.0
-            run += w
-            c = POS if j < NTOP else NEG
-            if j <= done:
-                ax.barh(j, w, height=0.62, color=c, alpha=0.9 if j <= done else 0.0)
-                ax.text(max(w, 0) + 0.015 * xmax, j, f"{values[j]:+.2f}" if j < done or t == 1.0 else "",
-                        color=INK, fontsize=8, va="center", family="monospace")
-            fig.text(0.045, 0.14 + 0.70 * (1 - (j + 0.6) / (n_bars + 0.2)),
-                     labels[j], color=(INK if j <= done else DIM), fontsize=8.6,
-                     family="monospace", va="center")
+    for j in range(n_bars):
+        w = values[j]
+        c = POS if j < NTOP else NEG
+        ax.barh(j, w, height=0.62, color=c, alpha=0.9)
+        ax.text(max(w, 0) + 0.015 * xmax, j, f"{values[j]:+.2f}",
+                color=INK, fontsize=8, va="center", family="monospace")
+        fig.text(0.045, 0.14 + 0.70 * (1 - (j + 0.6) / (n_bars + 0.2)),
+                 labels[j], color=INK, fontsize=8.6, family="monospace", va="center")
 
-        gap = abs(target - run)
-        fig.text(0.40, 0.055, "running sum of slot pushes:", color=MUTED, fontsize=9.5)
-        fig.text(0.615, 0.055, f"{run:+.2f}", color=POS, fontsize=11, weight="bold",
-                 family="monospace")
-        fig.text(0.70, 0.055, "remaining gap:", color=MUTED, fontsize=9.5)
-        fig.text(0.835, 0.055,
-                 f"{gap:.2f}" if done < n_bars - 1 or t < 1.0 else "0.00  (exact)",
-                 color=(GOOD if gap < 0.005 else INK), fontsize=11, weight="bold",
-                 family="monospace")
-        frames.append(grab(fig))
-    print(f"  attribution: final gap {abs(target - sum(values)):.2e}")
-    save_gif("yat-ffn-attribution", frames, fps=7, hold=16)
+    fig.text(0.40, 0.055, "sum of all slot pushes:", color=MUTED, fontsize=9.5)
+    fig.text(0.595, 0.055, f"{run:+.2f}", color=POS, fontsize=11, weight="bold",
+             family="monospace")
+    fig.text(0.70, 0.055, "remaining gap:", color=MUTED, fontsize=9.5)
+    fig.text(0.835, 0.055, "0.00  (exact)" if gap < 0.005 else f"{gap:.2f}",
+             color=(GOOD if gap < 0.005 else INK), fontsize=11, weight="bold",
+             family="monospace")
+    print(f"  attribution: final gap {gap:.2e}")
+    save_png("yat-ffn-attribution", fig)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -491,9 +485,11 @@ def gif_gainsweep(u_nl):
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# GIF 4: ABSTAIN. Prose degrades into gibberish; the memory goes dark, live.
+# FIGURE 4: ABSTAIN (static). Prose degrades into gibberish and the memory goes
+# dark. Every character's tint and the whole trace come from one forward pass —
+# a fixed array of numbers, no generation and no sweep — so it is a still figure.
 # ═════════════════════════════════════════════════════════════════════════════
-def gif_abstain():
+def png_abstain():
     # the opening of tinyshakespeare, the training corpus, sliced to 64 chars
     shake = ("First Citizen:\nBefore we proceed any further, hear me speak.\n\n"
              "All:\nSpeak, speak.\n")[:64]
@@ -515,67 +511,49 @@ def gif_abstain():
 
     Wpx, Hpx = 880, 560
     cols = 32
-    frames = []
     N = len(seq)
-    for i in range(N):
-        fig = plt.figure(figsize=(Wpx / 100, Hpx / 100), dpi=100, facecolor=BG)
-        fig.text(0.5, 0.955, "The memory goes dark when the prose does",
-                 ha="center", color=INK, fontsize=15, weight="bold")
-        fig.text(0.5, 0.912,
-                 "each character tints by its peak memory weight, maxᵤ k(Wᵤ, x), "
-                 "from a real forward pass",
-                 ha="center", color=MUTED, fontsize=9.5)
+    fig = plt.figure(figsize=(Wpx / 100, Hpx / 100), dpi=100, facecolor=BG)
+    fig.text(0.5, 0.955, "The memory goes dark when the prose does",
+             ha="center", color=INK, fontsize=15, weight="bold")
+    fig.text(0.5, 0.912,
+             "each character tints by its peak memory weight, maxᵤ k(Wᵤ, x), "
+             "from a real forward pass",
+             ha="center", color=MUTED, fontsize=9.5)
 
-        # the string, tinted as the readout passes
-        axs = fig.add_axes([0.07, 0.50, 0.86, 0.36])
-        axs.set_facecolor(PANEL)
-        axs.set_xlim(-0.6, cols)
-        axs.set_ylim(3.9, -0.9)
-        axs.set_xticks([])
-        axs.set_yticks([])
-        for sp in axs.spines.values():
-            sp.set_color(LINE)
-        for ci, c in enumerate(seq):
-            r, k = divmod(ci, cols)
-            if ci <= i:
-                col = shade(peak[ci])
-                w = "bold" if ci == i else "normal"
-            else:
-                col, w = DIM, "normal"
-            axs.text(k, r, glyph(c), color=col, fontsize=11.5, family="monospace",
-                     ha="center", va="center", weight=w)
-        cy, cx = divmod(i, cols)
-        axs.add_patch(plt.Rectangle((cx - 0.5, cy - 0.5), 1.0, 1.0, fill=False,
-                                    ec=INK, lw=1.1))
-        axs.text(7.5, -0.72, "real Shakespeare", color=GOOD, fontsize=8.5, ha="center")
-        axs.text(23.5, -0.72, "random characters", color=NEG, fontsize=8.5, ha="center")
+    # the whole string, tinted by its peak memory weight
+    axs = fig.add_axes([0.07, 0.50, 0.86, 0.36])
+    axs.set_facecolor(PANEL)
+    axs.set_xlim(-0.6, cols)
+    axs.set_ylim(3.9, -0.9)
+    axs.set_xticks([])
+    axs.set_yticks([])
+    for sp in axs.spines.values():
+        sp.set_color(LINE)
+    for ci, c in enumerate(seq):
+        r, k = divmod(ci, cols)
+        axs.text(k, r, glyph(c), color=shade(peak[ci]), fontsize=11.5,
+                 family="monospace", ha="center", va="center")
+    axs.text(7.5, -0.72, "real Shakespeare", color=GOOD, fontsize=8.5, ha="center")
+    axs.text(23.5, -0.72, "random characters", color=NEG, fontsize=8.5, ha="center")
 
-        # the peak-weight trace, drawing itself under the string
-        axc = fig.add_axes([0.09, 0.115, 0.84, 0.30])
-        axc.set_facecolor(PANEL)
-        axc.set_xlim(0, N - 1)
-        axc.set_ylim(0, vmax * 1.08)
-        axc.tick_params(colors=MUTED, labelsize=8)
-        for sp in axc.spines.values():
-            sp.set_color(LINE)
-        axc.axvline(63.5, color=LINE, lw=1.0, ls="--")
-        axc.set_xlabel("position in the string", color=MUTED, fontsize=9)
-        axc.set_ylabel("peak memory weight", color=MUTED, fontsize=9)
-        xs = np.arange(i + 1)
-        axc.plot(xs[: min(i + 1, 64)], peak[: min(i + 1, 64)], "-", color=GOOD, lw=1.8)
-        if i >= 64:
-            axc.plot(np.arange(63, i + 1), peak[63: i + 1], "-", color=NEG, lw=1.8)
-        axc.plot([i], [peak[i]], "o", color=INK, ms=5, mec=BG, zorder=5)
-        msg = f"mean so far: Shakespeare {peak[:min(i + 1, 64)].mean():.2f}"
-        if i >= 64:
-            msg += f"   random {peak[64:i + 1].mean():.2f}"
-        axc.text(0.98, 0.955, msg, transform=axc.transAxes, color=INK, fontsize=9.5,
-                 family="monospace", va="top", ha="right",
-                 bbox=dict(boxstyle="round,pad=0.3", fc=PANEL, ec=LINE, lw=0.8))
-        frames.append(grab(fig))
-        if (i + 1) % 32 == 0:
-            print(f"  abstain: {i + 1}/{N} frames")
-    save_gif("yat-ffn-abstain", frames, fps=9, hold=14)
+    # the full peak-weight trace, Shakespeare half then random half
+    axc = fig.add_axes([0.09, 0.115, 0.84, 0.30])
+    axc.set_facecolor(PANEL)
+    axc.set_xlim(0, N - 1)
+    axc.set_ylim(0, vmax * 1.08)
+    axc.tick_params(colors=MUTED, labelsize=8)
+    for sp in axc.spines.values():
+        sp.set_color(LINE)
+    axc.axvline(63.5, color=LINE, lw=1.0, ls="--")
+    axc.set_xlabel("position in the string", color=MUTED, fontsize=9)
+    axc.set_ylabel("peak memory weight", color=MUTED, fontsize=9)
+    axc.plot(np.arange(64), peak[:64], "-", color=GOOD, lw=1.8)
+    axc.plot(np.arange(63, N), peak[63:], "-", color=NEG, lw=1.8)
+    msg = f"mean: Shakespeare {m_in:.2f}   random {m_ood:.2f}"
+    axc.text(0.98, 0.955, msg, transform=axc.transAxes, color=INK, fontsize=9.5,
+             family="monospace", va="top", ha="right",
+             bbox=dict(boxstyle="round,pad=0.3", fc=PANEL, ec=LINE, lw=0.8))
+    save_png("yat-ffn-abstain", fig)
 
 
 if __name__ == "__main__":
@@ -585,8 +563,8 @@ if __name__ == "__main__":
     if "memory" in want:
         gif_memory()
     if "attribution" in want:
-        gif_attribution()
+        png_attribution()
     if "gainsweep" in want:
         gif_gainsweep(u_nl)
     if "abstain" in want:
-        gif_abstain()
+        png_abstain()
