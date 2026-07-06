@@ -1,0 +1,448 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="generator" content="Astro v5.18.1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#fbfaf6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)"><title>How Far Down Can You Build a Network by Hand?</title><meta name="description" content="The recipe for layer 2 has sat on the shelf for half a century. This post builds it by hand on Fashion-MNIST and measures where construction stops."><meta name="keywords" content="hand-built deep network, depth by construction, second feature layer by hand, junction detectors, combinatorial feature explosion, interpretable by construction, Yat kernel, ml, kernels, interpretability, prototypes, computer-vision, construction, depth, yat, deep-learning"><meta name="author" content="Taha Bouhsine"><link rel="canonical" href="https://tahabouhsine.com/blog/depth-by-construction/"><link rel="icon" href="/blog/favicon.svg" type="image/svg+xml"><link rel="alternate" type="application/rss+xml" title="Records of the !mmortal Data Scientist" href="/blog/rss.xml"><link rel="sitemap" href="/blog/sitemap-index.xml"><link rel="me" href="https://github.com/mlnomadpy"><link rel="me" href="https://x.com/mlnomadpy"><link rel="me" href="https://www.linkedin.com/in/tahabsn/"><link rel="me" href="https://scholar.google.com/citations?user=IsBjb3EAAAAJ"><link rel="me" href="https://g.dev/tahabsn"><link rel="author" href="https://github.com/mlnomadpy"><meta property="og:type" content="article"><meta property="og:site_name" content="Records of the !mmortal Data Scientist"><meta property="og:title" content="How Far Down Can You Build a Network by Hand?"><meta property="og:description" content="The recipe for layer 2 has sat on the shelf for half a century. This post builds it by hand on Fashion-MNIST and measures where construction stops."><meta property="og:url" content="https://tahabouhsine.com/blog/depth-by-construction/"><meta property="og:locale" content="en_US"><meta property="og:image" content="https://tahabouhsine.com/blog/og/depth-by-construction.png"><meta property="og:image:alt" content="How Far Down Can You Build? — Records of the !mmortal Data Scientist"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:type" content="image/png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@mlnomadpy"><meta name="twitter:creator" content="@mlnomadpy"><meta name="twitter:title" content="How Far Down Can You Build a Network by Hand?"><meta name="twitter:description" content="The recipe for layer 2 has sat on the shelf for half a century. This post builds it by hand on Fashion-MNIST and measures where construction stops."><meta name="twitter:image" content="https://tahabouhsine.com/blog/og/depth-by-construction.png"><meta name="twitter:image:alt" content="How Far Down Can You Build? — Records of the !mmortal Data Scientist"><meta property="article:published_time" content="2026-07-04T00:00:00.000Z"><meta property="article:author" content="Taha Bouhsine"><meta property="article:section" content="Machine Learning"><meta property="article:tag" content="ml"><meta property="article:tag" content="kernels"><meta property="article:tag" content="interpretability"><meta property="article:tag" content="prototypes"><meta property="article:tag" content="computer-vision"><meta property="article:tag" content="construction"><meta property="article:tag" content="depth"><meta property="article:tag" content="yat"><meta property="article:tag" content="deep-learning"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","@id":"https://tahabouhsine.com/blog/depth-by-construction/#article","headline":"How Far Down Can You Build?","name":"How Far Down Can You Build?","description":"The recipe for layer 2 has sat on the shelf for half a century. This post builds it by hand on Fashion-MNIST and measures where construction stops.","image":["https://tahabouhsine.com/blog/og/depth-by-construction.png"],"datePublished":"2026-07-04T00:00:00.000Z","dateModified":"2026-07-04T00:00:00.000Z","author":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#author","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","jobTitle":"Machine Learning Researcher","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"publisher":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#publisher","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"mainEntityOfPage":{"@type":"WebPage","@id":"https://tahabouhsine.com/blog/depth-by-construction/"},"keywords":"hand-built deep network, depth by construction, second feature layer by hand, junction detectors, combinatorial feature explosion, interpretable by construction, Yat kernel, ml, kernels, interpretability, prototypes, computer-vision, construction, depth, yat, deep-learning","url":"https://tahabouhsine.com/blog/depth-by-construction/","inLanguage":"en-US","wordCount":2292,"timeRequired":"PT12M","articleSection":"Machine Learning","isPartOf":{"@type":"Blog","@id":"https://tahabouhsine.com/blog/","name":"Records of the !mmortal Data Scientist","url":"https://tahabouhsine.com/blog/"}}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Blog","item":"https://tahabouhsine.com/blog/"},{"@type":"ListItem","position":2,"name":"Machine Learning","item":"https://tahabouhsine.com/blog/tag/ml/"},{"@type":"ListItem","position":3,"name":"How Far Down Can You Build?","item":"https://tahabouhsine.com/blog/depth-by-construction/"}]}</script><script>
+    (function () {
+      if (window.__gaSetup) return;
+      window.__gaSetup = true;
+      var GA_ID = 'G-373438VHJB';
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ dataLayer.push(arguments); }
+      window.gtag = window.gtag || gtag;
+      window.__gaEventQueue = window.__gaEventQueue || [];
+      window.__trackGA = function (eventName, params) {
+        if (!eventName) return;
+        var item = { name: eventName, params: params || {} };
+        if (window.__gaLoaded) {
+          gtag('event', item.name, item.params);
+        } else {
+          window.__gaEventQueue.push(item);
+        }
+      };
+
+      // Track whether the first astro:page-load has fired, so a mid-session
+      // Accept can still record the current page.
+      window.__gaFirstLoadDone = window.__gaFirstLoadDone || false;
+      document.addEventListener('astro:page-load', function () { window.__gaFirstLoadDone = true; });
+
+      window.__loadGA = function () {
+        if (window.__gaLoaded) return;
+        window.__gaLoaded = true;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+        document.head.appendChild(s);
+        gtag('js', new Date());
+        gtag('config', GA_ID, { send_page_view: false });
+        (window.__gaEventQueue || []).splice(0).forEach(function (item) {
+          gtag('event', item.name, item.params);
+        });
+        function sendPV() {
+          gtag('event', 'page_view', {
+            page_title: document.title,
+            page_location: location.href,
+            page_path: location.pathname + location.search,
+          });
+        }
+        document.addEventListener('astro:page-load', sendPV);
+        // If the initial page-load already happened (accept mid-session),
+        // record this page now; otherwise the listener catches the first one.
+        if (window.__gaFirstLoadDone) sendPV();
+      };
+
+      try {
+        if (localStorage.getItem('analytics-consent') === 'granted') window.__loadGA();
+      } catch (e) {}
+    })();
+  </script><script>
+  (() => {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'light' || stored === 'dark') {
+      document.documentElement.setAttribute('data-theme', stored);
+    }
+  })();
+</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.DstInXr_.css">
+<link rel="stylesheet" href="/blog/_astro/_slug_.BzSIaIK4.css"></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/writeups">writeups</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>
+  (() => {
+    const apply = (theme) => {
+      document.documentElement.setAttribute('data-theme', theme);
+      const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+      if (meta) meta.setAttribute('content', theme === 'dark' ? '#0e1116' : '#fbfaf6');
+      // Sync giscus iframe if present
+      const giscus = document.querySelector('iframe.giscus-frame');
+      if (giscus && giscus.contentWindow) {
+        giscus.contentWindow.postMessage(
+          { giscus: { setConfig: { theme: theme === 'dark' ? 'dark' : 'light' } } },
+          'https://giscus.app'
+        );
+      }
+    };
+
+    const init = () => {
+      const btns = document.querySelectorAll('[data-theme-toggle]');
+      btns.forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', () => {
+          const current = document.documentElement.getAttribute('data-theme')
+            || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          const next = current === 'dark' ? 'light' : 'dark';
+          localStorage.setItem('theme', next);
+          apply(next);
+        });
+      });
+    };
+
+    init();
+    document.addEventListener('astro:after-swap', init);
+    document.addEventListener('astro:page-load', init);
+  })();
+</script> </nav> </div> </header> <main id="main">  <div class="reading-progress" data-reading-progress aria-hidden="true"></div> <script>
+  (() => {
+    const init = () => {
+      const bar = document.querySelector('[data-reading-progress]');
+      if (!bar) return;
+      const update = () => {
+        const h = document.documentElement;
+        const scrolled = h.scrollTop;
+        const max = h.scrollHeight - h.clientHeight;
+        const pct = max > 0 ? Math.min(100, (scrolled / max) * 100) : 0;
+        bar.style.width = pct + '%';
+      };
+      // Coalesce scroll events into one paint per frame so fast/touch
+      // scrolling stays smooth.
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => { update(); ticking = false; });
+      };
+      update();
+      window.removeEventListener('scroll', window.__rp_onScroll || (() => {}));
+      window.removeEventListener('resize', window.__rp_onScroll || (() => {}));
+      window.__rp_onScroll = onScroll;
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+    };
+    init();
+    document.addEventListener('astro:page-load', init);
+    document.addEventListener('astro:after-swap', init);
+  })();
+</script> <article data-blog-post data-pagefind-body data-pagefind-meta="date:2026-07-04"> <header class="post-header">  <h1 data-pagefind-meta="title">How Far Down Can You Build?</h1> <p class="meta"> <time datetime="2026-07-04T00:00:00.000Z">July 4, 2026</time>   · 12 min read </p> <p style="margin-top:0.65rem" data-pagefind-meta="tags:ml,kernels,interpretability,prototypes,computer-vision,construction,depth,yat,deep-learning"> <a class="tag" href="/blog/tag/ml/">#ml</a><a class="tag" href="/blog/tag/kernels/">#kernels</a><a class="tag" href="/blog/tag/interpretability/">#interpretability</a><a class="tag" href="/blog/tag/prototypes/">#prototypes</a><a class="tag" href="/blog/tag/computer-vision/">#computer-vision</a><a class="tag" href="/blog/tag/construction/">#construction</a><a class="tag" href="/blog/tag/depth/">#depth</a><a class="tag" href="/blog/tag/yat/">#yat</a><a class="tag" href="/blog/tag/deep-learning/">#deep-learning</a> </p> </header> <details class="series-nav" data-astro-cid-w7ld43o3><summary data-astro-cid-w7ld43o3><span class="sn-strip" data-astro-cid-w7ld43o3><span class="sn-part" data-astro-cid-w7ld43o3>Part 6 of 10</span><span class="sn-sep" aria-hidden="true" data-astro-cid-w7ld43o3>·</span><span class="sn-series" data-astro-cid-w7ld43o3>The Prototype Network</span></span><span class="sn-chevron" aria-hidden="true" data-astro-cid-w7ld43o3><svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" data-astro-cid-w7ld43o3><path d="M2.5 4.5 6 8l3.5-3.5" data-astro-cid-w7ld43o3></path></svg></span></summary><ol class="sn-list" data-astro-cid-w7ld43o3><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/what-a-finite-kernel-buys-an-mlp/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>1</span><span class="sn-title" data-astro-cid-w7ld43o3>What a Finite Kernel Buys an MLP</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/your-neuron-is-a-picture/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>2</span><span class="sn-title" data-astro-cid-w7ld43o3>Your Neuron Is a Direction. It Should Be a Picture.</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/edit-a-network-by-hand/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>3</span><span class="sn-title" data-astro-cid-w7ld43o3>Your Network Is a List of Pictures. You Can Edit It.</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/train-the-features/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>4</span><span class="sn-title" data-astro-cid-w7ld43o3>You Only Have to Train the Features</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/you-dont-have-to-train-the-features/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>5</span><span class="sn-title" data-astro-cid-w7ld43o3>You Don&#39;t Even Have to Train the Features</span></a></li><li class="current" data-astro-cid-w7ld43o3><span class="sn-item" aria-current="page" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>6</span><span class="sn-title" data-astro-cid-w7ld43o3>How Far Down Can You Build?</span><span class="sn-note" data-astro-cid-w7ld43o3>you are here</span></span></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/calibration-of-a-bounded-net/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>7</span><span class="sn-title" data-astro-cid-w7ld43o3>When 80% Should Mean 80%</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/a-risk-model-that-names-its-reasons/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>8</span><span class="sn-title" data-astro-cid-w7ld43o3>A Risk Model That Names Its Reasons</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/your-network-is-a-fixed-point/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>9</span><span class="sn-title" data-astro-cid-w7ld43o3>Your Network Is a Stack of Layers. It Could Be a Fixed Point.</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/edit-a-fixed-point/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>10</span><span class="sn-title" data-astro-cid-w7ld43o3>Edit One Operator, Edit Every Depth</span></a></li></ol></details>   <p><em>The <a href="/blog/you-dont-have-to-train-the-features/">last post</a> built a network with nothing trained anywhere, one hand-designed feature layer feeding a constructed head, and it matched a trained backbone at 83.3% on Fashion-MNIST. It ended on the question it could not dodge: real networks are deep, and construction had only reached one layer down. So this post does the obvious next thing. It builds a second feature layer by hand, junctions, continuations, bends, stripes, every dimension still nameable in one sentence, and reports honestly what that buys. The answer is the finding. Every number is from a real run; the script is <code>scripts/handbuilt_depth.py</code>.</em></p>
+<h2 id="the-recipe-is-already-on-the-shelf">The recipe is already on the shelf<a class="heading-anchor-link" aria-label="Link to heading" href="#the-recipe-is-already-on-the-shelf"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Twice now, the greedy move has paid. The classifier was supposed to need training, and it turned out to be <a href="/blog/edit-a-network-by-hand/">placement</a>. The features were supposed to need training, and <a href="/blog/you-dont-have-to-train-the-features/">one hand-built layer of them</a> matched the trained backbone point for point. Each time, the part everyone called irreducible came apart into measurements a person could write down. So the greedy logic says: keep going. The fully trained network sits at 85.7%, the hand-built one at 83.3%, and between them, supposedly, lies the thing deep learning is actually for, <em>depth</em>, layers stacked on layers. Build one more layer by hand and see whether the gap closes.</p>
+<p>And here is the tempting part: you would not even have to invent the second layer. Vision science wrote it down decades ago. <a href="https://doi.org/10.1113/jphysiol.1962.sp006837">Hubel and Wiesel</a> found oriented-edge cells in the first cortical stage of vision, the exact detectors the last post built, and the stages after it respond to <em>arrangements</em> of edges: corners, junctions, curved contours. Marr’s primal sketch tells the same story from the computational side, edges first, then the tokens edges assemble into. The recipe for layer 2 has been on the shelf for half a century. This post takes it down and follows it.</p>
+<p>One honest stake before we start. If the second layer climbs, construction eats into the last 2.4 points and the thesis of this series gets stronger. If it does not climb, that is not a failed experiment; it is the first real measurement of where the construction program stops, and <em>why</em>. Either result is worth having. The ladder, three sections from here, will pick one.</p>
+<h2 id="what-can-you-say-about-an-edge">What can you say about an edge?<a class="heading-anchor-link" aria-label="Link to heading" href="#what-can-you-say-about-an-edge"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>A second layer has to be made of sentences about the first, so start with what the first layer says. Its whole vocabulary is seven words, six oriented edges and a corner, each measured at each patch of the image (the <a href="/blog/you-dont-have-to-train-the-features/">last post</a> built them from Sobel gradients; we reuse that recipe unchanged). A second layer, then, should say the things you can only say by <em>relating</em> those words. And when you sit down to write such sentences, four kinds come out almost by themselves:</p>
+<ul>
+<li><strong>A junction.</strong> Two different orientations firing in the same cell: “a 30° edge and a 90° edge meeting,” the corner of a collar, the crotch of a trouser.</li>
+<li><strong>A continuation.</strong> The same orientation firing one cell along its own direction: “a 0° edge that keeps going,” the long clean side of a trouser leg rather than a fleck of noise.</li>
+<li><strong>A bend.</strong> An edge whose continuation arrives rotated one step: “a 60° edge turning into a 90° edge,” the curve of a shoulder or a shoe’s toe.</li>
+<li><strong>A stripe.</strong> The same orientation echoed two cells across, perpendicular to itself: “two parallel 90° edges,” the two sides of a strap or a sleeve.</li>
+</ul>
+<p>Each of these is an <em>and</em>, and the cheapest honest AND between two non-negative energies is a minimum. Write the layer-1 edge energies on a grid of cells as <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>e</mi><mi>b</mi></msub><mo stretchy="false">(</mo><mi>p</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">e_b(p)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">b</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">p</span><span class="mclose">)</span></span></span></span>, with <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>u</mi><mi>b</mi></msub></mrow><annotation encoding="application/x-tex">u_b</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em"></span><span class="mord"><span class="mord mathnormal">u</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">b</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span></span></span></span> the unit step along orientation <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>b</mi></mrow><annotation encoding="application/x-tex">b</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em"></span><span class="mord mathnormal">b</span></span></span></span>‘s own direction, and the whole second layer is four lines:</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>J</mi><mrow><msub><mi>b</mi><mn>1</mn></msub><msub><mi>b</mi><mn>2</mn></msub></mrow></msub><mo stretchy="false">(</mo><mi>p</mi><mo stretchy="false">)</mo><mo>=</mo><mi>min</mi><mo>⁡</mo><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">(</mo><msub><mi>e</mi><msub><mi>b</mi><mn>1</mn></msub></msub><mo stretchy="false">(</mo><mi>p</mi><mo stretchy="false">)</mo><mo separator="true">,</mo><mtext> </mtext><msub><mi>e</mi><msub><mi>b</mi><mn>2</mn></msub></msub><mo stretchy="false">(</mo><mi>p</mi><mo stretchy="false">)</mo><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">)</mo><mo separator="true">,</mo><mspace width="2em"></mspace><msub><mi>C</mi><mi>b</mi></msub><mo stretchy="false">(</mo><mi>p</mi><mo stretchy="false">)</mo><mo>=</mo><mi>min</mi><mo>⁡</mo><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">(</mo><msub><mi>e</mi><mi>b</mi></msub><mo stretchy="false">(</mo><mi>p</mi><mo stretchy="false">)</mo><mo separator="true">,</mo><mtext> </mtext><msub><mi>e</mi><mi>b</mi></msub><mo stretchy="false">(</mo><mi>p</mi><mo>+</mo><msub><mi>u</mi><mi>b</mi></msub><mo stretchy="false">)</mo><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">)</mo><mo separator="true">,</mo></mrow><annotation encoding="application/x-tex">J_{b_1 b_2}(p) = \min\big(e_{b_1}(p),\, e_{b_2}(p)\big), \qquad
+C_b(p) = \min\big(e_b(p),\, e_b(p + u_b)\big),</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0001em;vertical-align:-0.2501em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0962em">J</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:-0.0962em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight">b</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3173em"><span style="top:-2.357em;margin-left:0em;margin-right:0.0714em"><span class="pstrut" style="height:2.5em"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em"><span></span></span></span></span></span></span><span class="mord mtight"><span class="mord mathnormal mtight">b</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3173em"><span style="top:-2.357em;margin-left:0em;margin-right:0.0714em"><span class="pstrut" style="height:2.5em"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2501em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">p</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em"></span><span class="mop">min</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight">b</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3173em"><span style="top:-2.357em;margin-left:0em;margin-right:0.0714em"><span class="pstrut" style="height:2.5em"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2501em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">p</span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight">b</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3173em"><span style="top:-2.357em;margin-left:0em;margin-right:0.0714em"><span class="pstrut" style="height:2.5em"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2501em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">p</span><span class="mclose">)</span><span class="mord"><span class="delimsizing size1">)</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em"></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em">C</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">b</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">p</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em"></span><span class="mop">min</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">b</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">p</span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">b</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">p</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em"></span><span class="mord"><span class="mord mathnormal">u</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">b</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mord"><span class="delimsizing size1">)</span></span><span class="mpunct">,</span></span></span></span></span>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>B</mi><mi>b</mi></msub><mo stretchy="false">(</mo><mi>p</mi><mo stretchy="false">)</mo><mo>=</mo><mi>min</mi><mo>⁡</mo><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">(</mo><msub><mi>e</mi><mi>b</mi></msub><mo stretchy="false">(</mo><mi>p</mi><mo stretchy="false">)</mo><mo separator="true">,</mo><mtext> </mtext><munder><mrow><mi>max</mi><mo>⁡</mo></mrow><mo lspace="0em" rspace="0em">±</mo></munder><msub><mi>e</mi><mrow><mi>b</mi><mo>±</mo><mn>1</mn></mrow></msub><mo stretchy="false">(</mo><mi>p</mi><mo>+</mo><msub><mi>u</mi><mi>b</mi></msub><mo stretchy="false">)</mo><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">)</mo><mo separator="true">,</mo><mspace width="2em"></mspace><msub><mi>S</mi><mi>b</mi></msub><mo stretchy="false">(</mo><mi>p</mi><mo stretchy="false">)</mo><mo>=</mo><mi>min</mi><mo>⁡</mo><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">(</mo><msub><mi>e</mi><mi>b</mi></msub><mo stretchy="false">(</mo><mi>p</mi><mo stretchy="false">)</mo><mo separator="true">,</mo><mtext> </mtext><munder><mrow><mi>max</mi><mo>⁡</mo></mrow><mo lspace="0em" rspace="0em">±</mo></munder><msub><mi>e</mi><mi>b</mi></msub><mo stretchy="false">(</mo><mi>p</mi><mo>±</mo><mn>2</mn><msubsup><mi>u</mi><mi>b</mi><mo lspace="0em" rspace="0em">⊥</mo></msubsup><mo stretchy="false">)</mo><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">)</mo><mi mathvariant="normal">.</mi></mrow><annotation encoding="application/x-tex">B_b(p) = \min\big(e_b(p),\, \max_{\pm} e_{b \pm 1}(p + u_b)\big), \qquad
+S_b(p) = \min\big(e_b(p),\, \max_{\pm} e_b(p \pm 2 u_b^{\perp})\big).</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0502em">B</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:-0.0502em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">b</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">p</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1.6083em;vertical-align:-0.7583em"></span><span class="mop">min</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">b</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">p</span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.4306em"><span style="top:-2.4em;margin-left:0em"><span class="pstrut" style="height:3em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">±</span></span></span></span><span style="top:-3em"><span class="pstrut" style="height:3em"></span><span><span class="mop">max</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.7583em"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">b</span><span class="mbin mtight">±</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">p</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em"></span><span class="mord"><span class="mord mathnormal">u</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">b</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mord"><span class="delimsizing size1">)</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em"></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0576em">S</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:-0.0576em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">b</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">p</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1.6083em;vertical-align:-0.7583em"></span><span class="mop">min</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">b</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">p</span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.4306em"><span style="top:-2.4em;margin-left:0em"><span class="pstrut" style="height:3em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">±</span></span></span></span><span style="top:-3em"><span class="pstrut" style="height:3em"></span><span><span class="mop">max</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.7583em"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">b</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">p</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">±</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:1.2491em;vertical-align:-0.35em"></span><span class="mord">2</span><span class="mord"><span class="mord mathnormal">u</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8991em"><span style="top:-2.453em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">b</span></span></span><span style="top:-3.113em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mrel mtight">⊥</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mord"><span class="delimsizing size1">)</span></span><span class="mord">.</span></span></span></span></span>
+<p>Fifteen junction pairs, six continuations, six bends, six stripes: <strong>33 named detectors</strong>, each one sentence long, computed from layer 1 the way layer 1 was computed from pixels. Watch two edge maps become a junction below; every map is computed live from the garment, the same arithmetic as the script.</p>
+<figure class="viz jassembly" data-caption="A layer-2 detector assembled from two layer-1 responses, computed live. Pick a garment and a pair of orientations: the left maps are the two hand-built edge channels from the last post, and the right map is their pointwise minimum, an AND that fires only where both orientations are present in the same cell, which is what a junction is. The collar of a shirt or the corner of a bag lights up exactly where two contours meet. This is the entire mechanism of the hand-built second layer: named relations between named measurements." data-height="340" tabindex="0"> <div class="viz-cell"></div> </figure> <script type="module" src="/blog/_astro/JunctionAssembly.astro_astro_type_script_index_0_lang.BHeWBKAN.js"></script>
+<h2 id="does-depth-cost-the-names">Does depth cost the names?<a class="heading-anchor-link" aria-label="Link to heading" href="#does-depth-cost-the-names"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The first thing depth was supposed to take from us is legibility, so check that before checking accuracy. Layer 2 gets the other habit of depth too, a coarser grid: its maps are pooled over 4×4 regions instead of layer 1’s 7×7, the way real networks trade resolution for abstraction as they go up. That makes 33 detectors × 16 regions = <strong>528 new dimensions</strong>, and every one of them is still a sentence: “a 30°+90° junction in the top-right region,” “a 0° continuation along the bottom.” Click around the whole vocabulary below.</p>
+<figure class="viz nameaxis2" data-caption="The complete layer-2 vocabulary, every axis still a sentence. Click any of the 33 hand-designed detectors (15 junctions, 6 continuations, 6 bends, 6 stripes) and its response map for the chosen garment is computed live from the raw image: layer-1 edges first, then the combination. Hover the map to read single dimensions off by name, a detector at a region, exactly as the last post read layer 1's axes. Depth did not cost the names: a second constructed layer is as readable as the first." data-height="420" tabindex="0"> <div class="viz-cell"></div> </figure> <script type="module" src="/blog/_astro/NameAnAxis2.astro_astro_type_script_index_0_lang.BxWCAC0m.js"></script>
+<p>So legibility survives the second layer completely. That was the obvious way for this experiment to fail, and it is not what happens. A constructed network two layers deep is exactly as readable as one layer deep; the sentences just get more interesting. Whatever wall exists between construction and depth, it is not made of opacity.</p>
+<h2 id="the-second-rung">The second rung<a class="heading-anchor-link" aria-label="Link to heading" href="#the-second-rung"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>It is made of something stranger, and the ladder shows it. The setup could not be more favorable: 528 new dimensions of curated, century-old vision science, concatenated onto the 343 that already reached 83.3%, feeding the same constructed head as always, k-means prototypes and a nearest-prototype vote in the <a href="/blog/edit-a-network-by-hand/">wells the editing post mapped</a>. If depth-by-hand works at all, this number climbs toward the trained network’s 85.7.</p>
+<p>It moves by <strong>−0.4</strong>. The full two-layer network scores <strong>82.9%</strong>.</p>
+<p>Maybe something specific is broken, so iterate like you would on any model, each redesign a theory about what went wrong. Maybe the weaker word types are diluting the strong ones: junctions alone score <strong>83.5%</strong>, the best of the six, two tenths of a point above layer 1. Add continuations back: 82.8. Add bends: 83.0. Add stripes and you are back at the full vocabulary’s 82.9. Maybe min is too cruel an AND, throttling every junction to its weaker edge, so swap in a geometric mean: 83.2. Maybe one cell is too myopic for a shoulder-scale bend, so give every detector a two-cell reach: 81.8, the worst of the lot. Six designs, six theories about what was broken, and each came back refuted by a few tenths; the best of them buys <strong>+0.2</strong> while most buy less than nothing. And the refutations share a shape: no theory rises, no theory matters, as if the head were shrugging at every new word offered to it. The second rung of the ladder is not lower than expected. It is <em>flat</em>.</p>
+<figure class="viz depthladder" data-caption="The construction ladder from the last post, extended one rung down and magnified, because the story now lives inside two points. Blue is built by hand, orange is trained; the top strip shows the full scale and the bottom strip zooms into the photo finish. The hand-built second layer lands at 82.9% (83.5% for the best of six designs), statistically on top of the one-layer 83.3% and the trained backbone's 83.2%, while the fully trained network keeps its 85.7% to itself. Hover a rung for what is built and what is learned. All numbers from scripts/handbuilt_depth.py and scripts/construct_vs_optimize.py." data-height="360" tabindex="0"> <div class="viz-cell"></div> </figure> <script type="module" src="/blog/_astro/DepthLadder.astro_astro_type_script_index_0_lang.CkazEnGq.js"></script>
+<p>Now the natural diagnosis, and why it is wrong. Flat rung, so the detectors must be junk? Run layer 2 <em>alone</em>: throw away the 343 edge dimensions entirely and classify garments from nothing but junctions, continuations, bends and stripes. It scores <strong>78.8%</strong> (80.9% under the geometric-mean AND), within a fifth of a point of the raw-pixel network’s 79.0. Detectors that never see a raw edge recover almost the entire baseline. The words are real words; they carry genuine class signal.</p>
+<p>They are just <em>synonyms</em>. Every layer-2 value is a fixed function of layer-1 values, <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>min</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mi>e</mi><msub><mi>b</mi><mn>1</mn></msub></msub><mo separator="true">,</mo><msub><mi>e</mi><msub><mi>b</mi><mn>2</mn></msub></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\min(e_{b_1}, e_{b_2})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0001em;vertical-align:-0.2501em"></span><span class="mop">min</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight">b</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3173em"><span style="top:-2.357em;margin-left:0em;margin-right:0.0714em"><span class="pstrut" style="height:2.5em"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2501em"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight">b</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3173em"><span style="top:-2.357em;margin-left:0em;margin-right:0.0714em"><span class="pstrut" style="height:2.5em"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2501em"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span> says nothing the pair <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><msub><mi>e</mi><msub><mi>b</mi><mn>1</mn></msub></msub><mo separator="true">,</mo><msub><mi>e</mi><msub><mi>b</mi><mn>2</mn></msub></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(e_{b_1}, e_{b_2})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0001em;vertical-align:-0.2501em"></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight">b</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3173em"><span style="top:-2.357em;margin-left:0em;margin-right:0.0714em"><span class="pstrut" style="height:2.5em"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2501em"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight">b</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3173em"><span style="top:-2.357em;margin-left:0em;margin-right:0.0714em"><span class="pstrut" style="height:2.5em"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2501em"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span> had not already said, and the constructed head, which reads whole feature vectors through a kernel, was already comparing garments on those coordinates jointly. Rewriting the same information in a richer vocabulary gives the head nothing to vote with that it did not have. (It even costs a little: the nearest-centroid control drops from 75.6 to 74.1 when the redundant dimensions pile on.) A trained second layer does not have this problem, because it is not restricted to re-describing; gradient descent can build combinations weighted precisely by what the first layer’s description <em>misses</em>.</p>
+<h2 id="counting-the-wall">Counting the wall<a class="heading-anchor-link" aria-label="Link to heading" href="#counting-the-wall"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>But wait, the obvious objection goes, maybe we just picked the wrong 33 sentences. That objection is correct, and it is the finding. Count what “picking the right ones” would mean. Layer 1 has 7 words. A pairwise layer-2 detector is two channels at a relative offset, and within even a one-cell neighborhood there are <strong>224</strong> distinct nameable types. Go to three-way combinations, the kind a real second layer of a CNN routinely represents, and the space is roughly <strong>4,630</strong> types before you have chosen pooling, reach, or the form of the AND. We curated 33 of the 224 using the best prior knowledge our species has about early vision, and moved the needle +0.2 at best. The vocabulary explodes; the accuracy per name collapses.</p>
+<figure class="viz vocabwall" data-caption="The combinatorial wall, drawn to scale. The horizontal axis counts nameable detectors, logarithmically; the curve is the measured test accuracy as the hand-built vocabulary grows from layer 1's 7 names to 40 (each point a full constructed network from scripts/handbuilt_depth.py). The curve is flat: 83.3, 83.5, 82.8, 83.0, 82.9. Beyond it, the dashed markers show how many detectors there are to choose from: 224 possible pairwise types, thousands of three-way types, while the fully trained network's 85.7% sits above the entire curve. Naming does not run out. Knowing which names matter does." data-height="340" tabindex="0"> <div class="viz-cell"></div> </figure> <script type="module" src="/blog/_astro/VocabularyWall.astro_astro_type_script_index_0_lang.DWMMMhqz.js"></script>
+<p>And that recount changes what the wall is made of. It is not that a second layer cannot be <em>named</em>; we named 33 dimensions and could name all 224 without breaking a sweat, and each would still be one honest sentence. It is that at depth two, naming and helping come apart. At layer 1 the two coincided: there are only a handful of local, first-order things an image measurement can be, orientation and cornerness roughly exhaust them, so human priors could curate the vocabulary completely, and did, decades ago. One layer up, the design space has already outrun curation, and picking the few combinations that add signal, jointly, against what the layer below already provides, is a search problem over thousands of candidates coupled through the data. There is a name for searching a huge combination space with the data as the judge. It is called training.</p>
+<h2 id="what-learning-is-for-said-precisely">What learning is for, said precisely<a class="heading-anchor-link" aria-label="Link to heading" href="#what-learning-is-for-said-precisely"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>So the series’ central trade can finally be stated with numbers on both sides. The last post said learning buys the final 2.4 points and charged the ability to say what a dimension means; this post says <em>where</em> those points live: not in layer 1, which a person can build completely and match, and not in the classifier, which has been placement since the <a href="/blog/edit-a-network-by-hand/">editing post</a>, but in the selection of deep combinations, which of the thousands of true sentences about edges are worth measuring. And that recasts what this series has been doing all along. Construction is not a rival training procedure that fell 2.4 points short; it is a measurement instrument. Run it up a network and it reports, layer by layer, how much of the machine is generic structure a person could have written (all of the classifier, all of the first feature layer, 83.3 of the 85.7 points) and how much is data-selected combination (the rest). One layer down, the instrument reads: this far by hand, no further. Though if selection really is the wall, a quieter thought opens past it: maybe depth was never a stack to build at all, but a loop to run. For now, the greedy question that drove three posts, how much do you get without training, has its complete answer, and the honest part is that the answer ends with a wall you can count.</p>
+<hr/>
+<p><em>Oriented-edge first stages are from <a href="https://doi.org/10.1113/jphysiol.1962.sp006837">Hubel and Wiesel (1962)</a>; the edges-then-tokens grammar is Marr’s primal sketch (Vision, 1982); the layer-1 detectors follow the HOG lineage of <a href="https://doi.org/10.1109/CVPR.2005.177">Dalal and Triggs (2005)</a>; <a href="https://arxiv.org/abs/1708.07747">Fashion-MNIST</a> from Xiao et al. (2017); the Yat kernel from <a href="https://arxiv.org/abs/2605.03262">Bouhsine (2026)</a>. This answers the question left open in <a href="/blog/you-dont-have-to-train-the-features/">You Don’t Even Have to Train the Features</a>.</em></p>  <section class="references" aria-labelledby="references-heading" data-astro-cid-rn7nvbl4><h2 id="references-heading" data-astro-cid-rn7nvbl4>References</h2><ol data-astro-cid-rn7nvbl4><li id="ref-1" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Hubel, D. H., Wiesel, T. N.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(1962)</span>. <span class="ref-title" data-astro-cid-rn7nvbl4>Receptive Fields, Binocular Interaction and Functional Architecture in the Cat&#39;s Visual Cortex</span>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>The Journal of Physiology 160, 106–154</span>.</li><li id="ref-2" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Marr, D.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(1982)</span>. <span class="ref-title" data-astro-cid-rn7nvbl4>Vision: A Computational Investigation into the Human Representation and Processing of Visual Information</span>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>W. H. Freeman</span>.</li><li id="ref-3" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Dalal, N., Triggs, B.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2005)</span>. <span class="ref-title" data-astro-cid-rn7nvbl4>Histograms of Oriented Gradients for Human Detection</span>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>CVPR 2005</span>.</li><li id="ref-4" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Xiao, H., Rasul, K., Vollgraf, R.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2017)</span>. <a class="ref-title" href="https://arxiv.org/abs/1708.07747" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>Fashion-MNIST: a Novel Image Dataset for Benchmarking Machine Learning Algorithms</a>.
+<a class="ref-ext" href="https://arxiv.org/abs/1708.07747" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:1708.07747</a></li><li id="ref-5" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Bouhsine, T.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2026)</span>. <a class="ref-title" href="https://arxiv.org/abs/2605.03262" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance</a>.
+<a class="ref-ext" href="https://arxiv.org/abs/2605.03262" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:2605.03262</a></li></ol></section> </article> <script>(function(){const payload = {"post_title":"How Far Down Can You Build?","post_slug":"depth-by-construction","post_path":"/blog/depth-by-construction/","post_tags":"ml,kernels,interpretability,prototypes,computer-vision,construction,depth,yat,deep-learning","word_count":2292,"reading_time_minutes":12,"is_draft":false};
+
+  (() => {
+    const thresholds = [25, 50, 75, 90, 100];
+    const state = { viewed: false, sent: new Set() };
+
+    const track = (name, params = {}) => {
+      if (typeof window.__trackGA === 'function') {
+        window.__trackGA(name, {
+          ...payload,
+          ...params,
+          non_interaction: name === 'blog_post_view',
+        });
+      }
+    };
+
+    const init = () => {
+      const article = document.querySelector('[data-blog-post]');
+      if (!article) return;
+
+      if (!state.viewed) {
+        state.viewed = true;
+        track('blog_post_view');
+      }
+
+      const progress = () => {
+        const rect = article.getBoundingClientRect();
+        const articleTop = window.scrollY + rect.top;
+        const articleHeight = Math.max(1, article.offsetHeight);
+        const viewportBottom = window.scrollY + window.innerHeight;
+        return Math.max(0, Math.min(100, ((viewportBottom - articleTop) / articleHeight) * 100));
+      };
+
+      const update = () => {
+        const pct = progress();
+        thresholds.forEach((threshold) => {
+          if (pct >= threshold && !state.sent.has(threshold)) {
+            state.sent.add(threshold);
+            track('blog_post_read_depth', { read_percent: threshold });
+            if (threshold === 90) {
+              track('blog_post_read', { read_percent: threshold });
+            }
+          }
+        });
+      };
+
+      if (window.__postAnalyticsCleanup) window.__postAnalyticsCleanup();
+
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => {
+          update();
+          ticking = false;
+        });
+      };
+
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+      window.__postAnalyticsCleanup = () => {
+        window.removeEventListener('scroll', onScroll);
+        window.removeEventListener('resize', onScroll);
+      };
+      update();
+    };
+
+    init();
+    document.addEventListener('astro:page-load', init, { once: true });
+  })();
+})();</script> <aside class="related" aria-labelledby="related-heading" data-astro-cid-dpgbfi7r><h2 id="related-heading" data-astro-cid-dpgbfi7r>Related posts</h2><ul data-astro-cid-dpgbfi7r><li data-astro-cid-dpgbfi7r><a href="/blog/you-dont-have-to-train-the-features/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>You Don&#39;t Even Have to Train the Features</span><span class="related-desc" data-astro-cid-dpgbfi7r>The last post trained a backbone and built the classifier by hand. This one builds the features by hand too: oriented-edge and corner detectors pooled over a grid of patches, the way computer vision worked for decades. Feed those to the same constructed Yat head and, with nothing trained anywhere, it matches the trained backbone on Fashion-MNIST point for point, within a couple of points of a fully trained network. The whole network is hand-built and readable end to end.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-06-24T00:00:00.000Z" data-astro-cid-dpgbfi7r>Jun 24, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/handbuilt-features-jax-flax-nnx/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>The Hand-Built Network, in JAX/Flax NNX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion: build the training-free image classifier from the post in JAX. The feature extractor is pure JAX (Sobel gradients, orientation binning, patch pooling); the classifier is a Flax NNX module holding k-means prototypes that votes with the Yat kernel. Nothing is trained, and it reproduces the 83.3% on Fashion-MNIST.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-06-24T17:00:00.000Z" data-astro-cid-dpgbfi7r>Jun 24, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/train-the-features/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>You Only Have to Train the Features</span><span class="related-desc" data-astro-cid-dpgbfi7r>Leave a convolutional network&#39;s weights at their random starting values and build a Yat head on its features by hand: the trained head on that random backbone sorts at chance while the constructed one reaches 74%. On a properly trained backbone the constructed head reaches 83.2% against 85.7% for the trained one. The accuracy lives in the representation; the classifier, and its edits, are furniture you place. This maps the boundary between what you must optimize and what you can construct.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-06-22T23:00:00.000Z" data-astro-cid-dpgbfi7r>Jun 22, 2026</time></span></a></li></ul></aside> <nav class="post-nav" aria-label="Adjacent posts"><a href="/blog/distillation-is-kernel-transfer/" class="prev" rel="prev"><div class="label">← Previous</div><div class="title">Distillation Is a Geometry, Not an Answer Key</div></a><a href="/blog/calibration-of-a-bounded-net/" class="next" rel="next"><div class="label">Next →</div><div class="title">When 80% Should Mean 80%</div></a></nav> <section aria-label="Comments" id="giscus-mount" style="margin-top:3rem" data-giscus="{&#34;repo&#34;:&#34;mlnomadpy/blog&#34;,&#34;repoId&#34;:&#34;MDEwOlJlcG9zaXRvcnk0MDQ4MzY2NDU=&#34;,&#34;category&#34;:&#34;Announcements&#34;,&#34;categoryId&#34;:&#34;DIC_kwDOGCFRJc4C9EiR&#34;,&#34;mapping&#34;:&#34;pathname&#34;,&#34;reactionsEnabled&#34;:&#34;1&#34;,&#34;emitMetadata&#34;:&#34;0&#34;,&#34;inputPosition&#34;:&#34;top&#34;,&#34;theme&#34;:&#34;preferred_color_scheme&#34;,&#34;lang&#34;:&#34;en&#34;}"></section><script>
+    (() => {
+      const load = () => {
+        const mount = document.getElementById('giscus-mount');
+        if (!mount || mount.dataset.loaded === '1') return;
+        const cfg = JSON.parse(mount.dataset.giscus);
+        const theme = document.documentElement.getAttribute('data-theme')
+          || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        const s = document.createElement('script');
+        s.src = 'https://giscus.app/client.js';
+        s.async = true;
+        s.crossOrigin = 'anonymous';
+        const attrs = {
+          'data-repo': cfg.repo,
+          'data-repo-id': cfg.repoId,
+          'data-category': cfg.category,
+          'data-category-id': cfg.categoryId,
+          'data-mapping': cfg.mapping,
+          'data-strict': '0',
+          'data-reactions-enabled': cfg.reactionsEnabled,
+          'data-emit-metadata': cfg.emitMetadata,
+          'data-input-position': cfg.inputPosition,
+          'data-theme': theme,
+          'data-lang': cfg.lang,
+          'data-loading': 'lazy',
+        };
+        for (const k in attrs) s.setAttribute(k, attrs[k]);
+        mount.appendChild(s);
+        mount.dataset.loaded = '1';
+      };
+      load();
+      document.addEventListener('astro:page-load', load);
+      document.addEventListener('astro:after-swap', load);
+    })();
+  </script> <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('pre').forEach((pre) => {
+        if (pre.dataset.copyEnhanced) return;
+        pre.dataset.copyEnhanced = '1';
+        const btn = document.createElement('button');
+        btn.className = 'code-copy';
+        btn.type = 'button';
+        btn.textContent = 'copy';
+        btn.setAttribute('aria-label', 'Copy code');
+        btn.addEventListener('click', async () => {
+          const code = pre.querySelector('code');
+          const text = (code ? code.innerText : pre.innerText) || '';
+          try {
+            await navigator.clipboard.writeText(text);
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = 'copy';
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+        pre.appendChild(btn);
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>  </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span class="site-footer__links"> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> <a class="site-footer__support" href="https://buymeacoffee.com/mlnomadpy" target="_blank" rel="noopener noreferrer" aria-label="Support this blog on Buy Me a Coffee">
+buy me a coffee
+</a> </span> </footer> <div id="consent-banner" class="consent-banner" role="dialog" aria-live="polite" aria-label="Analytics consent" hidden><p class="consent-text">
+I use Google Analytics to see which posts get read. It sets cookies only
+      if you accept. No ads, no selling data.
+</p><div class="consent-actions"><button type="button" id="consent-decline" class="consent-btn consent-decline">Decline</button><button type="button" id="consent-accept" class="consent-btn consent-accept">Accept</button></div></div>
+
+  <script>
+    (() => {
+      const KEY = 'analytics-consent';
+      const setup = () => {
+        const banner = document.getElementById('consent-banner');
+        if (!banner) return;
+        let choice = null;
+        try { choice = localStorage.getItem(KEY); } catch (e) {}
+        // Already decided → keep hidden.
+        if (choice === 'granted' || choice === 'denied') { banner.hidden = true; return; }
+        banner.hidden = false;
+
+        const decide = (value) => {
+          try { localStorage.setItem(KEY, value); } catch (e) {}
+          banner.hidden = true;
+          if (value === 'granted' && typeof window.__loadGA === 'function') window.__loadGA();
+        };
+        const accept = document.getElementById('consent-accept');
+        const decline = document.getElementById('consent-decline');
+        if (accept && !accept.dataset.bound) {
+          accept.dataset.bound = '1';
+          accept.addEventListener('click', () => decide('granted'));
+        }
+        if (decline && !decline.dataset.bound) {
+          decline.dataset.bound = '1';
+          decline.addEventListener('click', () => decide('denied'));
+        }
+      };
+      setup();
+      document.addEventListener('astro:page-load', setup);
+    })();
+  </script>
+
+  <style>
+    /* Author `display:flex` below would otherwise override the UA [hidden]
+       rule, leaving the banner visible after a choice. This wins on specificity. */
+    .consent-banner[hidden] { display: none !important; }
+    .consent-banner {
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      right: 1rem;
+      max-width: 30rem;
+      margin-left: auto;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+      padding: 0.95rem 1.1rem;
+      background: var(--bg-elev, #fff);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      font-family: var(--sans);
+    }
+    .consent-text {
+      margin: 0;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: var(--fg-muted);
+    }
+    .consent-actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+    }
+    .consent-btn {
+      font-family: var(--sans);
+      font-size: 0.82rem;
+      padding: 0.4rem 0.95rem;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    }
+    .consent-decline {
+      background: transparent;
+      color: var(--fg-muted);
+    }
+    .consent-decline:hover { color: var(--fg); border-color: var(--fg-faint); }
+    .consent-accept {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg);
+      font-weight: 600;
+    }
+    .consent-accept:hover { filter: brightness(1.05); }
+    @media (max-width: 520px) {
+      .consent-banner { left: 0.6rem; right: 0.6rem; bottom: 0.6rem; }
+    }
+  </style> <script>
+      // Inject a fullscreen toggle button onto every .viz figure on the page.
+      (() => {
+        const ENTER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10V4h6"/><path d="M20 10V4h-6"/><path d="M4 14v6h6"/><path d="M20 14v6h-6"/></svg>';
+        const EXIT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H4v6"/><path d="M14 4h6v6"/><path d="M10 20H4v-6"/><path d="M14 20h6v-6"/></svg>';
+        const inFs = () => document.fullscreenElement || document.webkitFullscreenElement;
+        const enhance = () => {
+          document.querySelectorAll('.viz').forEach((fig) => {
+            if (fig.dataset.fsReady) return;
+            fig.dataset.fsReady = '1';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'viz-fs-btn';
+            btn.setAttribute('aria-label', 'Toggle fullscreen');
+            btn.innerHTML = ENTER_SVG + '<span>fullscreen</span>';
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              try {
+                if (inFs() === fig) {
+                  await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen?.());
+                } else if (fig.requestFullscreen) {
+                  await fig.requestFullscreen();
+                } else if (fig.webkitRequestFullscreen) {
+                  await fig.webkitRequestFullscreen();
+                }
+              } catch (_) {}
+            });
+            fig.appendChild(btn);
+          });
+          const sync = () => {
+            document.querySelectorAll('.viz-fs-btn').forEach((b) => {
+              const fig = b.parentElement;
+              const open = inFs() === fig;
+              b.innerHTML = (open ? EXIT_SVG : ENTER_SVG) + '<span>' + (open ? 'exit' : 'fullscreen') + '</span>';
+            });
+          };
+          document.addEventListener('fullscreenchange', sync);
+          document.addEventListener('webkitfullscreenchange', sync);
+        };
+        enhance();
+        document.addEventListener('astro:page-load', enhance);
+        document.addEventListener('astro:after-swap', enhance);
+      })();
+    </script> </body> </html>

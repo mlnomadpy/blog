@@ -1,0 +1,485 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="generator" content="Astro v5.18.1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#fbfaf6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)"><title>Getting Zucked: What Researchers Should Know Before Starting a Company</title><meta name="description" content="A researcher's guide to not getting zucked: why research IP is easy to take, how the sole-owner-LLC move works, and what to settle before you build."><meta name="keywords" content="notes, research, startups, founders, ip"><meta name="author" content="Taha Bouhsine"><link rel="canonical" href="https://tahabouhsine.com/blog/writeups/getting-zucked-a-nonprofit-story/"><link rel="icon" href="/blog/favicon.svg" type="image/svg+xml"><link rel="alternate" type="application/rss+xml" title="Records of the !mmortal Data Scientist" href="/blog/rss.xml"><link rel="sitemap" href="/blog/sitemap-index.xml"><link rel="me" href="https://github.com/mlnomadpy"><link rel="me" href="https://x.com/mlnomadpy"><link rel="me" href="https://www.linkedin.com/in/tahabsn/"><link rel="me" href="https://scholar.google.com/citations?user=IsBjb3EAAAAJ"><link rel="me" href="https://g.dev/tahabsn"><link rel="author" href="https://github.com/mlnomadpy"><meta property="og:type" content="article"><meta property="og:site_name" content="Records of the !mmortal Data Scientist"><meta property="og:title" content="Getting Zucked: What Researchers Should Know Before Starting a Company"><meta property="og:description" content="A researcher's guide to not getting zucked: why research IP is easy to take, how the sole-owner-LLC move works, and what to settle before you build."><meta property="og:url" content="https://tahabouhsine.com/blog/writeups/getting-zucked-a-nonprofit-story/"><meta property="og:locale" content="en_US"><meta property="og:image" content="https://tahabouhsine.com/blog/og/writeups/getting-zucked-a-nonprofit-story.png"><meta property="og:image:alt" content="Getting Zucked: What Researchers Should Know Before Starting a Company — Records of the !mmortal Data Scientist"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:type" content="image/png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@mlnomadpy"><meta name="twitter:creator" content="@mlnomadpy"><meta name="twitter:title" content="Getting Zucked: What Researchers Should Know Before Starting a Company"><meta name="twitter:description" content="A researcher's guide to not getting zucked: why research IP is easy to take, how the sole-owner-LLC move works, and what to settle before you build."><meta name="twitter:image" content="https://tahabouhsine.com/blog/og/writeups/getting-zucked-a-nonprofit-story.png"><meta name="twitter:image:alt" content="Getting Zucked: What Researchers Should Know Before Starting a Company — Records of the !mmortal Data Scientist"><meta property="article:published_time" content="2026-07-01T00:00:00.000Z"><meta property="article:author" content="Taha Bouhsine"><meta property="article:section" content="Notes"><meta property="article:tag" content="notes"><meta property="article:tag" content="research"><meta property="article:tag" content="startups"><meta property="article:tag" content="founders"><meta property="article:tag" content="ip"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","@id":"https://tahabouhsine.com/blog/writeups/getting-zucked-a-nonprofit-story/#article","headline":"Getting Zucked: What Researchers Should Know Before Starting a Company","name":"Getting Zucked: What Researchers Should Know Before Starting a Company","description":"A researcher's guide to not getting zucked: why research IP is easy to take, how the sole-owner-LLC move works, and what to settle before you build.","image":["https://tahabouhsine.com/blog/og/writeups/getting-zucked-a-nonprofit-story.png"],"datePublished":"2026-07-01T00:00:00.000Z","dateModified":"2026-07-01T00:00:00.000Z","author":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#author","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","jobTitle":"Machine Learning Researcher","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"publisher":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#publisher","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"mainEntityOfPage":{"@type":"WebPage","@id":"https://tahabouhsine.com/blog/writeups/getting-zucked-a-nonprofit-story/"},"keywords":"notes, research, startups, founders, ip","url":"https://tahabouhsine.com/blog/writeups/getting-zucked-a-nonprofit-story/","inLanguage":"en-US","wordCount":1837,"timeRequired":"PT10M","articleSection":"Notes","isPartOf":{"@type":"Blog","@id":"https://tahabouhsine.com/blog/","name":"Records of the !mmortal Data Scientist","url":"https://tahabouhsine.com/blog/"}}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Blog","item":"https://tahabouhsine.com/blog/"},{"@type":"ListItem","position":2,"name":"Notes","item":"https://tahabouhsine.com/blog/tag/notes/"},{"@type":"ListItem","position":3,"name":"Getting Zucked: What Researchers Should Know Before Starting a Company","item":"https://tahabouhsine.com/blog/writeups/getting-zucked-a-nonprofit-story/"}]}</script><script>
+    (function () {
+      if (window.__gaSetup) return;
+      window.__gaSetup = true;
+      var GA_ID = 'G-373438VHJB';
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ dataLayer.push(arguments); }
+      window.gtag = window.gtag || gtag;
+      window.__gaEventQueue = window.__gaEventQueue || [];
+      window.__trackGA = function (eventName, params) {
+        if (!eventName) return;
+        var item = { name: eventName, params: params || {} };
+        if (window.__gaLoaded) {
+          gtag('event', item.name, item.params);
+        } else {
+          window.__gaEventQueue.push(item);
+        }
+      };
+
+      // Track whether the first astro:page-load has fired, so a mid-session
+      // Accept can still record the current page.
+      window.__gaFirstLoadDone = window.__gaFirstLoadDone || false;
+      document.addEventListener('astro:page-load', function () { window.__gaFirstLoadDone = true; });
+
+      window.__loadGA = function () {
+        if (window.__gaLoaded) return;
+        window.__gaLoaded = true;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+        document.head.appendChild(s);
+        gtag('js', new Date());
+        gtag('config', GA_ID, { send_page_view: false });
+        (window.__gaEventQueue || []).splice(0).forEach(function (item) {
+          gtag('event', item.name, item.params);
+        });
+        function sendPV() {
+          gtag('event', 'page_view', {
+            page_title: document.title,
+            page_location: location.href,
+            page_path: location.pathname + location.search,
+          });
+        }
+        document.addEventListener('astro:page-load', sendPV);
+        // If the initial page-load already happened (accept mid-session),
+        // record this page now; otherwise the listener catches the first one.
+        if (window.__gaFirstLoadDone) sendPV();
+      };
+
+      try {
+        if (localStorage.getItem('analytics-consent') === 'granted') window.__loadGA();
+      } catch (e) {}
+    })();
+  </script><script>
+  (() => {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'light' || stored === 'dark') {
+      document.documentElement.setAttribute('data-theme', stored);
+    }
+  })();
+</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.DstInXr_.css">
+<style>.kicker[data-astro-cid-avt6dfgd]{font-family:var(--mono);font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;margin:0 0 .5rem}.kicker[data-astro-cid-avt6dfgd] a[data-astro-cid-avt6dfgd]{color:var(--fg-faint);text-decoration:none}.kicker[data-astro-cid-avt6dfgd] a[data-astro-cid-avt6dfgd]:hover{color:var(--accent)}.tag-row[data-astro-cid-avt6dfgd]{margin-top:.65rem}.tag-row[data-astro-cid-avt6dfgd] .tag[data-astro-cid-avt6dfgd]{display:inline-block;font-family:var(--mono);font-size:.72rem;color:var(--fg-muted);margin-right:.6rem}.back-link[data-astro-cid-avt6dfgd]{margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border);font-family:var(--mono);font-size:.82rem}.back-link[data-astro-cid-avt6dfgd] a[data-astro-cid-avt6dfgd]{color:var(--fg-faint);text-decoration:none}.back-link[data-astro-cid-avt6dfgd] a[data-astro-cid-avt6dfgd]:hover{color:var(--accent)}
+</style></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/writeups" aria-current="page">writeups</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>
+  (() => {
+    const apply = (theme) => {
+      document.documentElement.setAttribute('data-theme', theme);
+      const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+      if (meta) meta.setAttribute('content', theme === 'dark' ? '#0e1116' : '#fbfaf6');
+      // Sync giscus iframe if present
+      const giscus = document.querySelector('iframe.giscus-frame');
+      if (giscus && giscus.contentWindow) {
+        giscus.contentWindow.postMessage(
+          { giscus: { setConfig: { theme: theme === 'dark' ? 'dark' : 'light' } } },
+          'https://giscus.app'
+        );
+      }
+    };
+
+    const init = () => {
+      const btns = document.querySelectorAll('[data-theme-toggle]');
+      btns.forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', () => {
+          const current = document.documentElement.getAttribute('data-theme')
+            || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          const next = current === 'dark' ? 'light' : 'dark';
+          localStorage.setItem('theme', next);
+          apply(next);
+        });
+      });
+    };
+
+    init();
+    document.addEventListener('astro:after-swap', init);
+    document.addEventListener('astro:page-load', init);
+  })();
+</script> </nav> </div> </header> <main id="main">  <div class="reading-progress" data-reading-progress aria-hidden="true"></div> <script>
+  (() => {
+    const init = () => {
+      const bar = document.querySelector('[data-reading-progress]');
+      if (!bar) return;
+      const update = () => {
+        const h = document.documentElement;
+        const scrolled = h.scrollTop;
+        const max = h.scrollHeight - h.clientHeight;
+        const pct = max > 0 ? Math.min(100, (scrolled / max) * 100) : 0;
+        bar.style.width = pct + '%';
+      };
+      // Coalesce scroll events into one paint per frame so fast/touch
+      // scrolling stays smooth.
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => { update(); ticking = false; });
+      };
+      update();
+      window.removeEventListener('scroll', window.__rp_onScroll || (() => {}));
+      window.removeEventListener('resize', window.__rp_onScroll || (() => {}));
+      window.__rp_onScroll = onScroll;
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+    };
+    init();
+    document.addEventListener('astro:page-load', init);
+    document.addEventListener('astro:after-swap', init);
+  })();
+</script> <article data-blog-post data-astro-cid-avt6dfgd> <header class="post-header" data-astro-cid-avt6dfgd> <p class="kicker" data-astro-cid-avt6dfgd><a href="/blog/writeups/" data-astro-cid-avt6dfgd>writeups</a></p>  <h1 data-astro-cid-avt6dfgd>Getting Zucked: What Researchers Should Know Before Starting a Company</h1> <p class="meta" data-astro-cid-avt6dfgd> <time datetime="2026-07-01T00:00:00.000Z" data-astro-cid-avt6dfgd>July 1, 2026</time>   · 10 min read </p> <p class="tag-row" data-astro-cid-avt6dfgd> <span class="tag" data-astro-cid-avt6dfgd>#notes</span><span class="tag" data-astro-cid-avt6dfgd>#research</span><span class="tag" data-astro-cid-avt6dfgd>#startups</span><span class="tag" data-astro-cid-avt6dfgd>#founders</span><span class="tag" data-astro-cid-avt6dfgd>#ip</span> </p> </header>  <p>If your research works, someone is going to suggest the two of you start a
+company. Maybe they already have. The field is having its moment, the money
+has noticed, and the distance between “promising result” and “fundable
+company” has collapsed to roughly the length of one coffee. The person
+suggesting it is often charming, often sincere, and often right that there is
+a company in your work. The question they will never help you ask is the only
+one that matters: when this company exists, who owns it?</p>
+<p>Because here is the thing nobody tells you at that coffee. In most of these
+pairings, you are not just being recruited. You are being acquired. Your
+contribution, the ideas, the code, the models, the results, already exists. It
+is sitting there finished, unregistered, and portable, which in legal terms
+means it belongs to whoever gets it assigned to the right piece of paper. The
+operator’s contribution is a promise about the future, and the one thing they
+produce on day one is the paperwork itself. Look at that asymmetry squarely:
+your value can be transferred with a signature, and their value <em>is</em> the
+signature. Every one of these pairings that ends badly for the researcher runs
+through that gap.</p>
+<p>Researchers walk into it for a structural reason, not a stupidity reason. Our
+entire training points outward. Publish the method, open the code, post the
+preprint, because the currency of science is credit and credit only exists in
+public. Nothing in a PhD teaches you to think of your own work as an asset
+that can be <em>held</em>, which is why the person across the table, whose whole
+craft is structure, entities, ownership percentages, who signs what, is
+playing a game you have literally never practiced. That used to be survivable,
+because research became valuable slowly, over years of citation. Now it
+becomes valuable the moment it runs, which means the acquisition has to happen
+early, before you notice what you are holding. Hence the coffee.</p>
+<h2 id="the-move-step-by-step">The move, step by step<a class="heading-anchor-link" aria-label="Link to heading" href="#the-move-step-by-step"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The move has a standard sequence. I can walk you through it in detail because
+it was run on me, and the details are the lesson.</p>
+<p><strong>Step one: agree on a structure that postpones ownership.</strong> In my case the
+plan was a nonprofit. We would build for the mission, structure “coming
+soon.” A nonprofit plan is ideal for this move, but “we’ll incorporate after
+the demo” or “let’s not complicate things yet” work identically. The function
+is the same: create a period where real work is being produced and no document
+says who owns it. And notice what mission framing does to the room. Once the
+shared destination is a cause, asking “who owns what” feels like asking who
+gets the furniture at a wedding. Whoever raises ownership first becomes the
+one who made it about money. So nobody raises it. I did not raise it either.
+Not because I forgot, but because the mission framing worked on me exactly as
+designed: I liked the cause, and I liked being the one too generous to ask.
+And the question does not dissolve. It waits for whoever is willing to answer
+it alone.</p>
+<p><strong>Step two: create the entity unilaterally.</strong> While our nonprofit stayed a
+shared intention, the person I was building with registered an LLC. Sole
+owner: him. Nothing was ever signed between us, so in the only sense that
+binds we were never co-founders at all, which is exactly the gap the move
+lives in. He did not steal anything, did not hack anything, did not lie
+about anything. He
+simply did, by himself, the one thing we were supposed to do together, and
+that is the entire move. A plan is a mood; an entity is a fact. Whatever
+everyone meant, whatever was said at the whiteboard, the state now recognized
+exactly one owner of exactly one container, and the container was about to be
+offered as the project’s home.</p>
+<p><strong>Step three: ask for the IP, framed as housekeeping.</strong> Then came the
+request: sign the project’s IP over to the LLC. Not presented as a takeover,
+because it never is. Presented as tidiness. The project needs a legal home,
+things should be held properly, this just formalizes what we are already
+doing, it is being held <em>for</em> everyone. Every sentence in this genre contains
+the word “for,” and every one of them skips the same fact: held <em>by whom</em>.
+Whoever owns the container owns the contents, whatever the container was said
+to be for. “For the mission” is not a legal concept. Sole member of the LLC
+is.</p>
+<p><strong>Step four: the document arrives already read.</strong> The paperwork shows up
+drafted, reviewed, decided, needing only your signature, and this is the tell
+that survives every disguise. The person handing it to you has known its
+contents for as long as it took to prepare, which means that for exactly that
+long, the partnership had one informed party and one trusting one. The
+asymmetry of preparation is the confession. You do not need to prove intent,
+read motives, or win an argument. The timeline already testified.</p>
+<p>I read the document twice, looking for the sentence that would make it
+innocent. I did not sign, and that outcome is the least interesting part,
+because by step four the damage is mostly done either way: the working relationship is
+gone, months of joint work sit in limbo, and your only options are surrender
+or conflict. The point of knowing the sequence is to break it at step one,
+where it costs a single awkward conversation, instead of at step four, where
+it costs the project.</p>
+<h2 id="what-you-already-signed">What you already signed<a class="heading-anchor-link" aria-label="Link to heading" href="#what-you-already-signed"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The week the document arrived, I had to answer a question I had never
+thought to ask: did I even own the work I was being asked to assign? It is
+the question that comes before “who will own this company,” and most
+researchers have never asked it either. In almost every case you answered it
+years ago, in the onboarding paperwork you signed without reading, and the
+answer depends entirely on which building you were sitting in.</p>
+<p><strong>The university deal.</strong> A PhD or a faculty position comes with an IP policy,
+and the core of it is roughly the same everywhere: the university claims
+inventions made with its resources, on its time, or under its grants, and if
+the work was federally funded the claim is not even the university’s choice.
+You cannot assign that invention to anyone’s LLC without going through the
+tech transfer office. What you keep is real, though: your name on the paper,
+the right to publish, a share of licensing revenue, and usually a sanctioned
+exit where the university licenses the patent to your own spinout for equity,
+which is how a large fraction of deep-tech startups are born. What you lose
+is title and control. It is honestly not a bad deal. It is just not the deal
+most students believe they are on, which is “everything I make is mine.”</p>
+<p><strong>The company deal.</strong> Industry is sharper. An employment contract almost
+always assigns your inventions to the employer at the moment they exist:
+anything within the scope of your job, made with company resources, or
+touching company confidential information. The copyright in your code was
+never yours for an instant, and publication needs approval. What you keep:
+your salary and equity, which is the honest price, and your general skill and
+knowledge, meaning you keep what you learned but not what you saw. Some
+places carve out what you build entirely on your own time and equipment; many
+do not, and there your weekend project is arguable. What you lose is the IP
+itself, plus a slice of your freedom to build the adjacent thing next.</p>
+<p>Read those two deals side by side and the lesson writes itself.
+When someone slides an assignment across the table, there may be two or three
+parties in the room you cannot see: a university, a funding agency, a former
+employer. Signing anyway does not transfer the IP, because you cannot
+transfer what you do not hold. It transfers the problem, and puts your
+signature on it.</p>
+<h2 id="the-rules-that-break-the-sequence">The rules that break the sequence<a class="heading-anchor-link" aria-label="Link to heading" href="#the-rules-that-break-the-sequence"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p><strong>Have the ownership conversation on day one, while it still feels rude.</strong> The
+awkwardness is the test working. Ask directly: who owns what, in what split,
+and what happens to the work if we part ways? A good-faith partner is not
+damaged by this question, because good faith has nothing to lose from
+clarity. The only person the conversation burns is the one whose plan
+required it never happening. Their reaction is worth more than any reference
+check.</p>
+<p><strong>Match the entity to the promise, and form it together.</strong> If the plan is a
+nonprofit, the first legal object created is the nonprofit, or nothing. The
+moment a different structure appears, especially with a sole owner, the plan
+has already changed regardless of what anyone says. Do not evaluate the
+words; evaluate what got filed, by whom, with whose name on it. If you were
+not in the room when the company was created, it is not your company. That
+sentence sounds harsh and is merely descriptive.</p>
+<p><strong>Never assign IP to an entity you do not co-own.</strong> Assignment is not sharing
+and it is not licensing. It is a one-way door, and “we’ll sort the equity
+later” on the far side of it is a negotiation you enter holding nothing. If
+an entity must hold the work, become an owner first, in writing, in the split
+you agreed. Later is the most expensive word in this genre.</p>
+<p><strong>Divide the labor, never the literacy.</strong> “You do the science, I’ll handle
+the business” is a fine arrangement, plenty of great companies run on it, but
+the business side is precisely where ownership lives. Delegate the work
+freely. The day you delegate the <em>understanding</em>, you have handed the other
+party the pen that signs for both of you.</p>
+<p><strong>Check the invisible parties before you promise anything.</strong> You now know
+who else may hold claims on your work. A partner who urges speed over
+checking them is urging it for a reason, theirs or plain carelessness, and
+both are disqualifying.</p>
+<p>None of this argues for trusting less. Research runs on exactly the openness
+that makes it takeable, and armoring yourself into paranoia would cost more
+than any LLC ever could. The argument is narrower: trust should be checkable,
+and the beginning, when everyone still likes each other and paper feels
+unnecessary, is the only cheap time to make it so. A partner worth having
+meets the ownership question with relief, because they wanted it settled too.
+The one who bristles at daylight has just told you, early and for free,
+everything the paperwork would have told you later at full price.</p>
+<p>I think sometimes about that first coffee. Everything that happened later was
+already present in the questions we were both too polite to ask at it.</p>  <p class="back-link" data-astro-cid-avt6dfgd><a href="/blog/writeups/" data-astro-cid-avt6dfgd>← all writeups</a></p> </article> <section aria-label="Comments" id="giscus-mount" style="margin-top:3rem" data-giscus="{&#34;repo&#34;:&#34;mlnomadpy/blog&#34;,&#34;repoId&#34;:&#34;MDEwOlJlcG9zaXRvcnk0MDQ4MzY2NDU=&#34;,&#34;category&#34;:&#34;Announcements&#34;,&#34;categoryId&#34;:&#34;DIC_kwDOGCFRJc4C9EiR&#34;,&#34;mapping&#34;:&#34;pathname&#34;,&#34;reactionsEnabled&#34;:&#34;1&#34;,&#34;emitMetadata&#34;:&#34;0&#34;,&#34;inputPosition&#34;:&#34;top&#34;,&#34;theme&#34;:&#34;preferred_color_scheme&#34;,&#34;lang&#34;:&#34;en&#34;}"></section><script>
+    (() => {
+      const load = () => {
+        const mount = document.getElementById('giscus-mount');
+        if (!mount || mount.dataset.loaded === '1') return;
+        const cfg = JSON.parse(mount.dataset.giscus);
+        const theme = document.documentElement.getAttribute('data-theme')
+          || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        const s = document.createElement('script');
+        s.src = 'https://giscus.app/client.js';
+        s.async = true;
+        s.crossOrigin = 'anonymous';
+        const attrs = {
+          'data-repo': cfg.repo,
+          'data-repo-id': cfg.repoId,
+          'data-category': cfg.category,
+          'data-category-id': cfg.categoryId,
+          'data-mapping': cfg.mapping,
+          'data-strict': '0',
+          'data-reactions-enabled': cfg.reactionsEnabled,
+          'data-emit-metadata': cfg.emitMetadata,
+          'data-input-position': cfg.inputPosition,
+          'data-theme': theme,
+          'data-lang': cfg.lang,
+          'data-loading': 'lazy',
+        };
+        for (const k in attrs) s.setAttribute(k, attrs[k]);
+        mount.appendChild(s);
+        mount.dataset.loaded = '1';
+      };
+      load();
+      document.addEventListener('astro:page-load', load);
+      document.addEventListener('astro:after-swap', load);
+    })();
+  </script> <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('pre').forEach((pre) => {
+        if (pre.dataset.copyEnhanced) return;
+        pre.dataset.copyEnhanced = '1';
+        const btn = document.createElement('button');
+        btn.className = 'code-copy';
+        btn.type = 'button';
+        btn.textContent = 'copy';
+        btn.setAttribute('aria-label', 'Copy code');
+        btn.addEventListener('click', async () => {
+          const code = pre.querySelector('code');
+          const text = (code ? code.innerText : pre.innerText) || '';
+          try {
+            await navigator.clipboard.writeText(text);
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = 'copy';
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+        pre.appendChild(btn);
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>  </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span class="site-footer__links"> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> <a class="site-footer__support" href="https://buymeacoffee.com/mlnomadpy" target="_blank" rel="noopener noreferrer" aria-label="Support this blog on Buy Me a Coffee">
+buy me a coffee
+</a> </span> </footer> <div id="consent-banner" class="consent-banner" role="dialog" aria-live="polite" aria-label="Analytics consent" hidden><p class="consent-text">
+I use Google Analytics to see which posts get read. It sets cookies only
+      if you accept. No ads, no selling data.
+</p><div class="consent-actions"><button type="button" id="consent-decline" class="consent-btn consent-decline">Decline</button><button type="button" id="consent-accept" class="consent-btn consent-accept">Accept</button></div></div>
+
+  <script>
+    (() => {
+      const KEY = 'analytics-consent';
+      const setup = () => {
+        const banner = document.getElementById('consent-banner');
+        if (!banner) return;
+        let choice = null;
+        try { choice = localStorage.getItem(KEY); } catch (e) {}
+        // Already decided → keep hidden.
+        if (choice === 'granted' || choice === 'denied') { banner.hidden = true; return; }
+        banner.hidden = false;
+
+        const decide = (value) => {
+          try { localStorage.setItem(KEY, value); } catch (e) {}
+          banner.hidden = true;
+          if (value === 'granted' && typeof window.__loadGA === 'function') window.__loadGA();
+        };
+        const accept = document.getElementById('consent-accept');
+        const decline = document.getElementById('consent-decline');
+        if (accept && !accept.dataset.bound) {
+          accept.dataset.bound = '1';
+          accept.addEventListener('click', () => decide('granted'));
+        }
+        if (decline && !decline.dataset.bound) {
+          decline.dataset.bound = '1';
+          decline.addEventListener('click', () => decide('denied'));
+        }
+      };
+      setup();
+      document.addEventListener('astro:page-load', setup);
+    })();
+  </script>
+
+  <style>
+    /* Author `display:flex` below would otherwise override the UA [hidden]
+       rule, leaving the banner visible after a choice. This wins on specificity. */
+    .consent-banner[hidden] { display: none !important; }
+    .consent-banner {
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      right: 1rem;
+      max-width: 30rem;
+      margin-left: auto;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+      padding: 0.95rem 1.1rem;
+      background: var(--bg-elev, #fff);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      font-family: var(--sans);
+    }
+    .consent-text {
+      margin: 0;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: var(--fg-muted);
+    }
+    .consent-actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+    }
+    .consent-btn {
+      font-family: var(--sans);
+      font-size: 0.82rem;
+      padding: 0.4rem 0.95rem;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    }
+    .consent-decline {
+      background: transparent;
+      color: var(--fg-muted);
+    }
+    .consent-decline:hover { color: var(--fg); border-color: var(--fg-faint); }
+    .consent-accept {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg);
+      font-weight: 600;
+    }
+    .consent-accept:hover { filter: brightness(1.05); }
+    @media (max-width: 520px) {
+      .consent-banner { left: 0.6rem; right: 0.6rem; bottom: 0.6rem; }
+    }
+  </style> <script>
+      // Inject a fullscreen toggle button onto every .viz figure on the page.
+      (() => {
+        const ENTER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10V4h6"/><path d="M20 10V4h-6"/><path d="M4 14v6h6"/><path d="M20 14v6h-6"/></svg>';
+        const EXIT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H4v6"/><path d="M14 4h6v6"/><path d="M10 20H4v-6"/><path d="M14 20h6v-6"/></svg>';
+        const inFs = () => document.fullscreenElement || document.webkitFullscreenElement;
+        const enhance = () => {
+          document.querySelectorAll('.viz').forEach((fig) => {
+            if (fig.dataset.fsReady) return;
+            fig.dataset.fsReady = '1';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'viz-fs-btn';
+            btn.setAttribute('aria-label', 'Toggle fullscreen');
+            btn.innerHTML = ENTER_SVG + '<span>fullscreen</span>';
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              try {
+                if (inFs() === fig) {
+                  await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen?.());
+                } else if (fig.requestFullscreen) {
+                  await fig.requestFullscreen();
+                } else if (fig.webkitRequestFullscreen) {
+                  await fig.webkitRequestFullscreen();
+                }
+              } catch (_) {}
+            });
+            fig.appendChild(btn);
+          });
+          const sync = () => {
+            document.querySelectorAll('.viz-fs-btn').forEach((b) => {
+              const fig = b.parentElement;
+              const open = inFs() === fig;
+              b.innerHTML = (open ? EXIT_SVG : ENTER_SVG) + '<span>' + (open ? 'exit' : 'fullscreen') + '</span>';
+            });
+          };
+          document.addEventListener('fullscreenchange', sync);
+          document.addEventListener('webkitfullscreenchange', sync);
+        };
+        enhance();
+        document.addEventListener('astro:page-load', enhance);
+        document.addEventListener('astro:after-swap', enhance);
+      })();
+    </script> </body> </html> 

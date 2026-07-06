@@ -1,0 +1,599 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="generator" content="Astro v5.18.1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#fbfaf6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)"><title>A White-Box Yat DeepSurv in JAX/Flax NNX</title><meta name="description" content="Build a Yat-kernel DeepSurv in Flax NNX: Cox partial-likelihood loss, C-index, convex attribution, cohort deletion, OOD abstention, on METABRIC."><meta name="keywords" content="DeepSurv JAX, Cox partial likelihood JAX, Yat kernel survival model, concordance index, interpretable survival analysis, Flax NNX implementation, survival-analysis, deepsurv, cox, kernels, interpretability, yat, healthcare-ml, jax, flax, nnx, implementation"><meta name="author" content="Taha Bouhsine"><link rel="canonical" href="https://tahabouhsine.com/blog/a-risk-model-that-names-its-reasons-jax-flax-nnx/"><link rel="icon" href="/blog/favicon.svg" type="image/svg+xml"><link rel="alternate" type="application/rss+xml" title="Records of the !mmortal Data Scientist" href="/blog/rss.xml"><link rel="sitemap" href="/blog/sitemap-index.xml"><link rel="me" href="https://github.com/mlnomadpy"><link rel="me" href="https://x.com/mlnomadpy"><link rel="me" href="https://www.linkedin.com/in/tahabsn/"><link rel="me" href="https://scholar.google.com/citations?user=IsBjb3EAAAAJ"><link rel="me" href="https://g.dev/tahabsn"><link rel="author" href="https://github.com/mlnomadpy"><meta property="og:type" content="article"><meta property="og:site_name" content="Records of the !mmortal Data Scientist"><meta property="og:title" content="A White-Box Yat DeepSurv in JAX/Flax NNX"><meta property="og:description" content="Build a Yat-kernel DeepSurv in Flax NNX: Cox partial-likelihood loss, C-index, convex attribution, cohort deletion, OOD abstention, on METABRIC."><meta property="og:url" content="https://tahabouhsine.com/blog/a-risk-model-that-names-its-reasons-jax-flax-nnx/"><meta property="og:locale" content="en_US"><meta property="og:image" content="https://tahabouhsine.com/blog/og/a-risk-model-that-names-its-reasons-jax-flax-nnx.png"><meta property="og:image:alt" content="A White-Box DeepSurv, in JAX/Flax NNX — Records of the !mmortal Data Scientist"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:type" content="image/png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@mlnomadpy"><meta name="twitter:creator" content="@mlnomadpy"><meta name="twitter:title" content="A White-Box Yat DeepSurv in JAX/Flax NNX"><meta name="twitter:description" content="Build a Yat-kernel DeepSurv in Flax NNX: Cox partial-likelihood loss, C-index, convex attribution, cohort deletion, OOD abstention, on METABRIC."><meta name="twitter:image" content="https://tahabouhsine.com/blog/og/a-risk-model-that-names-its-reasons-jax-flax-nnx.png"><meta name="twitter:image:alt" content="A White-Box DeepSurv, in JAX/Flax NNX — Records of the !mmortal Data Scientist"><meta property="article:published_time" content="2026-07-05T17:00:00.000Z"><meta property="article:author" content="Taha Bouhsine"><meta property="article:section" content="Survival Analysis"><meta property="article:tag" content="survival-analysis"><meta property="article:tag" content="deepsurv"><meta property="article:tag" content="cox"><meta property="article:tag" content="kernels"><meta property="article:tag" content="interpretability"><meta property="article:tag" content="yat"><meta property="article:tag" content="healthcare-ml"><meta property="article:tag" content="jax"><meta property="article:tag" content="flax"><meta property="article:tag" content="nnx"><meta property="article:tag" content="implementation"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","@id":"https://tahabouhsine.com/blog/a-risk-model-that-names-its-reasons-jax-flax-nnx/#article","headline":"A White-Box DeepSurv, in JAX/Flax NNX","name":"A White-Box DeepSurv, in JAX/Flax NNX","description":"Build a Yat-kernel DeepSurv in Flax NNX: Cox partial-likelihood loss, C-index, convex attribution, cohort deletion, OOD abstention, on METABRIC.","image":["https://tahabouhsine.com/blog/og/a-risk-model-that-names-its-reasons-jax-flax-nnx.png"],"datePublished":"2026-07-05T17:00:00.000Z","dateModified":"2026-07-05T17:00:00.000Z","author":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#author","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","jobTitle":"Machine Learning Researcher","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"publisher":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#publisher","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"mainEntityOfPage":{"@type":"WebPage","@id":"https://tahabouhsine.com/blog/a-risk-model-that-names-its-reasons-jax-flax-nnx/"},"keywords":"DeepSurv JAX, Cox partial likelihood JAX, Yat kernel survival model, concordance index, interpretable survival analysis, Flax NNX implementation, survival-analysis, deepsurv, cox, kernels, interpretability, yat, healthcare-ml, jax, flax, nnx, implementation","url":"https://tahabouhsine.com/blog/a-risk-model-that-names-its-reasons-jax-flax-nnx/","inLanguage":"en-US","wordCount":1907,"timeRequired":"PT10M","articleSection":"Survival Analysis","isPartOf":{"@type":"Blog","@id":"https://tahabouhsine.com/blog/","name":"Records of the !mmortal Data Scientist","url":"https://tahabouhsine.com/blog/"}}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Blog","item":"https://tahabouhsine.com/blog/"},{"@type":"ListItem","position":2,"name":"Survival Analysis","item":"https://tahabouhsine.com/blog/tag/survival-analysis/"},{"@type":"ListItem","position":3,"name":"A White-Box DeepSurv, in JAX/Flax NNX","item":"https://tahabouhsine.com/blog/a-risk-model-that-names-its-reasons-jax-flax-nnx/"}]}</script><script>
+    (function () {
+      if (window.__gaSetup) return;
+      window.__gaSetup = true;
+      var GA_ID = 'G-373438VHJB';
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ dataLayer.push(arguments); }
+      window.gtag = window.gtag || gtag;
+      window.__gaEventQueue = window.__gaEventQueue || [];
+      window.__trackGA = function (eventName, params) {
+        if (!eventName) return;
+        var item = { name: eventName, params: params || {} };
+        if (window.__gaLoaded) {
+          gtag('event', item.name, item.params);
+        } else {
+          window.__gaEventQueue.push(item);
+        }
+      };
+
+      // Track whether the first astro:page-load has fired, so a mid-session
+      // Accept can still record the current page.
+      window.__gaFirstLoadDone = window.__gaFirstLoadDone || false;
+      document.addEventListener('astro:page-load', function () { window.__gaFirstLoadDone = true; });
+
+      window.__loadGA = function () {
+        if (window.__gaLoaded) return;
+        window.__gaLoaded = true;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+        document.head.appendChild(s);
+        gtag('js', new Date());
+        gtag('config', GA_ID, { send_page_view: false });
+        (window.__gaEventQueue || []).splice(0).forEach(function (item) {
+          gtag('event', item.name, item.params);
+        });
+        function sendPV() {
+          gtag('event', 'page_view', {
+            page_title: document.title,
+            page_location: location.href,
+            page_path: location.pathname + location.search,
+          });
+        }
+        document.addEventListener('astro:page-load', sendPV);
+        // If the initial page-load already happened (accept mid-session),
+        // record this page now; otherwise the listener catches the first one.
+        if (window.__gaFirstLoadDone) sendPV();
+      };
+
+      try {
+        if (localStorage.getItem('analytics-consent') === 'granted') window.__loadGA();
+      } catch (e) {}
+    })();
+  </script><script>
+  (() => {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'light' || stored === 'dark') {
+      document.documentElement.setAttribute('data-theme', stored);
+    }
+  })();
+</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.DstInXr_.css">
+<link rel="stylesheet" href="/blog/_astro/_slug_.BzSIaIK4.css"><style>.cite-as[data-astro-cid-p234urri]{margin:3.5rem 0 0;padding-top:1.5rem;border-top:1px solid var(--border)}.cite-as[data-astro-cid-p234urri] h2[data-astro-cid-p234urri]{font-family:var(--mono);font-size:.82rem;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-faint);font-weight:500;margin:0 0 .75rem}.cite-as[data-astro-cid-p234urri] h3[data-astro-cid-p234urri]{font-family:var(--mono);font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-faint);font-weight:500;margin:1.5rem 0 .6rem}.cite-line[data-astro-cid-p234urri]{font-family:var(--serif);font-size:.98rem;line-height:1.55;color:var(--fg-muted);margin:0 0 .5rem}.cite-line[data-astro-cid-p234urri] em[data-astro-cid-p234urri]{color:var(--fg)}.cite-bib[data-astro-cid-p234urri]{margin:.4rem 0 0;position:relative}.cite-bib[data-astro-cid-p234urri] summary[data-astro-cid-p234urri]{cursor:pointer;font-family:var(--mono);font-size:.78rem;color:var(--fg-muted);padding:.25rem 0;user-select:none}.cite-bib[data-astro-cid-p234urri] summary[data-astro-cid-p234urri]:hover{color:var(--accent)}.cite-bib[data-astro-cid-p234urri] pre[data-astro-cid-p234urri]{margin:.4rem 0 0;padding:.85rem 1rem;background:var(--bg-elev);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;font-size:.82rem;line-height:1.55}.cite-bib[data-astro-cid-p234urri] pre[data-astro-cid-p234urri] code[data-astro-cid-p234urri]{background:transparent;border:0;padding:0}.cite-copy[data-astro-cid-p234urri]{position:absolute;top:2.1rem;right:.55rem;background:var(--bg);border:1px solid var(--border);color:var(--fg-muted);font-family:var(--mono);font-size:.72rem;padding:.25rem .55rem;border-radius:var(--radius-sm);cursor:pointer;transition:color var(--transition-fast),border-color var(--transition-fast)}.cite-copy[data-astro-cid-p234urri]:hover,.cite-copy[data-astro-cid-p234urri].copied{color:var(--accent);border-color:var(--accent)}
+</style></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/writeups">writeups</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>
+  (() => {
+    const apply = (theme) => {
+      document.documentElement.setAttribute('data-theme', theme);
+      const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+      if (meta) meta.setAttribute('content', theme === 'dark' ? '#0e1116' : '#fbfaf6');
+      // Sync giscus iframe if present
+      const giscus = document.querySelector('iframe.giscus-frame');
+      if (giscus && giscus.contentWindow) {
+        giscus.contentWindow.postMessage(
+          { giscus: { setConfig: { theme: theme === 'dark' ? 'dark' : 'light' } } },
+          'https://giscus.app'
+        );
+      }
+    };
+
+    const init = () => {
+      const btns = document.querySelectorAll('[data-theme-toggle]');
+      btns.forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', () => {
+          const current = document.documentElement.getAttribute('data-theme')
+            || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          const next = current === 'dark' ? 'light' : 'dark';
+          localStorage.setItem('theme', next);
+          apply(next);
+        });
+      });
+    };
+
+    init();
+    document.addEventListener('astro:after-swap', init);
+    document.addEventListener('astro:page-load', init);
+  })();
+</script> </nav> </div> </header> <main id="main">  <div class="reading-progress" data-reading-progress aria-hidden="true"></div> <script>
+  (() => {
+    const init = () => {
+      const bar = document.querySelector('[data-reading-progress]');
+      if (!bar) return;
+      const update = () => {
+        const h = document.documentElement;
+        const scrolled = h.scrollTop;
+        const max = h.scrollHeight - h.clientHeight;
+        const pct = max > 0 ? Math.min(100, (scrolled / max) * 100) : 0;
+        bar.style.width = pct + '%';
+      };
+      // Coalesce scroll events into one paint per frame so fast/touch
+      // scrolling stays smooth.
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => { update(); ticking = false; });
+      };
+      update();
+      window.removeEventListener('scroll', window.__rp_onScroll || (() => {}));
+      window.removeEventListener('resize', window.__rp_onScroll || (() => {}));
+      window.__rp_onScroll = onScroll;
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+    };
+    init();
+    document.addEventListener('astro:page-load', init);
+    document.addEventListener('astro:after-swap', init);
+  })();
+</script> <article data-blog-post data-pagefind-body data-pagefind-meta="date:2026-07-05"> <header class="post-header">  <h1 data-pagefind-meta="title">A White-Box DeepSurv, in JAX/Flax NNX</h1> <p class="meta"> <time datetime="2026-07-05T17:00:00.000Z">July 5, 2026</time>   · 10 min read </p> <p style="margin-top:0.65rem" data-pagefind-meta="tags:survival-analysis,deepsurv,cox,kernels,interpretability,yat,healthcare-ml,jax,flax,nnx,implementation"> <a class="tag" href="/blog/tag/survival-analysis/">#survival-analysis</a><a class="tag" href="/blog/tag/deepsurv/">#deepsurv</a><a class="tag" href="/blog/tag/cox/">#cox</a><a class="tag" href="/blog/tag/kernels/">#kernels</a><a class="tag" href="/blog/tag/interpretability/">#interpretability</a><a class="tag" href="/blog/tag/yat/">#yat</a><a class="tag" href="/blog/tag/healthcare-ml/">#healthcare-ml</a><a class="tag" href="/blog/tag/jax/">#jax</a><a class="tag" href="/blog/tag/flax/">#flax</a><a class="tag" href="/blog/tag/nnx/">#nnx</a><a class="tag" href="/blog/tag/implementation/">#implementation</a> </p> </header> <details class="series-nav" data-astro-cid-w7ld43o3><summary data-astro-cid-w7ld43o3><span class="sn-strip" data-astro-cid-w7ld43o3><span class="sn-part" data-astro-cid-w7ld43o3>Part 8 of 10</span><span class="sn-sep" aria-hidden="true" data-astro-cid-w7ld43o3>·</span><span class="sn-series" data-astro-cid-w7ld43o3>The Prototype Network</span></span><span class="sn-chevron" aria-hidden="true" data-astro-cid-w7ld43o3><svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" data-astro-cid-w7ld43o3><path d="M2.5 4.5 6 8l3.5-3.5" data-astro-cid-w7ld43o3></path></svg></span></summary><ol class="sn-list" data-astro-cid-w7ld43o3><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/what-a-finite-kernel-buys-an-mlp/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>1</span><span class="sn-title" data-astro-cid-w7ld43o3>What a Finite Kernel Buys an MLP</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/your-neuron-is-a-picture/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>2</span><span class="sn-title" data-astro-cid-w7ld43o3>Your Neuron Is a Direction. It Should Be a Picture.</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/edit-a-network-by-hand/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>3</span><span class="sn-title" data-astro-cid-w7ld43o3>Your Network Is a List of Pictures. You Can Edit It.</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/train-the-features/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>4</span><span class="sn-title" data-astro-cid-w7ld43o3>You Only Have to Train the Features</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/you-dont-have-to-train-the-features/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>5</span><span class="sn-title" data-astro-cid-w7ld43o3>You Don&#39;t Even Have to Train the Features</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/depth-by-construction/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>6</span><span class="sn-title" data-astro-cid-w7ld43o3>How Far Down Can You Build?</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/calibration-of-a-bounded-net/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>7</span><span class="sn-title" data-astro-cid-w7ld43o3>When 80% Should Mean 80%</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/a-risk-model-that-names-its-reasons/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>8</span><span class="sn-title" data-astro-cid-w7ld43o3>A Risk Model That Names Its Reasons</span><span class="sn-note" data-astro-cid-w7ld43o3>this post's explainer</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/your-network-is-a-fixed-point/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>9</span><span class="sn-title" data-astro-cid-w7ld43o3>Your Network Is a Stack of Layers. It Could Be a Fixed Point.</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/edit-a-fixed-point/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>10</span><span class="sn-title" data-astro-cid-w7ld43o3>Edit One Operator, Edit Every Depth</span></a></li></ol></details> <a class="companion-callout companion" href="/blog/a-risk-model-that-names-its-reasons/" data-astro-cid-x4o4rwnl><span class="cc-icon" aria-hidden="true" data-astro-cid-x4o4rwnl>📖</span><span class="cc-body" data-astro-cid-x4o4rwnl><span class="cc-eyebrow" data-astro-cid-x4o4rwnl>Explainer companion</span><span class="cc-title" data-astro-cid-x4o4rwnl>A Risk Model That Names Its Reasons</span><span class="cc-lead" data-astro-cid-x4o4rwnl>Want the full intuition first? This is the runnable companion to the explainer.</span></span><span class="cc-cta" data-astro-cid-x4o4rwnl>Read the explainer<span aria-hidden="true" data-astro-cid-x4o4rwnl>→</span></span></a>  <p><em>The <a href="/blog/a-risk-model-that-names-its-reasons/">explainer</a> built a survival model whose risk score decomposes into the prototype patients it resembles, and matched a standard DeepSurv on the concordance index while doing it. This is the implementation: the Cox partial-likelihood loss, both models in <a href="https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html">Flax NNX</a>, the concordance evaluation, and the interpretability and editing code, each a short block. Every number below is from a real run; the script is <code>scripts/yat_deepsurv.py</code>, on the METABRIC breast-cancer cohort, and this is a research illustration, not a clinical tool.</em></p>
+<h2 id="the-loss-is-the-whole-model">The loss is the whole model<a class="heading-anchor-link" aria-label="Link to heading" href="#the-loss-is-the-whole-model"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>A DeepSurv is defined by its loss, not its architecture: any network that outputs one scalar log-risk per patient can be trained by the Cox partial likelihood, and the rest is a choice of trunk. So the loss comes first. At each observed death, the model should have scored the patient who died above everyone still at risk at that moment. Sort patients by descending time and the risk set of an event becomes a running prefix, so the log of the risk-set sum is a cumulative logsumexp from the top.</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">import</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jax, jax.numpy </span><span style="color:#D73A49;--shiki-dark:#F47067">as</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> cox_ph_loss</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(logrisk, times, events):</span></span>
+<span class="line"><span style="color:#032F62;--shiki-dark:#96D0FF">    &quot;&quot;&quot;Negative Cox partial log-likelihood (Breslow ties).&quot;&quot;&quot;</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    order </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.argsort(</span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7">times)                 </span><span style="color:#6A737D;--shiki-dark:#768390"># descending time</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    h </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> logrisk[order]; ev </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> events[order]</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    m </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.max(h)                              </span><span style="color:#6A737D;--shiki-dark:#768390"># stabilize the logsumexp</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    log_cum </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> m </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.log(jnp.cumsum(jnp.exp(h </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> m)) </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1e-12</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)  </span><span style="color:#6A737D;--shiki-dark:#768390"># log Σ_{risk set} e^h</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#D73A49;--shiki-dark:#F47067"> -</span><span style="color:#24292E;--shiki-dark:#ADBAC7">jnp.sum((h </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> log_cum) </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> ev) </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (jnp.sum(ev) </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1e-8</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span></code></pre>
+<p>Only observed events (<code>ev == 1</code>) contribute a term, but censored patients are not discarded: they sit inside the risk-set sums of every death that preceded their censoring time. That is how the partial likelihood uses a patient you only watched for a while without inventing a death date for them.</p>
+<h2 id="two-trunks-one-output">Two trunks, one output<a class="heading-anchor-link" aria-label="Link to heading" href="#two-trunks-one-output"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>With the loss fixed, the two models differ by one attribute. The standard DeepSurv is a ReLU MLP; the Yat DeepSurv is a bank of prototype kernels. Both map covariates to one log-risk.</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">from</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> flax </span><span style="color:#D73A49;--shiki-dark:#F47067">import</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">class</span><span style="color:#6F42C1;--shiki-dark:#F69D50"> YatLayer</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(</span><span style="color:#6F42C1;--shiki-dark:#6CB6FF">nnx</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.</span><span style="color:#6F42C1;--shiki-dark:#6CB6FF">Module</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> __init__</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(self, d_in, k, </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, rngs, Winit, b0</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1.0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, eps0</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1.0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.W </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Param(jnp.asarray(Winit))                 </span><span style="color:#6A737D;--shiki-dark:#768390"># [K, d] prototype patients</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.log_b </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Param(jnp.full((), jnp.log(jnp.expm1(b0))))</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.log_eps </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Param(jnp.full((), jnp.log(jnp.expm1(eps0))))</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> __call__</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(self, x):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        b, eps </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jax.nn.softplus(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.log_b.value), jax.nn.softplus(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.log_eps.value)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        dot </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> x </span><span style="color:#D73A49;--shiki-dark:#F47067">@</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.W.value.T</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        d2 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.sum(x</span><span style="color:#D73A49;--shiki-dark:#F47067">**</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">keepdims</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">True</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.sum(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.W.value</span><span style="color:#D73A49;--shiki-dark:#F47067">**</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> dot</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (dot </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> b)</span><span style="color:#D73A49;--shiki-dark:#F47067">**</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">2</span><span style="color:#D73A49;--shiki-dark:#F47067"> /</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (d2 </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> eps)                       </span><span style="color:#6A737D;--shiki-dark:#768390"># [n, K] kernel activations</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">class</span><span style="color:#6F42C1;--shiki-dark:#F69D50"> YatSurv</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(</span><span style="color:#6F42C1;--shiki-dark:#6CB6FF">nnx</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.</span><span style="color:#6F42C1;--shiki-dark:#6CB6FF">Module</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#032F62;--shiki-dark:#96D0FF">    &quot;&quot;&quot;Yat DeepSurv: prototype-kernel trunk -&gt; scalar log-risk h(x) = Σ a_u φ_u(x).&quot;&quot;&quot;</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> __init__</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(self, d_in, k, </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, rngs, Winit):</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.yat </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> YatLayer(d_in, k, </span><span style="color:#E36209;--shiki-dark:#F69D50">rngs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">rngs, </span><span style="color:#E36209;--shiki-dark:#F69D50">Winit</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">Winit)</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.read </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Linear(k, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">use_bias</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">False</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">rngs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">rngs)  </span><span style="color:#6A737D;--shiki-dark:#768390"># the readout weights a_u</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> features</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(self, x): </span><span style="color:#D73A49;--shiki-dark:#F47067">return</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.yat(x)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> __call__</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(self, x):  </span><span style="color:#D73A49;--shiki-dark:#F47067">return</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.read(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.yat(x))[:, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">]</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">class</span><span style="color:#6F42C1;--shiki-dark:#F69D50"> MLPSurv</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(</span><span style="color:#6F42C1;--shiki-dark:#6CB6FF">nnx</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.</span><span style="color:#6F42C1;--shiki-dark:#6CB6FF">Module</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#032F62;--shiki-dark:#96D0FF">    &quot;&quot;&quot;Standard DeepSurv: ReLU MLP -&gt; scalar log-risk.&quot;&quot;&quot;</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> __init__</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(self, d_in, k, </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, rngs):</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.l1 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Linear(d_in, k, </span><span style="color:#E36209;--shiki-dark:#F69D50">rngs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">rngs)</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.l2 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Linear(k, k, </span><span style="color:#E36209;--shiki-dark:#F69D50">rngs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">rngs)</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.out </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Linear(k, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">use_bias</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">False</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">rngs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">rngs)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> __call__</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(self, x):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        h </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jax.nn.relu(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.l2(jax.nn.relu(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.l1(x))))</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        return</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.out(h)[:, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">]</span></span></code></pre>
+<p>The Yat trunk’s prototypes are seeded from k-means centroids on the training patients, so the model starts legible: each unit is already a plausible patient before a single gradient step. Training is full-batch, because the risk set is global (every patient’s loss term looks at every later patient), which makes full-batch the natural and standard choice at this data size.</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">import</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> optax</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6F42C1;--shiki-dark:#DCBDFB">@nnx.jit</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> train_step</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(model, opt, xb, tb, eb):</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> loss_fn</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(m): </span><span style="color:#D73A49;--shiki-dark:#F47067">return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> cox_ph_loss(m(xb), tb, eb)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    loss, grads </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.value_and_grad(loss_fn)(model)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    opt.update(model, grads)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> loss</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> train</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(model, X, t, e, epochs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">400</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, lr</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">3e-3</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, wd</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1e-4</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    opt </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Optimizer(model, optax.adamw(lr, </span><span style="color:#E36209;--shiki-dark:#F69D50">weight_decay</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">wd), </span><span style="color:#E36209;--shiki-dark:#F69D50">wrt</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">nnx.Param)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    Xj, tj, ej </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.asarray(X), jnp.asarray(t), jnp.asarray(e)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    for</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> _ </span><span style="color:#D73A49;--shiki-dark:#F47067">in</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> range</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(epochs):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        train_step(model, opt, Xj, tj, ej)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> model</span></span></code></pre>
+<p>The stratification below is what those 400 epochs buy: split the held-out patients into risk tertiles by the model’s log-risk, and draw each tertile’s Kaplan-Meier curve as training proceeds. Both models pull the three curves apart; the Yat model’s separation is at least as clean.</p>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/deepsurv-stratify.gif" alt="Kaplan-Meier survival curves of low, mid and high risk tertiles separating over training epochs, for the Yat DeepSurv and the standard DeepSurv side by side" loading="lazy" width="600" height="250"/><figcaption>Risk stratification forming over training. Each held-out patient is placed in a risk tertile by the model’s log-risk, and the tertile’s real Kaplan-Meier curve is drawn each logged epoch. Both models separate the tertiles; the Yat trunk (left) is at least as clean as the ReLU trunk (right). Real curves from <code>scripts/yat_deepsurv.py</code>.</figcaption></figure>
+<p>As the prototypes train, they migrate off their k-means seeds and settle onto the structure the partial likelihood cares about. Because a prototype is a point in patient space, that migration is literally visible: project the covariates to two dimensions and watch the prototype rings drift across the patient cloud.</p>
+<figure class="jax-fig"><img src="/blog/deepsurv-settle.gif" alt="Prototype rings drifting across a 2D PCA cloud of patients over training epochs, colored by whether they raise or lower risk" loading="lazy" width="440" height="322"/><figcaption>The prototype cloud settling onto patient data, in a 2D PCA of the covariate space. Grey dots are patients; orange rings are risk-raising prototypes, blue rings protective. The rings are the real <code>W</code> parameters at each logged epoch, no synthetic path. From <code>scripts/yat_deepsurv.py</code>.</figcaption></figure>
+<h2 id="concordance-does-it-rank">Concordance: does it rank?<a class="heading-anchor-link" aria-label="Link to heading" href="#concordance-does-it-rank"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The scoreboard for a survival model is Harrell’s concordance index: over all pairs of patients whose ordering is known (one died before the other was censored), the fraction the model ranks correctly. Chance is 0.5. We use scikit-survival’s estimator so the censoring bookkeeping is standard.</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">from</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> sksurv.metrics </span><span style="color:#D73A49;--shiki-dark:#F47067">import</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> concordance_index_censored</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> cindex</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(model, X, t, e):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    risk </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.asarray(model(jnp.asarray(X)))          </span><span style="color:#6A737D;--shiki-dark:#768390"># higher = earlier event</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> concordance_index_censored(e.astype(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">bool</span><span style="color:#24292E;--shiki-dark:#ADBAC7">), t, risk)[</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">]</span></span></code></pre>
+<p>Trained at matched capacity (24 hidden units) across three seeds, the two trunks tie on discrimination and the Yat trunk edges ahead on the probabilistic scores:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>metric</th><th>Yat DeepSurv</th><th>standard DeepSurv</th></tr></thead><tbody><tr><td>C-index</td><td>0.627 ± 0.033</td><td>0.623 ± 0.011</td></tr><tr><td>time-dependent AUC</td><td>0.653 ± 0.049</td><td>0.652 ± 0.016</td></tr><tr><td>integrated Brier (lower better)</td><td>0.199 ± 0.014</td><td>0.225 ± 0.008</td></tr><tr><td>Cox partial NLL (lower better)</td><td>5.64 ± 0.19</td><td>6.84 ± 0.40</td></tr></tbody></table>
+<h2 id="attribution-is-a-subtraction">Attribution is a subtraction<a class="heading-anchor-link" aria-label="Link to heading" href="#attribution-is-a-subtraction"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The point of the Yat trunk is that its log-risk has parts. Because <code>h(x) = read(yat(x))</code> is linear in the kernel activations, the exact per-prototype contribution is an element-wise product, no gradients, no approximation.</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">phi </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.asarray(model.yat(jnp.asarray(X)))           </span><span style="color:#6A737D;--shiki-dark:#768390"># [n, K] kernel activations</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">a   </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.asarray(model.read.kernel.value)[:, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">]       </span><span style="color:#6A737D;--shiki-dark:#768390"># [K] readout weights</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">contrib </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> phi </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> a[</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">None</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, :]                             </span><span style="color:#6A737D;--shiki-dark:#768390"># [n, K] signed contributions</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">assert</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.allclose(contrib.sum(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">), np.asarray(model(jnp.asarray(X))), </span><span style="color:#E36209;--shiki-dark:#F69D50">atol</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1e-3</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span></code></pre>
+<p>The contributions sum back to the log-risk to within <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mo>×</mo><msup><mn>10</mn><mrow><mo>−</mo><mn>6</mn></mrow></msup></mrow><annotation encoding="application/x-tex">2\times10^{-6}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:0.8141em"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">6</span></span></span></span></span></span></span></span></span></span></span></span> on the held-out set, so a patient’s score is genuinely the sum of named prototype terms. Reveal them one at a time and the risk assembles.</p>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/deepsurv-assemble.gif" alt="Signed contribution bars for a patient's prototypes revealed one at a time, with a running sum climbing to the patient's true log-risk" loading="lazy" width="600" height="262"/><figcaption>A patient’s log-risk assembling from prototype contributions. Each bar is a real signed term a_u φ_u(x); orange raises risk, blue lowers it. The running sum climbs to the model’s true h(x). From <code>scripts/yat_deepsurv.py</code>.</figcaption></figure>
+<h2 id="cohort-deletion-is-a-masked-readout">Cohort deletion is a masked readout<a class="heading-anchor-link" aria-label="Link to heading" href="#cohort-deletion-is-a-masked-readout"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>To forget a cohort, find the prototype it is built around and zero that readout weight. The change to every patient is the exact closed form <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>−</mo><msub><mi>a</mi><mi>u</mi></msub><mtext> </mtext><msub><mi>ϕ</mi><mi>u</mi></msub><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">-a_u\, \phi_u(x)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord">−</span><span class="mord"><span class="mord mathnormal">a</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">u</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal">ϕ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">u</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose">)</span></span></span></span> for the deleted prototype <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>u</mi></mrow><annotation encoding="application/x-tex">u</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em"></span><span class="mord mathnormal">u</span></span></span></span>, computable and auditable per patient.</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">assign </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> phi.argmax(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)                                </span><span style="color:#6A737D;--shiki-dark:#768390"># each patient&#39;s nearest prototype</span></span>
+<span class="line"><span style="color:#6A737D;--shiki-dark:#768390"># pick the prototype whose contribution mass is most concentrated on its own cohort</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">share </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> [np.abs(contrib[assign </span><span style="color:#D73A49;--shiki-dark:#F47067">==</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> u, u]).sum() </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (np.abs(contrib[:, u]).sum() </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1e-9</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">         for</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> u </span><span style="color:#D73A49;--shiki-dark:#F47067">in</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> range</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(K)]</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">u </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> int</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(np.argmax([s </span><span style="color:#D73A49;--shiki-dark:#F47067">if</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (assign </span><span style="color:#D73A49;--shiki-dark:#F47067">==</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> i).sum() </span><span style="color:#D73A49;--shiki-dark:#F47067">&gt;=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 8</span><span style="color:#D73A49;--shiki-dark:#F47067"> else</span><span style="color:#D73A49;--shiki-dark:#F47067"> -</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#D73A49;--shiki-dark:#F47067"> for</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> i, s </span><span style="color:#D73A49;--shiki-dark:#F47067">in</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> enumerate</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(share)]))</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">cohort </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> assign </span><span style="color:#D73A49;--shiki-dark:#F47067">==</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> u                                  </span><span style="color:#6A737D;--shiki-dark:#768390"># the patients built around prototype u</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">a_edit </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> a.copy(); a_edit[u] </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 0.0</span><span style="color:#6A737D;--shiki-dark:#768390">                    # zero that readout weight, no retraining</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">risk_before </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (phi </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> a[</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">None</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, :]).sum(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">risk_after  </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (phi </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> a_edit[</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">None</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, :]).sum(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">delta </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> risk_after </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> risk_before                      </span><span style="color:#6A737D;--shiki-dark:#768390"># = -a[u] * phi[:, u], exact per patient</span></span></code></pre>
+<p>On dense clinical covariates the deletion is not local the way it was on sparse images: every patient activates every prototype a little, so everyone moves by <em>some</em> exact amount. But the movement concentrates where the kernel says it should. Deleting prototype #12 (69% of its contribution mass on its own 28-patient cohort), the cohort shifts by 1.02 in log-risk on average; everyone else by 0.024, with 89% moving less than 0.05. The change to any patient is exactly their own resemblance to #12, a closed form you can show a regulator.</p>
+<figure class="jax-fig"><img src="/blog/deepsurv-forget.gif" alt="A 2D map of patients recoloring by risk as a cohort's prototype is deleted, the cohort ringed in black shifting while the rest barely moves" loading="lazy" width="440" height="333"/><figcaption>Cohort deletion in the 2D feature map. Patients are colored by log-risk; the cohort is ringed in black. As the prototype is removed, the cohort re-routes while the rest of the field barely moves. Every risk value is the real closed-form edit from <code>scripts/yat_deepsurv.py</code>.</figcaption></figure>
+<h2 id="abstention-is-a-max">Abstention is a max<a class="heading-anchor-link" aria-label="Link to heading" href="#abstention-is-a-max"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>A bounded kernel gives an out-of-distribution score for free: the largest activation a patient produces is a resemblance meter. Strangers score low.</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">kmax </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> phi.max(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)                                     </span><span style="color:#6A737D;--shiki-dark:#768390"># kernel-max resemblance per patient</span></span>
+<span class="line"><span style="color:#6A737D;--shiki-dark:#768390"># real patients: median 7.1; synthetic out-of-distribution patients: median 3.7</span></span></code></pre>
+<p>Walk a real patient off the data manifold and watch the meter fall into the region where the model should decline to answer.</p>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/deepsurv-abstain.gif" alt="A vertical marker for one patient sweeping left across two overlaid histograms of kernel-max scores for real and out-of-distribution patients as the patient is pushed off distribution" loading="lazy" width="600" height="330"/><figcaption>A patient walked off the data manifold. The histograms are the real kernel-max scores of in-distribution (blue) and out-of-distribution (grey) patients; the orange marker is the moving patient, its score computed live from the real kernel. From <code>scripts/yat_deepsurv.py</code>.</figcaption></figure>
+<h2 id="calibration-comes-along">Calibration comes along<a class="heading-anchor-link" aria-label="Link to heading" href="#calibration-comes-along"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Because the Yat trunk’s log-risks are read off bounded kernels, its predicted survival tracks the observed survival closely, group by group. Bin the held-out patients into risk tertiles, and for each tertile compare the model’s mean predicted survival against the Kaplan-Meier estimate at a set of horizons: on the diagonal is honest.</p>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/deepsurv-reliability.gif" alt="Predicted versus observed survival curves drawing themselves horizon by horizon for three risk tertiles, for the Yat DeepSurv and the standard DeepSurv" loading="lazy" width="600" height="262"/><figcaption>Predicted vs observed survival, drawing itself horizon by horizon. Each point is a risk tertile at a follow-up horizon; the diagonal is a perfectly calibrated model. The Yat DeepSurv (left) hugs the diagonal across all three tertiles; the standard DeepSurv (right) drifts off it. Real predicted-vs-Kaplan-Meier points from <code>scripts/yat_deepsurv.py</code>.</figcaption></figure>
+<p>That is the whole white-box DeepSurv: one loss, two trunks, and a handful of array operations that turn the legible trunk’s one number into reasons, an edit, and an abstention. The <a href="/blog/a-risk-model-that-names-its-reasons/">explainer</a> is where the clinical story lives.</p>
+<section class="cite-as" aria-labelledby="cite-a-risk-model-that-names-its-reasons-jax-flax-nnx" data-astro-cid-p234urri> <h2 id="cite-a-risk-model-that-names-its-reasons-jax-flax-nnx" data-astro-cid-p234urri>Cite as</h2> <p class="cite-line" data-astro-cid-p234urri>
+Bouhsine, T. (<time datetime="2026-07-05T00:00:00.000Z" data-astro-cid-p234urri>2026, July 5</time>).
+<em data-astro-cid-p234urri>A White-Box DeepSurv, in JAX/Flax NNX</em>. Records of the !mmortal Data Scientist.
+<a href="https://tahabouhsine.com/blog/a-risk-model-that-names-its-reasons-jax-flax-nnx/" data-astro-cid-p234urri>https://tahabouhsine.com/blog/a-risk-model-that-names-its-reasons-jax-flax-nnx/</a> </p> <details class="cite-bib" data-astro-cid-p234urri> <summary data-astro-cid-p234urri>BibTeX</summary> <pre data-astro-cid-p234urri><code class="bibtex" data-astro-cid-p234urri>@misc{bouhsine2026ariskmodelthatnamesitsreasonsjaxflaxnnx,
+  author       = {Bouhsine, Taha},
+  title        = {A White-Box DeepSurv, in JAX/Flax NNX},
+  year         = {2026},
+  month        = {jul},
+  howpublished = {\url{https://tahabouhsine.com/blog/a-risk-model-that-names-its-reasons-jax-flax-nnx/}},
+  note         = {Blog post, Records of the !mmortal Data Scientist}
+}</code></pre> <button type="button" class="cite-copy" data-copy="@misc{bouhsine2026ariskmodelthatnamesitsreasonsjaxflaxnnx,
+  author       = {Bouhsine, Taha},
+  title        = {A White-Box DeepSurv, in JAX/Flax NNX},
+  year         = {2026},
+  month        = {jul},
+  howpublished = {\url{https://tahabouhsine.com/blog/a-risk-model-that-names-its-reasons-jax-flax-nnx/}},
+  note         = {Blog post, Records of the !mmortal Data Scientist}
+}" aria-label="Copy BibTeX" data-astro-cid-p234urri>copy</button> </details>  </section>  <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('.cite-copy').forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(btn.dataset.copy || '');
+            const original = btn.textContent;
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = original;
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>
+<style>
+.jax-fig { margin: 1.8rem auto; text-align: center; }
+.jax-fig img { max-width: 620px; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; background: #fbf8f1; }
+.jax-fig-wide img { max-width: 720px; }
+.jax-fig figcaption { margin-top: 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--fg-muted); max-width: 64ch; margin-left: auto; margin-right: auto; }
+</style>  <section class="references" aria-labelledby="references-heading" data-astro-cid-rn7nvbl4><h2 id="references-heading" data-astro-cid-rn7nvbl4>References</h2><ol data-astro-cid-rn7nvbl4><li id="ref-1" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Katzman, J. L., Shaham, U., Cloninger, A., Bates, J., Jiang, T., Kluger, Y.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2018)</span>. <a class="ref-title" href="https://arxiv.org/abs/1606.00931" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>DeepSurv: Personalized Treatment Recommender System Using a Cox Proportional Hazards Deep Neural Network</a>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>BMC Medical Research Methodology 18(1), 24</span>.<a class="ref-ext" href="https://arxiv.org/abs/1606.00931" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:1606.00931</a></li><li id="ref-2" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Cox, D. R.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(1972)</span>. <span class="ref-title" data-astro-cid-rn7nvbl4>Regression Models and Life-Tables</span>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>Journal of the Royal Statistical Society, Series B 34(2), 187–220</span>.</li><li id="ref-3" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Harrell, F. E., Califf, R. M., Pryor, D. B., Lee, K. L., Rosati, R. A.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(1982)</span>. <span class="ref-title" data-astro-cid-rn7nvbl4>Evaluating the Yield of Medical Tests</span>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>JAMA 247(18), 2543–2546</span>.</li><li id="ref-4" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Curtis, C., et al.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2012)</span>. <span class="ref-title" data-astro-cid-rn7nvbl4>The Genomic and Transcriptomic Architecture of 2,000 Breast Tumours (METABRIC)</span>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>Nature 486, 346–352</span>.</li><li id="ref-5" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Bouhsine, T.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2026)</span>. <a class="ref-title" href="https://arxiv.org/abs/2605.03262" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance</a>.
+<a class="ref-ext" href="https://arxiv.org/abs/2605.03262" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:2605.03262</a></li></ol></section> </article> <script>(function(){const payload = {"post_title":"A White-Box DeepSurv, in JAX/Flax NNX","post_slug":"a-risk-model-that-names-its-reasons-jax-flax-nnx","post_path":"/blog/a-risk-model-that-names-its-reasons-jax-flax-nnx/","post_tags":"survival-analysis,deepsurv,cox,kernels,interpretability,yat,healthcare-ml,jax,flax,nnx,implementation","word_count":1907,"reading_time_minutes":10,"is_draft":false};
+
+  (() => {
+    const thresholds = [25, 50, 75, 90, 100];
+    const state = { viewed: false, sent: new Set() };
+
+    const track = (name, params = {}) => {
+      if (typeof window.__trackGA === 'function') {
+        window.__trackGA(name, {
+          ...payload,
+          ...params,
+          non_interaction: name === 'blog_post_view',
+        });
+      }
+    };
+
+    const init = () => {
+      const article = document.querySelector('[data-blog-post]');
+      if (!article) return;
+
+      if (!state.viewed) {
+        state.viewed = true;
+        track('blog_post_view');
+      }
+
+      const progress = () => {
+        const rect = article.getBoundingClientRect();
+        const articleTop = window.scrollY + rect.top;
+        const articleHeight = Math.max(1, article.offsetHeight);
+        const viewportBottom = window.scrollY + window.innerHeight;
+        return Math.max(0, Math.min(100, ((viewportBottom - articleTop) / articleHeight) * 100));
+      };
+
+      const update = () => {
+        const pct = progress();
+        thresholds.forEach((threshold) => {
+          if (pct >= threshold && !state.sent.has(threshold)) {
+            state.sent.add(threshold);
+            track('blog_post_read_depth', { read_percent: threshold });
+            if (threshold === 90) {
+              track('blog_post_read', { read_percent: threshold });
+            }
+          }
+        });
+      };
+
+      if (window.__postAnalyticsCleanup) window.__postAnalyticsCleanup();
+
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => {
+          update();
+          ticking = false;
+        });
+      };
+
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+      window.__postAnalyticsCleanup = () => {
+        window.removeEventListener('scroll', onScroll);
+        window.removeEventListener('resize', onScroll);
+      };
+      update();
+    };
+
+    init();
+    document.addEventListener('astro:page-load', init, { once: true });
+  })();
+})();</script> <aside class="related" aria-labelledby="related-heading" data-astro-cid-dpgbfi7r><h2 id="related-heading" data-astro-cid-dpgbfi7r>Related posts</h2><ul data-astro-cid-dpgbfi7r><li data-astro-cid-dpgbfi7r><a href="/blog/a-risk-model-that-names-its-reasons/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>A Risk Model That Names Its Reasons</span><span class="related-desc" data-astro-cid-dpgbfi7r>A survival model tells an oncologist a patient is high-risk, and she has to act on the number without being able to ask why. What would it take for the risk score to name its reasons? We build a Yat-kernel DeepSurv on breast-cancer survival, match a standard DeepSurv on concordance, and get a risk score that decomposes exactly into the prototype patients this one resembles, a model you can read, audit, and edit.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-07-05T00:00:00.000Z" data-astro-cid-dpgbfi7r>Jul 5, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/edit-a-network-jax-flax-nnx/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>Editing a Network by Hand, in JAX/Flax NNX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion: build the prototype Yat-MLP in Flax NNX, then add a class by concatenating a few prototype rows and forget a class by masking them out, with no gradient steps. Class-incremental learning that matches a from-scratch build, and exact machine unlearning, both as array edits you can read. Every number is from a real run on Fashion-MNIST.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-06-22T18:00:00.000Z" data-astro-cid-dpgbfi7r>Jun 22, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/yat-mlp-fmnist-jax-flax-nnx/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>Your Neuron Is a Picture, in JAX/Flax NNX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion: build the prototype MLP from the post in Flax NNX, train it on Fashion-MNIST, and watch the neurons. Pull the prototypes out as images, read a prediction as a vote over pictures, see the model abstain on out-of-distribution digits, check that random-init prototypes classify but stay noise, and track the prototypes migrating through a UMAP fit on the dataset as they train.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-06-21T17:00:00.000Z" data-astro-cid-dpgbfi7r>Jun 21, 2026</time></span></a></li></ul></aside> <nav class="post-nav" aria-label="Adjacent posts"><a href="/blog/a-risk-model-that-names-its-reasons/" class="prev" rel="prev"><div class="label">← Previous</div><div class="title">A Risk Model That Names Its Reasons</div></a><span></span></nav> <section aria-label="Comments" id="giscus-mount" style="margin-top:3rem" data-giscus="{&#34;repo&#34;:&#34;mlnomadpy/blog&#34;,&#34;repoId&#34;:&#34;MDEwOlJlcG9zaXRvcnk0MDQ4MzY2NDU=&#34;,&#34;category&#34;:&#34;Announcements&#34;,&#34;categoryId&#34;:&#34;DIC_kwDOGCFRJc4C9EiR&#34;,&#34;mapping&#34;:&#34;pathname&#34;,&#34;reactionsEnabled&#34;:&#34;1&#34;,&#34;emitMetadata&#34;:&#34;0&#34;,&#34;inputPosition&#34;:&#34;top&#34;,&#34;theme&#34;:&#34;preferred_color_scheme&#34;,&#34;lang&#34;:&#34;en&#34;}"></section><script>
+    (() => {
+      const load = () => {
+        const mount = document.getElementById('giscus-mount');
+        if (!mount || mount.dataset.loaded === '1') return;
+        const cfg = JSON.parse(mount.dataset.giscus);
+        const theme = document.documentElement.getAttribute('data-theme')
+          || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        const s = document.createElement('script');
+        s.src = 'https://giscus.app/client.js';
+        s.async = true;
+        s.crossOrigin = 'anonymous';
+        const attrs = {
+          'data-repo': cfg.repo,
+          'data-repo-id': cfg.repoId,
+          'data-category': cfg.category,
+          'data-category-id': cfg.categoryId,
+          'data-mapping': cfg.mapping,
+          'data-strict': '0',
+          'data-reactions-enabled': cfg.reactionsEnabled,
+          'data-emit-metadata': cfg.emitMetadata,
+          'data-input-position': cfg.inputPosition,
+          'data-theme': theme,
+          'data-lang': cfg.lang,
+          'data-loading': 'lazy',
+        };
+        for (const k in attrs) s.setAttribute(k, attrs[k]);
+        mount.appendChild(s);
+        mount.dataset.loaded = '1';
+      };
+      load();
+      document.addEventListener('astro:page-load', load);
+      document.addEventListener('astro:after-swap', load);
+    })();
+  </script> <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('pre').forEach((pre) => {
+        if (pre.dataset.copyEnhanced) return;
+        pre.dataset.copyEnhanced = '1';
+        const btn = document.createElement('button');
+        btn.className = 'code-copy';
+        btn.type = 'button';
+        btn.textContent = 'copy';
+        btn.setAttribute('aria-label', 'Copy code');
+        btn.addEventListener('click', async () => {
+          const code = pre.querySelector('code');
+          const text = (code ? code.innerText : pre.innerText) || '';
+          try {
+            await navigator.clipboard.writeText(text);
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = 'copy';
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+        pre.appendChild(btn);
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>  </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span class="site-footer__links"> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> <a class="site-footer__support" href="https://buymeacoffee.com/mlnomadpy" target="_blank" rel="noopener noreferrer" aria-label="Support this blog on Buy Me a Coffee">
+buy me a coffee
+</a> </span> </footer> <div id="consent-banner" class="consent-banner" role="dialog" aria-live="polite" aria-label="Analytics consent" hidden><p class="consent-text">
+I use Google Analytics to see which posts get read. It sets cookies only
+      if you accept. No ads, no selling data.
+</p><div class="consent-actions"><button type="button" id="consent-decline" class="consent-btn consent-decline">Decline</button><button type="button" id="consent-accept" class="consent-btn consent-accept">Accept</button></div></div>
+
+  <script>
+    (() => {
+      const KEY = 'analytics-consent';
+      const setup = () => {
+        const banner = document.getElementById('consent-banner');
+        if (!banner) return;
+        let choice = null;
+        try { choice = localStorage.getItem(KEY); } catch (e) {}
+        // Already decided → keep hidden.
+        if (choice === 'granted' || choice === 'denied') { banner.hidden = true; return; }
+        banner.hidden = false;
+
+        const decide = (value) => {
+          try { localStorage.setItem(KEY, value); } catch (e) {}
+          banner.hidden = true;
+          if (value === 'granted' && typeof window.__loadGA === 'function') window.__loadGA();
+        };
+        const accept = document.getElementById('consent-accept');
+        const decline = document.getElementById('consent-decline');
+        if (accept && !accept.dataset.bound) {
+          accept.dataset.bound = '1';
+          accept.addEventListener('click', () => decide('granted'));
+        }
+        if (decline && !decline.dataset.bound) {
+          decline.dataset.bound = '1';
+          decline.addEventListener('click', () => decide('denied'));
+        }
+      };
+      setup();
+      document.addEventListener('astro:page-load', setup);
+    })();
+  </script>
+
+  <style>
+    /* Author `display:flex` below would otherwise override the UA [hidden]
+       rule, leaving the banner visible after a choice. This wins on specificity. */
+    .consent-banner[hidden] { display: none !important; }
+    .consent-banner {
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      right: 1rem;
+      max-width: 30rem;
+      margin-left: auto;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+      padding: 0.95rem 1.1rem;
+      background: var(--bg-elev, #fff);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      font-family: var(--sans);
+    }
+    .consent-text {
+      margin: 0;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: var(--fg-muted);
+    }
+    .consent-actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+    }
+    .consent-btn {
+      font-family: var(--sans);
+      font-size: 0.82rem;
+      padding: 0.4rem 0.95rem;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    }
+    .consent-decline {
+      background: transparent;
+      color: var(--fg-muted);
+    }
+    .consent-decline:hover { color: var(--fg); border-color: var(--fg-faint); }
+    .consent-accept {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg);
+      font-weight: 600;
+    }
+    .consent-accept:hover { filter: brightness(1.05); }
+    @media (max-width: 520px) {
+      .consent-banner { left: 0.6rem; right: 0.6rem; bottom: 0.6rem; }
+    }
+  </style> <script>
+      // Inject a fullscreen toggle button onto every .viz figure on the page.
+      (() => {
+        const ENTER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10V4h6"/><path d="M20 10V4h-6"/><path d="M4 14v6h6"/><path d="M20 14v6h-6"/></svg>';
+        const EXIT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H4v6"/><path d="M14 4h6v6"/><path d="M10 20H4v-6"/><path d="M14 20h6v-6"/></svg>';
+        const inFs = () => document.fullscreenElement || document.webkitFullscreenElement;
+        const enhance = () => {
+          document.querySelectorAll('.viz').forEach((fig) => {
+            if (fig.dataset.fsReady) return;
+            fig.dataset.fsReady = '1';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'viz-fs-btn';
+            btn.setAttribute('aria-label', 'Toggle fullscreen');
+            btn.innerHTML = ENTER_SVG + '<span>fullscreen</span>';
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              try {
+                if (inFs() === fig) {
+                  await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen?.());
+                } else if (fig.requestFullscreen) {
+                  await fig.requestFullscreen();
+                } else if (fig.webkitRequestFullscreen) {
+                  await fig.webkitRequestFullscreen();
+                }
+              } catch (_) {}
+            });
+            fig.appendChild(btn);
+          });
+          const sync = () => {
+            document.querySelectorAll('.viz-fs-btn').forEach((b) => {
+              const fig = b.parentElement;
+              const open = inFs() === fig;
+              b.innerHTML = (open ? EXIT_SVG : ENTER_SVG) + '<span>' + (open ? 'exit' : 'fullscreen') + '</span>';
+            });
+          };
+          document.addEventListener('fullscreenchange', sync);
+          document.addEventListener('webkitfullscreenchange', sync);
+        };
+        enhance();
+        document.addEventListener('astro:page-load', enhance);
+        document.addEventListener('astro:after-swap', enhance);
+      })();
+    </script> </body> </html>
