@@ -1,0 +1,277 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="generator" content="Astro v5.18.1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#fbfaf6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)"><title>The Prototype Network — Records of the !mmortal Data Scientist</title><meta name="description" content="Replace the activation with a finite, positive-definite kernel and a network becomes a list of prototypes you can read, edit by hand, and finally collapse into a single fixed-point operator."><meta name="author" content="Taha Bouhsine"><link rel="canonical" href="https://tahabouhsine.com/blog/series/prototype-networks/"><link rel="icon" href="/blog/favicon.svg" type="image/svg+xml"><link rel="alternate" type="application/rss+xml" title="Records of the !mmortal Data Scientist" href="/blog/rss.xml"><link rel="sitemap" href="/blog/sitemap-index.xml"><link rel="me" href="https://github.com/mlnomadpy"><link rel="me" href="https://x.com/mlnomadpy"><link rel="me" href="https://www.linkedin.com/in/tahabsn/"><link rel="me" href="https://scholar.google.com/citations?user=IsBjb3EAAAAJ"><link rel="me" href="https://g.dev/tahabsn"><link rel="author" href="https://github.com/mlnomadpy"><meta property="og:type" content="website"><meta property="og:site_name" content="Records of the !mmortal Data Scientist"><meta property="og:title" content="The Prototype Network — Records of the !mmortal Data Scientist"><meta property="og:description" content="Replace the activation with a finite, positive-definite kernel and a network becomes a list of prototypes you can read, edit by hand, and finally collapse into a single fixed-point operator."><meta property="og:url" content="https://tahabouhsine.com/blog/series/prototype-networks/"><meta property="og:locale" content="en_US"><meta property="og:image" content="https://tahabouhsine.com/blog/og-default.svg"><meta property="og:image:alt" content="The Prototype Network — Records of the !mmortal Data Scientist"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:type" content="image/svg+xml"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@mlnomadpy"><meta name="twitter:creator" content="@mlnomadpy"><meta name="twitter:title" content="The Prototype Network — Records of the !mmortal Data Scientist"><meta name="twitter:description" content="Replace the activation with a finite, positive-definite kernel and a network becomes a list of prototypes you can read, edit by hand, and finally collapse into a single fixed-point operator."><meta name="twitter:image" content="https://tahabouhsine.com/blog/og-default.svg"><meta name="twitter:image:alt" content="The Prototype Network — Records of the !mmortal Data Scientist"><script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","@id":"https://tahabouhsine.com/blog/#website","name":"Records of the !mmortal Data Scientist","alternateName":"Records of the Immortal Data Scientist","description":"Machine learning research notes by Taha Bouhsine — neural network interpretability, kernel methods, contrastive learning, attention mechanisms, RKHS, and transformer architectures. Long-form pieces with interactive visualisations.","url":"https://tahabouhsine.com/blog/","publisher":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#publisher","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"inLanguage":"en-US","potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"https://tahabouhsine.com/blog/search/?q={search_term_string}"},"query-input":"required name=search_term_string"}}</script><script>
+    (function () {
+      if (window.__gaSetup) return;
+      window.__gaSetup = true;
+      var GA_ID = 'G-373438VHJB';
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ dataLayer.push(arguments); }
+      window.gtag = window.gtag || gtag;
+      window.__gaEventQueue = window.__gaEventQueue || [];
+      window.__trackGA = function (eventName, params) {
+        if (!eventName) return;
+        var item = { name: eventName, params: params || {} };
+        if (window.__gaLoaded) {
+          gtag('event', item.name, item.params);
+        } else {
+          window.__gaEventQueue.push(item);
+        }
+      };
+
+      // Track whether the first astro:page-load has fired, so a mid-session
+      // Accept can still record the current page.
+      window.__gaFirstLoadDone = window.__gaFirstLoadDone || false;
+      document.addEventListener('astro:page-load', function () { window.__gaFirstLoadDone = true; });
+
+      window.__loadGA = function () {
+        if (window.__gaLoaded) return;
+        window.__gaLoaded = true;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+        document.head.appendChild(s);
+        gtag('js', new Date());
+        gtag('config', GA_ID, { send_page_view: false });
+        (window.__gaEventQueue || []).splice(0).forEach(function (item) {
+          gtag('event', item.name, item.params);
+        });
+        function sendPV() {
+          gtag('event', 'page_view', {
+            page_title: document.title,
+            page_location: location.href,
+            page_path: location.pathname + location.search,
+          });
+        }
+        document.addEventListener('astro:page-load', sendPV);
+        // If the initial page-load already happened (accept mid-session),
+        // record this page now; otherwise the listener catches the first one.
+        if (window.__gaFirstLoadDone) sendPV();
+      };
+
+      try {
+        if (localStorage.getItem('analytics-consent') === 'granted') window.__loadGA();
+      } catch (e) {}
+    })();
+  </script><script>
+  (() => {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'light' || stored === 'dark') {
+      document.documentElement.setAttribute('data-theme', stored);
+    }
+  })();
+</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.DstInXr_.css">
+<link rel="stylesheet" href="/blog/_astro/_id_.BXkluuEW.css"></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/archive">archive</a><a href="/blog/map">map</a><a href="/blog/writeups">writeups</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>
+  (() => {
+    const apply = (theme) => {
+      document.documentElement.setAttribute('data-theme', theme);
+      const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+      if (meta) meta.setAttribute('content', theme === 'dark' ? '#0e1116' : '#fbfaf6');
+      // Sync giscus iframe if present
+      const giscus = document.querySelector('iframe.giscus-frame');
+      if (giscus && giscus.contentWindow) {
+        giscus.contentWindow.postMessage(
+          { giscus: { setConfig: { theme: theme === 'dark' ? 'dark' : 'light' } } },
+          'https://giscus.app'
+        );
+      }
+    };
+
+    const init = () => {
+      const btns = document.querySelectorAll('[data-theme-toggle]');
+      btns.forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', () => {
+          const current = document.documentElement.getAttribute('data-theme')
+            || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          const next = current === 'dark' ? 'light' : 'dark';
+          localStorage.setItem('theme', next);
+          apply(next);
+        });
+      });
+    };
+
+    init();
+    document.addEventListener('astro:after-swap', init);
+    document.addEventListener('astro:page-load', init);
+  })();
+</script> </nav> </div> </header> <main id="main">  <section class="series-hero" data-astro-cid-t62pxw4x> <p class="eyebrow" data-astro-cid-t62pxw4x>
+series · 10 parts <span class="ongoing" data-astro-cid-t62pxw4x>· in progress</span> </p> <h1 data-astro-cid-t62pxw4x>The Prototype Network</h1> <p class="series-lead" data-astro-cid-t62pxw4x>Replace the activation with a finite, positive-definite kernel and a network becomes a list of prototypes you can read, edit by hand, and finally collapse into a single fixed-point operator.</p> <a class="start-pill" href="/blog/what-a-finite-kernel-buys-an-mlp/" data-astro-cid-t62pxw4x>
+Start reading → <span class="start-title" data-astro-cid-t62pxw4x>What a Finite Kernel Buys an MLP</span> </a> </section> <ol class="series-parts" data-astro-cid-t62pxw4x> <li class="has-companion" data-astro-cid-t62pxw4x> <a class="part" href="/blog/what-a-finite-kernel-buys-an-mlp/" data-slug="what-a-finite-kernel-buys-an-mlp" data-astro-cid-t62pxw4x> <span class="part-num" data-astro-cid-t62pxw4x>01</span> <span class="part-body" data-astro-cid-t62pxw4x> <span class="part-title" data-astro-cid-t62pxw4x>  What a Finite Kernel Buys an MLP </span> <span class="part-desc" data-astro-cid-t62pxw4x>Replace the activation function with a finite, explicit, positive-definite kernel, the Yat kernel, and an MLP stops being a stack of linear maps glued by a nonlinearity. It becomes a kernel machine, with locality, attribution, geometry, capacity control, and a feature map you can write down.</span> <time class="part-date" datetime="2026-06-18T00:00:00.000Z" data-astro-cid-t62pxw4x> Jun 18, 2026 </time> </span> </a> <a class="companion-row" href="/blog/yat-mlp-jax-flax-nnx/" data-slug="yat-mlp-jax-flax-nnx" aria-label="JAX companion: The Yat-Kernel MLP in JAX/Flax NNX" data-astro-cid-t62pxw4x> <span class="companion-rail" aria-hidden="true" data-astro-cid-t62pxw4x></span> <span class="companion-tag" data-astro-cid-t62pxw4x>JAX companion</span> <span class="companion-title" data-astro-cid-t62pxw4x>  The Yat-Kernel MLP in JAX/Flax NNX </span> </a> </li><li class="has-companion" data-astro-cid-t62pxw4x> <a class="part" href="/blog/your-neuron-is-a-picture/" data-slug="your-neuron-is-a-picture" data-astro-cid-t62pxw4x> <span class="part-num" data-astro-cid-t62pxw4x>02</span> <span class="part-body" data-astro-cid-t62pxw4x> <span class="part-title" data-astro-cid-t62pxw4x>  Your Neuron Is a Direction. It Should Be a Picture. </span> <span class="part-desc" data-astro-cid-t62pxw4x>Why should a neuron store a direction when it could store a thing? A direction is not a referent you can point at, which is why MLPs are opaque. Put the Yat kernel where the activation was, train on Fashion-MNIST, and every neuron becomes a prototype that lives in pixel space, literally a picture, so the network reads its own predictions: this looks like that, no saliency method required.</span> <time class="part-date" datetime="2026-06-21T00:00:00.000Z" data-astro-cid-t62pxw4x> Jun 21, 2026 </time> </span> </a> <a class="companion-row" href="/blog/yat-mlp-fmnist-jax-flax-nnx/" data-slug="yat-mlp-fmnist-jax-flax-nnx" aria-label="JAX companion: Your Neuron Is a Picture, in JAX/Flax NNX" data-astro-cid-t62pxw4x> <span class="companion-rail" aria-hidden="true" data-astro-cid-t62pxw4x></span> <span class="companion-tag" data-astro-cid-t62pxw4x>JAX companion</span> <span class="companion-title" data-astro-cid-t62pxw4x>  Your Neuron Is a Picture, in JAX/Flax NNX </span> </a> </li><li class="has-companion" data-astro-cid-t62pxw4x> <a class="part" href="/blog/edit-a-network-by-hand/" data-slug="edit-a-network-by-hand" data-astro-cid-t62pxw4x> <span class="part-num" data-astro-cid-t62pxw4x>03</span> <span class="part-body" data-astro-cid-t62pxw4x> <span class="part-title" data-astro-cid-t62pxw4x>  Your Network Is a List of Pictures. You Can Edit It. </span> <span class="part-desc" data-astro-cid-t62pxw4x>If a neuron is a labelled picture, a classifier is a list of them, and a list is something you edit. Add a class to a trained-free Yat-kernel network by placing twenty pictures, and it recognizes that class at 95% with zero gradient steps. Delete a class by removing its pictures, and it is forgotten exactly, the other classes untouched. Class-incremental learning with no penalty and machine unlearning that is instant and exact, both falling out of the architecture rather than bolted on.</span> <time class="part-date" datetime="2026-06-22T00:00:00.000Z" data-astro-cid-t62pxw4x> Jun 22, 2026 </time> </span> </a> <a class="companion-row" href="/blog/edit-a-network-jax-flax-nnx/" data-slug="edit-a-network-jax-flax-nnx" aria-label="JAX companion: Editing a Network by Hand, in JAX/Flax NNX" data-astro-cid-t62pxw4x> <span class="companion-rail" aria-hidden="true" data-astro-cid-t62pxw4x></span> <span class="companion-tag" data-astro-cid-t62pxw4x>JAX companion</span> <span class="companion-title" data-astro-cid-t62pxw4x>  Editing a Network by Hand, in JAX/Flax NNX </span> </a> </li><li class="has-companion" data-astro-cid-t62pxw4x> <a class="part" href="/blog/train-the-features/" data-slug="train-the-features" data-astro-cid-t62pxw4x> <span class="part-num" data-astro-cid-t62pxw4x>04</span> <span class="part-body" data-astro-cid-t62pxw4x> <span class="part-title" data-astro-cid-t62pxw4x>  You Only Have to Train the Features </span> <span class="part-desc" data-astro-cid-t62pxw4x>Leave a convolutional network&#39;s weights at their random starting values and build a Yat head on its features by hand: the trained head on that random backbone sorts at chance while the constructed one reaches 74%. On a properly trained backbone the constructed head reaches 83.2% against 85.7% for the trained one. The accuracy lives in the representation; the classifier, and its edits, are furniture you place. This maps the boundary between what you must optimize and what you can construct.</span> <time class="part-date" datetime="2026-06-22T23:00:00.000Z" data-astro-cid-t62pxw4x> Jun 22, 2026 </time> </span> </a> <a class="companion-row" href="/blog/train-the-features-jax-flax-nnx/" data-slug="train-the-features-jax-flax-nnx" aria-label="JAX companion: Constructing the Head on Learned Features, in JAX/Flax NNX" data-astro-cid-t62pxw4x> <span class="companion-rail" aria-hidden="true" data-astro-cid-t62pxw4x></span> <span class="companion-tag" data-astro-cid-t62pxw4x>JAX companion</span> <span class="companion-title" data-astro-cid-t62pxw4x>  Constructing the Head on Learned Features, in JAX/Flax NNX </span> </a> </li><li class="has-companion" data-astro-cid-t62pxw4x> <a class="part" href="/blog/you-dont-have-to-train-the-features/" data-slug="you-dont-have-to-train-the-features" data-astro-cid-t62pxw4x> <span class="part-num" data-astro-cid-t62pxw4x>05</span> <span class="part-body" data-astro-cid-t62pxw4x> <span class="part-title" data-astro-cid-t62pxw4x>  You Don&#39;t Even Have to Train the Features </span> <span class="part-desc" data-astro-cid-t62pxw4x>The last post trained a backbone and built the classifier by hand. This one builds the features by hand too: oriented-edge and corner detectors pooled over a grid of patches, the way computer vision worked for decades. Feed those to the same constructed Yat head and, with nothing trained anywhere, it matches the trained backbone on Fashion-MNIST point for point, within a couple of points of a fully trained network. The whole network is hand-built and readable end to end.</span> <time class="part-date" datetime="2026-06-24T00:00:00.000Z" data-astro-cid-t62pxw4x> Jun 24, 2026 </time> </span> </a> <a class="companion-row" href="/blog/handbuilt-features-jax-flax-nnx/" data-slug="handbuilt-features-jax-flax-nnx" aria-label="JAX companion: The Hand-Built Network, in JAX/Flax NNX" data-astro-cid-t62pxw4x> <span class="companion-rail" aria-hidden="true" data-astro-cid-t62pxw4x></span> <span class="companion-tag" data-astro-cid-t62pxw4x>JAX companion</span> <span class="companion-title" data-astro-cid-t62pxw4x>  The Hand-Built Network, in JAX/Flax NNX </span> </a> </li><li class="has-companion" data-astro-cid-t62pxw4x> <a class="part" href="/blog/depth-by-construction/" data-slug="depth-by-construction" data-astro-cid-t62pxw4x> <span class="part-num" data-astro-cid-t62pxw4x>06</span> <span class="part-body" data-astro-cid-t62pxw4x> <span class="part-title" data-astro-cid-t62pxw4x>  How Far Down Can You Build? </span> <span class="part-desc" data-astro-cid-t62pxw4x>One hand-built feature layer matched a trained backbone at 83.3% on Fashion-MNIST, and real networks are deep. Conveniently, the recipe for a second layer has been on the shelf for half a century: vision science says edges assemble into junctions, continuations, bends and stripes. This post takes the recipe down and follows it, builds layer 2 entirely by hand with every dimension still nameable in one sentence, and measures exactly where construction stops, and why.</span> <time class="part-date" datetime="2026-07-04T00:00:00.000Z" data-astro-cid-t62pxw4x> Jul 04, 2026 </time> </span> </a> <a class="companion-row" href="/blog/depth-by-construction-jax-flax-nnx/" data-slug="depth-by-construction-jax-flax-nnx" aria-label="JAX companion: Building the Second Layer by Hand, in JAX/Flax NNX" data-astro-cid-t62pxw4x> <span class="companion-rail" aria-hidden="true" data-astro-cid-t62pxw4x></span> <span class="companion-tag" data-astro-cid-t62pxw4x>JAX companion</span> <span class="companion-title" data-astro-cid-t62pxw4x>  Building the Second Layer by Hand, in JAX/Flax NNX </span> </a> </li><li class="has-companion" data-astro-cid-t62pxw4x> <a class="part" href="/blog/calibration-of-a-bounded-net/" data-slug="calibration-of-a-bounded-net" data-astro-cid-t62pxw4x> <span class="part-num" data-astro-cid-t62pxw4x>07</span> <span class="part-body" data-astro-cid-t62pxw4x> <span class="part-title" data-astro-cid-t62pxw4x>  When 80% Should Mean 80% </span> <span class="part-desc" data-astro-cid-t62pxw4x>A network hands you a probability with every answer, and the number is the part you act on. So when this series&#39; bounded, self-explaining kernel network says 80%, is that a measurement or a mood? Five posts of evidence say it should be the honest one. This post puts that reputation through a lie-detector test, reliability diagrams, expected calibration error and temperature scaling against a matched ReLU MLP on Fashion-MNIST, and what the test found is the post.</span> <time class="part-date" datetime="2026-07-04T00:00:00.000Z" data-astro-cid-t62pxw4x> Jul 04, 2026 </time> </span> </a> <a class="companion-row" href="/blog/calibration-of-a-bounded-net-jax-flax-nnx/" data-slug="calibration-of-a-bounded-net-jax-flax-nnx" aria-label="JAX companion: Calibrating a Bounded Net, in JAX/Flax NNX" data-astro-cid-t62pxw4x> <span class="companion-rail" aria-hidden="true" data-astro-cid-t62pxw4x></span> <span class="companion-tag" data-astro-cid-t62pxw4x>JAX companion</span> <span class="companion-title" data-astro-cid-t62pxw4x>  Calibrating a Bounded Net, in JAX/Flax NNX </span> </a> </li><li class="has-companion" data-astro-cid-t62pxw4x> <a class="part" href="/blog/a-risk-model-that-names-its-reasons/" data-slug="a-risk-model-that-names-its-reasons" data-astro-cid-t62pxw4x> <span class="part-num" data-astro-cid-t62pxw4x>08</span> <span class="part-body" data-astro-cid-t62pxw4x> <span class="part-title" data-astro-cid-t62pxw4x>  A Risk Model That Names Its Reasons </span> <span class="part-desc" data-astro-cid-t62pxw4x>A survival model tells an oncologist a patient is high-risk, and she has to act on the number without being able to ask why. What would it take for the risk score to name its reasons? We build a Yat-kernel DeepSurv on breast-cancer survival, match a standard DeepSurv on concordance, and get a risk score that decomposes exactly into the prototype patients this one resembles, a model you can read, audit, and edit.</span> <time class="part-date" datetime="2026-07-05T00:00:00.000Z" data-astro-cid-t62pxw4x> Jul 05, 2026 </time> </span> </a> <a class="companion-row" href="/blog/a-risk-model-that-names-its-reasons-jax-flax-nnx/" data-slug="a-risk-model-that-names-its-reasons-jax-flax-nnx" aria-label="JAX companion: A White-Box DeepSurv, in JAX/Flax NNX" data-astro-cid-t62pxw4x> <span class="companion-rail" aria-hidden="true" data-astro-cid-t62pxw4x></span> <span class="companion-tag" data-astro-cid-t62pxw4x>JAX companion</span> <span class="companion-title" data-astro-cid-t62pxw4x>  A White-Box DeepSurv, in JAX/Flax NNX </span> </a> </li><li class="has-companion" data-astro-cid-t62pxw4x> <a class="part" href="/blog/your-network-is-a-fixed-point/" data-slug="your-network-is-a-fixed-point" data-astro-cid-t62pxw4x> <span class="part-num" data-astro-cid-t62pxw4x>09</span> <span class="part-body" data-astro-cid-t62pxw4x> <span class="part-title" data-astro-cid-t62pxw4x>  Your Network Is a Stack of Layers. It Could Be a Fixed Point. </span> <span class="part-desc" data-astro-cid-t62pxw4x>A deep network makes you choose its depth before you have seen the problem, and gives every layer its own weights. Share one Yat-kernel operator across all of them instead, and the stack collapses into a single equation: the answer is the fixed point the state settles into. Training makes that operator a contraction, so the settling point is unique and reached from anywhere, the network decides its own depth per input, and the same twenty-four prototypes describe the computation at every step. 98.2% on two moons from 1700 parameters shared across all depth.</span> <time class="part-date" datetime="2026-07-01T00:00:00.000Z" data-astro-cid-t62pxw4x> Jul 01, 2026 </time> </span> </a> <a class="companion-row" href="/blog/your-network-is-a-fixed-point-jax-flax-nnx/" data-slug="your-network-is-a-fixed-point-jax-flax-nnx" aria-label="JAX companion: A Network That Is a Fixed Point, in JAX/Flax NNX" data-astro-cid-t62pxw4x> <span class="companion-rail" aria-hidden="true" data-astro-cid-t62pxw4x></span> <span class="companion-tag" data-astro-cid-t62pxw4x>JAX companion</span> <span class="companion-title" data-astro-cid-t62pxw4x>  A Network That Is a Fixed Point, in JAX/Flax NNX </span> </a> </li><li class="has-companion" data-astro-cid-t62pxw4x> <a class="part" href="/blog/edit-a-fixed-point/" data-slug="edit-a-fixed-point" data-astro-cid-t62pxw4x> <span class="part-num" data-astro-cid-t62pxw4x>10</span> <span class="part-body" data-astro-cid-t62pxw4x> <span class="part-title" data-astro-cid-t62pxw4x>  Edit One Operator, Edit Every Depth </span> <span class="part-desc" data-astro-cid-t62pxw4x>One post taught and forgot classes by editing rows of a Yat network, with proofs that nothing else moved. Another melted the stack of layers into a single operator iterated to a fixed point. This is the collision. Every one of those editing proofs rested on a pasted row entering the score once, as one term in one sum, and in an equilibrium network there is no once: whatever you paste is applied at every depth and fed back into its own input, and every fixed point is free to drift. So did melting the stack melt the editability? This post pastes, deletes, and measures: every guarantee that survives is either proved inside the recursion or measured against the real run, fixed point by fixed point.</span> <time class="part-date" datetime="2026-07-04T00:00:00.000Z" data-astro-cid-t62pxw4x> Jul 04, 2026 </time> </span> </a> <a class="companion-row" href="/blog/edit-a-fixed-point-jax-flax-nnx/" data-slug="edit-a-fixed-point-jax-flax-nnx" aria-label="JAX companion: Editing a Deep Equilibrium Network, in JAX/Flax NNX" data-astro-cid-t62pxw4x> <span class="companion-rail" aria-hidden="true" data-astro-cid-t62pxw4x></span> <span class="companion-tag" data-astro-cid-t62pxw4x>JAX companion</span> <span class="companion-title" data-astro-cid-t62pxw4x>  Editing a Deep Equilibrium Network, in JAX/Flax NNX </span> </a> </li> </ol> <p class="ongoing-note" data-astro-cid-t62pxw4x>
+This series is still being written. New parts land in the
+<a href="/blog/archive/" data-astro-cid-t62pxw4x> archive</a> and the
+<a href="/blog/rss.xml" data-astro-cid-t62pxw4x> RSS feed</a> as they publish.
+</p><script>
+  (() => {
+    const decorate = () => {
+      let read, last;
+      try {
+        read = JSON.parse(localStorage.getItem('read-posts') || '[]');
+        last = JSON.parse(localStorage.getItem('last-read') || 'null');
+      } catch {
+        return;
+      }
+      if (Array.isArray(read) && read.length) {
+        const set = new Set(read);
+        document.querySelectorAll('a[data-slug]').forEach((a) => {
+          a.classList.toggle('is-read', set.has(a.dataset.slug));
+        });
+      }
+      const pill = document.querySelector('[data-continue]');
+      if (pill && last && last.slug && last.part < last.total) {
+        const link = pill.querySelector('a');
+        const label = pill.querySelector('[data-continue-label]');
+        if (link && label) {
+          link.href = pill.dataset.base + '/' + last.slug + '/';
+          label.textContent =
+            'Part ' + last.part + ' of ' + last.total + ' · ' + last.series;
+          const title = pill.querySelector('[data-continue-title]');
+          if (title) title.textContent = last.title;
+          pill.hidden = false;
+        }
+      }
+    };
+    decorate();
+    document.addEventListener('astro:page-load', decorate);
+    document.addEventListener('astro:after-swap', decorate);
+  })();
+</script>  </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span class="site-footer__links"> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> <a class="site-footer__support" href="https://buymeacoffee.com/mlnomadpy" target="_blank" rel="noopener noreferrer" aria-label="Support this blog on Buy Me a Coffee">
+buy me a coffee
+</a> </span> </footer> <div id="consent-banner" class="consent-banner" role="dialog" aria-live="polite" aria-label="Analytics consent" hidden><p class="consent-text">
+I use Google Analytics to see which posts get read. It sets cookies only
+      if you accept. No ads, no selling data.
+</p><div class="consent-actions"><button type="button" id="consent-decline" class="consent-btn consent-decline">Decline</button><button type="button" id="consent-accept" class="consent-btn consent-accept">Accept</button></div></div>
+
+  <script>
+    (() => {
+      const KEY = 'analytics-consent';
+      const setup = () => {
+        const banner = document.getElementById('consent-banner');
+        if (!banner) return;
+        let choice = null;
+        try { choice = localStorage.getItem(KEY); } catch (e) {}
+        // Already decided → keep hidden.
+        if (choice === 'granted' || choice === 'denied') { banner.hidden = true; return; }
+        banner.hidden = false;
+
+        const decide = (value) => {
+          try { localStorage.setItem(KEY, value); } catch (e) {}
+          banner.hidden = true;
+          if (value === 'granted' && typeof window.__loadGA === 'function') window.__loadGA();
+        };
+        const accept = document.getElementById('consent-accept');
+        const decline = document.getElementById('consent-decline');
+        if (accept && !accept.dataset.bound) {
+          accept.dataset.bound = '1';
+          accept.addEventListener('click', () => decide('granted'));
+        }
+        if (decline && !decline.dataset.bound) {
+          decline.dataset.bound = '1';
+          decline.addEventListener('click', () => decide('denied'));
+        }
+      };
+      setup();
+      document.addEventListener('astro:page-load', setup);
+    })();
+  </script>
+
+  <style>
+    /* Author `display:flex` below would otherwise override the UA [hidden]
+       rule, leaving the banner visible after a choice. This wins on specificity. */
+    .consent-banner[hidden] { display: none !important; }
+    .consent-banner {
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      right: 1rem;
+      max-width: 30rem;
+      margin-left: auto;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+      padding: 0.95rem 1.1rem;
+      background: var(--bg-elev, #fff);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      font-family: var(--sans);
+    }
+    .consent-text {
+      margin: 0;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: var(--fg-muted);
+    }
+    .consent-actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+    }
+    .consent-btn {
+      font-family: var(--sans);
+      font-size: 0.82rem;
+      padding: 0.4rem 0.95rem;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    }
+    .consent-decline {
+      background: transparent;
+      color: var(--fg-muted);
+    }
+    .consent-decline:hover { color: var(--fg); border-color: var(--fg-faint); }
+    .consent-accept {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg);
+      font-weight: 600;
+    }
+    .consent-accept:hover { filter: brightness(1.05); }
+    @media (max-width: 520px) {
+      .consent-banner { left: 0.6rem; right: 0.6rem; bottom: 0.6rem; }
+    }
+  </style> <script>
+      // Inject a fullscreen toggle button onto every .viz figure on the page.
+      (() => {
+        const ENTER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10V4h6"/><path d="M20 10V4h-6"/><path d="M4 14v6h6"/><path d="M20 14v6h-6"/></svg>';
+        const EXIT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H4v6"/><path d="M14 4h6v6"/><path d="M10 20H4v-6"/><path d="M14 20h6v-6"/></svg>';
+        const inFs = () => document.fullscreenElement || document.webkitFullscreenElement;
+        const enhance = () => {
+          document.querySelectorAll('.viz').forEach((fig) => {
+            if (fig.dataset.fsReady) return;
+            fig.dataset.fsReady = '1';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'viz-fs-btn';
+            btn.setAttribute('aria-label', 'Toggle fullscreen');
+            btn.innerHTML = ENTER_SVG + '<span>fullscreen</span>';
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              try {
+                if (inFs() === fig) {
+                  await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen?.());
+                } else if (fig.requestFullscreen) {
+                  await fig.requestFullscreen();
+                } else if (fig.webkitRequestFullscreen) {
+                  await fig.webkitRequestFullscreen();
+                }
+              } catch (_) {}
+            });
+            fig.appendChild(btn);
+          });
+          const sync = () => {
+            document.querySelectorAll('.viz-fs-btn').forEach((b) => {
+              const fig = b.parentElement;
+              const open = inFs() === fig;
+              b.innerHTML = (open ? EXIT_SVG : ENTER_SVG) + '<span>' + (open ? 'exit' : 'fullscreen') + '</span>';
+            });
+          };
+          document.addEventListener('fullscreenchange', sync);
+          document.addEventListener('webkitfullscreenchange', sync);
+        };
+        enhance();
+        document.addEventListener('astro:page-load', enhance);
+        document.addEventListener('astro:after-swap', enhance);
+      })();
+    </script> </body> </html> 

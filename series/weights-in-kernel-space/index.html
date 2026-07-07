@@ -1,0 +1,273 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="generator" content="Astro v5.18.1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#fbfaf6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)"><title>Weights in Kernel Space — Records of the !mmortal Data Scientist</title><meta name="description" content="Once everything is a kernel, what is a weight? An interlude on RKHS foundations: where a weight lives, what it can be, and why the MLP block is a representer theorem."><meta name="author" content="Taha Bouhsine"><link rel="canonical" href="https://tahabouhsine.com/blog/series/weights-in-kernel-space/"><link rel="icon" href="/blog/favicon.svg" type="image/svg+xml"><link rel="alternate" type="application/rss+xml" title="Records of the !mmortal Data Scientist" href="/blog/rss.xml"><link rel="sitemap" href="/blog/sitemap-index.xml"><link rel="me" href="https://github.com/mlnomadpy"><link rel="me" href="https://x.com/mlnomadpy"><link rel="me" href="https://www.linkedin.com/in/tahabsn/"><link rel="me" href="https://scholar.google.com/citations?user=IsBjb3EAAAAJ"><link rel="me" href="https://g.dev/tahabsn"><link rel="author" href="https://github.com/mlnomadpy"><meta property="og:type" content="website"><meta property="og:site_name" content="Records of the !mmortal Data Scientist"><meta property="og:title" content="Weights in Kernel Space — Records of the !mmortal Data Scientist"><meta property="og:description" content="Once everything is a kernel, what is a weight? An interlude on RKHS foundations: where a weight lives, what it can be, and why the MLP block is a representer theorem."><meta property="og:url" content="https://tahabouhsine.com/blog/series/weights-in-kernel-space/"><meta property="og:locale" content="en_US"><meta property="og:image" content="https://tahabouhsine.com/blog/og-default.svg"><meta property="og:image:alt" content="Weights in Kernel Space — Records of the !mmortal Data Scientist"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:type" content="image/svg+xml"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@mlnomadpy"><meta name="twitter:creator" content="@mlnomadpy"><meta name="twitter:title" content="Weights in Kernel Space — Records of the !mmortal Data Scientist"><meta name="twitter:description" content="Once everything is a kernel, what is a weight? An interlude on RKHS foundations: where a weight lives, what it can be, and why the MLP block is a representer theorem."><meta name="twitter:image" content="https://tahabouhsine.com/blog/og-default.svg"><meta name="twitter:image:alt" content="Weights in Kernel Space — Records of the !mmortal Data Scientist"><script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","@id":"https://tahabouhsine.com/blog/#website","name":"Records of the !mmortal Data Scientist","alternateName":"Records of the Immortal Data Scientist","description":"Machine learning research notes by Taha Bouhsine — neural network interpretability, kernel methods, contrastive learning, attention mechanisms, RKHS, and transformer architectures. Long-form pieces with interactive visualisations.","url":"https://tahabouhsine.com/blog/","publisher":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#publisher","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"inLanguage":"en-US","potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"https://tahabouhsine.com/blog/search/?q={search_term_string}"},"query-input":"required name=search_term_string"}}</script><script>
+    (function () {
+      if (window.__gaSetup) return;
+      window.__gaSetup = true;
+      var GA_ID = 'G-373438VHJB';
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ dataLayer.push(arguments); }
+      window.gtag = window.gtag || gtag;
+      window.__gaEventQueue = window.__gaEventQueue || [];
+      window.__trackGA = function (eventName, params) {
+        if (!eventName) return;
+        var item = { name: eventName, params: params || {} };
+        if (window.__gaLoaded) {
+          gtag('event', item.name, item.params);
+        } else {
+          window.__gaEventQueue.push(item);
+        }
+      };
+
+      // Track whether the first astro:page-load has fired, so a mid-session
+      // Accept can still record the current page.
+      window.__gaFirstLoadDone = window.__gaFirstLoadDone || false;
+      document.addEventListener('astro:page-load', function () { window.__gaFirstLoadDone = true; });
+
+      window.__loadGA = function () {
+        if (window.__gaLoaded) return;
+        window.__gaLoaded = true;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+        document.head.appendChild(s);
+        gtag('js', new Date());
+        gtag('config', GA_ID, { send_page_view: false });
+        (window.__gaEventQueue || []).splice(0).forEach(function (item) {
+          gtag('event', item.name, item.params);
+        });
+        function sendPV() {
+          gtag('event', 'page_view', {
+            page_title: document.title,
+            page_location: location.href,
+            page_path: location.pathname + location.search,
+          });
+        }
+        document.addEventListener('astro:page-load', sendPV);
+        // If the initial page-load already happened (accept mid-session),
+        // record this page now; otherwise the listener catches the first one.
+        if (window.__gaFirstLoadDone) sendPV();
+      };
+
+      try {
+        if (localStorage.getItem('analytics-consent') === 'granted') window.__loadGA();
+      } catch (e) {}
+    })();
+  </script><script>
+  (() => {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'light' || stored === 'dark') {
+      document.documentElement.setAttribute('data-theme', stored);
+    }
+  })();
+</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.DstInXr_.css">
+<link rel="stylesheet" href="/blog/_astro/_id_.BXkluuEW.css"></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/archive">archive</a><a href="/blog/map">map</a><a href="/blog/writeups">writeups</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>
+  (() => {
+    const apply = (theme) => {
+      document.documentElement.setAttribute('data-theme', theme);
+      const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+      if (meta) meta.setAttribute('content', theme === 'dark' ? '#0e1116' : '#fbfaf6');
+      // Sync giscus iframe if present
+      const giscus = document.querySelector('iframe.giscus-frame');
+      if (giscus && giscus.contentWindow) {
+        giscus.contentWindow.postMessage(
+          { giscus: { setConfig: { theme: theme === 'dark' ? 'dark' : 'light' } } },
+          'https://giscus.app'
+        );
+      }
+    };
+
+    const init = () => {
+      const btns = document.querySelectorAll('[data-theme-toggle]');
+      btns.forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', () => {
+          const current = document.documentElement.getAttribute('data-theme')
+            || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          const next = current === 'dark' ? 'light' : 'dark';
+          localStorage.setItem('theme', next);
+          apply(next);
+        });
+      });
+    };
+
+    init();
+    document.addEventListener('astro:after-swap', init);
+    document.addEventListener('astro:page-load', init);
+  })();
+</script> </nav> </div> </header> <main id="main">  <section class="series-hero" data-astro-cid-t62pxw4x> <p class="eyebrow" data-astro-cid-t62pxw4x>
+series · 5 parts  </p> <h1 data-astro-cid-t62pxw4x>Weights in Kernel Space</h1> <p class="series-lead" data-astro-cid-t62pxw4x>Once everything is a kernel, what is a weight? An interlude on RKHS foundations: where a weight lives, what it can be, and why the MLP block is a representer theorem.</p> <a class="start-pill" href="/blog/readout-as-convex-combination/" data-astro-cid-t62pxw4x>
+Start reading → <span class="start-title" data-astro-cid-t62pxw4x>The Readout is a Convex Combination of Prototypes</span> </a> </section> <ol class="series-parts" data-astro-cid-t62pxw4x> <li class="has-companion" data-astro-cid-t62pxw4x> <a class="part" href="/blog/readout-as-convex-combination/" data-slug="readout-as-convex-combination" data-astro-cid-t62pxw4x> <span class="part-num" data-astro-cid-t62pxw4x>01</span> <span class="part-body" data-astro-cid-t62pxw4x> <span class="part-title" data-astro-cid-t62pxw4x>  The Readout is a Convex Combination of Prototypes </span> <span class="part-desc" data-astro-cid-t62pxw4x>The second linear map in a transformer MLP is not just a projection. If the hidden activations are nonnegative and normalized, W_out reads the active neurons as a convex combination of output prototypes. Two independent constraints, nonnegativity and summing to one, sort the readout into four regimes: convex, conic, affine, and linear. This reframes the MLP readout as the same object that makes attention legible (a weighted sum over named basis elements), connects it to feed-forward key-value memories and modern Hopfield retrieval, and shows when a kernel makes it convex by construction.</span> <time class="part-date" datetime="2026-06-04T19:00:00.000Z" data-astro-cid-t62pxw4x> Jun 04, 2026 </time> </span> </a> <a class="companion-row" href="/blog/convex-readout-jax-flax-nnx/" data-slug="convex-readout-jax-flax-nnx" aria-label="JAX companion: The Prototype Readout in JAX/Flax NNX" data-astro-cid-t62pxw4x> <span class="companion-rail" aria-hidden="true" data-astro-cid-t62pxw4x></span> <span class="companion-tag" data-astro-cid-t62pxw4x>JAX companion</span> <span class="companion-title" data-astro-cid-t62pxw4x>  The Prototype Readout in JAX/Flax NNX </span> </a> </li><li class="has-companion" data-astro-cid-t62pxw4x> <a class="part" href="/blog/where-does-a-weight-live/" data-slug="where-does-a-weight-live" data-astro-cid-t62pxw4x> <span class="part-num" data-astro-cid-t62pxw4x>02</span> <span class="part-body" data-astro-cid-t62pxw4x> <span class="part-title" data-astro-cid-t62pxw4x>  Where Does a Weight Live? </span> <span class="part-desc" data-astro-cid-t62pxw4x>A standard neuron&#39;s weight and its input never actually meet: one is a point you can see, the other an arrow off in its own space, joined only by a shadow. This is what a reproducing kernel Hilbert space fixes: it gives input and weight one shared address, where the optimal weight is built from the data itself and sits right next to it. Four interactive panels.</span> <time class="part-date" datetime="2026-06-25T00:00:00.000Z" data-astro-cid-t62pxw4x> Jun 25, 2026 </time> </span> </a> <a class="companion-row" href="/blog/where-does-a-weight-live-jax-flax-nnx/" data-slug="where-does-a-weight-live-jax-flax-nnx" aria-label="JAX companion: Where a Weight Lives, in JAX/Flax NNX" data-astro-cid-t62pxw4x> <span class="companion-rail" aria-hidden="true" data-astro-cid-t62pxw4x></span> <span class="companion-tag" data-astro-cid-t62pxw4x>JAX companion</span> <span class="companion-title" data-astro-cid-t62pxw4x>  Where a Weight Lives, in JAX/Flax NNX </span> </a> </li><li class="has-companion" data-astro-cid-t62pxw4x> <a class="part" href="/blog/what-can-a-weight-be/" data-slug="what-can-a-weight-be" data-astro-cid-t62pxw4x> <span class="part-num" data-astro-cid-t62pxw4x>03</span> <span class="part-body" data-astro-cid-t62pxw4x> <span class="part-title" data-astro-cid-t62pxw4x>  What Can a Weight Be? </span> <span class="part-desc" data-astro-cid-t62pxw4x>Once a kernel gives a weight a home, a second question follows: what is the weight allowed to be? Not all reproducing kernel Hilbert spaces are the same. A Sobolev space lets the weight have a sharp corner; a Gaussian&#39;s space forbids it; on normalized data the home is a sphere graded by spherical harmonics. A kernel is secretly a price list for roughness, and that list decides everything. Four interactive panels.</span> <time class="part-date" datetime="2026-06-26T00:00:00.000Z" data-astro-cid-t62pxw4x> Jun 26, 2026 </time> </span> </a> <a class="companion-row" href="/blog/what-can-a-weight-be-jax-flax-nnx/" data-slug="what-can-a-weight-be-jax-flax-nnx" aria-label="JAX companion: What a Weight Can Be, in JAX/Flax NNX" data-astro-cid-t62pxw4x> <span class="companion-rail" aria-hidden="true" data-astro-cid-t62pxw4x></span> <span class="companion-tag" data-astro-cid-t62pxw4x>JAX companion</span> <span class="companion-title" data-astro-cid-t62pxw4x>  What a Weight Can Be, in JAX/Flax NNX </span> </a> </li><li class="has-companion" data-astro-cid-t62pxw4x> <a class="part" href="/blog/mlp-block-is-a-representer-theorem/" data-slug="mlp-block-is-a-representer-theorem" data-astro-cid-t62pxw4x> <span class="part-num" data-astro-cid-t62pxw4x>04</span> <span class="part-body" data-astro-cid-t62pxw4x> <span class="part-title" data-astro-cid-t62pxw4x>  The MLP Block Is a Representer Theorem </span> <span class="part-desc" data-astro-cid-t62pxw4x>After the 3Blue1Brown attention video you can read half a transformer: you can see which token attends to which. The other half, the MLP block, stays a black box. But attention is legible because it is a kernel, a vote by similarity, and if you make the MLP a kernel too, its output becomes the same thing: a representer-theorem vote over learned prototypes. Then the whole transformer explains itself.</span> <time class="part-date" datetime="2026-06-27T00:00:00.000Z" data-astro-cid-t62pxw4x> Jun 27, 2026 </time> </span> </a> <a class="companion-row" href="/blog/mlp-block-is-a-representer-theorem-jax-flax-nnx/" data-slug="mlp-block-is-a-representer-theorem-jax-flax-nnx" aria-label="JAX companion: A White-Box FFN: the Representer Theorem in JAX/Flax NNX" data-astro-cid-t62pxw4x> <span class="companion-rail" aria-hidden="true" data-astro-cid-t62pxw4x></span> <span class="companion-tag" data-astro-cid-t62pxw4x>JAX companion</span> <span class="companion-title" data-astro-cid-t62pxw4x>  A White-Box FFN: the Representer Theorem in JAX/Flax NNX </span> </a> </li><li class="has-companion" data-astro-cid-t62pxw4x> <a class="part" href="/blog/regularization-is-a-price-list/" data-slug="regularization-is-a-price-list" data-astro-cid-t62pxw4x> <span class="part-num" data-astro-cid-t62pxw4x>05</span> <span class="part-body" data-astro-cid-t62pxw4x> <span class="part-title" data-astro-cid-t62pxw4x>  Why Regularization Is a Price List </span> <span class="part-desc" data-astro-cid-t62pxw4x>The representer theorem says the optimal weight is a sum over prototypes, but it does not explain why that sum generalizes. The answer is the RKHS norm: a price list that charges each prototype by its eigenvalue, and regularization is just tightening the budget. Four panels show the knob turning.</span> <time class="part-date" datetime="2026-07-02T00:00:00.000Z" data-astro-cid-t62pxw4x> Jul 02, 2026 </time> </span> </a> <a class="companion-row" href="/blog/regularization-is-a-price-list-jax-flax-nnx/" data-slug="regularization-is-a-price-list-jax-flax-nnx" aria-label="JAX companion: The Price List, in JAX/Flax NNX" data-astro-cid-t62pxw4x> <span class="companion-rail" aria-hidden="true" data-astro-cid-t62pxw4x></span> <span class="companion-tag" data-astro-cid-t62pxw4x>JAX companion</span> <span class="companion-title" data-astro-cid-t62pxw4x>  The Price List, in JAX/Flax NNX </span> </a> </li> </ol> <script>
+  (() => {
+    const decorate = () => {
+      let read, last;
+      try {
+        read = JSON.parse(localStorage.getItem('read-posts') || '[]');
+        last = JSON.parse(localStorage.getItem('last-read') || 'null');
+      } catch {
+        return;
+      }
+      if (Array.isArray(read) && read.length) {
+        const set = new Set(read);
+        document.querySelectorAll('a[data-slug]').forEach((a) => {
+          a.classList.toggle('is-read', set.has(a.dataset.slug));
+        });
+      }
+      const pill = document.querySelector('[data-continue]');
+      if (pill && last && last.slug && last.part < last.total) {
+        const link = pill.querySelector('a');
+        const label = pill.querySelector('[data-continue-label]');
+        if (link && label) {
+          link.href = pill.dataset.base + '/' + last.slug + '/';
+          label.textContent =
+            'Part ' + last.part + ' of ' + last.total + ' · ' + last.series;
+          const title = pill.querySelector('[data-continue-title]');
+          if (title) title.textContent = last.title;
+          pill.hidden = false;
+        }
+      }
+    };
+    decorate();
+    document.addEventListener('astro:page-load', decorate);
+    document.addEventListener('astro:after-swap', decorate);
+  })();
+</script>  </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span class="site-footer__links"> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> <a class="site-footer__support" href="https://buymeacoffee.com/mlnomadpy" target="_blank" rel="noopener noreferrer" aria-label="Support this blog on Buy Me a Coffee">
+buy me a coffee
+</a> </span> </footer> <div id="consent-banner" class="consent-banner" role="dialog" aria-live="polite" aria-label="Analytics consent" hidden><p class="consent-text">
+I use Google Analytics to see which posts get read. It sets cookies only
+      if you accept. No ads, no selling data.
+</p><div class="consent-actions"><button type="button" id="consent-decline" class="consent-btn consent-decline">Decline</button><button type="button" id="consent-accept" class="consent-btn consent-accept">Accept</button></div></div>
+
+  <script>
+    (() => {
+      const KEY = 'analytics-consent';
+      const setup = () => {
+        const banner = document.getElementById('consent-banner');
+        if (!banner) return;
+        let choice = null;
+        try { choice = localStorage.getItem(KEY); } catch (e) {}
+        // Already decided → keep hidden.
+        if (choice === 'granted' || choice === 'denied') { banner.hidden = true; return; }
+        banner.hidden = false;
+
+        const decide = (value) => {
+          try { localStorage.setItem(KEY, value); } catch (e) {}
+          banner.hidden = true;
+          if (value === 'granted' && typeof window.__loadGA === 'function') window.__loadGA();
+        };
+        const accept = document.getElementById('consent-accept');
+        const decline = document.getElementById('consent-decline');
+        if (accept && !accept.dataset.bound) {
+          accept.dataset.bound = '1';
+          accept.addEventListener('click', () => decide('granted'));
+        }
+        if (decline && !decline.dataset.bound) {
+          decline.dataset.bound = '1';
+          decline.addEventListener('click', () => decide('denied'));
+        }
+      };
+      setup();
+      document.addEventListener('astro:page-load', setup);
+    })();
+  </script>
+
+  <style>
+    /* Author `display:flex` below would otherwise override the UA [hidden]
+       rule, leaving the banner visible after a choice. This wins on specificity. */
+    .consent-banner[hidden] { display: none !important; }
+    .consent-banner {
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      right: 1rem;
+      max-width: 30rem;
+      margin-left: auto;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+      padding: 0.95rem 1.1rem;
+      background: var(--bg-elev, #fff);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      font-family: var(--sans);
+    }
+    .consent-text {
+      margin: 0;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: var(--fg-muted);
+    }
+    .consent-actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+    }
+    .consent-btn {
+      font-family: var(--sans);
+      font-size: 0.82rem;
+      padding: 0.4rem 0.95rem;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    }
+    .consent-decline {
+      background: transparent;
+      color: var(--fg-muted);
+    }
+    .consent-decline:hover { color: var(--fg); border-color: var(--fg-faint); }
+    .consent-accept {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg);
+      font-weight: 600;
+    }
+    .consent-accept:hover { filter: brightness(1.05); }
+    @media (max-width: 520px) {
+      .consent-banner { left: 0.6rem; right: 0.6rem; bottom: 0.6rem; }
+    }
+  </style> <script>
+      // Inject a fullscreen toggle button onto every .viz figure on the page.
+      (() => {
+        const ENTER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10V4h6"/><path d="M20 10V4h-6"/><path d="M4 14v6h6"/><path d="M20 14v6h-6"/></svg>';
+        const EXIT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H4v6"/><path d="M14 4h6v6"/><path d="M10 20H4v-6"/><path d="M14 20h6v-6"/></svg>';
+        const inFs = () => document.fullscreenElement || document.webkitFullscreenElement;
+        const enhance = () => {
+          document.querySelectorAll('.viz').forEach((fig) => {
+            if (fig.dataset.fsReady) return;
+            fig.dataset.fsReady = '1';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'viz-fs-btn';
+            btn.setAttribute('aria-label', 'Toggle fullscreen');
+            btn.innerHTML = ENTER_SVG + '<span>fullscreen</span>';
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              try {
+                if (inFs() === fig) {
+                  await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen?.());
+                } else if (fig.requestFullscreen) {
+                  await fig.requestFullscreen();
+                } else if (fig.webkitRequestFullscreen) {
+                  await fig.webkitRequestFullscreen();
+                }
+              } catch (_) {}
+            });
+            fig.appendChild(btn);
+          });
+          const sync = () => {
+            document.querySelectorAll('.viz-fs-btn').forEach((b) => {
+              const fig = b.parentElement;
+              const open = inFs() === fig;
+              b.innerHTML = (open ? EXIT_SVG : ENTER_SVG) + '<span>' + (open ? 'exit' : 'fullscreen') + '</span>';
+            });
+          };
+          document.addEventListener('fullscreenchange', sync);
+          document.addEventListener('webkitfullscreenchange', sync);
+        };
+        enhance();
+        document.addEventListener('astro:page-load', enhance);
+        document.addEventListener('astro:after-swap', enhance);
+      })();
+    </script> </body> </html> 

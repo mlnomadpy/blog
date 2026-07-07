@@ -1,0 +1,273 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="generator" content="Astro v5.18.1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#fbfaf6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)"><title>Geometry of Representations — Records of the !mmortal Data Scientist</title><meta name="description" content="Where do representations live, and what makes a latent space good? Contrastive learning, the geometry of embedding spaces, and why the usual activation functions work against it."><meta name="author" content="Taha Bouhsine"><link rel="canonical" href="https://tahabouhsine.com/blog/series/representation-geometry/"><link rel="icon" href="/blog/favicon.svg" type="image/svg+xml"><link rel="alternate" type="application/rss+xml" title="Records of the !mmortal Data Scientist" href="/blog/rss.xml"><link rel="sitemap" href="/blog/sitemap-index.xml"><link rel="me" href="https://github.com/mlnomadpy"><link rel="me" href="https://x.com/mlnomadpy"><link rel="me" href="https://www.linkedin.com/in/tahabsn/"><link rel="me" href="https://scholar.google.com/citations?user=IsBjb3EAAAAJ"><link rel="me" href="https://g.dev/tahabsn"><link rel="author" href="https://github.com/mlnomadpy"><meta property="og:type" content="website"><meta property="og:site_name" content="Records of the !mmortal Data Scientist"><meta property="og:title" content="Geometry of Representations — Records of the !mmortal Data Scientist"><meta property="og:description" content="Where do representations live, and what makes a latent space good? Contrastive learning, the geometry of embedding spaces, and why the usual activation functions work against it."><meta property="og:url" content="https://tahabouhsine.com/blog/series/representation-geometry/"><meta property="og:locale" content="en_US"><meta property="og:image" content="https://tahabouhsine.com/blog/og-default.svg"><meta property="og:image:alt" content="Geometry of Representations — Records of the !mmortal Data Scientist"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:type" content="image/svg+xml"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@mlnomadpy"><meta name="twitter:creator" content="@mlnomadpy"><meta name="twitter:title" content="Geometry of Representations — Records of the !mmortal Data Scientist"><meta name="twitter:description" content="Where do representations live, and what makes a latent space good? Contrastive learning, the geometry of embedding spaces, and why the usual activation functions work against it."><meta name="twitter:image" content="https://tahabouhsine.com/blog/og-default.svg"><meta name="twitter:image:alt" content="Geometry of Representations — Records of the !mmortal Data Scientist"><script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","@id":"https://tahabouhsine.com/blog/#website","name":"Records of the !mmortal Data Scientist","alternateName":"Records of the Immortal Data Scientist","description":"Machine learning research notes by Taha Bouhsine — neural network interpretability, kernel methods, contrastive learning, attention mechanisms, RKHS, and transformer architectures. Long-form pieces with interactive visualisations.","url":"https://tahabouhsine.com/blog/","publisher":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#publisher","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"inLanguage":"en-US","potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"https://tahabouhsine.com/blog/search/?q={search_term_string}"},"query-input":"required name=search_term_string"}}</script><script>
+    (function () {
+      if (window.__gaSetup) return;
+      window.__gaSetup = true;
+      var GA_ID = 'G-373438VHJB';
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ dataLayer.push(arguments); }
+      window.gtag = window.gtag || gtag;
+      window.__gaEventQueue = window.__gaEventQueue || [];
+      window.__trackGA = function (eventName, params) {
+        if (!eventName) return;
+        var item = { name: eventName, params: params || {} };
+        if (window.__gaLoaded) {
+          gtag('event', item.name, item.params);
+        } else {
+          window.__gaEventQueue.push(item);
+        }
+      };
+
+      // Track whether the first astro:page-load has fired, so a mid-session
+      // Accept can still record the current page.
+      window.__gaFirstLoadDone = window.__gaFirstLoadDone || false;
+      document.addEventListener('astro:page-load', function () { window.__gaFirstLoadDone = true; });
+
+      window.__loadGA = function () {
+        if (window.__gaLoaded) return;
+        window.__gaLoaded = true;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+        document.head.appendChild(s);
+        gtag('js', new Date());
+        gtag('config', GA_ID, { send_page_view: false });
+        (window.__gaEventQueue || []).splice(0).forEach(function (item) {
+          gtag('event', item.name, item.params);
+        });
+        function sendPV() {
+          gtag('event', 'page_view', {
+            page_title: document.title,
+            page_location: location.href,
+            page_path: location.pathname + location.search,
+          });
+        }
+        document.addEventListener('astro:page-load', sendPV);
+        // If the initial page-load already happened (accept mid-session),
+        // record this page now; otherwise the listener catches the first one.
+        if (window.__gaFirstLoadDone) sendPV();
+      };
+
+      try {
+        if (localStorage.getItem('analytics-consent') === 'granted') window.__loadGA();
+      } catch (e) {}
+    })();
+  </script><script>
+  (() => {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'light' || stored === 'dark') {
+      document.documentElement.setAttribute('data-theme', stored);
+    }
+  })();
+</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.DstInXr_.css">
+<link rel="stylesheet" href="/blog/_astro/_id_.BXkluuEW.css"></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/archive">archive</a><a href="/blog/map">map</a><a href="/blog/writeups">writeups</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>
+  (() => {
+    const apply = (theme) => {
+      document.documentElement.setAttribute('data-theme', theme);
+      const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+      if (meta) meta.setAttribute('content', theme === 'dark' ? '#0e1116' : '#fbfaf6');
+      // Sync giscus iframe if present
+      const giscus = document.querySelector('iframe.giscus-frame');
+      if (giscus && giscus.contentWindow) {
+        giscus.contentWindow.postMessage(
+          { giscus: { setConfig: { theme: theme === 'dark' ? 'dark' : 'light' } } },
+          'https://giscus.app'
+        );
+      }
+    };
+
+    const init = () => {
+      const btns = document.querySelectorAll('[data-theme-toggle]');
+      btns.forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', () => {
+          const current = document.documentElement.getAttribute('data-theme')
+            || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          const next = current === 'dark' ? 'light' : 'dark';
+          localStorage.setItem('theme', next);
+          apply(next);
+        });
+      });
+    };
+
+    init();
+    document.addEventListener('astro:after-swap', init);
+    document.addEventListener('astro:page-load', init);
+  })();
+</script> </nav> </div> </header> <main id="main">  <section class="series-hero" data-astro-cid-t62pxw4x> <p class="eyebrow" data-astro-cid-t62pxw4x>
+series · 8 parts  </p> <h1 data-astro-cid-t62pxw4x>Geometry of Representations</h1> <p class="series-lead" data-astro-cid-t62pxw4x>Where do representations live, and what makes a latent space good? Contrastive learning, the geometry of embedding spaces, and why the usual activation functions work against it.</p> <a class="start-pill" href="/blog/activations-are-bad-for-geometry/" data-astro-cid-t62pxw4x>
+Start reading → <span class="start-title" data-astro-cid-t62pxw4x>Activations Are Bad for Geometry</span> </a> </section> <ol class="series-parts" data-astro-cid-t62pxw4x> <li data-astro-cid-t62pxw4x> <a class="part" href="/blog/activations-are-bad-for-geometry/" data-slug="activations-are-bad-for-geometry" data-astro-cid-t62pxw4x> <span class="part-num" data-astro-cid-t62pxw4x>01</span> <span class="part-body" data-astro-cid-t62pxw4x> <span class="part-title" data-astro-cid-t62pxw4x>  Activations Are Bad for Geometry </span> <span class="part-desc" data-astro-cid-t62pxw4x>ReLU, GELU, and friends factor into a layer&#39;s Jacobian as a diagonal modulation that wrecks the geometry of the data manifold. Why pointwise activations are a representational bug.</span> <time class="part-date" datetime="2026-02-20T00:00:00.000Z" data-astro-cid-t62pxw4x> Feb 20, 2026 </time> </span> </a>  </li><li data-astro-cid-t62pxw4x> <a class="part" href="/blog/opposite-is-not-different/" data-slug="opposite-is-not-different" data-astro-cid-t62pxw4x> <span class="part-num" data-astro-cid-t62pxw4x>02</span> <span class="part-body" data-astro-cid-t62pxw4x> <span class="part-title" data-astro-cid-t62pxw4x>  Opposite Is Not Different: The Cosine-Similarity Bug in CLIP and Contrastive Learning </span> <span class="part-desc" data-astro-cid-t62pxw4x>Maximum difference between two unit vectors is orthogonality (cos = 0), not opposition (cos = −1). CLIP, InfoNCE, and SimCLR have been optimizing for the wrong target for years.</span> <time class="part-date" datetime="2026-02-22T00:00:00.000Z" data-astro-cid-t62pxw4x> Feb 22, 2026 </time> </span> </a>  </li><li data-astro-cid-t62pxw4x> <a class="part" href="/blog/not-all-infinities-are-equal/" data-slug="not-all-infinities-are-equal" data-astro-cid-t62pxw4x> <span class="part-num" data-astro-cid-t62pxw4x>03</span> <span class="part-body" data-astro-cid-t62pxw4x> <span class="part-title" data-astro-cid-t62pxw4x>  Not All Infinities Are Equal: The Cross-Entropy Asymmetry Behind Hallucination </span> <span class="part-desc" data-astro-cid-t62pxw4x>The singularity structure of cross-entropy is asymmetric, and that asymmetry explains LLM hallucination, the CLIP modality gap, and why contrastive losses need 32K batches.</span> <time class="part-date" datetime="2026-02-23T00:00:00.000Z" data-astro-cid-t62pxw4x> Feb 23, 2026 </time> </span> </a>  </li><li class="has-companion" data-astro-cid-t62pxw4x> <a class="part" href="/blog/untangling-the-moons/" data-slug="untangling-the-moons" data-astro-cid-t62pxw4x> <span class="part-num" data-astro-cid-t62pxw4x>04</span> <span class="part-body" data-astro-cid-t62pxw4x> <span class="part-title" data-astro-cid-t62pxw4x>  Untangling the Moons: A Visual History of Contrastive Learning </span> <span class="part-desc" data-astro-cid-t62pxw4x>Eight contrastive losses, twenty years of history, one interactive playground. Watch pair, triplet, InfoNCE, CLIP, SupCon, SigLIP, alignment+uniformity, and cosine→0 organize 2D points, and see which ones know when to stop.</span> <time class="part-date" datetime="2026-05-26T00:00:00.000Z" data-astro-cid-t62pxw4x> May 26, 2026 </time> </span> </a> <a class="companion-row" href="/blog/organizing-randomness-jax/" data-slug="organizing-randomness-jax" aria-label="JAX companion: Organizing Randomness: Contrastive Learning in JAX" data-astro-cid-t62pxw4x> <span class="companion-rail" aria-hidden="true" data-astro-cid-t62pxw4x></span> <span class="companion-tag" data-astro-cid-t62pxw4x>JAX companion</span> <span class="companion-title" data-astro-cid-t62pxw4x>  Organizing Randomness: Contrastive Learning in JAX </span> </a> </li><li class="has-companion" data-astro-cid-t62pxw4x> <a class="part" href="/blog/welch-bound-good-latent-space/" data-slug="welch-bound-good-latent-space" data-astro-cid-t62pxw4x> <span class="part-num" data-astro-cid-t62pxw4x>05</span> <span class="part-body" data-astro-cid-t62pxw4x> <span class="part-title" data-astro-cid-t62pxw4x>  What Makes a Good Latent Space? The Welch Bound and the Simplex </span> <span class="part-desc" data-astro-cid-t62pxw4x>The hidden codebook inside representation learning: why collapse happens, why opposition is a trap, why class means form a simplex, and why the Welch bound sets the best geometry when too many concepts share too few dimensions.</span> <time class="part-date" datetime="2026-06-02T00:00:00.000Z" data-astro-cid-t62pxw4x> Jun 02, 2026 </time> </span> </a> <a class="companion-row" href="/blog/welch-bound-jax-analysis/" data-slug="welch-bound-jax-analysis" aria-label="JAX companion: Auditing Latent Space Geometry in JAX" data-astro-cid-t62pxw4x> <span class="companion-rail" aria-hidden="true" data-astro-cid-t62pxw4x></span> <span class="companion-tag" data-astro-cid-t62pxw4x>JAX companion</span> <span class="companion-title" data-astro-cid-t62pxw4x>  Auditing Latent Space Geometry in JAX </span> </a> </li><li class="has-companion" data-astro-cid-t62pxw4x> <a class="part" href="/blog/latent-on-the-spectrum/" data-slug="latent-on-the-spectrum" data-astro-cid-t62pxw4x> <span class="part-num" data-astro-cid-t62pxw4x>06</span> <span class="part-body" data-astro-cid-t62pxw4x> <span class="part-title" data-astro-cid-t62pxw4x>  Latent on the Spectrum: Why Cats Sit Closer to Dogs Than to Cars </span> <span class="part-desc" data-astro-cid-t62pxw4x>The regular simplex is the perfect codebook only when classes are strangers, and real labels are not strangers. A latent space is a lossy, finite-dimensional encoding of a label-similarity kernel: the codebook is the top eigenmodes of that kernel, the information rides in the modes below them, and the Welch bound sets the geometry of that channel. A follow-up to the Welch-bound post with live in-browser experiments: steer a codebook from simplex to taxonomy, spend a dimension budget, watch neural collapse grind the information spectrum to zero, read dark knowledge off a wandering feature, and see a structured codebook make better mistakes.</span> <time class="part-date" datetime="2026-06-07T19:00:00.000Z" data-astro-cid-t62pxw4x> Jun 07, 2026 </time> </span> </a> <a class="companion-row" href="/blog/latent-on-the-spectrum-jax/" data-slug="latent-on-the-spectrum-jax" aria-label="JAX companion: Latent on the Spectrum, in JAX" data-astro-cid-t62pxw4x> <span class="companion-rail" aria-hidden="true" data-astro-cid-t62pxw4x></span> <span class="companion-tag" data-astro-cid-t62pxw4x>JAX companion</span> <span class="companion-title" data-astro-cid-t62pxw4x>  Latent on the Spectrum, in JAX </span> </a> </li><li class="has-companion" data-astro-cid-t62pxw4x> <a class="part" href="/blog/three-states-of-information/" data-slug="three-states-of-information" data-astro-cid-t62pxw4x> <span class="part-num" data-astro-cid-t62pxw4x>07</span> <span class="part-body" data-astro-cid-t62pxw4x> <span class="part-title" data-astro-cid-t62pxw4x>  The Three States of Information </span> <span class="part-desc" data-astro-cid-t62pxw4x>Representations learned by a network pass through three states, like matter: random (high-entropy, no structure), organized (clusters, local order), and structured (a maximally-separated simplex, global order). The transitions between them are exactly the loss plateaus you see when training: the flat stretch is where the representation reorganizes before that reorganization shows up in the loss. Built from live in-browser training runs.</span> <time class="part-date" datetime="2026-06-07T19:30:00.000Z" data-astro-cid-t62pxw4x> Jun 07, 2026 </time> </span> </a> <a class="companion-row" href="/blog/three-states-of-information-jax/" data-slug="three-states-of-information-jax" aria-label="JAX companion: The Three States of Information, in JAX" data-astro-cid-t62pxw4x> <span class="companion-rail" aria-hidden="true" data-astro-cid-t62pxw4x></span> <span class="companion-tag" data-astro-cid-t62pxw4x>JAX companion</span> <span class="companion-title" data-astro-cid-t62pxw4x>  The Three States of Information, in JAX </span> </a> </li><li class="has-companion" data-astro-cid-t62pxw4x> <a class="part" href="/blog/distillation-is-kernel-transfer/" data-slug="distillation-is-kernel-transfer" data-astro-cid-t62pxw4x> <span class="part-num" data-astro-cid-t62pxw4x>08</span> <span class="part-body" data-astro-cid-t62pxw4x> <span class="part-title" data-astro-cid-t62pxw4x>  Distillation Is a Geometry, Not an Answer Key </span> <span class="part-desc" data-astro-cid-t62pxw4x>Knowledge distillation has a standing puzzle: Hinton&#39;s student recognized 98.6% of the digit 3s in the test set after training on a transfer set with every 3 deleted. An answer key cannot do that, so what actually crosses the wire? This post gives dark knowledge a data type, a class-similarity kernel, and runs the experiment that isolates it: a student trained on nothing but pairwise relations, no labels, no soft targets, no class names, measured against the label-trained ceiling and the random floor. With live experiments: watch the kernel accumulate from single outputs, turn the temperature knob on how much geometry leaks, train a relational student in the page, and watch whose spectrum the student grows into.</span> <time class="part-date" datetime="2026-07-04T00:00:00.000Z" data-astro-cid-t62pxw4x> Jul 04, 2026 </time> </span> </a> <a class="companion-row" href="/blog/distillation-is-kernel-transfer-jax-flax-nnx/" data-slug="distillation-is-kernel-transfer-jax-flax-nnx" aria-label="JAX companion: Distillation as Kernel Transfer, in JAX/Flax NNX" data-astro-cid-t62pxw4x> <span class="companion-rail" aria-hidden="true" data-astro-cid-t62pxw4x></span> <span class="companion-tag" data-astro-cid-t62pxw4x>JAX companion</span> <span class="companion-title" data-astro-cid-t62pxw4x>  Distillation as Kernel Transfer, in JAX/Flax NNX </span> </a> </li> </ol> <script>
+  (() => {
+    const decorate = () => {
+      let read, last;
+      try {
+        read = JSON.parse(localStorage.getItem('read-posts') || '[]');
+        last = JSON.parse(localStorage.getItem('last-read') || 'null');
+      } catch {
+        return;
+      }
+      if (Array.isArray(read) && read.length) {
+        const set = new Set(read);
+        document.querySelectorAll('a[data-slug]').forEach((a) => {
+          a.classList.toggle('is-read', set.has(a.dataset.slug));
+        });
+      }
+      const pill = document.querySelector('[data-continue]');
+      if (pill && last && last.slug && last.part < last.total) {
+        const link = pill.querySelector('a');
+        const label = pill.querySelector('[data-continue-label]');
+        if (link && label) {
+          link.href = pill.dataset.base + '/' + last.slug + '/';
+          label.textContent =
+            'Part ' + last.part + ' of ' + last.total + ' · ' + last.series;
+          const title = pill.querySelector('[data-continue-title]');
+          if (title) title.textContent = last.title;
+          pill.hidden = false;
+        }
+      }
+    };
+    decorate();
+    document.addEventListener('astro:page-load', decorate);
+    document.addEventListener('astro:after-swap', decorate);
+  })();
+</script>  </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span class="site-footer__links"> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> <a class="site-footer__support" href="https://buymeacoffee.com/mlnomadpy" target="_blank" rel="noopener noreferrer" aria-label="Support this blog on Buy Me a Coffee">
+buy me a coffee
+</a> </span> </footer> <div id="consent-banner" class="consent-banner" role="dialog" aria-live="polite" aria-label="Analytics consent" hidden><p class="consent-text">
+I use Google Analytics to see which posts get read. It sets cookies only
+      if you accept. No ads, no selling data.
+</p><div class="consent-actions"><button type="button" id="consent-decline" class="consent-btn consent-decline">Decline</button><button type="button" id="consent-accept" class="consent-btn consent-accept">Accept</button></div></div>
+
+  <script>
+    (() => {
+      const KEY = 'analytics-consent';
+      const setup = () => {
+        const banner = document.getElementById('consent-banner');
+        if (!banner) return;
+        let choice = null;
+        try { choice = localStorage.getItem(KEY); } catch (e) {}
+        // Already decided → keep hidden.
+        if (choice === 'granted' || choice === 'denied') { banner.hidden = true; return; }
+        banner.hidden = false;
+
+        const decide = (value) => {
+          try { localStorage.setItem(KEY, value); } catch (e) {}
+          banner.hidden = true;
+          if (value === 'granted' && typeof window.__loadGA === 'function') window.__loadGA();
+        };
+        const accept = document.getElementById('consent-accept');
+        const decline = document.getElementById('consent-decline');
+        if (accept && !accept.dataset.bound) {
+          accept.dataset.bound = '1';
+          accept.addEventListener('click', () => decide('granted'));
+        }
+        if (decline && !decline.dataset.bound) {
+          decline.dataset.bound = '1';
+          decline.addEventListener('click', () => decide('denied'));
+        }
+      };
+      setup();
+      document.addEventListener('astro:page-load', setup);
+    })();
+  </script>
+
+  <style>
+    /* Author `display:flex` below would otherwise override the UA [hidden]
+       rule, leaving the banner visible after a choice. This wins on specificity. */
+    .consent-banner[hidden] { display: none !important; }
+    .consent-banner {
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      right: 1rem;
+      max-width: 30rem;
+      margin-left: auto;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+      padding: 0.95rem 1.1rem;
+      background: var(--bg-elev, #fff);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      font-family: var(--sans);
+    }
+    .consent-text {
+      margin: 0;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: var(--fg-muted);
+    }
+    .consent-actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+    }
+    .consent-btn {
+      font-family: var(--sans);
+      font-size: 0.82rem;
+      padding: 0.4rem 0.95rem;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    }
+    .consent-decline {
+      background: transparent;
+      color: var(--fg-muted);
+    }
+    .consent-decline:hover { color: var(--fg); border-color: var(--fg-faint); }
+    .consent-accept {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg);
+      font-weight: 600;
+    }
+    .consent-accept:hover { filter: brightness(1.05); }
+    @media (max-width: 520px) {
+      .consent-banner { left: 0.6rem; right: 0.6rem; bottom: 0.6rem; }
+    }
+  </style> <script>
+      // Inject a fullscreen toggle button onto every .viz figure on the page.
+      (() => {
+        const ENTER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10V4h6"/><path d="M20 10V4h-6"/><path d="M4 14v6h6"/><path d="M20 14v6h-6"/></svg>';
+        const EXIT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H4v6"/><path d="M14 4h6v6"/><path d="M10 20H4v-6"/><path d="M14 20h6v-6"/></svg>';
+        const inFs = () => document.fullscreenElement || document.webkitFullscreenElement;
+        const enhance = () => {
+          document.querySelectorAll('.viz').forEach((fig) => {
+            if (fig.dataset.fsReady) return;
+            fig.dataset.fsReady = '1';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'viz-fs-btn';
+            btn.setAttribute('aria-label', 'Toggle fullscreen');
+            btn.innerHTML = ENTER_SVG + '<span>fullscreen</span>';
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              try {
+                if (inFs() === fig) {
+                  await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen?.());
+                } else if (fig.requestFullscreen) {
+                  await fig.requestFullscreen();
+                } else if (fig.webkitRequestFullscreen) {
+                  await fig.webkitRequestFullscreen();
+                }
+              } catch (_) {}
+            });
+            fig.appendChild(btn);
+          });
+          const sync = () => {
+            document.querySelectorAll('.viz-fs-btn').forEach((b) => {
+              const fig = b.parentElement;
+              const open = inFs() === fig;
+              b.innerHTML = (open ? EXIT_SVG : ENTER_SVG) + '<span>' + (open ? 'exit' : 'fullscreen') + '</span>';
+            });
+          };
+          document.addEventListener('fullscreenchange', sync);
+          document.addEventListener('webkitfullscreenchange', sync);
+        };
+        enhance();
+        document.addEventListener('astro:page-load', enhance);
+        document.addEventListener('astro:after-swap', enhance);
+      })();
+    </script> </body> </html> 
