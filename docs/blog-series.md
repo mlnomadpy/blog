@@ -279,6 +279,11 @@ New-post candidates, in rough order of appeal:
 ## 6. Where things live
 
 - Posts: `src/content/blog/<slug>.mdx`
+- Series registry: `src/data/series.ts` (slugs in reading order + a reader-facing
+  `description` per arc and `status: 'ongoing'` while an arc is open; it feeds the
+  series-first home page, `/series/<id>` landing pages, series-aware prev/next,
+  and `/map`, which also extracts the cross-reference graph from post bodies at
+  build time, so plain `/blog/<slug>/` markdown links double as map edges)
 - Engine viz components: `src/components/viz/*.astro` (+ shared helpers like `yatedit.js`, `yatedit.worker.js`)
 - Viz engine: `src/components/viz/engine/` (`vizkit.js`, `jax.js`, `draw.js`, `nanograd.js`)
 - Experiments + renderers: `scripts/*.py`

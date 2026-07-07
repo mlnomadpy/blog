@@ -68,16 +68,38 @@ export async function getStaticPaths() {
       ? { role: pr.role, slug: pr.other.id, title: pr.other.data.title }
       : undefined;
 
+    const series = seriesFor(post);
+
+    // Prev/next follows the series reading order when there is one; the
+    // chronological chain is only a fallback for standalone posts (and
+    // one-part series, where reading order does not disambiguate anything).
+    // A series deliberately dead-ends at its last part instead of jumping
+    // into an unrelated arc.
+    // sorted desc → i+1 is older (previous in time), i-1 is newer (next in time)
+    let next = i > 0 ? { slug: posts[i - 1].id, title: posts[i - 1].data.title } : undefined;
+    let prev = i < posts.length - 1 ? { slug: posts[i + 1].id, title: posts[i + 1].data.title } : undefined;
+    if (series && series.total > 1) {
+      const k = series.part - 1; // anchor's index in the visible reading order
+      const nav = (item: (typeof series.items)[number] | undefined, label: string) =>
+        item ? { slug: item.slug, title: item.title, label } : undefined;
+      if (pr?.role === 'companion') {
+        prev = nav(series.items[k], '← Explainer');
+        next = nav(series.items[k + 1], `Part ${k + 2} →`);
+      } else {
+        prev = nav(series.items[k - 1], `← Part ${k}`);
+        next = nav(series.items[k + 1], `Part ${k + 2} →`);
+      }
+    }
+
     return {
       params: { slug: post.id },
       props: {
         post,
-        // sorted desc → i+1 is older (previous in time), i-1 is newer (next in time)
-        next: i > 0 ? { slug: posts[i - 1].id, title: posts[i - 1].data.title } : undefined,
-        prev: i < posts.length - 1 ? { slug: posts[i + 1].id, title: posts[i + 1].data.title } : undefined,
+        next,
+        prev,
         related,
         pair,
-        series: seriesFor(post),
+        series,
       },
     };
   });

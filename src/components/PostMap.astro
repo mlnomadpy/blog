@@ -1,0 +1,187 @@
+---
+// The post map: series as horizontal lanes in narrative order, explainers as
+// dots in reading order, real cross-references (extracted from post bodies at
+// build time) as bezier edges. Pure static SVG; the only client JS is hover
+// emphasis, and everything works without it.
+import type { Layout } from '../utils/postGraph';
+
+interface Props { layout: Layout }
+const { layout } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+<figure class="post-map">
+  <div class="map-scroll">
+    <svg
+      data-post-map
+      viewBox={`0 0 ${layout.width} ${layout.height}`}
+      xmlns="http://www.w3.org/2000/svg"
+      role="group"
+      aria-label="Map of the blog's series and the cross-references between posts"
+    >
+      <g class="edges" aria-hidden="true">
+        {layout.edges.map((e) => (
+          <path d={e.path} data-src={e.source} data-tgt={e.target} />
+        ))}
+      </g>
+      {layout.arcs.map((arc) => (
+        <g class="lane">
+          <a class="arc-link" href={`${base}/series/${arc.def.id}/`}>
+            <text class="arc-label" x={arc.spine.x1 - 50} y={arc.y - 50}>
+              {arc.def.title} · {arc.nodes.length}
+            </text>
+          </a>
+          {arc.nodes.length > 1 && (
+            <line class="spine" x1={arc.spine.x1} y1={arc.y} x2={arc.spine.x2} y2={arc.y} />
+          )}
+          {arc.nodes.map((n) => (
+            <a
+              href={`${base}/${n.slug}/`}
+              data-slug={n.slug}
+              aria-label={`${n.title} (${arc.def.short}, part ${n.part + 1}${n.hasCompanion ? ', with JAX companion' : ''})`}
+            >
+              <title>{n.title}{n.hasCompanion ? ' · has a JAX companion' : ''}</title>
+              {n.hasCompanion && <circle class="ring" cx={n.x} cy={n.y} r="11" />}
+              <circle class={`dot${n.draft ? ' draft' : ''}`} cx={n.x} cy={n.y} r="7" />
+              <text
+                class="node-label"
+                x={n.x}
+                y={n.y + (n.labelAbove ? -18 : 24)}
+                text-anchor="middle"
+              >{n.label}</text>
+            </a>
+          ))}
+        </g>
+      ))}
+    </svg>
+  </div>
+  <figcaption class="map-legend">
+    <span class="legend-item"><span class="swatch out"></span> cites</span>
+    <span class="legend-item"><span class="swatch in"></span> cited by</span>
+    <span class="legend-item"><span class="swatch ring-swatch"></span> has a JAX companion</span>
+    <span class="legend-hint">hover a post to see its references</span>
+  </figcaption>
+</figure>
+
+<style>
+  .post-map { margin: 1.5rem 0 0; }
+  .map-scroll { overflow-x: auto; }
+  svg { display: block; min-width: 880px; width: 100%; height: auto; }
+
+  .edges path {
+    fill: none;
+    stroke: var(--fg-faint);
+    stroke-opacity: 0.3;
+    stroke-width: 1;
+    transition: stroke-opacity var(--transition-fast), stroke var(--transition-fast);
+  }
+  svg.focused .edges path { stroke-opacity: 0.05; }
+  svg.focused .edges path.out { stroke: var(--accent); stroke-opacity: 1; stroke-width: 1.5; }
+  svg.focused .edges path.in { stroke: var(--fg-muted); stroke-opacity: 1; stroke-width: 1.5; }
+
+  .spine { stroke: var(--border-strong); stroke-width: 1.5; }
+
+  .arc-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    fill: var(--fg-faint);
+    transition: fill var(--transition-fast);
+  }
+  .arc-link:hover .arc-label, .arc-link:focus .arc-label { fill: var(--accent); }
+
+  .dot {
+    fill: var(--fg);
+    stroke: var(--bg);
+    stroke-width: 2;
+    transition: fill var(--transition-fast);
+  }
+  a:hover .dot, a:focus-visible .dot { fill: var(--accent); }
+  a:focus-visible .dot { stroke: var(--accent); stroke-width: 3; }
+  .dot.draft {
+    fill: var(--bg);
+    stroke: var(--fg-faint);
+    stroke-dasharray: 2 2;
+    opacity: 0.55;
+  }
+  .ring { fill: none; stroke: var(--accent); stroke-width: 1; opacity: 0.65; }
+
+  .node-label {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    fill: var(--fg-muted);
+    transition: fill var(--transition-fast);
+  }
+  a:hover .node-label, a:focus-visible .node-label { fill: var(--accent); }
+
+  .map-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.25rem;
+    margin-top: 0.75rem;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--fg-muted);
+  }
+  .legend-item { display: inline-flex; align-items: center; gap: 0.4rem; }
+  .swatch { display: inline-block; width: 18px; height: 0; border-top: 1.5px solid; }
+  .swatch.out { border-color: var(--accent); }
+  .swatch.in { border-color: var(--fg-muted); }
+  .swatch.ring-swatch {
+    width: 10px;
+    height: 10px;
+    border: 1px solid var(--accent);
+    border-radius: 50%;
+  }
+  .legend-hint { color: var(--fg-faint); }
+  @media (pointer: coarse) {
+    .legend-hint { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .edges path, .dot, .node-label, .arc-label { transition: none; }
+  }
+</style>
+
+<script is:inline>
+  (() => {
+    const init = () => {
+      document.querySelectorAll('svg[data-post-map]').forEach((svg) => {
+        if (svg.dataset.bound) return;
+        svg.dataset.bound = '1';
+        const paths = Array.from(svg.querySelectorAll('path[data-src]'));
+        const clear = () => {
+          svg.classList.remove('focused');
+          delete svg.dataset.armed;
+          paths.forEach((p) => p.classList.remove('out', 'in'));
+        };
+        const focus = (slug) => {
+          clear();
+          svg.classList.add('focused');
+          paths.forEach((p) => {
+            if (p.dataset.src === slug) p.classList.add('out');
+            if (p.dataset.tgt === slug) p.classList.add('in');
+          });
+        };
+        svg.querySelectorAll('a[data-slug]').forEach((a) => {
+          const slug = a.dataset.slug;
+          a.addEventListener('mouseenter', () => focus(slug));
+          a.addEventListener('focusin', () => focus(slug));
+          a.addEventListener('mouseleave', clear);
+          a.addEventListener('focusout', clear);
+          // On touch, first tap shows the post's references; second tap opens it.
+          a.addEventListener('click', (ev) => {
+            if (!window.matchMedia('(pointer: coarse)').matches) return;
+            if (svg.dataset.armed === slug) return;
+            ev.preventDefault();
+            focus(slug);
+            svg.dataset.armed = slug;
+          });
+        });
+      });
+    };
+    init();
+    document.addEventListener('astro:page-load', init);
+    document.addEventListener('astro:after-swap', init);
+  })();
+</script>

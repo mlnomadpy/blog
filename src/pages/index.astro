@@ -1,21 +1,23 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import PostRow from '../components/PostRow.astro';
+import SeriesCard from '../components/SeriesCard.astro';
+import ReadMarks from '../components/ReadMarks.astro';
 import { getCollection } from 'astro:content';
 import { SITE_TITLE, SITE_DESCRIPTION, SITE_TAGLINE } from '../consts';
 import { postFilter, buildPairs } from '../utils/posts';
-import { seriesForSlug } from '../data/series';
+import { SERIES, seriesForSlug } from '../data/series';
 
 const posts = (await getCollection('blog', postFilter))
   .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
 
 // Pair explainers with their JAX companions. Companions are not listed on their
-// own row; they appear nested under their explainer (see the archive markup).
+// own row; they appear nested under their explainer.
 const { companionOf, mainOf } = buildPairs(posts);
 const stripId = (s: string) => s.replace(/\.(md|mdx)$/, '');
 const topLevel = posts.filter((p) => !mainOf.has(stripId(p.id)));
 
-// Series chip for archive rows: "<series short label> · <part>", where the
-// part number counts only visible (draft-filtered) explainers of that series.
+// Series chip: part number counts only visible (draft-filtered) explainers.
 const visibleSlugs = new Set(posts.map((p) => stripId(p.id)));
 const seriesChip = (post: (typeof posts)[number]) => {
   const id = stripId(post.id);
@@ -25,13 +27,21 @@ const seriesChip = (post: (typeof posts)[number]) => {
   return part > 0 ? { label: def.short, part } : undefined;
 };
 
-const byYear = topLevel.reduce<Record<number, typeof posts>>((acc, p) => {
-  const y = p.data.pubDate.getFullYear();
-  (acc[y] ??= []).push(p);
-  return acc;
-}, {});
-const years = Object.keys(byYear).map(Number).sort((a, b) => b - a);
-const fmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: '2-digit' });
+// The three most recent top-level posts, for returning readers.
+const latest = topLevel.slice(0, 3);
+
+// Arcs in narrative order, restricted to what is actually published.
+const byId = new Map(posts.map((p) => [stripId(p.id), p]));
+const arcs = SERIES.map((def) => ({
+  def,
+  parts: def.slugs
+    .filter((s) => byId.has(s))
+    .map((s) => ({ id: byId.get(s)!.id, title: byId.get(s)!.data.title })),
+})).filter((a) => a.parts.length > 0);
+
+// Top-level posts that belong to no series.
+const standalone = topLevel.filter((p) => !seriesForSlug(stripId(p.id)));
+
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const siteBase = (Astro.site?.toString() ?? '').replace(/\/+$/, '') + base + '/';
 
@@ -56,47 +66,51 @@ const blogPosts = posts.slice(0, 10).map((p) => ({
       <strong>kernel methods</strong>, <strong>contrastive learning</strong>,
       and the <strong>geometry of neural network representations</strong>.
       Most posts ship with interactive visualisations you can play with in the
-      browser.
+      browser. The posts run in series that build on each other; see
+      <a href={`${base}/map/`}>the map</a> for how they connect.
     </p>
   </section>
 
-  <section class="archive">
-    {years.map((year) => (
-      <div class="archive-year">
-        <h2>{year}</h2>
-        <ul>
-          {byYear[year].map((post) => {
-            const companion = companionOf.get(stripId(post.id));
-            const chip = seriesChip(post);
-            return (
-              <li class={companion ? 'has-companion' : undefined}>
-                <a class="row" href={`${base}/${post.id}/`}>
-                  <time class="row-date" datetime={post.data.pubDate.toISOString()}>
-                    {fmt.format(post.data.pubDate)}
-                  </time>
-                  <span class="row-title">
-                    {post.data.draft && <span class="draft-badge">draft</span>}
-                    {post.data.title}
-                    {chip && <span class="series-chip">{chip.label} · {chip.part}</span>}
-                  </span>
-                </a>
-                {companion && (
-                  <a class="companion-row" href={`${base}/${companion.id}/`} aria-label={`JAX companion: ${companion.data.title}`}>
-                    <span class="companion-rail" aria-hidden="true"></span>
-                    <span class="companion-tag">JAX companion</span>
-                    <span class="companion-title">
-                      {companion.data.draft && <span class="draft-badge">draft</span>}
-                      {companion.data.title}
-                    </span>
-                  </a>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-    ))}
+  <div class="continue" data-continue data-base={base} hidden>
+    <a href={`${base}/`}>
+      <span class="continue-eyebrow">Continue reading · <span data-continue-label></span></span>
+      <span class="continue-title" data-continue-title></span>
+    </a>
+  </div>
+
+  <section class="home-section">
+    <h2 class="section-eyebrow">Latest</h2>
+    <ul class="latest-list">
+      {latest.map((post) => (
+        <PostRow
+          post={post}
+          companion={companionOf.get(stripId(post.id))}
+          chip={seriesChip(post)}
+        />
+      ))}
+    </ul>
+    <a class="section-more" href={`${base}/archive/`}>Full archive by date →</a>
   </section>
+
+  <section class="home-section">
+    <h2 class="section-eyebrow">Series, in reading order</h2>
+    <p class="section-note">Each series is a narrative: start at part 1.</p>
+    <div class="series-stack">
+      {arcs.map(({ def, parts }) => <SeriesCard def={def} parts={parts} />)}
+    </div>
+  </section>
+
+  {standalone.length > 0 && (
+    <section class="home-section">
+      <h2 class="section-eyebrow">More posts</h2>
+      <ul class="latest-list">
+        {standalone.map((post) => (
+          <PostRow post={post} companion={companionOf.get(stripId(post.id))} />
+        ))}
+      </ul>
+    </section>
+  )}
+  <ReadMarks />
 </BaseLayout>
 
 <style>
@@ -108,9 +122,37 @@ const blogPosts = posts.slice(0, 10).map((p) => ({
     max-width: 56ch;
   }
   .intro-blurb strong { color: var(--fg); font-weight: 600; }
-  .archive { margin-top: 1.5rem; }
-  .archive-year { margin-bottom: 1.75rem; }
-  .archive-year h2 {
+  .intro-blurb a { color: var(--accent); }
+
+  .continue { margin-top: 1.25rem; }
+  .continue a {
+    display: block;
+    background: var(--bg-sunken);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.7rem 0.95rem;
+    text-decoration: none;
+    color: inherit;
+    transition: border-color var(--transition-fast);
+  }
+  .continue a:hover { border-color: var(--border-strong); }
+  .continue-eyebrow {
+    display: block;
+    font-family: var(--mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 0.2rem;
+  }
+  .continue-title {
+    font-family: var(--serif);
+    font-size: 1rem;
+    color: var(--fg);
+  }
+
+  .home-section { margin-top: 2rem; }
+  .section-eyebrow {
     font-family: var(--mono);
     font-size: 0.78rem;
     letter-spacing: 0.16em;
@@ -121,114 +163,21 @@ const blogPosts = posts.slice(0, 10).map((p) => ({
     padding-bottom: 0.45rem;
     border-bottom: 1px solid var(--border);
   }
-  .archive-year ul { list-style: none; padding: 0; margin: 0; }
-  .archive-year li { border-bottom: 1px dashed var(--border); }
-  .archive-year li:last-child { border-bottom: 0; }
-  .archive-year li.has-companion { padding-bottom: 0.35rem; }
-
-  .row {
-    display: grid;
-    grid-template-columns: 72px minmax(0, 1fr);
-    gap: 1rem;
-    align-items: baseline;
-    padding: 0.6rem 0;
-    text-decoration: none;
-    color: inherit;
-  }
-  .has-companion .row { padding-bottom: 0.3rem; }
-
-  /* nested JAX-companion link under its explainer */
-  .companion-row {
-    position: relative;
-    display: flex;
-    align-items: baseline;
-    gap: 0.5rem;
-    margin-left: calc(72px + 1rem);
-    padding: 0.1rem 0 0.45rem;
-    text-decoration: none;
-    color: inherit;
-  }
-  .companion-rail {
-    position: absolute;
-    left: -14px;
-    top: -0.35em;
-    width: 10px;
-    height: 0.95em;
-    border-left: 1.5px solid var(--border);
-    border-bottom: 1.5px solid var(--border);
-    border-bottom-left-radius: 6px;
-  }
-  .companion-tag {
-    flex: none;
-    font-family: var(--mono);
-    font-size: 0.6rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--accent);
-    border: 1px solid var(--accent);
-    border-radius: 4px;
-    padding: 0.07rem 0.4rem;
-    white-space: nowrap;
-  }
-  .companion-title {
-    font-family: var(--serif);
-    font-size: 0.92rem;
-    line-height: 1.4;
+  .section-note {
+    margin: 0.5rem 0 0.75rem;
+    font-size: 0.88rem;
     color: var(--fg-muted);
+  }
+  .latest-list { list-style: none; padding: 0; margin: 0; }
+  .section-more {
+    display: inline-block;
+    margin-top: 0.6rem;
+    font-family: var(--mono);
+    font-size: 0.74rem;
+    color: var(--fg-muted);
+    text-decoration: none;
     transition: color var(--transition-fast);
   }
-  .companion-row:hover .companion-title { color: var(--accent); }
-  .companion-row:hover .companion-tag { background: color-mix(in srgb, var(--accent) 12%, transparent); }
-  .row-date {
-    font-family: var(--mono);
-    font-size: 0.78rem;
-    color: var(--fg-faint);
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-  .row-title {
-    font-family: var(--serif);
-    font-size: 1.02rem;
-    line-height: 1.4;
-    color: var(--fg);
-    transition: color var(--transition-fast);
-  }
-  .row:hover .row-title { color: var(--accent); }
-  .series-chip {
-    display: inline-block;
-    font-family: var(--mono);
-    font-size: 0.64rem;
-    letter-spacing: 0.06em;
-    color: var(--fg-faint);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 0.05rem 0.4rem;
-    margin-left: 0.55rem;
-    white-space: nowrap;
-    vertical-align: 0.12em;
-    transition: color var(--transition-fast), border-color var(--transition-fast);
-  }
-  .row:hover .series-chip { color: var(--fg-muted); border-color: var(--border-strong); }
-  .draft-badge {
-    display: inline-block;
-    font-family: var(--mono);
-    font-size: 0.62rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--accent);
-    border: 1px solid var(--accent);
-    border-radius: 4px;
-    padding: 0.05rem 0.35rem;
-    margin-right: 0.5rem;
-    vertical-align: 0.12em;
-  }
-
-  @media (max-width: 720px) {
-    .row {
-      grid-template-columns: 56px 1fr;
-      gap: 0.75rem;
-      padding: 0.7rem 0;
-    }
-  }
+  .section-more:hover { color: var(--accent); }
+  .series-stack { margin-top: 0.85rem; display: grid; gap: 1rem; }
 </style>

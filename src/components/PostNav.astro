@@ -1,5 +1,5 @@
 ---
-interface NavItem { slug: string; title: string }
+interface NavItem { slug: string; title: string; label?: string }
 interface Props { prev?: NavItem; next?: NavItem }
 const { prev, next } = Astro.props;
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -8,13 +8,13 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   <nav class="post-nav" aria-label="Adjacent posts">
     {prev ? (
       <a href={`${base}/${prev.slug}/`} class="prev" rel="prev">
-        <div class="label">← Previous</div>
+        <div class="label">{prev.label ?? '← Previous'}</div>
         <div class="title">{prev.title}</div>
       </a>
     ) : <span />}
     {next ? (
       <a href={`${base}/${next.slug}/`} class="next" rel="next">
-        <div class="label">Next →</div>
+        <div class="label">{next.label ?? 'Next →'}</div>
         <div class="title">{next.title}</div>
       </a>
     ) : <span />}

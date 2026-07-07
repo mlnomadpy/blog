@@ -1,0 +1,51 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import SeriesCard from '../../components/SeriesCard.astro';
+import { getCollection } from 'astro:content';
+import { postFilter } from '../../utils/posts';
+import { SERIES } from '../../data/series';
+
+const posts = await getCollection('blog', postFilter);
+const stripId = (s: string) => s.replace(/\.(md|mdx)$/, '');
+const byId = new Map(posts.map((p) => [stripId(p.id), p]));
+
+// Visible explainers per arc, in reading order; arcs with nothing published
+// yet stay hidden.
+const arcs = SERIES.map((def) => ({
+  def,
+  parts: def.slugs
+    .filter((s) => byId.has(s))
+    .map((s) => ({ id: byId.get(s)!.id, title: byId.get(s)!.data.title })),
+})).filter((a) => a.parts.length > 0);
+---
+<BaseLayout
+  title="Series"
+  description="Every series on this blog, in reading order. Each one is a narrative: start at part 1."
+>
+  <section class="intro">
+    <h1>Series</h1>
+    <p class="series-lead">
+      Every post here belongs to a running argument. Each series is a narrative:
+      start at part 1, or jump back in where you left off.
+    </p>
+  </section>
+
+  <div class="series-stack">
+    {arcs.map(({ def, parts }) => <SeriesCard def={def} parts={parts} />)}
+  </div>
+</BaseLayout>
+
+<style>
+  .series-lead {
+    margin: 0.85rem 0 0.5rem;
+    font-size: 0.96rem;
+    line-height: 1.6;
+    color: var(--fg-muted);
+    max-width: 56ch;
+  }
+  .series-stack {
+    margin-top: 1.5rem;
+    display: grid;
+    gap: 1rem;
+  }
+</style>
