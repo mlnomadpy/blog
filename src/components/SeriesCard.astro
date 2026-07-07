@@ -1,0 +1,116 @@
+---
+// One arc card for the home page and /series/: title, description, and the
+// two entry points that matter (part 1 for new readers, the newest part for
+// returning ones), plus a link to the full series page.
+import type { SeriesDef } from '../data/series';
+
+interface PartItem { id: string; title: string }
+interface Props {
+  def: SeriesDef;
+  parts: PartItem[]; // visible explainers in reading order
+}
+const { def, parts } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const first = parts[0];
+const newest = parts[parts.length - 1];
+---
+<article class="series-card">
+  <h3 class="card-title">
+    <a href={`${base}/series/${def.id}/`}>{def.title}</a>
+  </h3>
+  <p class="card-count">
+    {parts.length} {parts.length === 1 ? 'part' : 'parts'}
+    {def.status === 'ongoing' && <span class="ongoing">· ongoing</span>}
+  </p>
+  <p class="card-desc">{def.description}</p>
+  <ul class="card-entries">
+    <li>
+      <span class="entry-pill">Start here</span>
+      <a class="entry-title" href={`${base}/${first.id}/`}>{first.title}</a>
+    </li>
+    {parts.length > 1 && (
+      <li>
+        <span class="entry-pill">Newest</span>
+        <a class="entry-title" href={`${base}/${newest.id}/`}>{newest.title}</a>
+      </li>
+    )}
+  </ul>
+  <a class="card-all" href={`${base}/series/${def.id}/`}>All {parts.length} {parts.length === 1 ? 'part' : 'parts'} →</a>
+</article>
+
+<style>
+  .series-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-elev);
+    padding: 1.1rem 1.25rem 1rem;
+    transition: border-color var(--transition-fast);
+  }
+  .series-card:hover { border-color: var(--border-strong); }
+
+  .card-title { margin: 0; font-size: 1.18rem; line-height: 1.35; }
+  .card-title a {
+    font-family: var(--serif);
+    color: var(--fg);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+  }
+  .card-title a:hover { color: var(--accent); }
+
+  .card-count {
+    margin: 0.3rem 0 0;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--fg-faint);
+  }
+  .card-count .ongoing { color: var(--accent); }
+
+  .card-desc {
+    margin: 0.6rem 0 0.85rem;
+    font-size: 0.92rem;
+    line-height: 1.6;
+    color: var(--fg-muted);
+  }
+
+  .card-entries { list-style: none; padding: 0; margin: 0; }
+  .card-entries li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.55rem;
+    padding: 0.3rem 0;
+  }
+  .entry-pill {
+    flex: none;
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 0.07rem 0.4rem;
+    white-space: nowrap;
+  }
+  .entry-title {
+    font-family: var(--serif);
+    font-size: 0.95rem;
+    line-height: 1.4;
+    color: var(--fg);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+  }
+  .entry-title:hover { color: var(--accent); }
+
+  .card-all {
+    display: inline-block;
+    margin-top: 0.7rem;
+    font-family: var(--mono);
+    font-size: 0.74rem;
+    color: var(--fg-muted);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+  }
+  .card-all:hover { color: var(--accent); }
+</style>

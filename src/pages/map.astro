@@ -1,0 +1,155 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PostMap from '../components/PostMap.astro';
+import ReadMarks from '../components/ReadMarks.astro';
+import { getCollection } from 'astro:content';
+import { postFilter, buildPairs } from '../utils/posts';
+import { buildPostGraph, layoutGraph } from '../utils/postGraph';
+
+const posts = await getCollection('blog', postFilter);
+const graph = buildPostGraph(posts);
+const layout = layoutGraph(graph);
+const nodeCount = graph.arcs.reduce((n, a) => n + a.nodes.length, 0);
+console.log(`[map] ${nodeCount} nodes, ${graph.edges.length} cross-reference edges`);
+
+// Companions for the per-arc list below the map (the accessible, mobile-first
+// representation of the same structure).
+const { companionOf } = buildPairs(posts);
+const stripId = (s: string) => s.replace(/\.(md|mdx)$/, '');
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+<BaseLayout
+  title="Map"
+  description="A map of every series on this blog: posts in reading order, and the real cross-references between them, extracted from the posts themselves."
+>
+  <section class="intro">
+    <h1>The map</h1>
+    <p class="map-lead">
+      Every post here cites the posts it builds on. This map is drawn from
+      those citations: each lane is a series in reading order, each dot a post,
+      each curve a reference from one post to another. Hover a dot to see what
+      it draws on and what draws on it.
+    </p>
+  </section>
+
+  <div class="map-wide">
+    <PostMap layout={layout} />
+  </div>
+
+  <section class="arc-lists">
+    {graph.arcs.map((arc) => (
+      <div class="arc-section">
+        <h2 class="arc-heading">
+          <a href={`${base}/series/${arc.def.id}/`}>{arc.def.title}</a>
+          <span class="arc-count">{arc.nodes.length} {arc.nodes.length === 1 ? 'part' : 'parts'}</span>
+        </h2>
+        <p class="arc-desc">{arc.def.description}</p>
+        <ol class="arc-posts">
+          {arc.nodes.map((n) => {
+            const companion = companionOf.get(n.slug);
+            return (
+              <li>
+                <a href={`${base}/${n.slug}/`} data-slug={n.slug}>{n.title}</a>
+                {companion && (
+                  <a class="arc-companion" href={`${base}/${companion.id}/`} data-slug={stripId(companion.id)}>
+                    <span class="companion-tag">JAX companion</span>
+                  </a>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+    ))}
+  </section>
+  <ReadMarks />
+</BaseLayout>
+
+<style>
+  .map-lead {
+    margin: 0.85rem 0 0.5rem;
+    font-size: 0.96rem;
+    line-height: 1.6;
+    color: var(--fg-muted);
+    max-width: 60ch;
+  }
+
+  /* Let the map break out of the 720px column on wide screens. */
+  .map-wide {
+    width: min(var(--wide-width), 100vw - 2.5rem);
+    margin-left: calc(50% - min(var(--wide-width), 100vw - 2.5rem) / 2);
+  }
+
+  .arc-lists { margin-top: 2.5rem; }
+  .arc-section { margin-bottom: 2rem; }
+  .arc-heading {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    font-size: 1.15rem;
+    margin: 0 0 0.35rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .arc-heading a {
+    font-family: var(--serif);
+    color: var(--fg);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+  }
+  .arc-heading a:hover { color: var(--accent); }
+  .arc-count {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--fg-faint);
+  }
+  .arc-desc {
+    margin: 0.4rem 0 0.75rem;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: var(--fg-muted);
+  }
+  .arc-posts { margin: 0; padding-left: 1.4rem; }
+  .arc-posts li { padding: 0.22rem 0; }
+  .arc-posts li::marker {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--fg-faint);
+  }
+  .arc-posts a {
+    font-family: var(--serif);
+    font-size: 0.98rem;
+    color: var(--fg);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+  }
+  .arc-posts a:hover { color: var(--accent); }
+  .arc-companion { margin-left: 0.55rem; }
+  .companion-tag {
+    font-family: var(--mono);
+    font-size: 0.58rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 0.05rem 0.35rem;
+    white-space: nowrap;
+    vertical-align: 0.15em;
+  }
+  .arc-companion:hover .companion-tag { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+
+  /* read-state dot (class added by ReadMarks) */
+  .arc-posts :global(a.is-read)::after {
+    content: '';
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin-left: 0.35rem;
+    vertical-align: 0.15em;
+  }
+</style>

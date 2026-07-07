@@ -1,0 +1,42 @@
+---
+// Progressive enhancement for listing pages: mark already-read posts with a
+// small dot (`.is-read` on any anchor carrying `data-slug`) and, on the home
+// page, fill the hidden "[data-continue]" pill with the last series post the
+// reader was in. Reads localStorage written by PostLayout; without JS or
+// storage the listings are untouched.
+---
+<script is:inline>
+  (() => {
+    const decorate = () => {
+      let read, last;
+      try {
+        read = JSON.parse(localStorage.getItem('read-posts') || '[]');
+        last = JSON.parse(localStorage.getItem('last-read') || 'null');
+      } catch {
+        return;
+      }
+      if (Array.isArray(read) && read.length) {
+        const set = new Set(read);
+        document.querySelectorAll('a[data-slug]').forEach((a) => {
+          a.classList.toggle('is-read', set.has(a.dataset.slug));
+        });
+      }
+      const pill = document.querySelector('[data-continue]');
+      if (pill && last && last.slug && last.part < last.total) {
+        const link = pill.querySelector('a');
+        const label = pill.querySelector('[data-continue-label]');
+        if (link && label) {
+          link.href = pill.dataset.base + '/' + last.slug + '/';
+          label.textContent =
+            'Part ' + last.part + ' of ' + last.total + ' · ' + last.series;
+          const title = pill.querySelector('[data-continue-title]');
+          if (title) title.textContent = last.title;
+          pill.hidden = false;
+        }
+      }
+    };
+    decorate();
+    document.addEventListener('astro:page-load', decorate);
+    document.addEventListener('astro:after-swap', decorate);
+  })();
+</script>

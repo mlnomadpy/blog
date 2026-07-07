@@ -11,7 +11,7 @@ import References from '../components/References.astro';
 import Colophon from '../components/Colophon.astro';
 import PostAnalytics from '../components/PostAnalytics.astro';
 
-interface NavItem { slug: string; title: string }
+interface NavItem { slug: string; title: string; label?: string }
 interface RelatedPost { slug: string; title: string; description?: string; pubDate: Date }
 interface Pair { role: 'explainer' | 'companion'; slug: string; title: string }
 interface SeriesItem { slug: string; title: string; current: boolean; explainerOfCurrent: boolean }
@@ -61,6 +61,12 @@ const postPath = Astro.url.pathname;
 const postSlug = base && postPath.startsWith(`${base}/`)
   ? postPath.slice(base.length).replace(/^\/+|\/+$/g, '')
   : postPath.replace(/^\/+|\/+$/g, '');
+// Read-state record for the listing pages' "continue reading" pill and the
+// read dots (see ReadMarks.astro). Series posts only; standalone posts still
+// get a read dot but never become the continue target.
+const lastRead = series
+  ? { slug: postSlug, title, series: series.title, part: series.part, total: series.total }
+  : null;
 ---
 <BaseLayout
   title={title}
@@ -113,6 +119,16 @@ const postSlug = base && postPath.startsWith(`${base}/`)
   />
   <RelatedPosts posts={related} />
   <PostNav prev={prev} next={next} />
+  <script is:inline data-astro-rerun define:vars={{ postSlug, lastRead }}>
+    try {
+      const raw = JSON.parse(localStorage.getItem('read-posts') || '[]');
+      const read = (Array.isArray(raw) ? raw : []).filter((s) => s !== postSlug);
+      read.push(postSlug);
+      while (read.length > 200) read.shift();
+      localStorage.setItem('read-posts', JSON.stringify(read));
+      if (lastRead) localStorage.setItem('last-read', JSON.stringify(lastRead));
+    } catch {}
+  </script>
   <Giscus />
   <CodeCopy />
 </BaseLayout>

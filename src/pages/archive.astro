@@ -1,0 +1,89 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PostRow from '../components/PostRow.astro';
+import ReadMarks from '../components/ReadMarks.astro';
+import { getCollection } from 'astro:content';
+import { postFilter, buildPairs } from '../utils/posts';
+import { seriesForSlug } from '../data/series';
+
+const posts = (await getCollection('blog', postFilter))
+  .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+
+// Pair explainers with their JAX companions; companions render nested under
+// their explainer, never on their own row.
+const { companionOf, mainOf } = buildPairs(posts);
+const stripId = (s: string) => s.replace(/\.(md|mdx)$/, '');
+const topLevel = posts.filter((p) => !mainOf.has(stripId(p.id)));
+
+// Series chip: part number counts only visible (draft-filtered) explainers.
+const visibleSlugs = new Set(posts.map((p) => stripId(p.id)));
+const seriesChip = (post: (typeof posts)[number]) => {
+  const id = stripId(post.id);
+  const def = seriesForSlug(id);
+  if (!def) return undefined;
+  const part = def.slugs.filter((s) => visibleSlugs.has(s)).indexOf(id) + 1;
+  return part > 0 ? { label: def.short, part } : undefined;
+};
+
+const byYear = topLevel.reduce<Record<number, typeof posts>>((acc, p) => {
+  const y = p.data.pubDate.getFullYear();
+  (acc[y] ??= []).push(p);
+  return acc;
+}, {});
+const years = Object.keys(byYear).map(Number).sort((a, b) => b - a);
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+<BaseLayout
+  title="Archive"
+  description="Every post, newest first."
+>
+  <section class="intro">
+    <h1>Archive</h1>
+    <p class="archive-lead">
+      Every post, newest first. Reading in order instead?
+      Start from the <a href={`${base}/`}>series</a> or the <a href={`${base}/map/`}>map</a>.
+    </p>
+  </section>
+
+  <section class="archive">
+    {years.map((year) => (
+      <div class="archive-year">
+        <h2>{year}</h2>
+        <ul>
+          {byYear[year].map((post) => (
+            <PostRow
+              post={post}
+              companion={companionOf.get(stripId(post.id))}
+              chip={seriesChip(post)}
+            />
+          ))}
+        </ul>
+      </div>
+    ))}
+  </section>
+  <ReadMarks />
+</BaseLayout>
+
+<style>
+  .archive-lead {
+    margin: 0.85rem 0 0.5rem;
+    font-size: 0.96rem;
+    line-height: 1.6;
+    color: var(--fg-muted);
+    max-width: 56ch;
+  }
+  .archive { margin-top: 1.5rem; }
+  .archive-year { margin-bottom: 1.75rem; }
+  .archive-year h2 {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--fg-faint);
+    font-weight: 500;
+    margin: 0 0 0.4rem;
+    padding-bottom: 0.45rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .archive-year ul { list-style: none; padding: 0; margin: 0; }
+</style>
