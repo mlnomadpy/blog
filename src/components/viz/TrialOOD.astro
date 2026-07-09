@@ -1,0 +1,134 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 430 } = Astro.props;
+---
+<figure class="viz trialood" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Can the kernel tell a stranger from a patient it learned on? The kernel-max is a
+// resemblance meter; this panel scores how well it separates real held-out
+// patients from three kinds of constructed outsider, per dataset, with bootstrap
+// CIs. It is deliberately honest: some bars land below 0.5, meaning the model does
+// NOT find that construction strange, and the readout says which and why. Click a
+// bar to read its caveat. Data: scripts/deepsurv_trial.py -> ood.json.
+import { defineViz } from './engine/vizkit.js';
+import { gate, loadingText, axes, T as Ty } from './engine/draw.js';
+import { DS_LABEL } from './trial.js';
+import { localPoint } from './engine/pointer.js';
+
+defineViz('trialood', {
+  title: 'Does the kernel notice a stranger?',
+  height: 430,
+  controls: [
+    { type: 'select', name: 'ds', label: 'dataset',
+      options: [
+        { value: 'metabric', label: 'METABRIC' },
+        { value: 'support', label: 'SUPPORT' },
+        { value: 'gbsg', label: 'GBSG' },
+        { value: 'whas500', label: 'WHAS500' },
+        { value: 'flchain', label: 'FLCHAIN' },
+      ], value: 'metabric', reset: false },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    api.state.sel = -1;
+    gate(api, () => import('./trial.js').then((m) => m.loadOod()), (api, d) => { api.state.d = d; bind(api); });
+  },
+
+  onControl(name, v, api) { api.state.sel = -1; api.render(); },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    if (!st.ready) { loadingText(api); return; }
+    const d = st.d;
+    const ds = api.get('ds');
+    const info = d.data[ds];
+    const bars = info.bars;
+
+    Ty(ctx, colors, 'small', { color: colors.muted, align: 'left' });
+    ctx.fillText(`${DS_LABEL[ds]}: AUROC of the kernel-max separating real patients (high) from a constructed outsider (low). Kernel-max median on real data: ${info.kmax_in_median.toFixed(2)}.`, 16, 20);
+
+    const pad = 16, top = 46, bottom = 78;
+    const bx = 16, by = top, bw = W - 2 * pad, bh = H - top - bottom;
+    // horizontal bars, x = AUROC in [0,1]
+    const A = axes(ctx, { x: bx, y: by, w: bw, h: bh }, {
+      xMin: 0, xMax: 1, yMin: 0, yMax: 1,
+      xTicks: [0, 0.25, 0.5, 0.75, 1], fmtX: (v) => v.toFixed(2), grid: true, border: true,
+    }, colors);
+    // 0.5 = "no stranger than a real patient" reference
+    ctx.strokeStyle = colors.faint; ctx.setLineDash([2, 4]);
+    ctx.beginPath(); ctx.moveTo(A.sx(0.5), by); ctx.lineTo(A.sx(0.5), by + bh); ctx.stroke();
+    ctx.setLineDash([]);
+    Ty(ctx, colors, 'small', { color: colors.faint, align: 'center' }); ctx.textBaseline = 'bottom';
+    ctx.fillText('0.5: model finds it no stranger', A.sx(0.5), by - 2);
+
+    const n = bars.length, rowH = bh / n, barH = Math.min(30, rowH * 0.5);
+    st._hit = [];
+    bars.forEach((b, i) => {
+      const cy = by + (i + 0.5) * rowH;
+      const good = b.auroc >= 0.55;
+      const col = good ? colors.accent : colors.blue;
+      // bar from 0 to auroc
+      ctx.fillStyle = col; ctx.globalAlpha = st.sel === i ? 1 : 0.82;
+      const x0 = A.sx(0), x1 = A.sx(b.auroc);
+      ctx.fillRect(x0, cy - barH / 2, x1 - x0, barH);
+      ctx.globalAlpha = 1;
+      // CI whisker
+      if (b.lo != null && b.hi != null) {
+        ctx.strokeStyle = colors.fg; ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.moveTo(A.sx(b.lo), cy); ctx.lineTo(A.sx(b.hi), cy); ctx.stroke();
+        for (const xv of [b.lo, b.hi]) { ctx.beginPath(); ctx.moveTo(A.sx(xv), cy - 4); ctx.lineTo(A.sx(xv), cy + 4); ctx.stroke(); }
+      }
+      // label inside the bar if it fits, else above it; value past the CI whisker end
+      const barW = x1 - x0;
+      Ty(ctx, colors, 'label', { color: colors.fg, align: 'left' }); ctx.textBaseline = 'middle';
+      const lw = ctx.measureText(b.label).width;
+      if (lw + 16 < barW) ctx.fillText(b.label, x0 + 8, cy);
+      else { ctx.textBaseline = 'bottom'; ctx.fillText(b.label, x0 + 2, cy - barH / 2 - 3); }
+      const valX = Math.max(x1, b.hi != null ? A.sx(b.hi) : x1) + 8;
+      Ty(ctx, colors, 'value', { color: good ? colors.accent : colors.muted, align: 'left' }); ctx.textBaseline = 'middle';
+      ctx.fillText(b.auroc.toFixed(2), valX, cy);
+      st._hit.push({ y0: by + i * rowH, y1: by + (i + 1) * rowH, i, b });
+    });
+
+    // caveat / verdict line
+    Ty(ctx, colors, 'small', { color: colors.muted, align: 'left' }); ctx.textBaseline = 'top';
+    if (st.sel >= 0 && bars[st.sel]) {
+      const b = bars[st.sel];
+      wrap(ctx, `${b.label}: ${b.caveat}`, bx, by + bh + 10, bw, 13);
+    } else {
+      wrap(ctx, 'Click a bar for its caveat. A bar below 0.5 means the model does not find that construction strange, either because the shift is mild or because a far-tail point still lands near a prototype.', bx, by + bh + 10, bw, 13);
+    }
+
+    const strong = bars.filter((b) => b.auroc >= 0.55).length;
+    api.readout('rd', `${strong} of ${bars.length} constructions are flagged as strange here; the rest are not.`);
+  },
+});
+
+function wrap(ctx, str, x, y, maxW, lh) {
+  const words = str.split(' '); let line = '', yy = y;
+  for (const w of words) {
+    const test = line ? line + ' ' + w : w;
+    if (ctx.measureText(test).width > maxW && line) { ctx.fillText(line, x, yy); line = w; yy += lh; }
+    else line = test;
+  }
+  if (line) ctx.fillText(line, x, yy);
+}
+
+function bind(api) {
+  if (api.canvas.dataset.oodBound) return; api.canvas.dataset.oodBound = '1';
+  api.canvas.addEventListener('pointerdown', (e) => {
+    const st = api.state; if (!st || !st._hit) return;
+    const p = localPoint(api.canvas, e);
+    for (const h of st._hit) { if (p.y >= h.y0 && p.y <= h.y1) { st.sel = st.sel === h.i ? -1 : h.i; api.render(); return; } }
+  });
+}
+</script>

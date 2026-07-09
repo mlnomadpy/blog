@@ -1,0 +1,145 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 470 } = Astro.props;
+---
+<figure class="viz trialforest" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The viability panel. For one dataset at a time, every model's held-out C-index
+// as a point with its seed-0 bootstrap 95% CI as a whisker, the classical
+// baselines and the two neural nets side by side. The question the whole post
+// answers: does a kernel machine trained by plain gradient descent land in the
+// same interval as Cox / penalized Cox / Random Survival Forest? Read the overlap
+// of the whiskers. Data: scripts/deepsurv_trial.py -> forest.json.
+import { defineViz } from './engine/vizkit.js';
+import { gate, loadingText, axes, T as Ty, fmt } from './engine/draw.js';
+import { DS_LABEL } from './trial.js';
+
+defineViz('trialforest', {
+  title: 'Does the white-box model land in the pack?',
+  height: 470,
+  controls: [
+    { type: 'select', name: 'ds', label: 'dataset',
+      options: [
+        { value: 'metabric', label: 'METABRIC (breast, n=1903)' },
+        { value: 'support', label: 'SUPPORT (ICU, n=8873)' },
+        { value: 'gbsg', label: 'GBSG (breast, n=2232)' },
+        { value: 'whas500', label: 'WHAS500 (cardiac, n=500)' },
+        { value: 'flchain', label: 'FLCHAIN (mortality, n=6521)' },
+      ], value: 'metabric', reset: false },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    gate(api, () => import('./trial.js').then((m) => m.loadForest()), (api, d) => { api.state.d = d; });
+  },
+
+  onControl() { /* redraw only */ },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    if (!st.ready) { loadingText(api); return; }
+    const d = st.d;
+    const ds = api.get('ds');
+    const rows = d.rows[ds];
+    const card = d.cards[ds];
+
+    // header: dataset card
+    const pad = 16;
+    Ty(ctx, colors, 'title', { color: colors.fg });
+    ctx.fillText(`${DS_LABEL[ds]}`, pad, pad + 12);
+    Ty(ctx, colors, 'small', { color: colors.muted });
+    ctx.fillText(`n=${card.n}   ${card.d} covariates   ${(card.cens * 100).toFixed(0)}% censored   median ${fmt(card.median_t, 0)} time-units`,
+      pad, pad + 30);
+
+    const top = pad + 46, bottom = 40;
+    const bx = 190, by = top, bw = W - bx - pad - 40, bh = H - top - bottom;
+
+    // shared x-scale from the whiskers across all models on this dataset
+    let xlo = Infinity, xhi = -Infinity;
+    for (const r of rows) {
+      xlo = Math.min(xlo, r.lo != null ? r.lo : r.mean - r.std);
+      xhi = Math.max(xhi, r.hi != null ? r.hi : r.mean + r.std);
+    }
+    const span = xhi - xlo || 0.1;
+    xlo -= span * 0.12; xhi += span * 0.12;
+    const ticks = [];
+    const step = span > 0.25 ? 0.1 : 0.05;
+    let t0 = Math.ceil(xlo / step) * step;
+    for (let t = t0; t <= xhi + 1e-9; t += step) ticks.push(+t.toFixed(3));
+
+    const A = axes(ctx, { x: bx, y: by, w: bw, h: bh }, {
+      xMin: xlo, xMax: xhi, yMin: 0, yMax: 1,
+      xTicks: ticks, fmtX: (v) => v.toFixed(2), grid: true, border: true,
+    }, colors);
+
+    // 0.5 = chance reference if in view
+    if (xlo < 0.5 && xhi > 0.5) {
+      ctx.strokeStyle = colors.faint; ctx.setLineDash([2, 4]);
+      ctx.beginPath(); ctx.moveTo(A.sx(0.5), by); ctx.lineTo(A.sx(0.5), by + bh); ctx.stroke();
+      ctx.setLineDash([]);
+      Ty(ctx, colors, 'small', { color: colors.faint, align: 'center' });
+      ctx.fillText('chance 0.5', A.sx(0.5), by - 3);
+    }
+
+    // a band marking the classical baselines' envelope (min lo to max hi over
+    // coxph/coxnet/rsf), so "in the pack" is literally the shaded region.
+    const cls = rows.filter((r) => !r.is_net);
+    let clo = Infinity, chi = -Infinity;
+    for (const r of cls) { clo = Math.min(clo, r.lo ?? r.mean); chi = Math.max(chi, r.hi ?? r.mean); }
+    ctx.fillStyle = colors.accent; ctx.globalAlpha = 0.06;
+    ctx.fillRect(A.sx(clo), by, A.sx(chi) - A.sx(clo), bh);
+    ctx.globalAlpha = 1;
+
+    const nR = rows.length;
+    const rowH = bh / nR;
+    st._hit = [];
+    rows.forEach((r, i) => {
+      const cy = by + (i + 0.5) * rowH;
+      const isYat = r.is_yat;
+      const color = isYat ? colors.accent : (r.is_net ? colors.blue : colors.muted);
+      // label
+      Ty(ctx, colors, 'label', { align: 'right', color: isYat ? colors.accent : colors.fg, weight: isYat ? 'b' : '' });
+      ctx.textBaseline = 'middle';
+      ctx.fillText(r.label, bx - 12, cy);
+      // whisker
+      const lo = r.lo != null ? r.lo : r.mean - r.std;
+      const hi = r.hi != null ? r.hi : r.mean + r.std;
+      ctx.strokeStyle = color; ctx.lineWidth = isYat ? 2.4 : 1.6;
+      ctx.beginPath(); ctx.moveTo(A.sx(lo), cy); ctx.lineTo(A.sx(hi), cy); ctx.stroke();
+      for (const xv of [lo, hi]) { ctx.beginPath(); ctx.moveTo(A.sx(xv), cy - 4); ctx.lineTo(A.sx(xv), cy + 4); ctx.stroke(); }
+      // point
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(A.sx(r.mean), cy, isYat ? 5.5 : 4.2, 0, 7); ctx.fill();
+      if (isYat) { ctx.strokeStyle = colors.bg; ctx.lineWidth = 1.2; ctx.stroke(); }
+      // value
+      Ty(ctx, colors, 'value', { align: 'left', color: colors.muted });
+      ctx.textBaseline = 'middle';
+      ctx.fillText(r.mean.toFixed(3), A.sx(hi) + 8, cy);
+      st._hit.push({ y0: by + i * rowH, y1: by + (i + 1) * rowH, r });
+    });
+
+    // x-axis title
+    Ty(ctx, colors, 'small', { color: colors.muted, align: 'center' });
+    ctx.fillText('held-out concordance index (higher = ranks patients better)', bx + bw / 2, by + bh + 26);
+
+    // readout: the honest verdict
+    const yat = rows.find((r) => r.is_yat);
+    const best = rows.reduce((a, b) => (b.mean > a.mean ? b : a));
+    const gap = (best.mean - yat.mean);
+    const inband = (yat.hi ?? yat.mean) >= clo && (yat.lo ?? yat.mean) <= chi;
+    let verdict;
+    if (gap <= 0.006) verdict = 'Yat is inside the pack here';
+    else if (inband) verdict = `Yat trails the best (${best.label}) by ${(gap).toFixed(3)}, whiskers overlap`;
+    else verdict = `Yat trails here by ${(gap).toFixed(3)}, a real cost`;
+    api.readout('rd', `shaded band = classical baselines' CI envelope. ${verdict}.`);
+  },
+});
+</script>

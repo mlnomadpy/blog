@@ -91,6 +91,7 @@ capstone (the Yat prototype story returned to the transformer).
 | live | a-risk-model-that-names-its-reasons | a-risk-model-that-names-its-reasons-jax-flax-nnx |
 | live | your-network-is-a-fixed-point | your-network-is-a-fixed-point-jax-flax-nnx |
 | live | edit-a-fixed-point | edit-a-fixed-point-jax-flax-nnx |
+| live | survival-model-on-trial | survival-model-on-trial-jax-flax-nnx |
 
 ### Arc D: networks as integrators (new, opened 2026-07-04)
 The standing move: numerical analysis as an architecture catalog. Each
@@ -100,6 +101,7 @@ testable prediction about trained hidden states.
 | status | explainer | companion |
 | --- | --- | --- |
 | live | skip-connections-are-half-of-newton | momentum-resnet-jax-flax-nnx |
+| live | transformers-with-a-velocity-ledger | transformers-with-a-velocity-ledger-jax-flax-nnx |
 
 ---
 
@@ -195,7 +197,7 @@ attribution ("your risk is high because you resemble these patients", sums to h 
 1e-7); the clinical risk landscape (attractor field); a Nadaraya-Watson survival curve
 built from a patient's prototype-neighbors; **cohort deletion** as an exact closed-form
 readout edit (delta h = -a_u phi_u(x): 1.02 on the deleted 28-patient cohort vs 0.024
-on everyone else, framed honestly as "exact and local", not "provably unchanged");
+on everyone else, framed as "exact and local", not "provably unchanged");
 OOD abstention via kernel-max (7.1 real vs 3.7 stranger). Carries a "research
 illustration, not a clinical tool" note. Six fresh viz (PatientPrototypes,
 WhoDoYouLookLike, RiskLandscape, SurvivalCurveFromNeighbors, ForgetACohort,
@@ -203,12 +205,31 @@ AbstainOnStrangers) + six GIFs. Spends nothing new-derived: references prototype
 (C1), attractor field (C2), convex attribution (C0/C1), teach/forget (C2), OOD
 abstention (C1), calibration (C6), RKHS/representer (C0) by link.
 
+### C8. survival-model-on-trial  (LIVE, 2026-07-09; + companion)
+Title: "The White-Box Survival Model on Trial." C7's model retried at scale: five
+clinical datasets (METABRIC, WHAS500, GBSG, SUPPORT, FLCHAIN) against Cox, penalized
+Cox, RSF, and a standard MLP DeepSurv, LR-fair (per-model LR sweep + best-epoch
+selection, `scripts/deepsurv_trial.py`, Kaggle, bundle
+`scripts/results/kgl_blog-deepsurv-trial-v2/`). The claim is the existence proof:
+a deep Yat-kernel survival model trains with plain gradient descent, no solve, and
+lands in the pack on C-index (FLCHAIN 0.909, METABRIC 0.621, GBSG/SUPPORT in the
+pack, WHAS500 its worst case at 0.679 vs Cox 0.765) while inheriting what the
+others cannot give: exact convex attribution, prototype ablation (K=6 kmeans 0.629
+vs random 0.605 on METABRIC), calibration read off reliability gaps (0.008-0.078
+except WHAS500's 0.265), OOD abstention (perm ~0.66 / extreme 0.63 AUROC; subgroup
+<0.5 and cross-dataset 0.044 reported as failures of the detector), and prototype
+plausibility (8/24 within the covariate ranges, median distance 1.45). Viz:
+TrialForest, TrialAblation, TrialCalibration, TrialOOD, TrialPlausibility.
+Companion survival-model-on-trial-jax-flax-nnx (2 GIFs: KM tertiles separating,
+prototypes migrating; 5 PNG scoreboards). Spends: everything from C7 by link;
+new-derived: the LR-fairness protocol and the five-dataset viability table.
+
 ### D1. skip-connections-are-half-of-newton  (LIVE, 2026-07-04; opens Arc D)
 A skip connection x + f(x) is forward Euler: depth=time, hidden state=position,
 residual branch=vector field; Euler is HALF of Newton, there is no velocity anywhere.
 Physics anchor (`scripts/momentum_resnet.py`, pure-math part): Kepler orbit, dt=0.02,
 Euler gains **+68.3%** energy over 20 orbits (apoapsis 1.0 -> 3.37) while leapfrog
-holds **0.016%**. Network result: no cliff exists in the data; the honest finding is
+holds **0.016%**. Network result: no cliff exists in the data; the finding is
 an **exactness ceiling**: a flow-like plain net (L>=32) never reaches 100% on rings
 in any of 6 runs (non-crossing obstruction) while the momentum net (v <- mu v + f(x);
 x <- x + v) posts **100.0%** in all seeds; spirals L128 is a reliability story (96.2%
@@ -219,6 +240,27 @@ by mu, amplifying float noise by (1/mu)^L (3.7e-4 at mu=0.9 float32, 54 at 0.6,
 non-crossing/homeomorphism obstruction, Euler-vs-leapfrog energy drift, mu-friction
 irreversibility. Viz: OrbitIntegrator, DepthTrajectories, InertiaDial, RewindExact,
 StabilityCliff. Companion momentum-resnet-jax-flax-nnx (6 GIFs: orbits, depth-lapse, velocity ledger, crystallize, rewind + (1/mu)^L sweep, exactness ceiling).
+
+### D2. transformers-with-a-velocity-ledger  (LIVE, 2026-07-09; + companion)
+Title: "Transformers With a Velocity Ledger." The pre-norm Transformer residual
+stream IS forward Euler (x += Attn(norm x); x += MLP(norm x)), so D1's dictionary
+transfers wholesale. Experiment (`scripts/velocity_ledger.py`, Kaggle, bundle
+`scripts/results/kgl_blog-velocity-ledger-v2/`): four parameter-matched char-level
+GPTs (2,724,864 params each; plain / velocity ledger v = mu v + (1-mu) F(x) /
+ngpt-lite / ngpt+ledger), 3 seeds, dropout, best-val early stopping. The result
+splits: on quality they tie (best-val 1.433 / 1.435 / 1.420 / 1.456), and the
+ngpt+ledger synthesis LOSES, momentum on the sphere hurts; on dynamics the ledger
+changes everything: residual-stream path length through depth 128 -> 58 (ledger)
+vs 48 (ngpt) vs 32 (ngpt+ledger), mean turning angle 75° -> 29°. Same destination,
+gentler road, zero extra parameters. Related work spent: Momentum Streams (arXiv
+2605.24425), YuriiFormer (arXiv 2601.23236), Momentum Transformer (arXiv
+2208.00579), Lu et al. (arXiv 1906.02762), ODE Transformer (arXiv 2203.09176),
+nGPT (arXiv 2410.01131) as the first-order-on-a-sphere contrast. Viz: QualityTie,
+PathLengthBars, ResidualStreamPath, PathStraightens, VelocityThroughDepth
+(engine/velocityledger.js). Companion transformers-with-a-velocity-ledger-jax-flax-nnx
+(1 GIF: path straightening over training; 4 PNGs). Spends: depth=time and
+velocity-ledger dictionary from D1; new-derived: depth telemetry (path length +
+turning angle per sub-update) as an instrument.
 
 ## 4. Concept ledger (what is already spent, do not re-explain)
 
@@ -273,6 +315,7 @@ New-post candidates, in rough order of appeal:
 9. ~~The fixed point that edits itself~~ DONE as draft C5.5 (`edit-a-fixed-point`, verified; publishes after C5). Its open thread: true erasure of trained knowledge from the dynamics = retraining by another name.
 10. ~~Distillation as kernel transfer~~ LIVE as Arc A capstone (`distillation-is-kernel-transfer`, 2026-07-04).
 11. **Arc D next beats** (from D1's close): Hamiltonian networks that conserve a learned energy (Greydanus); adaptive-step depth as learned computation time (ties to C5's residual halting); the memory-free backprop that exact invertibility buys.
+12. ~~D2 candidate: "Transformers With a Velocity Ledger"~~ LIVE as D2 (`transformers-with-a-velocity-ledger`, 2026-07-09); related-work map moved into the D2 beat. The Momentum-nGPT synthesis hook was tested and answered: ngpt+ledger is the worst of the four on best-val (1.456), momentum on the sphere hurts. Remaining open thread from D2: does the shorter, straighter residual-stream path buy anything at scale (trainability at large L, pruning depth, early exit)?
 
 ---
 

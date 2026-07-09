@@ -90,6 +90,7 @@ export const SERIES: SeriesDef[] = [
       'depth-by-construction',
       'calibration-of-a-bounded-net',
       'a-risk-model-that-names-its-reasons',
+      'survival-model-on-trial',
       'your-network-is-a-fixed-point',
       'edit-a-fixed-point',
     ],
@@ -104,6 +105,7 @@ export const SERIES: SeriesDef[] = [
     status: 'ongoing',
     slugs: [
       'skip-connections-are-half-of-newton',
+      'transformers-with-a-velocity-ledger',
     ],
   },
 ];

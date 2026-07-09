@@ -1,0 +1,83 @@
+---
+interface Props { caption?: string; height?: number; }
+const { caption, height = 420 } = Astro.props;
+---
+<figure class="viz pathstraightens" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Total residual-stream path length at each of the four telemetry checkpoints
+// (init, ~10%, 50%, 100% of training), one line per variant. The plain net's
+// path grows and stays long; the ledger's settles low. Numbers from
+// scripts/results/.../velocity_ledger.npz (per-ckpt seglen sums, 3-seed mean).
+// This is a real training axis, so a slider carries it; the eye reads the gap
+// opening as training proceeds.
+import { defineViz } from './engine/vizkit.js';
+import { grid, panel, dot, T, fmt } from './engine/draw.js';
+import { gate, loadingText } from './engine/draw.js';
+import { loadSummary, ORDER, VCOL, VLABEL } from './velocityledger.js';
+
+defineViz('pathstraightens', {
+  title: 'As training proceeds the ledger keeps its path short; the plain path stays long',
+  height: 420,
+  controls: [
+    { type: 'range', name: 'ck', label: 'through training', min: 0, max: 3, step: 1, value: 3, int: true, reset: false, play: { period: 4200, loop: false } },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) {
+    gate(api, loadSummary, (api, d) => {
+      api.state.d = d;
+      api.state.byKey = {};
+      for (const v of d.variants) api.state.byKey[v.key] = v;
+      api.state.ckpts = d.ckpt_steps;
+    });
+  },
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    if (!st || !st.ready) { loadingText(api, 'loading the per-checkpoint path lengths…'); return; }
+    const upto = api.get('ck');
+    const ckpts = st.ckpts;
+    const cell = grid(size.W, size.H, 1, 1, 0)[0];
+    const m = panel(ctx, cell, colors, { header: 42 });
+    T(ctx, colors, 'label', { color: colors.fg, weight: 'b' });
+    ctx.fillText('total residual-stream path length vs training step', cell.x + 14, cell.y + 18);
+    T(ctx, colors, 'small', { color: colors.muted });
+    ctx.fillText('3-seed mean · lower = calmer integration through depth', cell.x + 14, cell.y + 33);
+
+    const x0 = cell.x + 54, x1 = cell.x + cell.w - 96;
+    const top = cell.y + 56, bot = cell.y + cell.h - 34;
+    let maxV = 0;
+    for (const k of ORDER) maxV = Math.max(maxV, ...st.byKey[k].path_len_by_ckpt);
+    maxV *= 1.1;
+    const sx = (i) => x0 + (ckpts.length > 1 ? i / (ckpts.length - 1) : 0) * (x1 - x0);
+    const sy = (v) => bot - (v / maxV) * (bot - top);
+
+    // y grid + labels
+    ctx.strokeStyle = colors.border; T(ctx, colors, 'small', { color: colors.muted, align: 'right', baseline: 'middle' });
+    ctx.textAlign = 'right';
+    for (let g = 0; g <= 4; g++) {
+      const v = maxV * g / 4, y = sy(v);
+      ctx.globalAlpha = 0.4; ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke(); ctx.globalAlpha = 1;
+      ctx.fillText(fmt(v, 0), x0 - 8, y);
+    }
+    ctx.textAlign = 'center'; T(ctx, colors, 'small', { color: colors.muted, align: 'center', baseline: 'top' });
+    for (let i = 0; i < ckpts.length; i++) ctx.fillText(ckpts[i] === 0 ? 'init' : `${ckpts[i]}`, sx(i), bot + 8);
+    ctx.textAlign = 'left';
+
+    for (const k of ORDER) {
+      const series = st.byKey[k].path_len_by_ckpt;
+      ctx.strokeStyle = VCOL[k]; ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      for (let i = 0; i <= upto; i++) { const x = sx(i), y = sy(series[i]); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+      ctx.stroke();
+      for (let i = 0; i <= upto; i++) dot(ctx, sx(i), sy(series[i]), i === upto ? 4 : 2.4, VCOL[k]);
+      // label at the current head
+      T(ctx, colors, 'small', { color: VCOL[k], weight: 'b', baseline: 'middle' });
+      ctx.fillText(`${VLABEL[k]} ${fmt(series[upto], 0)}`, sx(upto) + 8, sy(series[upto]));
+    }
+
+    api.readout('rd', `step ${ckpts[upto] === 0 ? 'init' : ckpts[upto]} · the plain path climbs past 140 and settles near 128; the ledger holds near 48`);
+  },
+});
+</script>

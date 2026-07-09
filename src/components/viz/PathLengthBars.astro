@@ -1,0 +1,98 @@
+---
+interface Props { caption?: string; height?: number; }
+const { caption, height = 420 } = Astro.props;
+---
+<figure class="viz pathlengthbars" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Where the real signal lives: total residual-stream path length and mean turning
+// angle at the final checkpoint, 3-seed mean, one bar per variant. Numbers from
+// scripts/results/.../velocity_ledger_summary.json + .npz (export_velocity_viz.py).
+// A tie-table and bars are STATIC information (a categorical scoreboard, not a
+// process), so this is a still figure with a toggle, not an animation.
+import { defineViz } from './engine/vizkit.js';
+import { grid, panel, T, fmt } from './engine/draw.js';
+import { gate, loadingText } from './engine/draw.js';
+import { loadSummary, ORDER, VCOL, VLABEL } from './velocityledger.js';
+
+defineViz('pathlengthbars', {
+  title: 'The ledger shortens and straightens the depth path (final checkpoint, 3 seeds)',
+  height: 420,
+  controls: [
+    { type: 'select', name: 'metric', label: 'show', reset: false, options: [
+      { value: 'path', label: 'total path length' },
+      { value: 'turn', label: 'mean turning angle' }], value: 'path' },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) {
+    gate(api, loadSummary, (api, d) => {
+      api.state.byKey = {};
+      for (const v of d.variants) api.state.byKey[v.key] = v;
+    });
+  },
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    if (!st || !st.ready) { loadingText(api, 'loading the depth-dynamics numbers…'); return; }
+    const metric = api.get('metric');
+    const cell = grid(size.W, size.H, 1, 1, 0)[0];
+    const m = panel(ctx, cell, colors, { header: 42 });
+    T(ctx, colors, 'label', { color: colors.fg, weight: 'b' });
+    const title = metric === 'path'
+      ? 'total residual-stream path length (stream units)'
+      : 'mean turning angle per sub-update (degrees)';
+    ctx.fillText(title, cell.x + 14, cell.y + 18);
+    T(ctx, colors, 'small', { color: colors.muted });
+    ctx.fillText('lower = calmer integrator · error bar = seed spread', cell.x + 14, cell.y + 33);
+
+    const rows = ORDER.map((k) => {
+      const v = st.byKey[k];
+      const val = metric === 'path' ? v.path_len.mean : v.turn_deg.mean;
+      const std = metric === 'path' ? v.path_len.std : v.turn_deg.std;
+      return { k, val, std, best: v.best_val.mean };
+    });
+    const maxV = Math.max(...rows.map((r) => r.val + r.std)) * 1.12;
+    const x0 = cell.x + 150;
+    const x1 = cell.x + cell.w - 90;
+    const top = cell.y + 58;
+    const bot = cell.y + cell.h - 24;
+    const rowH = (bot - top) / rows.length;
+    const bh = Math.min(30, rowH * 0.52);
+
+    rows.forEach((r, i) => {
+      const cy = top + rowH * (i + 0.5);
+      T(ctx, colors, 'label', { color: VCOL[r.k], weight: 'b', baseline: 'middle' });
+      ctx.textAlign = 'right';
+      ctx.fillText(VLABEL[r.k], x0 - 12, cy);
+      ctx.textAlign = 'left';
+      const w = ((r.val) / maxV) * (x1 - x0);
+      ctx.fillStyle = VCOL[r.k]; ctx.globalAlpha = 0.85;
+      ctx.beginPath();
+      const bx = x0, by = cy - bh / 2;
+      const rad = 4;
+      ctx.moveTo(bx, by); ctx.lineTo(bx + Math.max(0, w - rad), by);
+      ctx.arcTo(bx + w, by, bx + w, by + rad, rad);
+      ctx.lineTo(bx + w, by + bh - rad); ctx.arcTo(bx + w, by + bh, bx + w - rad, by + bh, rad);
+      ctx.lineTo(bx, by + bh); ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = 1;
+      // seed-spread whisker
+      const sw = (r.std / maxV) * (x1 - x0);
+      if (sw > 0.5) {
+        ctx.strokeStyle = colors.fg; ctx.lineWidth = 1.2; ctx.globalAlpha = 0.7;
+        ctx.beginPath(); ctx.moveTo(bx + w - sw, cy); ctx.lineTo(bx + w + sw, cy);
+        ctx.moveTo(bx + w - sw, cy - 4); ctx.lineTo(bx + w - sw, cy + 4);
+        ctx.moveTo(bx + w + sw, cy - 4); ctx.lineTo(bx + w + sw, cy + 4);
+        ctx.stroke(); ctx.globalAlpha = 1;
+      }
+      // value label
+      T(ctx, colors, 'small', { color: colors.fg, weight: 'b', baseline: 'middle' });
+      ctx.fillText(metric === 'path' ? fmt(r.val, 0) : `${fmt(r.val, 0)}°`, bx + w + 10, cy);
+    });
+
+    api.readout('rd', metric === 'path'
+      ? 'plain 128 → ledger 48 → ngpt-ledger 32: momentum halves the wander at a tied best-val'
+      : 'plain bends 75° a step, the ledger 29°: the momentum stream turns far less sharply');
+  },
+});
+</script>

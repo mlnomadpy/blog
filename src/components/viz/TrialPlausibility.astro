@@ -1,0 +1,129 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 440 } = Astro.props;
+---
+<figure class="viz trialplausibility" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Are the learned prototypes real clinical profiles, or math-useful oddities? Each
+// Yat prototype on METABRIC de-normalized to clinical units, laid out by readout
+// weight (protective at left, risk-raising at right). Click one to read its chart
+// against the training range: green covariates land inside the observed min/max,
+// orange ones are excursions. The count of fully in-range prototypes is the honest
+// plausibility number. Data: scripts/deepsurv_trial.py -> plausibility.json.
+import { defineViz } from './engine/vizkit.js';
+import { gate, loadingText, T as Ty, fmt } from './engine/draw.js';
+import { localPoint } from './engine/pointer.js';
+
+defineViz('trialplausibility', {
+  title: 'Are the prototypes real patients?',
+  height: 440,
+  controls: [
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    api.state.sel = 0;
+    gate(api, () => import('./trial.js').then((m) => m.loadPlaus()), (api, d) => {
+      api.state.d = d;
+      // rank readout for a stable protective->risky order
+      api.state.order = d.prototypes.map((p, i) => i);
+      bind(api);
+    });
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    if (!st.ready) { loadingText(api); return; }
+    const d = st.d;
+    const protos = d.prototypes;
+
+    const pad = 16;
+    Ty(ctx, colors, 'small', { color: colors.muted, align: 'left' });
+    ctx.fillText(`${d.n_plausible} of ${d.n_total} prototypes land fully inside the training range; median distance to a real patient ${d.median_nn_dist.toFixed(2)}.`, pad, pad + 8);
+
+    // strip of prototype markers, x = readout, y jittered by index parity
+    const top = pad + 24, stripH = 116;
+    const bx = pad, bw = W - 2 * pad;
+    let rlo = Infinity, rhi = -Infinity;
+    for (const p of protos) { rlo = Math.min(rlo, p.readout); rhi = Math.max(rhi, p.readout); }
+    const rspan = rhi - rlo || 1;
+    const sx = (r) => bx + 40 + ((r - rlo) / rspan) * (bw - 80);
+    // zero line
+    if (rlo < 0 && rhi > 0) {
+      ctx.strokeStyle = colors.faint; ctx.setLineDash([2, 4]);
+      ctx.beginPath(); ctx.moveTo(sx(0), top); ctx.lineTo(sx(0), top + stripH); ctx.stroke(); ctx.setLineDash([]);
+    }
+    Ty(ctx, colors, 'small', { color: colors.blue, align: 'left' }); ctx.textBaseline = 'top';
+    ctx.fillText('protective', bx + 40, top + stripH + 2);
+    Ty(ctx, colors, 'small', { color: colors.accent, align: 'right' });
+    ctx.fillText('raises risk', bx + bw - 40, top + stripH + 2);
+
+    st._hit = [];
+    protos.forEach((p, i) => {
+      const x = sx(p.readout);
+      const y = top + stripH * (0.30 + 0.40 * ((i % 3) / 2));
+      const raise = p.readout >= 0;
+      const col = raise ? colors.accent : colors.blue;
+      const sel = st.sel === i;
+      ctx.globalAlpha = p.plausible ? 1 : 0.55;
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(x, y, sel ? 8 : 5.5, 0, 7); ctx.fill();
+      if (!p.plausible) { ctx.strokeStyle = colors.accent; ctx.lineWidth = 1.4; ctx.setLineDash([2, 2]); ctx.stroke(); ctx.setLineDash([]); }
+      if (sel) { ctx.strokeStyle = colors.fg; ctx.lineWidth = 1.6; ctx.stroke(); }
+      ctx.globalAlpha = 1;
+      st._hit.push({ x, y, i });
+    });
+    Ty(ctx, colors, 'small', { color: colors.faint, align: 'center' }); ctx.textBaseline = 'top';
+    ctx.fillText('dashed ring = a covariate falls outside the training range', bx + bw / 2, top + stripH + 18);
+
+    // chart for the selected prototype
+    const p = protos[st.sel];
+    const cy0 = top + stripH + 40;
+    Ty(ctx, colors, 'label', { color: colors.fg, weight: 'b', align: 'left' });
+    ctx.fillText(`Prototype #${p.id}   readout ${p.readout >= 0 ? '+' : ''}${p.readout.toFixed(3)}   ${p.readout >= 0 ? 'raises risk' : 'protects'}`, bx, cy0);
+    Ty(ctx, colors, 'small', { color: colors.muted, align: 'left' });
+    ctx.fillText(`${p.n_out === 0 ? 'all covariates in range' : p.n_out + ' covariate(s) out of range, max excursion ' + p.max_excursion.toFixed(2) + ' sd'}   |   nearest real patient at distance ${p.nn_dist.toFixed(2)}`, bx, cy0 + 16);
+
+    // covariate rows: name, value, in/out flag
+    const names = d.feature_names;
+    const rowY0 = cy0 + 34, avail = H - rowY0 - 12;
+    const rh = Math.min(20, avail / names.length);
+    names.forEach((nm, j) => {
+      const y = rowY0 + j * rh;
+      const inr = p.in_range[j] === 1;
+      const col = inr ? colors.green : colors.accent;
+      Ty(ctx, colors, 'small', { color: colors.muted, align: 'left' }); ctx.textBaseline = 'middle';
+      ctx.fillText(nm, bx, y + rh / 2);
+      Ty(ctx, colors, 'value', { color: colors.fg, align: 'right', mono: true }); ctx.textBaseline = 'middle';
+      ctx.font = '11px ui-monospace, monospace';
+      ctx.fillStyle = colors.fg;
+      ctx.fillText(fmt(p.clin[j], 2), bx + 200, y + rh / 2);
+      // flag dot
+      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(bx + 220, y + rh / 2, 3.4, 0, 7); ctx.fill();
+      Ty(ctx, colors, 'small', { color: col, align: 'left' }); ctx.textBaseline = 'middle';
+      ctx.fillText(inr ? 'in range' : 'out of range', bx + 230, y + rh / 2);
+    });
+
+    api.readout('rd', `#${p.id}: ${p.plausible ? 'clinically plausible (all covariates in range)' : p.n_out + ' covariate(s) outside the training range'}.`);
+  },
+});
+
+function bind(api) {
+  if (api.canvas.dataset.plBound) return; api.canvas.dataset.plBound = '1';
+  api.canvas.addEventListener('pointerdown', (e) => {
+    const st = api.state; if (!st || !st._hit) return;
+    const p = localPoint(api.canvas, e);
+    let best = -1, bd = 200;
+    for (const h of st._hit) { const dd = (h.x - p.x) ** 2 + (h.y - p.y) ** 2; if (dd < bd) { bd = dd; best = h.i; } }
+    if (best >= 0 && best !== st.sel) { st.sel = best; api.render(); }
+  });
+}
+</script>

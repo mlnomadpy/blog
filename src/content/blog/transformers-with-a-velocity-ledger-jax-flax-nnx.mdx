@@ -1,0 +1,211 @@
+---
+title: "A Velocity Ledger for Transformers, in JAX/Flax NNX"
+seoTitle: "Velocity-Ledger Transformer in JAX/Flax NNX"
+description: "A runnable companion: the pre-norm Transformer block as a forward-Euler step, then the residual-stream velocity ledger as one line of Flax NNX state (mu = 0 recovers plain), the ngpt-lite retraction variant, best-val early-stopped training, and the depth telemetry (path length and turning angle per sub-update). Four parameter-matched char-level GPTs that tie on quality and split on dynamics: the ledger's residual-stream path is a third as long and half as sharp."
+seoDescription: "Build a velocity-ledger Transformer in Flax NNX: the pre-norm block as Euler, a one-line velocity stream, ngpt-lite retraction, and depth telemetry."
+pubDate: 2026-07-09T10:00:00-07:00
+draft: false
+tags: [ml, transformers, residual-stream, momentum, nGPT, jax, flax, nnx, implementation, dynamical-systems, deep-learning]
+references:
+  - authors: "Anonymous"
+    year: 2026
+    title: "Momentum Streams for Optimizer-Inspired Transformers"
+    venue: "preprint"
+    arxiv: "2605.24425"
+  - authors: "Loshchilov, I., Hsieh, C.-P., Sun, S., Ginsburg, B."
+    year: 2024
+    title: "nGPT: Normalized Transformer with Representation Learning on the Hypersphere"
+    venue: "preprint"
+    arxiv: "2410.01131"
+  - authors: "Sander, M. E., Ablin, P., Blondel, M., Peyré, G."
+    year: 2021
+    title: "Momentum Residual Neural Networks"
+    venue: "ICML 2021"
+    arxiv: "2102.07870"
+  - authors: "Lu, Y., Li, Z., He, D., Sun, Z., Dong, B., Qin, T., Wang, L., Liu, T.-Y."
+    year: 2019
+    title: "Understanding and Improving Transformer From a Multi-Particle Dynamic System Point of View"
+    venue: "ICLR 2020 Workshop"
+    arxiv: "1906.02762"
+keywords:
+  - velocity ledger transformer JAX
+  - pre-norm block forward Euler
+  - flax nnx residual stream
+  - nGPT hypersphere retraction
+  - depth telemetry path length
+  - momentum in depth
+  - best-val early stopping
+---
+import CiteAs from '../../components/CiteAs.astro';
+
+*The [explainer](/blog/transformers-with-a-velocity-ledger/) read a pre-norm Transformer layer $x \mathrel{+}= \mathrm{Attn}(\mathrm{norm}\,x);\ x \mathrel{+}= \mathrm{MLP}(\mathrm{norm}\,x)$ as two forward-Euler steps and asked what a velocity stream in the residual stream buys a real language model. The answer split: on quality the four variants tie, on dynamics the ledger makes the residual-stream path far shorter and straighter. This is the implementation: the plain block as Euler, the velocity ledger as one line of Flax NNX state, the ngpt-lite retraction variant, best-val early-stopped training, and the depth telemetry that measures the path. Every published number is from `scripts/velocity_ledger.py`; every figure is rendered from that run's bundle by `scripts/render_velocity_ledger_gifs.py`.*
+
+## The plain block is one Euler step
+
+Before any ledger, the block the whole post leans on, small enough to trust. A pre-norm Transformer layer reads a normalized copy of the residual stream, runs it through attention, adds the raw result back, and does the same with the MLP. Two sub-updates, each a state plus an increment, each forward Euler on the stream:
+
+```python
+def plain_step(x, ln, f, mask=None):
+    # x  += f(norm x):  read a normalized copy, integrate the field, write back.
+    # This is one forward-Euler step on the residual stream x (Delta t = 1).
+    return x + f(ln(x))
+```
+
+The `norm` is the only wrinkle the ResNet did not have: the field is integrated on a *normalized* copy of the stream, then the raw increment is written to the un-normalized state. That is a preconditioning of the field, not a change to the integrator. The update is still position-plus-increment. Which means, exactly as in D1, there is no velocity anywhere: each sub-update moves the stream directly and forgets the direction of the last.
+
+## The ledger is one line of state
+
+What does it take to give the residual stream a velocity? One persistent array, threaded through the layers, that the blocks write into instead of the stream. D1's heavy-ball update, verbatim, now shared across both sub-updates of every layer:
+
+$$
+v_{l} = \mu\, v_{l-1} + (1-\mu)\, F(\mathrm{norm}\,x_{l-1}), \qquad x_l = x_{l-1} + h\, v_l, \qquad v_0 = 0.
+$$
+
+```python
+def ledger_step(x, v, ln, f, mu=0.9, h=1.0, mask=None):
+    # the block writes to the velocity stream; the velocity moves the state.
+    # mu = 0 recovers plain_step EXACTLY. v is depth-state, not a weight: 0 params.
+    v = mu * v + (1.0 - mu) * f(ln(x))
+    x = x + h * v
+    return x, v
+```
+
+At $\mu = 0$ the ledger forgets instantly and `ledger_step` *is* `plain_step`: one dial from Euler to heavy-ball, at identical parameter count, because $\mu$ and $h$ are fixed scalars, not learned. The velocity $v$ is depth-state (it lives only during the forward pass, zero-initialized at the embedding), so the ledger adds exactly zero parameters, verified in the bundle: plain and ledger both weigh 2,724,864 params.
+
+Both blocks live in one Flax NNX module, and the residual stream is threaded as a plain loop over the layers. The full model in `scripts/velocity_ledger.py` builds the four variants from the same `Block`; here is the residual-stream core, the part that differs:
+
+```python
+class Block(nnx.Module):
+    def __init__(s, variant, dm, ff, heads, drop, *, rngs):
+        if variant.startswith('ngpt'):
+            s.alpha1 = nnx.Param(jnp.ones((dm,)))   # per-dim step scale (attn)
+            s.alpha2 = nnx.Param(jnp.ones((dm,)))   # per-dim step scale (mlp)
+        else:
+            s.ln1 = nnx.LayerNorm(dm, rngs=rngs)
+            s.ln2 = nnx.LayerNorm(dm, rngs=rngs)
+        s.attn = nnx.MultiHeadAttention(num_heads=heads, in_features=dm,
+                                        dropout_rate=drop, decode=False, rngs=rngs)
+        s.fc1 = nnx.Linear(dm, ff, rngs=rngs)
+        s.fc2 = nnx.Linear(ff, dm, rngs=rngs)
+        s.drop1 = nnx.Dropout(drop, rngs=rngs)
+        s.drop2 = nnx.Dropout(drop, rngs=rngs)
+```
+
+The stream loop, one branch per variant, is where D1's dictionary becomes code. `led` toggles the velocity; `ngpt` toggles the sphere:
+
+```python
+v = jnp.zeros_like(x)                       # the velocity stream, zero at embed
+for b in s.blocks:
+    for which in ('attn', 'mlp'):
+        inp = x if ngpt else (b.ln1 if which == 'attn' else b.ln2)(x)
+        f = (b.drop1(b.attn(inp, mask=mask)) if which == 'attn'
+             else b.drop2(b.fc2(jax.nn.gelu(b.fc1(inp)))))
+        if led:                             # the velocity ledger (heavy-ball)
+            v = MU * v + (1.0 - MU) * f
+            step = H_STEP * v
+        else:
+            step = f
+        if ngpt:                            # per-dim step scale
+            step = (b.alpha1 if which == 'attn' else b.alpha2).value * step
+        x = x + step
+        if ngpt:
+            x = retract(x, math.sqrt(s.dm)) # back to the sphere of radius sqrt(D)
+```
+
+## The sphere variant, and what it is not
+
+nGPT (Loshchilov et al., 2024) is the deliberate contrast: a first-order optimizer on the hypersphere, no velocity. Our ngpt-lite is a simplified version: the state is retracted to the sphere of radius $\sqrt{D}$ after the embedding and after every sub-update, the in-block LayerNorms are dropped (the state is already normalized), and the eigen learning rates become a per-layer, per-dimension learnable step scale $\alpha$. What we do *not* claim is full nGPT: no weight-matrix normalization, no logit scale, no QK normalization. The retraction is one line:
+
+```python
+def retract(z, radius):
+    # renormalize each token vector back onto the sphere of the given radius
+    return z * (radius / (jnp.linalg.norm(z, axis=-1, keepdims=True) + 1e-8))
+```
+
+ngpt-ledger is the synthesis: run the heavy-ball ledger in ambient space from the block output, take the scaled step, then retract. It is the accelerated optimizer on the sphere, the natural experiment the explainer flagged.
+
+## Best-val, not the endpoint
+
+Two loss numbers at the end of training would mislead, because a Transformer can over-train and the endpoint measures memorization, not quality. The headline metric is the *best* (early-stopped) validation loss over the whole run, and it is worth writing the loop that way explicitly:
+
+```python
+best_val = float('inf')
+for it in range(1, STEPS + 1):
+    x, y = get_batch('train', BATCH, seed * 1000003 + it)
+    loss = step(model, opt, x, y)                 # dropout ON (model.train())
+    if it % VAL_LOG == 0 or it == STEPS:
+        model.eval()                              # dropout OFF for val + telemetry
+        vl = np.mean([eval_loss(model, vx, vy) for vx, vy in val_batches])
+        model.train()
+        best_val = min(best_val, float(vl))
+```
+
+Run all four variants, three seeds, on the complete works of Shakespeare (character level, about 5.4M characters, so 12000 steps is roughly 14 epochs, not the 90 that memorized an earlier tinyshakespeare run). The four converge on top of each other:
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/velocity-ledger-curves.png" alt="Train and validation loss curves for the four variants over 12000 steps, seed 0: all four fall together from about 2.2 to near 1.43, the faint train curves slightly below the bold validation curves, with ngpt-lite a hair lower and ngpt-ledger a hair higher" loading="lazy" width="880" height="450" />
+  <figcaption>Train (faint) and validation (bold) loss, seed 0, all four variants. The four converge together; final val sits essentially on best val for every variant (blow-up ratio 1.00), so dropout tamed the over-training an earlier run showed. From <code>scripts/velocity_ledger.py</code>; rendered by <code>scripts/render_velocity_ledger_gifs.py</code>.</figcaption>
+</figure>
+
+Across three seeds the best-val numbers are a tie: plain 1.433, ledger 1.435, ngpt-lite 1.420, ngpt-ledger 1.456, a spread of 0.036 against a per-seed noise of about 0.005. The velocity ledger did not move quality.
+
+<figure class="jax-fig">
+  <img src="/blog/velocity-ledger-tie.png" alt="Best validation loss for the four variants, three seeds each, drawn as a dot at the seed mean with a bar from best to worst seed; the four intervals nearly overlap around 1.42 to 1.46" loading="lazy" width="760" height="360" />
+  <figcaption>Best (early-stopped) val loss, 3 seeds: dot = mean, bar = min to max across seeds. The four intervals nearly overlap. On quality this is a tie, and that is the headline. From <code>scripts/velocity_ledger.py</code>.</figcaption>
+</figure>
+
+## The telemetry that finds the signal
+
+If the four tie on quality, the interesting question is what they do differently to get there, and D1 already told us where to look: the geometry of the residual-stream path. The telemetry runs the field on a fixed probe batch (dropout off) and, at each of four checkpoints, records the per-sub-update displacement and the turning angle:
+
+```python
+def depth_stats(model, probe):
+    _, rec = model._stream(probe, collect=True)         # collect x at every node
+    xs = np.stack([np.asarray(a) for a in rec['x']])    # [2L+1, B, T, D]
+    seg = np.diff(xs, axis=0)                            # per-sub-update step
+    seglen = np.linalg.norm(seg, axis=-1)               # path length per step
+    d1, d2 = seg[:-1], seg[1:]
+    cos = (d1 * d2).sum(-1) / (np.linalg.norm(d1, -1) * np.linalg.norm(d2, -1) + 1e-12)
+    turn = np.degrees(np.arccos(np.clip(cos, -1, 1)))   # turning angle per step
+    return {'seglen': seglen.mean((1, 2)), 'turn': turn.mean((1, 2)), ...}
+```
+
+Summed over the twelve sub-updates, the total path lengths (3-seed mean, final checkpoint) separate cleanly: plain 128, ngpt-lite 58, ledger 48, ngpt-ledger 32. The turning angles do too: plain 75 degrees a step, ledger 29, ngpt-lite 98, ngpt-ledger 47. The velocity ledger cuts the path to roughly a third and the sharpness to under half, at a tied best-val.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/velocity-ledger-pathbars.png" alt="Two bar panels: left, total residual-stream path length per variant (plain 128, ngpt-lite 58, ledger 48, ngpt-ledger 32); right, mean turning angle per sub-update (plain 75 degrees, ngpt-lite 98, ledger 29, ngpt-ledger 47)" loading="lazy" width="880" height="380" />
+  <figcaption>The depth-dynamics table, where the real difference lives. Left, total path length; right, mean turning angle, both 3-seed mean at the final checkpoint. The ledger shortens and straightens the path; ngpt-lite (first-order on the sphere) bends the most of all, and adding the ledger to it straightens even that. From <code>scripts/velocity_ledger.py</code>.</figcaption>
+</figure>
+
+The mechanism is the $(1-\mu)$ damping: a plain layer writes the full block output into the stream, while the ledger writes a running average of it, so no single block output can move the state far. Watch the step sizes and the velocity that funds them:
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/velocity-ledger-steps.png" alt="Left, step size per sub-update for the four variants: the plain line balloons to 25 at the readout while ledger and ngpt-ledger stay low; right, velocity-stream norm through depth for the two ledger variants, both rising smoothly from zero at the embedding" loading="lazy" width="880" height="380" />
+  <figcaption>Left, the displacement the stream takes at each of the twelve sub-updates: the plain step balloons toward the readout (25 units), the ledger keeps each step small and even. Right, the velocity-stream norm through depth for the two ledger variants, filling smoothly from zero at the embedding. Momentum carries the state instead of dumping the raw block output into it. From <code>scripts/velocity_ledger.py</code>.</figcaption>
+</figure>
+
+## The path straightening, as it happens
+
+The one thing here that is a real *process* is how the path changes over training. All four start short at initialization (an untrained field is small); training is what pushes the plain net's path out into a long wander while the ledger holds its short. The telemetry was dumped at four checkpoints, so we can watch the two paths form, side by side, and watch the gap open:
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/velocity-ledger-straighten.gif" alt="Two panels forming the residual-stream 2D path over four training checkpoints: on the left the plain path grows from a short line into a long zigzag wander reaching path length 130; on the right the ledger path stays a short smooth arc at path length 48; earlier checkpoints ghost faintly behind" loading="lazy" width="880" height="470" />
+  <figcaption>The residual-stream path forming through training, plain (left) vs ledger (right), drawn as a 2D shadow whose every segment length and every bend is the real measured number from the probe batch. Each checkpoint's path draws in segment by segment, with earlier checkpoints ghosted behind. The plain path grows into a long kinked wander (128); the ledger's stays a short smooth arc (48). The straightness is a trained property of carrying a velocity, not an artifact of initialization. Rendered by <code>scripts/render_velocity_ledger_gifs.py</code>. (The other figures are static: a best-val tie and a path-length bar are categorical scoreboards, not processes, so they are stills, not GIFs.)</figcaption>
+</figure>
+
+## What carried over
+
+D1's prediction transferred to a Transformer and held, at the level where it actually applies. The pre-norm block is forward Euler on the residual stream; the velocity ledger is one line of NNX state and zero parameters; and at $\mu = 0$ it collapses exactly to the plain block. On this small char-level GPT it does not move quality, the four variants tie on best-val to within seed noise, and it is not an upgrade. What it moves is the dynamics: the residual stream reaches an equally-good answer along a path a third as long (48 against 128 units) and less than half as sharp (29 against 75 degrees a step), whether the geometry is flat or spherical. A skip connection is half of Newton in a Transformer too, and the other half is a calmer, straighter path to the same destination.
+
+---
+
+*The four residual-stream updates and their telemetry are from `scripts/velocity_ledger.py` (JAX + Flax NNX, run once on Kaggle); the momentum residual network the ledger borrows is from [Sander et al. (2021)](https://arxiv.org/abs/2102.07870); the hypersphere variant is a simplified [nGPT](https://arxiv.org/abs/2410.01131); the depth-as-dynamics reading of Transformers is [Lu et al. (2019)](https://arxiv.org/abs/1906.02762). The conceptual companion is [Transformers With a Velocity Ledger](/blog/transformers-with-a-velocity-ledger/).*
+
+<CiteAs slug="transformers-with-a-velocity-ledger-jax-flax-nnx" title="A Velocity Ledger for Transformers, in JAX/Flax NNX" pubDate="2026-07-09T10:00:00-07:00" />
+
+<style>{`
+.jax-fig { margin: 1.8rem auto; text-align: center; }
+.jax-fig img { max-width: 520px; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; background: #fbf8f1; }
+.jax-fig-wide img { max-width: 880px; }
+.jax-fig figcaption { margin-top: 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--fg-muted); max-width: 64ch; margin-left: auto; margin-right: auto; }
+`}</style>

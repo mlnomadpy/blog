@@ -1,0 +1,173 @@
+---
+title: "Transformers With a Velocity Ledger"
+description: "A pre-norm Transformer's residual stream is forward Euler: x += Attn(norm x); x += MLP(norm x). So D1's whole dictionary transfers, and the same question follows: does a velocity ledger in the residual stream buy in a Transformer what it bought in a ResNet? The answer splits. On quality, four variants tie. On dynamics, the ledger changes everything: the residual-stream path through depth gets dramatically shorter and straighter, reaching the same answer by a calmer journey. Same destination, gentler road."
+seoTitle: "Transformers With a Velocity Ledger: Momentum in Depth"
+seoDescription: "A pre-norm Transformer's residual stream is forward Euler. A velocity ledger does not make it better, but it makes the depth path far straighter."
+pubDate: 2026-07-09
+draft: false
+companion: transformers-with-a-velocity-ledger-jax-flax-nnx
+tags: [ml, transformers, residual-stream, momentum, nGPT, dynamical-systems, depth, architecture, physics]
+references:
+  - authors: "Anonymous"
+    year: 2026
+    title: "Momentum Streams for Optimizer-Inspired Transformers"
+    venue: "preprint"
+    arxiv: "2605.24425"
+  - authors: "Anonymous"
+    year: 2026
+    title: "YuriiFormer: Transformer Layers as Momentum Gradient Descent on Token Energies"
+    venue: "preprint"
+    arxiv: "2601.23236"
+  - authors: "Loshchilov, I., Hsieh, C.-P., Sun, S., Ginsburg, B."
+    year: 2024
+    title: "nGPT: Normalized Transformer with Representation Learning on the Hypersphere"
+    venue: "preprint"
+    arxiv: "2410.01131"
+  - authors: "Nguyen, T. M., Baraniuk, R. G., Kirby, R. M., Osher, S. J., Wang, B."
+    year: 2022
+    title: "Momentum Transformer: Closing the Performance Gap Between Self-Attention and Its Linearization"
+    venue: "preprint"
+    arxiv: "2208.00579"
+  - authors: "Lu, Y., Li, Z., He, D., Sun, Z., Dong, B., Qin, T., Wang, L., Liu, T.-Y."
+    year: 2019
+    title: "Understanding and Improving Transformer From a Multi-Particle Dynamic System Point of View"
+    venue: "ICLR 2020 Workshop"
+    arxiv: "1906.02762"
+  - authors: "Li, B., Du, Q., Zhou, T., Jing, Y., Zhou, S., Zeng, X., Xiao, T., Zhu, J., Liu, X., Zhang, M."
+    year: 2022
+    title: "ODE Transformer: An Ordinary Differential Equation-Inspired Model for Sequence Generation"
+    venue: "ACL 2022"
+    arxiv: "2203.09176"
+  - authors: "Sander, M. E., Ablin, P., Blondel, M., Peyré, G."
+    year: 2021
+    title: "Momentum Residual Neural Networks"
+    venue: "ICML 2021"
+    arxiv: "2102.07870"
+keywords:
+  - residual stream
+  - pre-norm transformer
+  - forward Euler
+  - velocity ledger
+  - momentum in depth
+  - nGPT hypersphere
+  - depth dynamics
+  - path length
+  - turning angle
+  - second-order recurrence
+---
+import ResidualStreamPath from '../../components/viz/ResidualStreamPath.astro';
+import PathLengthBars from '../../components/viz/PathLengthBars.astro';
+import QualityTie from '../../components/viz/QualityTie.astro';
+import PathStraightens from '../../components/viz/PathStraightens.astro';
+import VelocityThroughDepth from '../../components/viz/VelocityThroughDepth.astro';
+import CiteAs from '../../components/CiteAs.astro';
+
+The last post read a residual block $x + F(x)$ as one forward-Euler step and gave a planet's worth of stability to whatever second ledger you were willing to carry. It ended on a promise that felt too convenient to be true: if a ResNet is an integrator, then *every* residual network is, and the most consequential residual network of the decade is the Transformer. So the invitation on the table is to walk up to a real language model and ask the same question we asked of a toy ResNet. Does giving the residual stream a velocity change what the model does?
+
+Look at a pre-norm Transformer layer, the standard modern kind, and the correspondence is already sitting there in plain sight:
+
+$$
+x \mathrel{+}= \mathrm{Attn}(\mathrm{norm}\,x), \qquad x \mathrel{+}= \mathrm{MLP}(\mathrm{norm}\,x).
+$$
+
+Two sub-updates per layer, each one a state plus an increment, each one a forward-Euler step on the residual stream $x$. Depth is time, the stream is position, the attention and MLP branches are the vector field, exactly the dictionary from D1, now pointed at a two-hundred-dimensional stream of token representations instead of a width-2 plane. Which means the missing half of Newton is missing here too. Nothing accumulates. Each sub-update moves the stream directly, forgetting the direction of the last one.
+
+So we did the obvious experiment. Take a small character-level GPT, hold everything fixed, and change only the residual-stream update: **plain** (the Euler layer above), **ledger** (D1's exact velocity stream, one line), **ngpt-lite** (a first-order variant that lives on a sphere, no velocity), and **ngpt-ledger** (the ledger *and* the sphere). Three seeds each, best-val early-stopped, all in `scripts/velocity_ledger.py`.
+
+Here is the headline, up front, because the story is more interesting once you stop hoping for the wrong thing. **On quality, the four tie.** Best validation loss lands at 1.433 (plain), 1.435 (ledger), 1.420 (ngpt-lite), 1.456 (ngpt-ledger), a spread of 0.036 against a per-seed noise of about 0.005. The velocity ledger did not make the Transformer better. But it did something the scoreboard cannot see, and it is exactly what the physics predicted: it changed the *path*. The residual stream reaches the same answer by a journey that is roughly a third as long and less than half as sharp. Same destination, calmer road. That, and not a win, is the true finding, and it is the one D1 told us to expect.
+
+## The dictionary still holds
+
+Does the D1 correspondence really survive the move from a width-2 ResNet to a real Transformer, or does the analogy quietly break somewhere in the attention block? It survives, and it is worth pinning down as a table, because everything below reads off it:
+
+| pre-norm Transformer | numerical integrator |
+| --- | --- |
+| layer index $l$ (and each sub-update within it) | time $t$ |
+| residual stream $x_l$ | position |
+| $\mathrm{Attn}(\mathrm{norm}\,x)$ and $\mathrm{MLP}(\mathrm{norm}\,x)$ | the vector field being integrated |
+| $x \mathrel{+}= F(\mathrm{norm}\,x)$ | one forward-Euler step, $\Delta t = 1$ |
+| stacking $L$ layers (two sub-updates each) | integrating for total time $T = 2L\,h$ |
+| a velocity stream $v_l$ (usually absent) | the momentum ledger |
+| its damping $\mu$ | how long inertia is remembered |
+
+The only genuinely new wrinkle is the `norm`: a pre-norm block reads a *normalized* copy of the stream, integrates the field there, and writes the raw increment back. That is a preconditioning of the field, not a change to the integrator; the update is still position-plus-increment, still Euler. This reading is not new either. Lu et al. (2019) read the whole Transformer as a multi-particle dynamical system and its layers as a Lie-Trotter splitting of an ODE; the ODE Transformer of Li et al. (2022) replaced the Euler step with a Runge-Kutta one and got a better integrator of the same field. Depth-as-time is an established lens on Transformers. What D1 adds is the specific missing piece, the velocity, and a specific prediction about what carrying it does to the trajectory.
+
+And the prediction transfers verbatim. In D1, the velocity ledger's signature was not accuracy, it was geometry: consecutive Euler steps forget each other and the path kinks, while a velocity that persists across steps makes the path coast, smooth and short. The plain ResNet on rings turned 53° per layer; the momentum net turned 10° on a path of nearly the same length. So the D1 question for a Transformer is not "does the ledger raise accuracy," it is "does the ledger straighten the residual-stream trajectory." Hold that question. It is the one the data answers loudly.
+
+## This idea has precedent, and that is fine
+
+Before training anything, a question of provenance: is a velocity in the residual stream a new idea? It is not. This is a clean, instrumented demonstration of a known effect plus a deliberate contrast, not a novelty claim.
+
+> **Where this sits in the literature.** Closest is **Momentum Streams for Optimizer-Inspired Transformers** (2605.24425), which builds exactly this: an auxiliary velocity (and moment) stream running alongside the residual stream, with heavy-ball, Nesterov, and Adam-like variants. Their framing is ours: the velocity stream turns the first-order residual map into a *second-order recurrence in depth*, which is D1's thesis stated inside a Transformer. **YuriiFormer** (2601.23236) reads GPT layers as gradient descent on a token energy and adds Nesterov/Polyak momentum in the representation at no extra attention or MLP evaluations, the same acceleration from a different door. The **Momentum Transformer** (2208.00579) puts momentum inside linear attention rather than the residual stream. The older ODE lineage (Lu et al., 2019; ODE Transformer, 2203.09176) is the depth-as-dynamics reading we are standing on. And **nGPT** (2410.01131) is the deliberate contrast: a first-order variable-metric optimizer *on the hypersphere*, with normalized displacements and a retraction step but no velocity at all. Our ngpt-lite is a simplified nGPT (the sphere and per-dimension step scales, without the weight and logit normalization); it is the first-order-on-a-sphere corner that makes the ledger's effect legible by contrast.
+
+So the experiment is not "we invented momentum for Transformers." It is "the depth dynamics D1 predicted are real and measurable in a Transformer, and here is exactly what the velocity buys and what it does not, with the nGPT sphere as a control."
+
+## The scope, before the claims
+
+One caveat has to come before the results, because the results are about *dynamics*, and dynamics claims are easy to overstate.
+
+> **What this experiment is and is not.** It is one small character-level GPT (6 layers, 192-wide, 4 heads) on one corpus (the complete works of Shakespeare, character level), trained for 12000 steps with dropout, best-val early-stopped, three seeds. It is an *illustration of a dynamical effect* at fixed parameter count, not a scaling claim, not a recommendation, and not evidence that a velocity ledger helps at any size. All four variants are matched to within 0.1% of parameters (the ledger adds *zero* parameters; it is a depth-state, not a weight). The depth telemetry is measured on a fixed held-out probe batch. Read every number below as "on this model, this is what the ledger does to the trajectory," and nothing wider.
+
+## The tie on quality
+
+Every hope you might bring to a new architecture knob dies on the first figure, and it is better to look straight at it. Best validation loss, three seeds, four variants, on a zoomed axis so the whole spread is visible:
+
+<QualityTie caption="Best (early-stopped) validation loss for the four variants, three seeds each; the dot is the seed mean and the bar runs from the best to the worst seed. The axis is zoomed to where the data lives. The four intervals nearly overlap: the spread across variants (about 0.036) is only a few times the per-seed noise (about 0.005). ngpt-lite is a hair ahead and ngpt-ledger a hair behind, but the velocity ledger did not make the Transformer measurably better or worse than plain. On quality, this is a tie. All numbers from scripts/velocity_ledger.py." />
+
+There is one more number worth stating so the earlier version of this story is not misremembered: the over-training blow-up is gone. In an earlier, smaller-corpus run the ledger and plain variants over-trained at very different rates, which looked like a robustness signal. With dropout and a five-times-larger corpus, every variant's final val loss sits essentially on top of its best (blow-up ratio 1.00 across the board), so there is no hidden robustness win either. Just a clean four-way tie on quality. Which is exactly why the interesting part is not on this axis at all.
+
+## Where the signal actually lives
+
+If the four models end up equally good, are they doing the same thing to get there? Not remotely. The whole payoff of the depth-as-time reading is that it hands us an axis the scoreboard does not have: the geometry of the path the residual stream takes from the embedding to the readout. Measure that path on the probe batch and the four variants separate cleanly.
+
+<PathLengthBars caption="The depth-dynamics table, where the real difference lives. Left toggle: total residual-stream path length (summed displacement across all twelve sub-updates), 3-seed mean, final checkpoint. Right toggle: mean turning angle between consecutive sub-updates. The plain stream travels 128 units and bends 75 degrees a step; the ledger travels 48 and bends 29; ngpt-ledger, the shortest, travels 32. The velocity ledger cuts the path to roughly a third and the sharpness to under half, at a tied best-val. Whisker = seed spread. Numbers from scripts/velocity_ledger.py." />
+
+Two things to read carefully here, because they are the crux. First, the ledger path is dramatically *shorter*: the residual stream does not need to travel 128 units to land where plain lands; carrying a velocity gets it to an equally-good answer in 48. Second, it is dramatically *straighter*: 29 degrees of bend per step against plain's 75. This is precisely the D1 signature. In the ResNet, the momentum net made the same-length journey without the kinks; in the Transformer the momentum stream makes a *shorter* journey and still without the kinks. The velocity is doing the same job it did on the planet: accumulating direction across steps so the state stops re-deciding where to go at every layer.
+
+The ngpt contrast sharpens it. ngpt-lite, first-order on the sphere, bends the *most* of all, 98 degrees a step, because retraction to the sphere after every sub-update keeps re-orienting the stream; its path is short only because the sphere caps how far it can wander. Add the ledger to it and the bend drops to 47 and the path to 32: the velocity smooths even the sphere's re-orientations. Momentum straightens the path whether the geometry is flat or spherical.
+
+You can see the trajectory itself. The residual stream is 192-dimensional, so this is a 2D shadow, but it is a *faithful* shadow: every segment you see has the real measured length, and every bend has the real measured angle. The verdict your eye reads, shorter and straighter, is exactly the model's measured verdict.
+
+<ResidualStreamPath caption="The residual-stream trajectory from the embedding to the readout, drawn as a 2D shadow whose segment lengths and turning angles are the real measured numbers from the probe batch (final checkpoint). Left vs right toggles plain-vs-ledger and ngpt-lite-vs-ngpt-ledger; the slider walks depth sub-update by sub-update. The plain stream wanders far and kinks at every step; the ledger's coasts to the same kind of destination on a short, smooth arc. This is a shadow of a 192-D path, but the lengths and bends are not stylized, they are the run's numbers. From scripts/velocity_ledger.py via export_velocity_viz.py." />
+
+## Why the ledger's path is short
+
+Where does the shortening come from, mechanically? The velocity update is one line, D1's exactly:
+
+$$
+v_{l} = \mu\, v_{l-1} + (1-\mu)\, F(\mathrm{norm}\,x_{l-1}), \qquad x_l = x_{l-1} + h\, v_l, \qquad v_0 = 0,
+$$
+
+with $\mu = 0.9$, $h = 1$ fixed, one velocity stream shared across both sub-updates of every layer, zero-initialized at the embedding. Set $\mu = 0$ and it collapses exactly to the plain layer $x \mathrel{+}= F(\mathrm{norm}\,x)$, so the ledger is one dial from Euler to heavy-ball, at identical parameter count.
+
+The $(1-\mu)$ factor is the whole story. A plain layer writes the *full* block output $F$ into the stream; the ledger writes a running average of $F$, damped by $0.9$. Early in depth, before the average has filled, each step is tiny; the velocity accumulates gradient across layers and only opens up near the readout. Watch the actual step sizes:
+
+<VelocityThroughDepth caption="The displacement the residual stream takes at each of the twelve sub-updates (left toggle), and the velocity-stream norm through depth for the two ledger variants (right toggle), final checkpoint. The plain step balloons toward the readout, reaching 25 units in the last sub-update; the ledger keeps every step small and even, roughly 0.5 rising to 12. The velocity stream fills smoothly from zero at the embedding: momentum carries the state instead of dumping the raw block output into it. From scripts/velocity_ledger.py." />
+
+The plain net's step size *balloons* toward the readout, dumping a 25-unit increment in the final sub-update, which is where much of its 128-unit path and its stream-norm blow-up to 72 come from. The ledger's steps stay small and even, because the $(1-\mu)$ damping refuses to let any single block output move the state far, and the velocity that funds each step is a smoothed accumulation, not a raw output. That is the whole shortening: the ledger integrates the field instead of chasing it.
+
+## The path straightens as training proceeds
+
+Is the straight path there from initialization, or does the model *learn* to keep it short? The telemetry was dumped at four checkpoints (init, ten percent, fifty percent, and the end of training), so we can watch the gap open.
+
+<PathStraightens caption="Total residual-stream path length at each of the four telemetry checkpoints, one line per variant, 3-seed mean. The slider carries training forward. All four start short at init; as training proceeds the plain path climbs past 140 and settles near 128, while the ledger's settles near 48 and ngpt-ledger's near 32. The calm path is not an artifact of initialization; the ledger holds it short while the plain net's grows into a long wander. From scripts/velocity_ledger.py." />
+
+At initialization everything is short, because an untrained field is small. Training is what pushes the plain net's path out: as the plain net learns to separate characters, its per-layer steps grow, its stream-norm climbs, and its path lengthens toward 128 and stays there. The ledger, over the same training, holds its path near 48. The straightness is a *trained* property of carrying a velocity, not a coincidence of the starting point, and it survives to the checkpoint that scores best. Same best-val, and one path a third the length of the other, at every point past the first tenth of training.
+
+## Same answer, gentler journey
+
+So what did the velocity ledger buy a Transformer? Not accuracy. On this model the four variants tie on best validation loss to within seed noise, the over-training blow-up is gone, and the ledger is not a quality upgrade. That is the headline, and it is a tie.
+
+What it bought is exactly what D1 said a second ledger buys: a calmer integrator. The residual stream reaches an equally-good answer along a path that is roughly a third as long and less than half as sharp, and it does so whether the geometry is flat (ledger vs plain) or spherical (ngpt-ledger vs ngpt-lite). The velocity accumulates direction across depth, so the stream stops re-deciding where to go at every sub-update and starts coasting, the way a thing with inertia moves. The plain net gets to the same place by lurching, a fresh 25-unit jump at the readout; the ledger glides.
+
+Whether a shorter, straighter residual-stream path is *worth* anything is a genuinely open question this experiment does not answer. It might matter for very deep stacks, where a first-order flow's accumulated wander could be a real cost; it might matter for interpretability, since a straight path is easier to read; it might not matter at all at this scale, which is exactly why the word here is *tie*. The one thing the data settles is that D1's prediction transferred and held: a velocity in the residual stream is a smoother integrator of the same field, and the calm it produces is real, measurable, and precisely the calm the physics promised. A skip connection is half of Newton in a Transformer too, and the other half, once again, is a straighter path to the same destination.
+
+---
+
+*Every number in this post comes from `scripts/velocity_ledger.py` (JAX + Flax NNX, four parameter-matched char-level GPTs, three seeds, best-val early-stopped, with depth telemetry on a fixed probe batch), reshaped for the panels above by `scripts/export_velocity_viz.py`. The runnable companion builds all four residual-stream updates in Flax NNX and renders the depth telemetry from the same bundle.*
+
+<CiteAs
+  slug="transformers-with-a-velocity-ledger"
+  title="Transformers With a Velocity Ledger"
+  pubDate={frontmatter.pubDate}
+/>
