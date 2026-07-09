@@ -8,7 +8,6 @@ import RelatedPosts from '../components/RelatedPosts.astro';
 import CompanionCallout from '../components/CompanionCallout.astro';
 import SeriesNav from '../components/SeriesNav.astro';
 import References from '../components/References.astro';
-import Colophon from '../components/Colophon.astro';
 import PostAnalytics from '../components/PostAnalytics.astro';
 
 interface NavItem { slug: string; title: string; label?: string }
@@ -106,7 +105,6 @@ const lastRead = series
     {pair && <CompanionCallout pair={pair} />}
     <slot />
     <References items={references} />
-    <Colophon />
   </article>
   <PostAnalytics
     title={title}
