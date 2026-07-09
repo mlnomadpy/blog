@@ -1,0 +1,447 @@
+{
+ "smoke": false,
+ "corpus": "complete_shakespeare",
+ "corpus_chars": 5359444,
+ "random_loss": 4.38203,
+ "headline_metric": "best_val (early-stopped minimum val loss over training); the final-val + blowup_ratio are a SECONDARY over-training dynamics signal, NOT a quality measure",
+ "headline_order_best_val": [
+  "ngpt_lite",
+  "plain",
+  "ledger",
+  "ngpt_ledger"
+ ],
+ "blowup_order_least_to_most": [
+  "plain",
+  "ngpt_ledger",
+  "ledger",
+  "ngpt_lite"
+ ],
+ "config": {
+  "D": 192,
+  "LAYERS": 6,
+  "HEADS": 4,
+  "T": 128,
+  "FF": 768,
+  "BATCH": 64,
+  "STEPS": 12000,
+  "TRAIN_LOG": 50,
+  "VAL_LOG": 250,
+  "SEEDS": [
+   0,
+   1,
+   2
+  ],
+  "GEN_LEN": 300,
+  "DROPOUT": 0.15,
+  "mu": 0.9,
+  "h": 1.0,
+  "peak_lr": 0.001,
+  "end_lr": 0.0001,
+  "warmup": 200,
+  "weight_decay": 0.01,
+  "clip": 1.0,
+  "dropout": 0.15,
+  "corpus": "complete_shakespeare",
+  "random_loss": 4.38203,
+  "ckpt_steps": [
+   0,
+   1200,
+   6000,
+   12000
+  ],
+  "variants": [
+   "plain",
+   "ledger",
+   "ngpt_lite",
+   "ngpt_ledger"
+  ],
+  "seeds": [
+   0,
+   1,
+   2
+  ],
+  "vocab": 80,
+  "val_batch_seeds": [
+   900001,
+   900002,
+   900003,
+   900004
+  ],
+  "probe_seed": 4242,
+  "probe_bs": 8,
+  "gen_seed": 7,
+  "gen_temp": 0.8
+ },
+ "design_notes": {
+  "ledger": "one shared velocity across both sub-updates per layer, zero-init at the embedding; v = mu*v + (1-mu)*F(ln x); x = x + h*v; mu=0.9, h=1 fixed (D1 convention; mu=0 recovers plain exactly); adds 0 params",
+  "ngpt_lite": "state retracted to radius sqrt(D) after embedding and every sub-update; no in-block LayerNorms; per-layer per-dim learnable step scales alpha (init 1.0); shared final LN + head; NOT full nGPT (no weight normalization, logit scale, or QK norm)",
+  "ngpt_ledger": "ambient-space heavy-ball ledger + step x + h*alpha*v, then retraction to the sphere",
+  "regularization": "dropout=0.15 on embedding + each residual sub-update + attention matrix; weight_decay=0.01; dropout OFF (deterministic) for all val/telemetry/generation passes",
+  "telemetry": "depth arrays indexed per SUB-update (2 per layer): xnorm [2L+1], seglen/vnorm/rawstep [2L], turn [2L-1]; probe batch fixed (val, seed 4242, bs 8); ngpt post-retraction displacement = seglen"
+ },
+ "comparison": {
+  "plain": {
+   "best_val": {
+    "mean": 1.43296,
+    "std": 0.005,
+    "min": 1.42591,
+    "max": 1.43687,
+    "n": 3
+   },
+   "best_bpc": {
+    "mean": 2.06732,
+    "std": 0.00721,
+    "min": 2.05715,
+    "max": 2.07297,
+    "n": 3
+   },
+   "best_step": {
+    "mean": 12000.0,
+    "std": 0.0,
+    "min": 12000.0,
+    "max": 12000.0,
+    "n": 3
+   },
+   "final_val": {
+    "mean": 1.43296,
+    "std": 0.005,
+    "min": 1.42591,
+    "max": 1.43687,
+    "n": 3
+   },
+   "blowup_ratio": {
+    "mean": 1.0,
+    "std": 0.0,
+    "min": 1.0,
+    "max": 1.0,
+    "n": 3
+   },
+   "below_random_all_seeds": true,
+   "params": 2724864
+  },
+  "ledger": {
+   "best_val": {
+    "mean": 1.43516,
+    "std": 0.00316,
+    "min": 1.43135,
+    "max": 1.43908,
+    "n": 3
+   },
+   "best_bpc": {
+    "mean": 2.07049,
+    "std": 0.00456,
+    "min": 2.06499,
+    "max": 2.07616,
+    "n": 3
+   },
+   "best_step": {
+    "mean": 11916.66667,
+    "std": 117.85113,
+    "min": 11750.0,
+    "max": 12000.0,
+    "n": 3
+   },
+   "final_val": {
+    "mean": 1.43525,
+    "std": 0.00316,
+    "min": 1.43135,
+    "max": 1.43908,
+    "n": 3
+   },
+   "blowup_ratio": {
+    "mean": 1.00007,
+    "std": 9e-05,
+    "min": 1.0,
+    "max": 1.0002,
+    "n": 3
+   },
+   "below_random_all_seeds": true,
+   "params": 2724864
+  },
+  "ngpt_lite": {
+   "best_val": {
+    "mean": 1.41978,
+    "std": 0.00063,
+    "min": 1.41931,
+    "max": 1.42068,
+    "n": 3
+   },
+   "best_bpc": {
+    "mean": 2.04831,
+    "std": 0.00092,
+    "min": 2.04763,
+    "max": 2.04961,
+    "n": 3
+   },
+   "best_step": {
+    "mean": 11833.33333,
+    "std": 117.85113,
+    "min": 11750.0,
+    "max": 12000.0,
+    "n": 3
+   },
+   "final_val": {
+    "mean": 1.42072,
+    "std": 0.00112,
+    "min": 1.41936,
+    "max": 1.42211,
+    "n": 3
+   },
+   "blowup_ratio": {
+    "mean": 1.00067,
+    "std": 0.00047,
+    "min": 1.0,
+    "max": 1.001,
+    "n": 3
+   },
+   "below_random_all_seeds": true,
+   "params": 2722560
+  },
+  "ngpt_ledger": {
+   "best_val": {
+    "mean": 1.45562,
+    "std": 0.00273,
+    "min": 1.452,
+    "max": 1.45858,
+    "n": 3
+   },
+   "best_bpc": {
+    "mean": 2.10003,
+    "std": 0.00393,
+    "min": 2.0948,
+    "max": 2.10429,
+    "n": 3
+   },
+   "best_step": {
+    "mean": 11916.66667,
+    "std": 117.85113,
+    "min": 11750.0,
+    "max": 12000.0,
+    "n": 3
+   },
+   "final_val": {
+    "mean": 1.45568,
+    "std": 0.00274,
+    "min": 1.452,
+    "max": 1.45858,
+    "n": 3
+   },
+   "blowup_ratio": {
+    "mean": 1.00003,
+    "std": 5e-05,
+    "min": 1.0,
+    "max": 1.0001,
+    "n": 3
+   },
+   "below_random_all_seeds": true,
+   "params": 2722560
+  }
+ },
+ "runs": {
+  "plain_s0": {
+   "variant": "plain",
+   "seed": 0,
+   "params": 2724864,
+   "best_val_loss": 1.42591,
+   "best_step": 12000,
+   "best_bpc": 2.05715,
+   "final_val_loss": 1.42591,
+   "final_step": 12000,
+   "final_bpc": 2.05715,
+   "blowup_ratio": 1.0,
+   "below_random": true,
+   "dropout_on_train": true,
+   "wall_s": 457.3,
+   "nan_free": true,
+   "sample": "And you do so gracious lord; for my people,\nI'll rememb'r this fiery monger can be stoop?\n\nSATURNINUS.\nLet them know it be stands at enough.\n\nANTIPHOLUS OF SYRACUSE.\nStand we all so rebellion heirs of Suffolk,\nWith wings and lie to the country,\nOr now of this walls the earth murder;\nWhich calls she "
+  },
+  "plain_s1": {
+   "variant": "plain",
+   "seed": 1,
+   "params": 2724864,
+   "best_val_loss": 1.43687,
+   "best_step": 12000,
+   "best_bpc": 2.07297,
+   "final_val_loss": 1.43687,
+   "final_step": 12000,
+   "final_bpc": 2.07297,
+   "blowup_ratio": 1.0,
+   "below_random": true,
+   "dropout_on_train": true,
+   "wall_s": 439.8,
+   "nan_free": true,
+   "sample": "Ay, what is the devil?\n\nSECOND LORD.\nI do not know not 'em, what hour we have done to know, I have not known\nthat voice he to mischief thee, and I have received\nto thee did appear the closes of his own\nTo fly attending him, the right simple of all,\nHis father wars commend with brawl thee against his"
+  },
+  "plain_s2": {
+   "variant": "plain",
+   "seed": 2,
+   "params": 2724864,
+   "best_val_loss": 1.4361,
+   "best_step": 12000,
+   "best_bpc": 2.07185,
+   "final_val_loss": 1.4361,
+   "final_step": 12000,
+   "final_bpc": 2.07185,
+   "blowup_ratio": 1.0,
+   "below_random": true,
+   "dropout_on_train": true,
+   "wall_s": 444.2,
+   "nan_free": true,
+   "sample": "Ay, you could look and my love in my father's horse, he\nIs not fortune, and be gone. I would we shall report\nSo much as commodity as a state a fool's angel order.\n\nQUEEN ELIZABETH.\nHow now? Come, what art thou wouldst thou be many foot,\nI'll to this tempest of a slave.\n\nALONSO.\nThou wilt be a weak o"
+  },
+  "ledger_s0": {
+   "variant": "ledger",
+   "seed": 0,
+   "params": 2724864,
+   "best_val_loss": 1.43135,
+   "best_step": 12000,
+   "best_bpc": 2.06499,
+   "final_val_loss": 1.43135,
+   "final_step": 12000,
+   "final_bpc": 2.06499,
+   "blowup_ratio": 1.0,
+   "below_random": true,
+   "dropout_on_train": true,
+   "wall_s": 459.2,
+   "nan_free": true,
+   "sample": "Are you for shame, I will not come to see thee when the\nWill?\n\nFIRST MURDERER.\nHe is much or the rest smiles\nMade to do death one doubtful to a scar a men\nDoth as little determinate the gentleman!\n\nLEONATO.\nThey do you do not lend me to me this offend\nShall let him to play. Come, what sea!\n\nADRIANA."
+  },
+  "ledger_s1": {
+   "variant": "ledger",
+   "seed": 1,
+   "params": 2724864,
+   "best_val_loss": 1.43908,
+   "best_step": 12000,
+   "best_bpc": 2.07616,
+   "final_val_loss": 1.43908,
+   "final_step": 12000,
+   "final_bpc": 2.07616,
+   "blowup_ratio": 1.0,
+   "below_random": true,
+   "dropout_on_train": true,
+   "wall_s": 460.2,
+   "nan_free": true,
+   "sample": "And you for me well much, is not one more than you have\nWithout shows the soldier's son; now where they provage\nThey change themselves to steal that can give, a trumpet\nIn war heart ready to hell, and all our customs,\nThat but brought them to the spirit continual's throat,\nBeat thou with a calm in t"
+  },
+  "ledger_s2": {
+   "variant": "ledger",
+   "seed": 2,
+   "params": 2724864,
+   "best_val_loss": 1.43504,
+   "best_step": 11750,
+   "best_bpc": 2.07033,
+   "final_val_loss": 1.43532,
+   "final_step": 12000,
+   "final_bpc": 2.07073,
+   "blowup_ratio": 1.0002,
+   "below_random": true,
+   "dropout_on_train": true,
+   "wall_s": 454.0,
+   "nan_free": true,
+   "sample": "And you for me! Her most content men, let me see thee hang to be cut,\nThat make forgot them as my dearest to lie,\nTo do him tell me, and consent a kind of his day;\nThey did appear me bear the deceived and forehead,\nWhich every course to me thou requitard thy friend.\n\nTIMON.\nBeshrew at the chain of t"
+  },
+  "ngpt_lite_s0": {
+   "variant": "ngpt_lite",
+   "seed": 0,
+   "params": 2722560,
+   "best_val_loss": 1.41931,
+   "best_step": 11750,
+   "best_bpc": 2.04763,
+   "final_val_loss": 1.42068,
+   "final_step": 12000,
+   "final_bpc": 2.04961,
+   "blowup_ratio": 1.001,
+   "below_random": true,
+   "dropout_on_train": true,
+   "wall_s": 448.7,
+   "nan_free": true,
+   "sample": "Are you gone, friendship?\n\nSIMPCOX.\nWhat is the consider of your drum?\n\nEVANS.\nI have lost your praised proud in this palace?\n\nROMEO.\nI will call a babe, and yourself we have a letter for you.\n\nDON PEDRO.\nI thank you.\n\nCAIUS.\nI shall remember you to your pleasure.\n\nPETRUCHIO.\nWell, I'll be back of y"
+  },
+  "ngpt_lite_s1": {
+   "variant": "ngpt_lite",
+   "seed": 1,
+   "params": 2722560,
+   "best_val_loss": 1.42068,
+   "best_step": 11750,
+   "best_bpc": 2.04961,
+   "final_val_loss": 1.42211,
+   "final_step": 12000,
+   "final_bpc": 2.05167,
+   "blowup_ratio": 1.001,
+   "below_random": true,
+   "dropout_on_train": true,
+   "wall_s": 442.1,
+   "nan_free": true,
+   "sample": "Are you here's the King? Dost thou speak not?\n\nTHERSITES.\nNow, forbid thee, O faith, let's talk to thee, not\nThat to do him, I would entreat her.\n\nCAIUS.\nBut ye told me in this instant in the clothes,\nAnd he should with him that these news this offend\nThat which they will wear him.\n\n[_Exeunt Attenda"
+  },
+  "ngpt_lite_s2": {
+   "variant": "ngpt_lite",
+   "seed": 2,
+   "params": 2722560,
+   "best_val_loss": 1.41936,
+   "best_step": 12000,
+   "best_bpc": 2.0477,
+   "final_val_loss": 1.41936,
+   "final_step": 12000,
+   "final_bpc": 2.0477,
+   "blowup_ratio": 1.0,
+   "below_random": true,
+   "dropout_on_train": true,
+   "wall_s": 442.7,
+   "nan_free": true,
+   "sample": "And you do so gracious looks for some of my instant of Bassianus,\nWith a little contrary, to the pardon of the King;\nAnd therefore to my countenance a more projane,\nWho gentle heart than drop him with a woman's virginity,\nPatience from his soul of my body,\nWhile she hath buried this very chain?\n\nBAS"
+  },
+  "ngpt_ledger_s0": {
+   "variant": "ngpt_ledger",
+   "seed": 0,
+   "params": 2722560,
+   "best_val_loss": 1.45629,
+   "best_step": 11750,
+   "best_bpc": 2.10099,
+   "final_val_loss": 1.45645,
+   "final_step": 12000,
+   "final_bpc": 2.10122,
+   "blowup_ratio": 1.0001,
+   "below_random": true,
+   "dropout_on_train": true,
+   "wall_s": 448.2,
+   "nan_free": true,
+   "sample": "Are you do so for your lordship, good man, and yield of\nboth. And you then, I have spoken to weep and the state of your death\nis.\n\nSUFFOLK.\nNay, I have platent and store her rain not,\nAnd will leave their eyes work with her times.\n\nSECOND GENTLEMAN.\nWell set my brother's eye, the worst of bears\nOf t"
+  },
+  "ngpt_ledger_s1": {
+   "variant": "ngpt_ledger",
+   "seed": 1,
+   "params": 2722560,
+   "best_val_loss": 1.452,
+   "best_step": 12000,
+   "best_bpc": 2.0948,
+   "final_val_loss": 1.452,
+   "final_step": 12000,
+   "final_bpc": 2.0948,
+   "blowup_ratio": 1.0,
+   "below_random": true,
+   "dropout_on_train": true,
+   "wall_s": 447.3,
+   "nan_free": true,
+   "sample": "Away-lie!\n\nSHALLOW.\nOur uncle and horse linens were not anger.\n\nMARTIUS.\nNor chamber; for that is but the traitor, where is the will?\n\nPRINCE.\nHold he is a mountain. No more than none bears,\nHave you taken to cut thou see thy hand.\n\nBRUTUS.\nIs't heart so soon we shall not wear,\nThy brother call of t"
+  },
+  "ngpt_ledger_s2": {
+   "variant": "ngpt_ledger",
+   "seed": 2,
+   "params": 2722560,
+   "best_val_loss": 1.45858,
+   "best_step": 12000,
+   "best_bpc": 2.10429,
+   "final_val_loss": 1.45858,
+   "final_step": 12000,
+   "final_bpc": 2.10429,
+   "blowup_ratio": 1.0,
+   "below_random": true,
+   "dropout_on_train": true,
+   "wall_s": 447.5,
+   "nan_free": true,
+   "sample": "And you do that all the weapon of my father's house.\n\nGADSHILL.\nNow, look you have spoken to wear him to the gods.\nO did them love to love the est in Lord Christian.\n\nSALISBURY.\nGood and by a field of Love, sir? I am not endure\nTo come in his service.\n\nDESDEMONA.\nI will believe you.\n\nDUKE.\nEach made"
+  }
+ },
+ "total_wall_s": 5459.7
+}

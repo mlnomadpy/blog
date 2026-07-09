@@ -51,7 +51,7 @@ import HandBuiltLive from '../../components/viz/HandBuiltLive.astro';
 
 You can skip the classifier. The previous posts made that case three times over: a neuron is a picture, a network is a list of those pictures, and you can place them by hand instead of learning them. But all of that sat on top of features, and the features came from a trained backbone. That backbone is supposed to be the irreducible core, the part deep learning exists to provide. The whole story of the last fifteen years is that you cannot hand-design good features, you have to learn them.
 
-People did hand-design them, though, and it worked. Before the deep-learning turn, the best vision systems ran on features a person wrote down: oriented-edge histograms, corner and blob detectors, gradients pooled over a grid. HOG and SIFT did not learn anything; they measured the image in ways an engineer chose, and those measurements fed a plain classifier. So the honest version of the greedy question is concrete. Take features of exactly that kind, hand-built and frozen, hand them to the constructed head from the last post, and see how far a network with nothing trained anywhere can actually get.
+People did hand-design them, though, and it worked. Before the deep-learning turn, the best vision systems ran on features a person wrote down: oriented-edge histograms, corner and blob detectors, gradients pooled over a grid. HOG and SIFT did not learn anything; they measured the image in ways an engineer chose, and those measurements fed a plain classifier. So the greedy question has a concrete version. Take features of exactly that kind, hand-built and frozen, hand them to the constructed head from the last post, and see how far a network with nothing trained anywhere can actually get.
 
 ## A feature you can name
 
@@ -114,7 +114,7 @@ Eighty-three percent from edges and a vote is the kind of number you should not 
 
 <HandBuiltLive caption="The whole hand-built network, run live on whatever you draw. Paint a garment, or load a real test image, and watch it flow through the pipeline: Sobel gradients, the seven oriented-edge and corner detectors (shown firing on your drawing), a 7x7 patch pool to 343 named numbers, then the Yat kernel against 200 stored prototypes and a nearest-prototype vote. Nothing is precomputed for your drawing and no trained network is involved. Computed live in your browser." />
 
-A crude drawing will not classify as cleanly as a real photo, which is the honest point: the detectors are generic, not tuned to your handwriting or to anything else. But load a real garment and it lands, every time, with the same edges and the same vote you could compute by hand.
+A crude drawing will not classify as cleanly as a real photo, which is the point: the detectors are generic, not tuned to your handwriting or to anything else. But load a real garment and it lands, every time, with the same edges and the same vote you could compute by hand.
 
 ## Where the line finally falls
 

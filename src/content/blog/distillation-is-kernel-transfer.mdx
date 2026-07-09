@@ -128,7 +128,7 @@ Before the numbers, feel the mechanism. This panel trains a real relational stud
 
 ## Where a label-free student lands
 
-So how much of the teacher's competence comes through a channel that thin? The honest expectation is "somewhere between random and labels," and where it lands *is* the measurement of how much of classification knowledge is geometry rather than answers.
+So how much of the teacher's competence comes through a channel that thin? The expectation is "somewhere between random and labels," and where it lands *is* the measurement of how much of classification knowledge is geometry rather than answers.
 
 <InheritanceScale caption="The five runs on one axis (probe accuracy on the 10,000-image test set; switch between the linear and nearest-centroid probe). The shaded green span is everything label training can add over a random network; the orange fill is how much of it relations alone recover. Small dots are the relational student's other seeds. Hover a marker for what that run was allowed to see." />
 
@@ -142,7 +142,7 @@ The numbers, from the run (seeds 0, 1, 2 for the relational student; seed 0 else
 | true labels | the answer key | 87.0% |
 | random init | nothing | 77.5% |
 
-Read it honestly. The floor is high: a random CNN's features already probe at 77.5%, the same random-features effect the Arc C posts kept meeting, so nobody gets credit for the first three quarters of the scale. The interval that measures *training* runs from 77.5 to the label ceiling at 87.0, and the relations-only student lands at 83.7 to 84.9 across seeds: **about two thirds of everything label training could add, from a signal that never contained a label, an answer, or even a class.**
+Start at the floor, because it is high: a random CNN's features already probe at 77.5%, the same random-features effect the Arc C posts kept meeting, so nobody gets credit for the first three quarters of the scale. The interval that measures *training* runs from 77.5 to the label ceiling at 87.0, and the relations-only student lands at 83.7 to 84.9 across seeds: **about two thirds of everything label training could add, from a signal that never contained a label, an answer, or even a class.**
 
 Before celebrating, though, notice who the judge was. A linear probe is allowed to re-weight and shear the space however it likes to find the classes: it will happily rescue features that are merely *present*, recoverable along some direction, whether or not the space is actually arranged well. Maybe that is all relations buy, raw material a probe can salvage, not a geometry worth the name. If distillation truly transfers a geometry, the result should survive a ruler that is not allowed to fix anything.
 

@@ -1,0 +1,107 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 430 } = Astro.props;
+---
+<figure class="viz trialcalibration" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// A ranking model is only half-useful if its survival probabilities are off. This
+// panel plots predicted survival against Kaplan-Meier observed survival, one curve
+// per risk tertile, for the Yat model against the standard DeepSurv on the same
+// dataset. On the diagonal-ish overlap of predicted and observed you read whether
+// the probabilities can be trusted, a thing a C-index alone never tells you.
+// Data: scripts/deepsurv_trial.py -> calibration.json.
+import { defineViz } from './engine/vizkit.js';
+import { gate, loadingText, axes, T as Ty } from './engine/draw.js';
+import { DS_LABEL } from './trial.js';
+
+defineViz('trialcalibration', {
+  title: 'Predicted survival against what actually happened.',
+  height: 430,
+  controls: [
+    { type: 'select', name: 'ds', label: 'dataset',
+      options: [
+        { value: 'metabric', label: 'METABRIC' },
+        { value: 'support', label: 'SUPPORT' },
+        { value: 'gbsg', label: 'GBSG' },
+        { value: 'whas500', label: 'WHAS500' },
+        { value: 'flchain', label: 'FLCHAIN' },
+      ], value: 'metabric', reset: false },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    gate(api, () => import('./trial.js').then((m) => m.loadCalib()), (api, d) => { api.state.d = d; });
+  },
+
+  onControl() {},
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    if (!st.ready) { loadingText(api); return; }
+    const d = st.d;
+    const ds = api.get('ds');
+
+    const pad = 16, gutter = 26, top = 42, bottom = 40, gap = 26;
+    const left = pad + gutter;                              // room for the left panel's y labels
+    const pw = (W - left - pad - gap) / 2;
+    const by = top, bh = H - top - bottom;
+
+    Ty(ctx, colors, 'small', { color: colors.muted, align: 'left' });
+    ctx.fillText(`${DS_LABEL[ds]}: each curve is one risk third; solid = predicted survival, dashed = Kaplan-Meier observed.`, pad, pad + 10);
+
+    const cols = [colors.blue, colors.green, colors.accent];
+    const names = ['low-risk third', 'mid-risk third', 'high-risk third'];
+
+    const drawPanel = (bx, model, title) => {
+      const rel = d.data[ds][model];
+      const hs = rel.horizons;
+      const xMin = hs[0], xMax = hs[hs.length - 1];
+      const A = axes(ctx, { x: bx, y: by, w: pw, h: bh }, {
+        xMin, xMax, yMin: 0, yMax: 1.02,
+        xTicks: [hs[0], hs[Math.floor(hs.length / 2)], hs[hs.length - 1]],
+        yTicks: [0, 0.25, 0.5, 0.75, 1], fmtX: (v) => v.toFixed(0), fmtY: (v) => v.toFixed(2),
+        grid: true, border: true,
+      }, colors);
+      rel.groups.forEach((g, gi) => {
+        // predicted (solid)
+        ctx.strokeStyle = cols[gi]; ctx.lineWidth = 2.2; ctx.beginPath();
+        g.pred.forEach((v, i) => { const x = A.sx(hs[i]), y = A.sy(v); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+        ctx.stroke();
+        // observed (dashed)
+        ctx.strokeStyle = cols[gi]; ctx.lineWidth = 1.6; ctx.setLineDash([3, 3]); ctx.beginPath();
+        g.obs.forEach((v, i) => { const x = A.sx(hs[i]), y = A.sy(v); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+        ctx.stroke(); ctx.setLineDash([]);
+      });
+      Ty(ctx, colors, 'label', { color: colors.fg, weight: 'b', align: 'center' });
+      ctx.fillText(title, bx + pw / 2, by - 8);
+      Ty(ctx, colors, 'small', { color: colors.muted, align: 'center' }); ctx.textBaseline = 'top';
+      ctx.fillText('time', bx + pw / 2, by + bh + 20);
+      Ty(ctx, colors, 'small', { color: colors.muted, align: 'left' });
+      ctx.fillText('reliability gap ' + rel.mae.toFixed(3), bx + 6, by + bh - 12);
+      return rel;
+    };
+
+    const relYat = drawPanel(left, 'yat', 'Yat DeepSurv');
+    drawPanel(left + pw + gap, 'mlp', 'standard DeepSurv');
+
+    // shared legend across the top-right
+    let lx = left + pw + gap + 6, ly = by + 4;
+    names.forEach((nm, i) => {
+      ctx.strokeStyle = cols[i]; ctx.lineWidth = 2.2; ctx.beginPath();
+      ctx.moveTo(lx, ly); ctx.lineTo(lx + 14, ly); ctx.stroke();
+      Ty(ctx, colors, 'small', { color: colors.muted, align: 'left' }); ctx.textBaseline = 'middle';
+      ctx.fillText(nm, lx + 18, ly); ly += 15;
+    });
+
+    api.readout('rd', `Yat reliability gap ${relYat.mae.toFixed(3)}; closer predicted and observed curves = probabilities you can trust.`);
+  },
+});
+</script>

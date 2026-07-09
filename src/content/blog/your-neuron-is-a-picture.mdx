@@ -77,7 +77,7 @@ The two networks are nearly twins: same shape, same data, three points apart in 
 
 <ProtoGallery caption="Left: the 50 hidden units of a Yat-kernel MLP, each a prototype that lives in pixel space, so each is a picture, bordered by the class it votes for. Right: the 50 first-layer filters of a same-sized ReLU MLP, weight vectors with no reason to look like anything, and they don't. Same data, comparable accuracy, shown side by side." />
 
-Why is the left side legible? The honest route to the answer passes through a fact that should make it seem impossible. The Yat unit is a positive-definite kernel, $\phi_u(x) = k(w_u, x)$, so it carries a reproducing-kernel Hilbert space $\mathcal{H}$: a feature map $\Phi : \mathbb{R}^{784} \to \mathcal{H}$ with
+Why is the left side legible? The route to the answer passes through a fact that should make it seem impossible. The Yat unit is a positive-definite kernel, $\phi_u(x) = k(w_u, x)$, so it carries a reproducing-kernel Hilbert space $\mathcal{H}$: a feature map $\Phi : \mathbb{R}^{784} \to \mathcal{H}$ with
 
 $$
 k(w_u, x) \;=\; \langle\, \Phi(w_u),\, \Phi(x) \,\rangle_{\mathcal{H}},

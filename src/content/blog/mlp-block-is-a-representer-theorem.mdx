@@ -46,7 +46,7 @@ import AbstainMeter from '../../components/viz/AbstainMeter.astro';
 
 If you watched the [3Blue1Brown attention video](https://www.3blue1brown.com/lessons/attention), you came away able to read half of a transformer. You can point at the attention pattern and say what it does: this token is looking at that one, the verb is reaching back for its subject, the pronoun is fetching its referent. The picture is legible because you can see who is talking to whom.
 
-Then the same series reaches the other half, the MLP block, and the tone changes. This is where the network stores what it knows, and the honest answer for how it stores it is that nobody is quite sure. The neurons are polysemantic, the features are superposed, the block is a wall of numbers with no handle on it. So you finish the series able to read one half of the machine and staring at the other. **Why is attention the readable half and the MLP the black box?**
+Then the same series reaches the other half, the MLP block, and the tone changes. This is where the network stores what it knows, and nobody is quite sure how it stores it. The neurons are polysemantic, the features are superposed, the block is a wall of numbers with no handle on it. So you finish the series able to read one half of the machine and staring at the other. **Why is attention the readable half and the MLP the black box?**
 
 ## What makes attention readable?
 
@@ -108,7 +108,7 @@ And you can **tell when the memory is out of its depth**: the Yat kernel is loca
 
 None of that is available when the primitive is a direction with no reference. All of it falls out the moment the primitive is a kernel.
 
-That is the whole argument. The MLP was never doomed to be a black box; it was built from a primitive with no metric, and the opacity followed from that and nothing else. Give it a kernel and the block becomes a representer-theorem vote over prototypes, a key-value memory you can read, attribute through, edit, and trust to abstain, as legible as the attention beside it. And to keep the ledger honest: the panels on this page are the feed-forward half of "the whole transformer explains itself"; the attention half was made exact in [Attention Is Explainable Because It Is a Kernel](/blog/attention-is-a-kernel/). Between the two posts, both halves now read, by the same principle: a similarity to a reference you can name was available for the whole machine all along.
+That is the whole argument. The MLP was never doomed to be a black box; it was built from a primitive with no metric, and the opacity followed from that and nothing else. Give it a kernel and the block becomes a representer-theorem vote over prototypes, a key-value memory you can read, attribute through, edit, and trust to abstain, as legible as the attention beside it. The panels on this page are the feed-forward half of "the whole transformer explains itself"; the attention half was made exact in [Attention Is Explainable Because It Is a Kernel](/blog/attention-is-a-kernel/). Between the two posts, both halves now read, by the same principle: a similarity to a reference you can name was available for the whole machine all along.
 
 ---
 

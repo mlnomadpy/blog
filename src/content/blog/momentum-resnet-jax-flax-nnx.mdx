@@ -60,7 +60,7 @@ def leapfrog(r, v, dt):
     return r, v + 0.5 * dt * accel(r)          # half kick
 ```
 
-Before anyone bills leapfrog double, one honest accounting note: as written, `leapfrog` calls `accel` twice per step where `euler` calls it once, because this version favors visible symmetry over bookkeeping. In the standard kick-drift-kick formulation the force that closes one step is exactly the force that opens the next, so a production integrator caches it and the steady-state cost is one force evaluation per step, the same as Euler.
+Before anyone bills leapfrog double, one accounting note: as written, `leapfrog` calls `accel` twice per step where `euler` calls it once, because this version favors visible symmetry over bookkeeping. In the standard kick-drift-kick formulation the force that closes one step is exactly the force that opens the next, so a production integrator caches it and the steady-state cost is one force evaluation per step, the same as Euler.
 
 Launch the same planet with both, $\Delta t = 0.02$, twenty orbits, and print the damage:
 
@@ -164,7 +164,7 @@ Watch that training happen rather than take the two numbers. The run below is th
   <figcaption>The real training run, 4000 Adam steps with a snapshot every 50: left, the class-probability field over the input plane with the decision contour; middle, the hidden trajectories of 16 test points; right, the training loss on a log axis. Test accuracy reaches 100% before step 50 and the loss still falls another five decades while the field crystallizes. Telemetry dumped by <code>scripts/momentum_gif_data.py</code> (the identical training, rerun with dense logging); rendered by <code>scripts/render_momentum_gifs.py</code>.</figcaption>
 </figure>
 
-## The ceiling, drawn honestly
+## The ceiling, measured
 
 Two training runs is not a result. The 99.80% against 100.00% above is one seed at one depth, and before reading anything into a fifth of a point, two questions have to survive the full sweep in `scripts/momentum_resnet.py`: does the gap hold across three seeds and three depths, and does a plain net that is deep enough to be a true flow ever touch the 100% line at all? The sweep's first answer is a null. There is **no cliff** anywhere in it: on two moons both rules sit between 99.85% and 100% everywhere, and even on rings the plain net at depth 128 posts 99.85% on average.
 
@@ -175,7 +175,7 @@ What the theorem forbids is *exactness*, and exactness is the one line in the fi
   <figcaption>Every seed of the rings sweep from <code>scripts/momentum_resnet.py</code>, against the line that matters: 100% is exact separation, the thing a first-order planar flow can never achieve on an enclosed class. The plain net (orange) touches the line only at depth 8, where h = 1 is too coarse to be a flow; once it becomes one, its band hangs just below, at 99.76% and 99.95% best-seed, in all 6 runs. The momentum net (teal) sits on the line in every seed at L = 8 and 32. Rendered by <code>scripts/render_momentum_gifs.py</code>.</figcaption>
 </figure>
 
-The seed accounting behind the dots: at depth 8 the plain net is not yet a flow (steps of $h = 1$ can jump the wall) and it hits 100.0% in two seeds of three; at depths 32 and 128, where it refines into an honest flow, it never touches 100% again in any of its six runs, its best seeds stalling at 99.76% and 99.95%, while the momentum net pins 100.0% in every seed at depths 8 and 32. On spirals the same ledger shows up as reliability rather than a ceiling: the plain net's three depth-128 seeds spread from 92.9% to 98.3%, the momentum net's sit within six tenths of a point of each other.
+The seed accounting behind the dots: at depth 8 the plain net is not yet a flow (steps of $h = 1$ can jump the wall) and it hits 100.0% in two seeds of three; at depths 32 and 128, where it refines into a true flow, it never touches 100% again in any of its six runs, its best seeds stalling at 99.76% and 99.95%, while the momentum net pins 100.0% in every seed at depths 8 and 32. On spirals the same ledger shows up as reliability rather than a ceiling: the plain net's three depth-128 seeds spread from 92.9% to 98.3%, the momentum net's sit within six tenths of a point of each other.
 
 The whole sweep fits in one table, so the plot above can be audited at a glance: three seeds per cell, mean test accuracy with the min-to-max seed range in parentheses, from `scripts/momentum_resnet.py`.
 
@@ -255,7 +255,7 @@ This is not a party trick. A network you can run backward is a network you can t
 
 ## What carried over
 
-Every claim the explainer made on physics grounds survived contact with real trained weights, in about a hundred lines of NNX. The plain residual block is forward Euler, and it kinks (52.9 degrees per layer) where the momentum block coasts (9.6). The missing second state is one line of module code, costs zero parameters, and buys crossing trajectories where topology forbids a flow to go: the plain net never touches 100% on rings once it is deep enough to be an honest flow, and the momentum net pins it. At every scale the scoreboard was blind to the ledger: across architectures, across $\mu$, and inside a single run, where accuracy pinned at step 50 and the dynamics kept crystallizing for 3,950 more. And the ledger's damping is exactly friction, right down to which networks can remember their own past. Architecture choices are integrator choices; the numerical-analysis shelf is full of integrators nobody has read as networks yet.
+Every claim the explainer made on physics grounds survived contact with real trained weights, in about a hundred lines of NNX. The plain residual block is forward Euler, and it kinks (52.9 degrees per layer) where the momentum block coasts (9.6). The missing second state is one line of module code, costs zero parameters, and buys crossing trajectories where topology forbids a flow to go: the plain net never touches 100% on rings once it is deep enough to be a true flow, and the momentum net pins it. At every scale the scoreboard was blind to the ledger: across architectures, across $\mu$, and inside a single run, where accuracy pinned at step 50 and the dynamics kept crystallizing for 3,950 more. And the ledger's damping is exactly friction, right down to which networks can remember their own past. Architecture choices are integrator choices; the numerical-analysis shelf is full of integrators nobody has read as networks yet.
 
 ---
 

@@ -1,0 +1,157 @@
+---
+title: "The White-Box Survival Model on Trial"
+seoTitle: "The White-Box Survival Model on Trial"
+description: "A classical kernel machine is beautiful and needs a solve that will not minibatch or compose. A deep net trains on anything and its risk score is a fog. What if one thing had the training of a net and the theory of a kernel? We put a deep Yat-kernel survival model on trial across five real datasets against Cox, penalized Cox, and Random Survival Forest: it trains with plain gradient descent, lands in the pack on the concordance index, and, because its units are genuine Mercer kernels, inherits exact attribution, calibration, editing, and bounded out-of-distribution response the others cannot give. Where it costs a point or two, we show exactly where."
+seoDescription: "A deep Yat-kernel survival model trained by plain gradient descent lands in the pack across five datasets against Cox and RSF, and inherits kernel theory."
+pubDate: 2026-07-09
+draft: false
+companion: survival-model-on-trial-jax-flax-nnx
+tags: [survival-analysis, deepsurv, cox, kernels, interpretability, yat, healthcare-ml, benchmark]
+references:
+  - authors: "Katzman, J. L., Shaham, U., Cloninger, A., Bates, J., Jiang, T., Kluger, Y."
+    year: 2018
+    title: "DeepSurv: Personalized Treatment Recommender System Using a Cox Proportional Hazards Deep Neural Network"
+    venue: "BMC Medical Research Methodology 18(1), 24"
+    arxiv: "1606.00931"
+  - authors: "Cox, D. R."
+    year: 1972
+    title: "Regression Models and Life-Tables"
+    venue: "Journal of the Royal Statistical Society, Series B 34(2), 187–220"
+  - authors: "Ishwaran, H., Kogalur, U. B., Blackstone, E. H., Lauer, M. S."
+    year: 2008
+    title: "Random Survival Forests"
+    venue: "Annals of Applied Statistics 2(3), 841–860"
+  - authors: "Harrell, F. E., Califf, R. M., Pryor, D. B., Lee, K. L., Rosati, R. A."
+    year: 1982
+    title: "Evaluating the Yield of Medical Tests"
+    venue: "JAMA 247(18), 2543–2546"
+  - authors: "Simon, N., Friedman, J., Hastie, T., Tibshirani, R."
+    year: 2011
+    title: "Regularization Paths for Cox's Proportional Hazards Model via Coordinate Descent"
+    venue: "Journal of Statistical Software 39(5), 1–13"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+  - authors: "Choromanski, K., Bouhsine, T., et al."
+    year: 2026
+    title: "SLAY: Scalable Linear Attention with the Yat Kernel and Positive Random Features"
+    arxiv: "2602.04915"
+keywords:
+  - survival analysis benchmark
+  - DeepSurv
+  - Cox proportional hazards
+  - Random Survival Forest
+  - concordance index
+  - kernel machine gradient descent
+  - Yat kernel
+  - interpretable survival model
+  - out-of-distribution abstention
+  - Mercer kernel deep network
+---
+import CiteAs from '../../components/CiteAs.astro';
+import TrialForest from '../../components/viz/TrialForest.astro';
+import TrialAblation from '../../components/viz/TrialAblation.astro';
+import TrialCalibration from '../../components/viz/TrialCalibration.astro';
+import TrialOOD from '../../components/viz/TrialOOD.astro';
+import TrialPlausibility from '../../components/viz/TrialPlausibility.astro';
+
+*A kernel machine is one of the most beautiful objects in machine learning, and one of the least convenient. It comes with a whole theory attached: a norm that measures its complexity, a representer theorem that says exactly what shape its solution takes, closed-form ways to reason about and edit it, and a principled way to know when a new point sits outside everything it learned. The price of all that structure is a fit that does not fit the modern world. Support-vector machines want a quadratic program; kernel ridge regression wants you to invert an n-by-n matrix; Gaussian processes want the same solve. None of these minibatch, none of them compose into layers, and on anything but small data you fall back to Nystrom approximations and inducing points, machinery that exists precisely to dodge the solve the theory demanded. A deep network is the opposite bargain. It trains on anything, streams through minibatches, stacks into depth, and in return its risk score is a fog with no parts you can name.*
+
+*This post is about a model that refuses to choose. The [previous post](/blog/a-risk-model-that-names-its-reasons/) built a survival model whose hidden units are genuine positive-definite kernels, a bank of prototype patients, and trained it end to end by plain gradient descent, no solve anywhere. That post made a strong claim on one dataset and a reviewer, rightly, called the evidence thin. So this is the retrial, on five real clinical datasets against the models a survival statistician would actually reach for, and it is also a correction: the point was never that the white-box model wins. The point is that it exists at all. A note before anything else: this is a research illustration of interpretable survival modeling, not a clinical tool, and no number in it should touch a real decision.*
+
+## What is actually on trial
+
+What claim is worth five datasets and a battery of baselines? Not a leaderboard place. The thing under test is an existence proof, and it is worth stating plainly before any number arrives so that every number can be read against it.
+
+You can build a deep machine whose every hidden unit is a real [Mercer kernel](/blog/your-neuron-is-a-picture/), stack it, and train the whole thing by ordinary minibatched gradient descent on the [Cox partial likelihood](/blog/a-risk-model-that-names-its-reasons/), with no linear system to solve, no quadratic program, no Nystrom approximation, no inducing points. And because the units really are kernels, the trained network does not just predict; it inherits the theory. The risk score decomposes exactly into named prototype patients. There is an RKHS norm that bounds its capacity. Editing it is a closed-form row operation. It has a built-in resemblance meter that goes quiet on a patient unlike anyone it saw. None of that is bolted on afterward as an explanation; it falls out of what a hidden unit was allowed to be.
+
+Against that claim, the success criterion is not "beats Random Survival Forest." It is "trains like a network, and ranks patients about as well as the classical machines that come with none of this structure." Landing in the same interval as Cox and the forest, across a spread of real datasets, *is* the result, because it shows the trade is real: you can have the convenience of deep learning and the legibility of a kernel machine at the same time, and the accuracy you give up for it is small enough to see and to price. Where the white-box model costs a point or two, we say so and show exactly where.
+
+So the rest of the post is a trial with two halves. First, viability: can it even hang with the baselines on the one metric survival modeling agrees on? Then, the inheritance: the four things the kernel structure gives you for free that Cox and the forest structurally cannot.
+
+## The lineup
+
+Who is the white-box model actually up against? Five datasets, chosen because they load without any private download and span very different survival regimes. **METABRIC** (breast cancer, n=1903, 42% censored) and **GBSG** (breast cancer recurrence, n=2232) are the mid-sized clinical staples. **SUPPORT** (critically ill hospitalized adults, n=8873) is larger and harder to rank. **WHAS500** (heart-attack survival, n=500) is small and heavily censored, a stress test for anything data-hungry. **FLCHAIN** (a free-light-chain mortality cohort, n=6521, 70% censored) is nearly separable and where every model does well. Different sizes, different censoring, different signal.
+
+Every model sees the same split, the same standardization, six seeds, and bootstrap confidence intervals on the held-out concordance index. The baselines are the ones a survival statistician reaches for: classical **Cox proportional hazards**, **penalized Cox** with an elastic-net path (Simon et al., 2011), and **Random Survival Forest** (Ishwaran et al., 2008), a strong nonlinear ensemble. Then two neural models at matched capacity: a standard **ReLU DeepSurv** (Katzman et al., 2018), the black box, and the **Yat DeepSurv** on trial.
+
+One methodological point decides whether the comparison is fair, and it is worth naming because it is easy to get wrong. The two neural nets do not share a learning rate. A convergence probe found the Yat trunk and the ReLU MLP prefer different rates, so pinning them to one rate would be measuring an optimizer artifact, not a model. Each net instead sweeps its own learning rate over a small grid, picks the best by inner validation, and stops at its best epoch, all without ever touching the test set. The classical baselines have no learning rate, so they anchor the whole comparison. Every number below is from `scripts/deepsurv_trial.py`, run once on Kaggle.
+
+## The viability verdict
+
+Here is the whole trial in one panel: for each dataset, every model's held-out concordance index as a point, with its bootstrap 95% interval as a whisker. The shaded band is the classical baselines' envelope, so "landing in the pack" is a literal thing you can see. Switch datasets and watch where the Yat point falls.
+
+<TrialForest caption="Held-out concordance index across five datasets. Each point is the mean over six seeds; the whisker is the seed-0 bootstrap 95% CI (300 resamples). Grey = classical (Cox, penalized Cox, Random Survival Forest); blue = standard ReLU DeepSurv; orange = the Yat DeepSurv on trial. The shaded band is the classical baselines' CI envelope. Computed live from the trial bundle." />
+
+Read the panel and it says two different things on two groups of datasets. On METABRIC, SUPPORT, and GBSG the Yat model sits squarely inside the pack: 0.621 against a best-of-0.638 on METABRIC, 0.606 against 0.612 on SUPPORT, 0.662 against 0.676 on GBSG, whiskers overlapping every baseline. This is exactly the existence proof landing: a kernel machine trained by gradient descent, ranking patients as well as classical Cox and within a whisker of a tuned forest, while carrying a theory none of them have.
+
+On WHAS500 and FLCHAIN it costs something, and that cost is part of what the trial was built to find. WHAS500 is the sharpest: Cox reaches 0.765 and the Yat model 0.679, a real gap on a small, heavily censored cohort where the linear model's strong prior pays off and a flexible prototype bank has too few patients to place its prototypes well. On the near-separable FLCHAIN the whole field is bunched near 0.92 and the Yat model trails by about two points at 0.909. These costs point somewhere useful: the white-box model earns its keep on the mid-sized, genuinely nonlinear problems, and gives ground exactly where a simple linear hazard was going to win anyway. A reviewer who wanted to know when the accuracy trade is worth it now has an answer with five data points in it.
+
+That is the entire viability claim. The model is not a champion; it is a viable member of the field that happens to bring a theory with it. The rest of the post is that theory.
+
+## How many prototypes, and does the seeding matter?
+
+Before spending the inheritance, one worry the reviewer raised deserves its own measurement: a prototype model has a knob, the number of prototypes K, and a choice, how to place them at the start. If the accuracy swings wildly with either, the "in the pack" result is luck. Does it?
+
+<TrialAblation caption="Yat DeepSurv concordance index as the prototype count K sweeps 6, 12, 24, 48, for k-means seeding (orange) against random seeding (blue), on METABRIC and GBSG. Points are the mean over three seeds; the band is the seed spread. Computed live from the trial bundle." />
+
+The curve is nearly flat, which is the reassuring answer. Sweeping K from 6 to 48 moves the concordance index by only about a hundredth on either dataset; the model is not perched on a lucky value of K. K-means seeding and random seeding land close on average, with k-means the steadier choice (on METABRIC at K=6, k-means holds 0.629 against random's 0.605 with roughly twice the seed spread). The reading is that a handful of well-placed prototypes already captures the signal, and adding more neither helps nor much hurts, which is the [capacity story](/blog/what-can-a-weight-be/) the kernel norm predicts. The knob is safe.
+
+## Inheritance one: calibration you can read
+
+A concordance index tells you the ranking is right; it says nothing about whether the numbers mean anything. An oncologist does not act on a rank, she acts on "70% chance of surviving five years," and a model can rank perfectly while its probabilities are badly off. This is where the survival curve, not the risk score, is on trial, and it is the first thing the kernel structure lets you inspect directly.
+
+<TrialCalibration caption="Predicted survival (solid) against Kaplan-Meier observed survival (dashed) by risk tertile, for the Yat DeepSurv and the standard DeepSurv on the same split. Each color is one third of the cohort by predicted risk. The reliability gap is the mean absolute distance between predicted and observed across horizons and groups. Computed live from the trial bundle." />
+
+On most datasets the two curves track closely: low-risk, mid-risk, and high-risk thirds each separate as they should and the predicted survival lands near the observed, with reliability gaps in the low single percent (GBSG 0.022, SUPPORT 0.035, FLCHAIN 0.008 for the Yat model). METABRIC is a touch looser at 0.078, and WHAS500 is the exception again, where the Yat model's probabilities drift wide (gap 0.265) on that small cohort even as its ranking stayed in range. The point is not that the calibration is flawless; it is that you can *see* it, tertile by tertile, because the survival curve is assembled from nameable parts rather than read off a black box. A miscalibration here is a diagnosis, not a mystery.
+
+## Inheritance two: does it know a stranger?
+
+Every model in the lineup will hand you a confident risk score for a patient who looks nothing like anyone it trained on. That is not a virtue; it is the failure mode that gets people hurt. A kernel machine has a natural defense: each unit is a bounded bump that decays away from its prototype, so the largest activation any patient produces, the [kernel-max](/blog/a-risk-model-that-names-its-reasons/), is a resemblance meter. High for a patient like the training population, low for a stranger. Does it actually separate strangers from real patients?
+
+<TrialOOD caption="AUROC of the kernel-max score separating real held-out patients (which should score high) from three kinds of constructed outsider, per dataset, with 300-resample bootstrap CIs. Above 0.5 the meter flags the construction as strange; at or below 0.5 it does not. Click a bar to read its caveat. Computed live from the trial bundle." />
+
+The picture is mixed, and the mix is the interesting part. Shuffling each covariate independently, which breaks the joint distribution while preserving every marginal, is caught mildly (AUROC around 0.66 on METABRIC and GBSG): a real but subtle shift the meter half-notices. Synthetic far-tail patients, pushed several standard deviations out, are caught strongly on METABRIC (0.63) but, revealingly, not on GBSG or FLCHAIN, where pushing a normalized covariate far can still land near some prototype, so the meter reads them as familiar. And a real held-out subgroup, the top decile of the most variable covariate, often scores *below* 0.5, which reads at first like a failure and is actually a finding: that subpopulation is not strange to the kernel, it sits comfortably inside the learned field. The one true cross-dataset test that could run, scoring WHAS500 patients through the SUPPORT model, gives a kernel-max so low the separation is near-total, exactly the strong signal you want when a genuinely foreign cohort walks in.
+
+So the abstention property is real but not a magic OOD detector, and the previous post claimed too much by showing only the easy synthetic case. What it actually does: the kernel-max reliably flags a genuinely different data source and a strong synthetic push, mildly flags a broken joint distribution, and correctly does *not* flag an in-distribution subgroup that only looks extreme on one axis. That is a resemblance meter behaving like one, and it is a capability the Cox model and the forest simply do not have.
+
+## Inheritance three: are the prototypes real patients?
+
+The whole legibility story rests on the prototypes being things a clinician could actually reason about. A prototype is a point in patient space, so in principle it is a synthetic patient, but nothing forces a learned point to be a *plausible* one; gradient descent could park a prototype in a math-useful but clinically absurd region. So the last question of the trial is a reality check: de-normalize every prototype to clinical units and ask whether it lands inside the range real patients occupy.
+
+<TrialPlausibility caption="The 24 Yat prototypes on METABRIC, de-normalized to clinical units and laid out by readout weight (protective at left, risk-raising at right). Click one to read its chart against the training range: green covariates land inside the observed min/max, orange are excursions; a dashed ring marks any prototype with a covariate out of range. Computed live from the trial bundle." />
+
+Eight of the twenty-four prototypes land fully inside the training range on every covariate, and the median prototype sits close to a real patient (distance 1.45 in nine-dimensional standardized space). The rest have one or two covariates that stray a little past the observed edge, usually a treatment indicator that a continuous prototype cannot represent cleanly, but their excursions are small (a fraction of a standard deviation) rather than wild. So a third of the prototypes are clinically plausible in the strict sense and most of the remainder are close, near-real profiles with a small excursion on a binary axis. This is neither "all prototypes are real patients" nor "they are meaningless"; it is a legible middle that you can audit prototype by prototype, which is the whole point of a model whose reasons are inspectable.
+
+## The scoreboard, and what it is not
+
+<div class="scope-box">
+
+**Scope and limits.** These are small-to-medium clinical datasets (n from 500 to 8873), and this is a research illustration, not a clinical tool. No number here should touch a real medical decision. The Yat DeepSurv is competitive with classical baselines on the mid-sized, nonlinear problems (METABRIC, SUPPORT, GBSG) and pays a real accuracy cost on the small heavily censored cohort (WHAS500) and the near-separable one (FLCHAIN), exactly where a simple linear hazard already wins. The out-of-distribution meter is a genuine resemblance signal, not a certified detector. The value proposition is legibility plus inherited kernel structure at a small, visible accuracy cost, worth it when you need to read, calibrate, edit, and bound a survival model, and not worth it when a Cox model already ranks as well and you need nothing more.
+
+</div>
+
+Here is the full concordance-index table, every number traced to the trial bundle, so the reader can audit the "in the pack" claim directly rather than take the forest plot on faith.
+
+| dataset | Cox PH | penalized Cox | RSF | ReLU DeepSurv | **Yat DeepSurv** |
+| --- | --- | --- | --- | --- | --- |
+| METABRIC | 0.627 | 0.627 | 0.638 | 0.632 | **0.621** |
+| SUPPORT | 0.570 | 0.569 | 0.612 | 0.604 | **0.606** |
+| GBSG | 0.665 | 0.665 | 0.676 | 0.670 | **0.662** |
+| WHAS500 | 0.765 | 0.765 | 0.763 | 0.744 | **0.679** |
+| FLCHAIN | 0.928 | 0.929 | 0.917 | 0.923 | **0.909** |
+
+*(Mean held-out concordance index over six seeds; higher is better, chance is 0.5. Full mean, standard deviation, AUC, integrated Brier, and bootstrap intervals are in `scripts/results/kgl_blog-deepsurv-trial-v2/trial_results.json`.)*
+
+## What the trial settled
+
+Go back to the tension we opened on. A kernel machine gives you a theory and demands a solve that will not scale or compose. A deep network gives you the training and takes away the reasons. The claim of this whole series has been that the Yat kernel dissolves that choice, and this trial is the claim made to stand up in front of the baselines a skeptic would name.
+
+The verdict is not a trophy and was never meant to be. It is that the white-box survival model is *viable*: trained by ordinary gradient descent with no solve, it ranks patients about as well as classical Cox and within a whisker of a tuned forest across a spread of real datasets, and where it costs a point or two we can point at exactly which datasets and why. What it gives back for that small, visible cost is everything a kernel machine was always supposed to: a risk score that names its prototype patients, a calibration you can read tertile by tertile, a resemblance meter that flags a genuine stranger, and prototypes you can audit against the clinic. The previous post said legibility comes free; the correction is that on the harder small-data corners it is not quite free, and it is still a bargain, because the thing you are buying, a deep model you can actually read, edit, and bound, is not on the menu at any of the baselines at any price. That was the existence proof, and it survived the trial.
+
+<CiteAs slug="survival-model-on-trial" title="The White-Box Survival Model on Trial" pubDate="2026-07-09" />
+
+<style>{`
+.scope-box { margin: 1.8rem 0; padding: 14px 18px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; background: var(--bg-elev, #fff); font-size: 0.94rem; line-height: 1.6; }
+`}</style>

@@ -152,7 +152,7 @@ m =  256   relative error 0.183   (worst draw 0.259)
 m = 1024   relative error 0.099   (worst draw 0.134)
 ```
 
-Each 4x in features roughly halves the error: the $1/\sqrt m$ of a Monte-Carlo estimate, visible in the digits. One honest caveat rides along. These are unit-norm queries and keys; the positive-feature estimator's variance grows like $e^{\|q+k\|^2}$, so vectors with much larger norms need far more features (or the orthogonal-feature tricks a production Performer adds).
+Each 4x in features roughly halves the error: the $1/\sqrt m$ of a Monte-Carlo estimate, visible in the digits. One caveat rides along. These are unit-norm queries and keys; the positive-feature estimator's variance grows like $e^{\|q+k\|^2}$, so vectors with much larger norms need far more features (or the orthogonal-feature tricks a production Performer adds).
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/linear-attention-error.gif" alt="Animated convergence of linear attention: the exact softmax attention matrix, the matrix implied by m positive random features sharpening as m grows, and the relative output error falling along a one-over-square-root-of-m line" loading="lazy" width="1100" height="460" />

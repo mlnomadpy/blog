@@ -244,7 +244,7 @@ assert jnp.min(jnp.linalg.norm(forces, axis=1)) > 1e-4   # force everywhere, no 
 
 ## What this leaves out
 
-This is a teaching implementation, not a drop-in transformer FFN, that is an empirical question the [explainer](/blog/what-a-finite-kernel-buys-an-mlp/) is careful not to prejudge. Three honest notes. The distance term costs more memory traffic than a single GEMM, even though it reduces to a matmul plus two norm vectors. The canonical block is $x \to \text{Yat} \to \text{Linear}$, not stacked kernels. And prototype initialization matters more than weight initialization in a ReLU net, because a center is a *location*, not just a scale. None of that changes the object: a layer whose primitive is a finite, positive-definite kernel, and whose every affordance, locality, attribution, geometry, capacity, a feature map, is a property of that kernel rather than something bolted on after the fact.
+This is a teaching implementation, not a drop-in transformer FFN, that is an empirical question the [explainer](/blog/what-a-finite-kernel-buys-an-mlp/) leaves open. Three notes. The distance term costs more memory traffic than a single GEMM, even though it reduces to a matmul plus two norm vectors. The canonical block is $x \to \text{Yat} \to \text{Linear}$, not stacked kernels. And prototype initialization matters more than weight initialization in a ReLU net, because a center is a *location*, not just a scale. None of that changes the object: a layer whose primitive is a finite, positive-definite kernel, and whose every affordance, locality, attribution, geometry, capacity, a feature map, is a property of that kernel rather than something bolted on after the fact.
 
 ---
 

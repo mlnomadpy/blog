@@ -180,7 +180,7 @@ The bisection lands on **0.462** of the raw gain, and the certificate reads mean
 
 ## Audit the drift: 520 fixed points, re-solved and subtracted
 
-The readout edit's invariance was a proof. The dynamics edit's cannot be, the map moved, so the only honest thing is a measurement, and this is where the recursion earns its keep: solve every old fixed point under the base operator and under the edited one, and subtract.
+The readout edit's invariance was a proof. The dynamics edit's cannot be, the map moved, so what remains is a measurement, and this is where the recursion earns its keep: solve every old fixed point under the base operator and under the edited one, and subtract.
 
 ```python
 zb = model.zstar(Xte_old)                                  # 520 base equilibria
@@ -229,7 +229,7 @@ Nothing survives. Run the hybrid with the edit steering for the first 3, 10, or 
 
 ## What a stack charges for the same edit
 
-The evaporation result says an edit must exist at every depth to exist at all. The tied network gets that for free; what does it cost when the weights are not shared? The run trains the honest control, the same architecture with the tying switched off, twelve untied layers, which needs **18,981** parameters to the loop's 1,733 before anyone edits anything. Reading is cheap everywhere: pasting anchor rows onto the stack's final state teaches the class at full recall with zero dynamics edits. But putting the class into the dynamics has no single place to go. The paste must be repeated at each layer where the edit should exist.
+The evaporation result says an edit must exist at every depth to exist at all. The tied network gets that for free; what does it cost when the weights are not shared? The run trains the control, the same architecture with the tying switched off, twelve untied layers, which needs **18,981** parameters to the loop's 1,733 before anyone edits anything. Reading is cheap everywhere: pasting anchor rows onto the stack's final state teaches the class at full recall with zero dynamics edits. But putting the class into the dynamics has no single place to go. The paste must be repeated at each layer where the edit should exist.
 
 ```python
 # the tied loop: one paste, active at every turn
@@ -282,7 +282,7 @@ pred = jnp.where(s > masked.max(-1), 2, masked.argmax(-1))
 print("resurrected recall:", float((pred[y_old == 2] == 2).mean()))         # 1.0, never erased
 ```
 
-That is the honest boundary, and it is the finding of the post: inside a fixed point, *what you constructed, you can delete exactly; what you trained, you can only silence*. The equilibrium model keeps the exact-unlearning guarantee precisely for the knowledge that lives as rows.
+That is the boundary, and it is the finding of the post: inside a fixed point, *what you constructed, you can delete exactly; what you trained, you can only silence*. The equilibrium model keeps the exact-unlearning guarantee precisely for the knowledge that lives as rows.
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/deqedit-silence-erase.gif" alt="A cluster of blob-class equilibria in the state plane recolouring from green to its neighbours' colours when the readout row is masked, the recall bar dropping to zero, then recolouring back to green when eight anchors are pasted, positions never moving" loading="lazy" width="946" height="517" />
@@ -291,7 +291,7 @@ That is the honest boundary, and it is the finding of the post: inside a fixed p
 
 ## What this leaves out
 
-Two rows, two contracts. Readout rows keep every proof from the list network: exact invariance (`max |Δ| = 0.0`), exact undo, zero gradient steps. Dynamics rows are more powerful, one `jnp.concatenate` re-carves the landscape at every depth at once, something a stack would charge twelve edits and 6,144 numbers for, and in exchange they demand a measurement culture: run `certificate`, re-solve the fixed points, report the drift, `rescue_gamma` when the slope crosses one. The honest limit is the same as its parent's: these rows are legible because the state space is low-dimensional and the anchors are settled inputs, and true erasure of trained knowledge still means editing the dynamics it is woven into, which is retraining by another name. What does not change is the object: an equation whose rows you can read, append, delete, and certify, so that editing the network is editing one operator and auditing exactly what that did.
+Two rows, two contracts. Readout rows keep every proof from the list network: exact invariance (`max |Δ| = 0.0`), exact undo, zero gradient steps. Dynamics rows are more powerful, one `jnp.concatenate` re-carves the landscape at every depth at once, something a stack would charge twelve edits and 6,144 numbers for, and in exchange they demand a measurement culture: run `certificate`, re-solve the fixed points, report the drift, `rescue_gamma` when the slope crosses one. The limit is the same as its parent's: these rows are legible because the state space is low-dimensional and the anchors are settled inputs, and true erasure of trained knowledge still means editing the dynamics it is woven into, which is retraining by another name. What does not change is the object: an equation whose rows you can read, append, delete, and certify, so that editing the network is editing one operator and auditing exactly what that did.
 
 ---
 

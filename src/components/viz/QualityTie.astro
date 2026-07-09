@@ -1,0 +1,84 @@
+---
+interface Props { caption?: string; height?: number; }
+const { caption, height = 380 } = Astro.props;
+---
+<figure class="viz qualitytie" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The honest headline: best (early-stopped) val loss per variant, 3 seeds, drawn
+// as a point with its min-to-max seed interval on a zoomed axis. The four
+// intervals nearly overlap: the ledger does NOT make the model better on quality.
+// A comparison of four fixed numbers is STATIC (no process), so this is a figure.
+// Numbers from scripts/results/.../velocity_ledger_summary.json.
+import { defineViz } from './engine/vizkit.js';
+import { grid, panel, dot, T, fmt } from './engine/draw.js';
+import { gate, loadingText } from './engine/draw.js';
+import { loadSummary, ORDER, VCOL, VLABEL } from './velocityledger.js';
+
+defineViz('qualitytie', {
+  title: 'On quality the four variants tie: best val loss lands inside seed noise',
+  height: 380,
+  controls: [{ type: 'readout', name: 'rd' }],
+  setup(api) {
+    gate(api, loadSummary, (api, d) => {
+      api.state.byKey = {};
+      for (const v of d.variants) api.state.byKey[v.key] = v;
+    });
+  },
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    if (!st || !st.ready) { loadingText(api, 'loading the best-val numbers…'); return; }
+    const cell = grid(size.W, size.H, 1, 1, 0)[0];
+    const m = panel(ctx, cell, colors, { header: 44 });
+    T(ctx, colors, 'label', { color: colors.fg, weight: 'b' });
+    ctx.fillText('best validation loss (lower = better), 3 seeds', cell.x + 14, cell.y + 18);
+    T(ctx, colors, 'small', { color: colors.muted });
+    ctx.fillText('dot = seed mean · bar = min to max across seeds · axis zoomed to where the data lives', cell.x + 14, cell.y + 33);
+
+    const rows = ORDER.map((k) => st.byKey[k]);
+    // zoom axis to the spread of means +/- spreads
+    let lo = Infinity, hi = -Infinity;
+    for (const v of rows) { lo = Math.min(lo, v.best_val.min); hi = Math.max(hi, v.best_val.max); }
+    const pad = (hi - lo) * 0.35 || 0.01;
+    lo -= pad; hi += pad;
+    const x0 = cell.x + 150, x1 = cell.x + cell.w - 60;
+    const sx = (v) => x0 + ((v - lo) / (hi - lo)) * (x1 - x0);
+    const top = cell.y + 62, bot = cell.y + cell.h - 40;
+    const rowH = (bot - top) / rows.length;
+
+    // axis ticks
+    T(ctx, colors, 'small', { color: colors.muted, align: 'center', baseline: 'top' });
+    ctx.textAlign = 'center';
+    const nt = 4;
+    ctx.strokeStyle = colors.border; ctx.lineWidth = 1;
+    for (let t = 0; t <= nt; t++) {
+      const v = lo + (hi - lo) * t / nt;
+      const x = sx(v);
+      ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.moveTo(x, top - 6); ctx.lineTo(x, bot + 6); ctx.stroke(); ctx.globalAlpha = 1;
+      ctx.fillText(v.toFixed(3), x, bot + 12);
+    }
+    ctx.textAlign = 'left';
+
+    rows.forEach((v, i) => {
+      const cy = top + rowH * (i + 0.5);
+      const k = v.key;
+      T(ctx, colors, 'label', { color: VCOL[k], weight: 'b', baseline: 'middle' });
+      ctx.textAlign = 'right';
+      ctx.fillText(VLABEL[k], x0 - 14, cy);
+      ctx.textAlign = 'left';
+      const a = sx(v.best_val.min), b = sx(v.best_val.max), mid = sx(v.best_val.mean);
+      ctx.strokeStyle = VCOL[k]; ctx.lineWidth = 2.4; ctx.globalAlpha = 0.55;
+      ctx.beginPath(); ctx.moveTo(a, cy); ctx.lineTo(b, cy); ctx.stroke(); ctx.globalAlpha = 1;
+      ctx.lineWidth = 2; ctx.beginPath();
+      ctx.moveTo(a, cy - 5); ctx.lineTo(a, cy + 5); ctx.moveTo(b, cy - 5); ctx.lineTo(b, cy + 5); ctx.stroke();
+      dot(ctx, mid, cy, 5, VCOL[k]);
+      T(ctx, colors, 'small', { color: colors.fg, weight: 'b', baseline: 'middle' });
+      ctx.fillText(v.best_val.mean.toFixed(3), b + 12, cy);
+    });
+
+    api.readout('rd', 'best-val spread ≈ 0.036 across all four, seed noise ≈ 0.005: on quality, they tie');
+  },
+});
+</script>

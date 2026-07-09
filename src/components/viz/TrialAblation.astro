@@ -1,0 +1,120 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 400 } = Astro.props;
+---
+<figure class="viz trialablation" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// How many prototypes, and how to seed them? The Yat DeepSurv's C-index as the
+// prototype count K sweeps 6 -> 48, kmeans seeding against random seeding, with
+// the per-seed spread as a shaded band. The point is stability: accuracy barely
+// moves with K, and k-means seeding is the safer default. Data:
+// scripts/deepsurv_trial.py -> ablation.json.
+import { defineViz } from './engine/vizkit.js';
+import { gate, loadingText, axes, T as Ty, parseColor, rgba } from './engine/draw.js';
+import { DS_LABEL } from './trial.js';
+
+defineViz('trialablation', {
+  title: 'How many prototypes, and how to seed them?',
+  height: 400,
+  controls: [
+    { type: 'select', name: 'ds', label: 'dataset',
+      options: [
+        { value: 'metabric', label: 'METABRIC' },
+        { value: 'gbsg', label: 'GBSG' },
+      ], value: 'metabric', reset: false },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    gate(api, () => import('./trial.js').then((m) => m.loadAblation()), (api, d) => { api.state.d = d; });
+  },
+
+  onControl() {},
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (W === 0 || !st) return;
+    if (!st.ready) { loadingText(api); return; }
+    const d = st.d;
+    const ds = api.get('ds');
+    const series = d.series[ds];
+    const Ks = d.Ks;
+
+    const pad = 16, top = 34, bottom = 46, right = 130;
+    const bx = 52, by = top, bw = W - bx - right - pad, bh = H - top - bottom;
+
+    // y-range from all points +/- std
+    let ylo = Infinity, yhi = -Infinity;
+    for (const init of ['kmeans', 'random']) for (const p of series[init]) {
+      ylo = Math.min(ylo, p.mean - p.std); yhi = Math.max(yhi, p.mean + p.std);
+    }
+    const pd = (yhi - ylo) * 0.18 || 0.02; ylo -= pd; yhi += pd;
+    const yticks = [];
+    const ys = (yhi - ylo);
+    const yStep = ys > 0.08 ? 0.02 : 0.01;
+    for (let t = Math.ceil(ylo / yStep) * yStep; t <= yhi + 1e-9; t += yStep) yticks.push(+t.toFixed(3));
+
+    // x is index over Ks (evenly spaced), labeled with K
+    const xAt = (i) => bx + (Ks.length === 1 ? 0.5 : i / (Ks.length - 1)) * bw;
+    const A = axes(ctx, { x: bx, y: by, w: bw, h: bh }, {
+      xMin: 0, xMax: 1, yMin: ylo, yMax: yhi,
+      yTicks: yticks, fmtY: (v) => v.toFixed(2), grid: true, border: true,
+    }, colors);
+    // x ticks (K labels)
+    Ty(ctx, colors, 'small', { color: colors.faint, align: 'center' });
+    ctx.textBaseline = 'top';
+    Ks.forEach((k, i) => ctx.fillText('K=' + k, xAt(i), by + bh + 5));
+
+    const initColor = { kmeans: colors.accent, random: colors.blue };
+    for (const init of ['kmeans', 'random']) {
+      const pts = series[init];
+      const col = initColor[init];
+      const c = parseColor(col);
+      // band
+      ctx.fillStyle = rgba(c, 0.12);
+      ctx.beginPath();
+      pts.forEach((p, i) => { const x = xAt(i), y = A.sy(p.mean + p.std); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+      for (let i = pts.length - 1; i >= 0; i--) { const p = pts[i], x = xAt(i), y = A.sy(p.mean - p.std); ctx.lineTo(x, y); }
+      ctx.closePath(); ctx.fill();
+      // line
+      ctx.strokeStyle = col; ctx.lineWidth = 2.2; ctx.beginPath();
+      pts.forEach((p, i) => { const x = xAt(i), y = A.sy(p.mean); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+      ctx.stroke();
+      // dots
+      pts.forEach((p, i) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(xAt(i), A.sy(p.mean), 3.6, 0, 7); ctx.fill(); });
+    }
+
+    // legend
+    let ly = by + 6;
+    for (const init of ['kmeans', 'random']) {
+      ctx.fillStyle = initColor[init]; ctx.fillRect(bx + bw + 18, ly - 5, 12, 4);
+      Ty(ctx, colors, 'label', { color: colors.fg, align: 'left' }); ctx.textBaseline = 'middle';
+      ctx.fillText(init + ' seed', bx + bw + 34, ly - 3); ly += 22;
+    }
+    Ty(ctx, colors, 'small', { color: colors.muted, align: 'left' });
+    ctx.textBaseline = 'top';
+    const wrapX = bx + bw + 18;
+    ctx.fillText('band = spread', wrapX, ly + 4);
+    ctx.fillText('over 3 seeds', wrapX, ly + 18);
+
+    // y-axis title
+    ctx.save(); ctx.translate(pad - 4, by + bh / 2); ctx.rotate(-Math.PI / 2);
+    Ty(ctx, colors, 'small', { color: colors.muted, align: 'center' }); ctx.textBaseline = 'top';
+    ctx.fillText('C-index', 0, 0); ctx.restore();
+
+    // readout: spread across K
+    const km = series['kmeans'], rd = series['random'];
+    const kmMeans = km.map((p) => p.mean), rdMeans = rd.map((p) => p.mean);
+    const kmSpread = Math.max(...kmMeans) - Math.min(...kmMeans);
+    const rdSpread = Math.max(...rdMeans) - Math.min(...rdMeans);
+    api.readout('rd', `${DS_LABEL[ds]}: C moves only ${kmSpread.toFixed(3)} (kmeans) / ${rdSpread.toFixed(3)} (random) as K goes 6 to 48.`);
+  },
+});
+</script>

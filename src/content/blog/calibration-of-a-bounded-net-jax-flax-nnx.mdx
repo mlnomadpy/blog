@@ -229,7 +229,7 @@ The field magnitude reads AUROC 0.914, 0.924, 0.901 across the seeds; the softma
 
 ## What the experiment settled
 
-The scoreboard, three seeds, nothing cherry-picked. In-distribution the ReLU net wins outright: ECE 1.76% against 6.20%, temperature 1.17 against 1.68, and it stays ahead after both are corrected, because the kernel's dynamic range saturates the softmax. Off-distribution the field magnitude, the number the softmax deletes, separates Fashion from MNIST at a steady 0.92 while the softmax channel wobbles. Calibration is a property of the probability head, not of the feature geometry: a softmax bolted onto a kernel launders similarity scores into false certainty, and the honest deployment recipe is a thermometer for the probabilities and a seismograph, the un-normalized field, for the "is this even my world?" question.
+The scoreboard, all three seeds. In-distribution the ReLU net wins outright: ECE 1.76% against 6.20%, temperature 1.17 against 1.68, and it stays ahead after both are corrected, because the kernel's dynamic range saturates the softmax. Off-distribution the field magnitude, the number the softmax deletes, separates Fashion from MNIST at a steady 0.92 while the softmax channel wobbles. Calibration is a property of the probability head, not of the feature geometry: a softmax bolted onto a kernel launders similarity scores into false certainty, and the deployment recipe is a thermometer for the probabilities and a seismograph, the un-normalized field, for the "is this even my world?" question.
 
 ---
 

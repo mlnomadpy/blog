@@ -1,0 +1,83 @@
+---
+interface Props { caption?: string; height?: number; }
+const { caption, height = 420 } = Astro.props;
+---
+<figure class="viz velocitythroughdepth" data-caption={caption} data-height={height} tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The ledger itself, made visible: the per-sub-update step size the residual
+// stream actually takes (seglen) for every variant, and, for the two ledger
+// variants, the velocity-stream norm (vnorm) filling from zero at the embedding.
+// The plain net takes ever bigger steps toward the readout; the ledger's stream
+// coasts on a smoothly accumulated velocity. Numbers from the final-checkpoint
+// depth telemetry, scripts/results/.../velocity_ledger.npz.
+import { defineViz } from './engine/vizkit.js';
+import { grid, panel, dot, T, fmt } from './engine/draw.js';
+import { gate, loadingText } from './engine/draw.js';
+import { loadDepth, VCOL, VLABEL } from './velocityledger.js';
+
+defineViz('velocitythroughdepth', {
+  title: 'The step the stream takes at each sub-update, and the velocity that funds it',
+  height: 420,
+  controls: [
+    { type: 'select', name: 'show', label: 'show', reset: false, options: [
+      { value: 'step', label: 'step size per sub-update' },
+      { value: 'vel', label: 'velocity-stream norm (ledger)' }], value: 'step' },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) {
+    gate(api, loadDepth, (api, d) => { api.state.d = d; });
+  },
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    if (!st || !st.ready) { loadingText(api, 'loading the depth telemetry…'); return; }
+    const show = api.get('show');
+    const cell = grid(size.W, size.H, 1, 1, 0)[0];
+    const m = panel(ctx, cell, colors, { header: 42 });
+    T(ctx, colors, 'label', { color: colors.fg, weight: 'b' });
+    ctx.fillText(show === 'step' ? 'displacement of the residual stream at each sub-update'
+                                 : 'velocity-stream norm through depth (the ledger variants)', cell.x + 14, cell.y + 18);
+    T(ctx, colors, 'small', { color: colors.muted });
+    ctx.fillText(show === 'step' ? 'two sub-updates per layer (attn, mlp) · 6 layers · final checkpoint'
+                                 : 'v starts at zero at the embedding and fills as depth accumulates gradient', cell.x + 14, cell.y + 33);
+
+    const keys = show === 'step' ? ['plain', 'ngpt_lite', 'ledger', 'ngpt_ledger']
+                                 : ['ledger', 'ngpt_ledger'];
+    const arr = (k) => show === 'step' ? st.d.variants[k].seglen : st.d.variants[k].vnorm;
+    const N = arr(keys[0]).length;
+    let maxV = 0;
+    for (const k of keys) maxV = Math.max(maxV, ...arr(k));
+    maxV *= 1.1;
+
+    const x0 = cell.x + 44, x1 = cell.x + cell.w - 96;
+    const top = cell.y + 56, bot = cell.y + cell.h - 30;
+    const sx = (i) => x0 + (N > 1 ? i / (N - 1) : 0) * (x1 - x0);
+    const sy = (v) => bot - (v / maxV) * (bot - top);
+
+    ctx.strokeStyle = colors.border; T(ctx, colors, 'small', { color: colors.muted, align: 'right', baseline: 'middle' });
+    ctx.textAlign = 'right';
+    for (let g = 0; g <= 4; g++) { const v = maxV * g / 4, y = sy(v); ctx.globalAlpha = 0.4; ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke(); ctx.globalAlpha = 1; ctx.fillText(fmt(v, 0), x0 - 8, y); }
+    ctx.textAlign = 'center'; T(ctx, colors, 'small', { color: colors.muted, align: 'center', baseline: 'top' });
+    ctx.fillText('embedding', sx(0), bot + 8);
+    ctx.fillText('readout', sx(N - 1), bot + 8);
+    ctx.textAlign = 'left';
+
+    for (const k of keys) {
+      const s = arr(k);
+      ctx.strokeStyle = VCOL[k]; ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      for (let i = 0; i < N; i++) { const x = sx(i), y = sy(s[i]); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+      ctx.stroke();
+      for (let i = 0; i < N; i++) dot(ctx, sx(i), sy(s[i]), 2.2, VCOL[k]);
+      T(ctx, colors, 'small', { color: VCOL[k], weight: 'b', baseline: 'middle' });
+      ctx.fillText(VLABEL[k], sx(N - 1) + 8, sy(s[N - 1]));
+    }
+
+    api.readout('rd', show === 'step'
+      ? 'the plain step balloons toward the readout (25 units); the ledger keeps each step small and even'
+      : 'the velocity fills smoothly from zero: momentum carries the state instead of the raw block output');
+  },
+});
+</script>

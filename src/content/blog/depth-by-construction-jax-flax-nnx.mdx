@@ -42,7 +42,7 @@ import CiteAs from '../../components/CiteAs.astro';
 
 ## What layer 2 is made of
 
-What can a second layer even say? Only things about the first. Layer 1's whole vocabulary is seven words per cell, six oriented-edge energies and a corner, so layer 2 has to be sentences that *relate* those words. The cheapest honest AND between two non-negative energies is their minimum, and four kinds of sentence fall out of it: a junction (two orientations in one cell), a continuation (one orientation one cell along its own direction), a bend (a continuation that arrives rotated a step), and a stripe (a parallel echo two cells across). Layer 1 comes in unchanged from the last companion, mean-pooled to a 14-by-14 cell grid so layer 2 has neighbours to reach into.
+What can a second layer even say? Only things about the first. Layer 1's whole vocabulary is seven words per cell, six oriented-edge energies and a corner, so layer 2 has to be sentences that *relate* those words. The cheapest faithful AND between two non-negative energies is their minimum, and four kinds of sentence fall out of it: a junction (two orientations in one cell), a continuation (one orientation one cell along its own direction), a bend (a continuation that arrives rotated a step), and a stripe (a parallel echo two cells across). Layer 1 comes in unchanged from the last companion, mean-pooled to a 14-by-14 cell grid so layer 2 has neighbours to reach into.
 
 ```python
 import numpy as np, math
@@ -72,7 +72,7 @@ A junction is the whole idea in one picture: take the map of one orientation and
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/depth-junction-assembly.png" alt="Three panels on a real bag: the 30-degree edge map, the 90-degree edge map, and their pointwise minimum, a 30+90 junction detector that fires only at the corners where both orientations are present" loading="lazy" width="946" height="429" />
-  <figcaption>The entire mechanism of layer 2, on a real garment. Left, the 30° edge map of a bag; middle, its 90° edge map; right, their pointwise minimum, a detector that is bright only where <em>both</em> orientations are present in the same cell, which is what a junction is. This is <code>np.minimum(e1, e2)</code>, the cheapest honest AND of two non-negative energies, no parameter fit. Rendered by <code>scripts/render_depth_figs.py</code>.</figcaption>
+  <figcaption>The entire mechanism of layer 2, on a real garment. Left, the 30° edge map of a bag; middle, its 90° edge map; right, their pointwise minimum, a detector that is bright only where <em>both</em> orientations are present in the same cell, which is what a junction is. This is <code>np.minimum(e1, e2)</code>, the cheapest faithful AND of two non-negative energies, no parameter fit. Rendered by <code>scripts/render_depth_figs.py</code>.</figcaption>
 </figure>
 
 ## The four lines that are the layer

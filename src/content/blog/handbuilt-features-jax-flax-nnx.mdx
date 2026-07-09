@@ -165,7 +165,7 @@ print(100 * (((Fte[:, None] - cen[None]) ** 2).sum(2).argmin(1) == yte).mean()) 
 
 <figure class="jax-fig">
   <img src="/blog/handbuilt-yat-well.png" alt="Four garments, each with ten wells along the class axis whose depths are that garment's real Yat scores; the star sits in the deepest well, correct for three and a miss for the fourth" loading="lazy" width="900" height="620" />
-  <figcaption>The forward pass of the head, as ten wells, for four real garments. Each well's depth is that garment's <em>real</em> Yat score for that class, the numbers the module computes, so the feature vector fixes all ten depths and the star sits at the bottom of the deepest one: that is <code>scores.argmax</code>, nothing simulated. Three land in the right well; the fourth is a coat scoring highest for pullover, with coat the runner-up, which is exactly why the two confuse: the honest 83.3%, not a perfect classifier. Rendered by <code>scripts/render_handbuilt_gifs.py</code>.</figcaption>
+  <figcaption>The forward pass of the head, as ten wells, for four real garments. Each well's depth is that garment's <em>real</em> Yat score for that class, the numbers the module computes, so the feature vector fixes all ten depths and the star sits at the bottom of the deepest one: that is <code>scores.argmax</code>, nothing simulated. Three land in the right well; the fourth is a coat scoring highest for pullover, with coat the runner-up, which is exactly why the two confuse: the real 83.3%, not a perfect classifier. Rendered by <code>scripts/render_handbuilt_gifs.py</code>.</figcaption>
 </figure>
 
 ## What this leaves out
