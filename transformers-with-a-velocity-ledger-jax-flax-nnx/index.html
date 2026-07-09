@@ -1,0 +1,584 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="generator" content="Astro v5.18.1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#fbfaf6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)"><title>Velocity-Ledger Transformer in JAX/Flax NNX</title><meta name="description" content="Build a velocity-ledger Transformer in Flax NNX: the pre-norm block as Euler, a one-line velocity stream, ngpt-lite retraction, and depth telemetry."><meta name="keywords" content="velocity ledger transformer JAX, pre-norm block forward Euler, flax nnx residual stream, nGPT hypersphere retraction, depth telemetry path length, momentum in depth, best-val early stopping, ml, transformers, residual-stream, momentum, nGPT, jax, flax, nnx, implementation, dynamical-systems, deep-learning"><meta name="author" content="Taha Bouhsine"><link rel="canonical" href="https://tahabouhsine.com/blog/transformers-with-a-velocity-ledger-jax-flax-nnx/"><link rel="icon" href="/blog/favicon.svg" type="image/svg+xml"><link rel="alternate" type="application/rss+xml" title="Records of the !mmortal Data Scientist" href="/blog/rss.xml"><link rel="sitemap" href="/blog/sitemap-index.xml"><link rel="me" href="https://github.com/mlnomadpy"><link rel="me" href="https://x.com/mlnomadpy"><link rel="me" href="https://www.linkedin.com/in/tahabsn/"><link rel="me" href="https://scholar.google.com/citations?user=IsBjb3EAAAAJ"><link rel="me" href="https://g.dev/tahabsn"><link rel="author" href="https://github.com/mlnomadpy"><meta property="og:type" content="article"><meta property="og:site_name" content="Records of the !mmortal Data Scientist"><meta property="og:title" content="Velocity-Ledger Transformer in JAX/Flax NNX"><meta property="og:description" content="Build a velocity-ledger Transformer in Flax NNX: the pre-norm block as Euler, a one-line velocity stream, ngpt-lite retraction, and depth telemetry."><meta property="og:url" content="https://tahabouhsine.com/blog/transformers-with-a-velocity-ledger-jax-flax-nnx/"><meta property="og:locale" content="en_US"><meta property="og:image" content="https://tahabouhsine.com/blog/og/transformers-with-a-velocity-ledger-jax-flax-nnx.png"><meta property="og:image:alt" content="A Velocity Ledger for Transformers, in JAX/Flax NNX — Records of the !mmortal Data Scientist"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:type" content="image/png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@mlnomadpy"><meta name="twitter:creator" content="@mlnomadpy"><meta name="twitter:title" content="Velocity-Ledger Transformer in JAX/Flax NNX"><meta name="twitter:description" content="Build a velocity-ledger Transformer in Flax NNX: the pre-norm block as Euler, a one-line velocity stream, ngpt-lite retraction, and depth telemetry."><meta name="twitter:image" content="https://tahabouhsine.com/blog/og/transformers-with-a-velocity-ledger-jax-flax-nnx.png"><meta name="twitter:image:alt" content="A Velocity Ledger for Transformers, in JAX/Flax NNX — Records of the !mmortal Data Scientist"><meta property="article:published_time" content="2026-07-09T17:00:00.000Z"><meta property="article:author" content="Taha Bouhsine"><meta property="article:section" content="Machine Learning"><meta property="article:tag" content="ml"><meta property="article:tag" content="transformers"><meta property="article:tag" content="residual-stream"><meta property="article:tag" content="momentum"><meta property="article:tag" content="nGPT"><meta property="article:tag" content="jax"><meta property="article:tag" content="flax"><meta property="article:tag" content="nnx"><meta property="article:tag" content="implementation"><meta property="article:tag" content="dynamical-systems"><meta property="article:tag" content="deep-learning"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","@id":"https://tahabouhsine.com/blog/transformers-with-a-velocity-ledger-jax-flax-nnx/#article","headline":"A Velocity Ledger for Transformers, in JAX/Flax NNX","name":"A Velocity Ledger for Transformers, in JAX/Flax NNX","description":"Build a velocity-ledger Transformer in Flax NNX: the pre-norm block as Euler, a one-line velocity stream, ngpt-lite retraction, and depth telemetry.","image":["https://tahabouhsine.com/blog/og/transformers-with-a-velocity-ledger-jax-flax-nnx.png"],"datePublished":"2026-07-09T17:00:00.000Z","dateModified":"2026-07-09T17:00:00.000Z","author":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#author","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","jobTitle":"Machine Learning Researcher","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"publisher":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#publisher","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"mainEntityOfPage":{"@type":"WebPage","@id":"https://tahabouhsine.com/blog/transformers-with-a-velocity-ledger-jax-flax-nnx/"},"keywords":"velocity ledger transformer JAX, pre-norm block forward Euler, flax nnx residual stream, nGPT hypersphere retraction, depth telemetry path length, momentum in depth, best-val early stopping, ml, transformers, residual-stream, momentum, nGPT, jax, flax, nnx, implementation, dynamical-systems, deep-learning","url":"https://tahabouhsine.com/blog/transformers-with-a-velocity-ledger-jax-flax-nnx/","inLanguage":"en-US","wordCount":2200,"timeRequired":"PT11M","articleSection":"Machine Learning","isPartOf":{"@type":"Blog","@id":"https://tahabouhsine.com/blog/","name":"Records of the !mmortal Data Scientist","url":"https://tahabouhsine.com/blog/"}}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Blog","item":"https://tahabouhsine.com/blog/"},{"@type":"ListItem","position":2,"name":"Machine Learning","item":"https://tahabouhsine.com/blog/tag/ml/"},{"@type":"ListItem","position":3,"name":"A Velocity Ledger for Transformers, in JAX/Flax NNX","item":"https://tahabouhsine.com/blog/transformers-with-a-velocity-ledger-jax-flax-nnx/"}]}</script><script>
+    (function () {
+      if (window.__gaSetup) return;
+      window.__gaSetup = true;
+      var GA_ID = 'G-373438VHJB';
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ dataLayer.push(arguments); }
+      window.gtag = window.gtag || gtag;
+      window.__gaEventQueue = window.__gaEventQueue || [];
+      window.__trackGA = function (eventName, params) {
+        if (!eventName) return;
+        var item = { name: eventName, params: params || {} };
+        if (window.__gaLoaded) {
+          gtag('event', item.name, item.params);
+        } else {
+          window.__gaEventQueue.push(item);
+        }
+      };
+
+      // Track whether the first astro:page-load has fired, so a mid-session
+      // Accept can still record the current page.
+      window.__gaFirstLoadDone = window.__gaFirstLoadDone || false;
+      document.addEventListener('astro:page-load', function () { window.__gaFirstLoadDone = true; });
+
+      window.__loadGA = function () {
+        if (window.__gaLoaded) return;
+        window.__gaLoaded = true;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+        document.head.appendChild(s);
+        gtag('js', new Date());
+        gtag('config', GA_ID, { send_page_view: false });
+        (window.__gaEventQueue || []).splice(0).forEach(function (item) {
+          gtag('event', item.name, item.params);
+        });
+        function sendPV() {
+          gtag('event', 'page_view', {
+            page_title: document.title,
+            page_location: location.href,
+            page_path: location.pathname + location.search,
+          });
+        }
+        document.addEventListener('astro:page-load', sendPV);
+        // If the initial page-load already happened (accept mid-session),
+        // record this page now; otherwise the listener catches the first one.
+        if (window.__gaFirstLoadDone) sendPV();
+      };
+
+      try {
+        if (localStorage.getItem('analytics-consent') === 'granted') window.__loadGA();
+      } catch (e) {}
+    })();
+  </script><script>
+  (() => {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'light' || stored === 'dark') {
+      document.documentElement.setAttribute('data-theme', stored);
+    }
+  })();
+</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.DstInXr_.css">
+<link rel="stylesheet" href="/blog/_astro/_slug_.BzSIaIK4.css">
+<style>.colophon[data-astro-cid-hgpgqpeo]{margin:2.5rem 0 0;padding:.9rem 1.1rem;border:1px solid var(--border);border-radius:8px;background:var(--bg-sunken, var(--bg))}.colophon[data-astro-cid-hgpgqpeo] p[data-astro-cid-hgpgqpeo]{margin:0;font-size:.82rem;line-height:1.6;color:var(--fg-muted)}
+</style><style>.cite-as[data-astro-cid-p234urri]{margin:3.5rem 0 0;padding-top:1.5rem;border-top:1px solid var(--border)}.cite-as[data-astro-cid-p234urri] h2[data-astro-cid-p234urri]{font-family:var(--mono);font-size:.82rem;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-faint);font-weight:500;margin:0 0 .75rem}.cite-as[data-astro-cid-p234urri] h3[data-astro-cid-p234urri]{font-family:var(--mono);font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-faint);font-weight:500;margin:1.5rem 0 .6rem}.cite-line[data-astro-cid-p234urri]{font-family:var(--serif);font-size:.98rem;line-height:1.55;color:var(--fg-muted);margin:0 0 .5rem}.cite-line[data-astro-cid-p234urri] em[data-astro-cid-p234urri]{color:var(--fg)}.cite-bib[data-astro-cid-p234urri]{margin:.4rem 0 0;position:relative}.cite-bib[data-astro-cid-p234urri] summary[data-astro-cid-p234urri]{cursor:pointer;font-family:var(--mono);font-size:.78rem;color:var(--fg-muted);padding:.25rem 0;user-select:none}.cite-bib[data-astro-cid-p234urri] summary[data-astro-cid-p234urri]:hover{color:var(--accent)}.cite-bib[data-astro-cid-p234urri] pre[data-astro-cid-p234urri]{margin:.4rem 0 0;padding:.85rem 1rem;background:var(--bg-elev);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;font-size:.82rem;line-height:1.55}.cite-bib[data-astro-cid-p234urri] pre[data-astro-cid-p234urri] code[data-astro-cid-p234urri]{background:transparent;border:0;padding:0}.cite-copy[data-astro-cid-p234urri]{position:absolute;top:2.1rem;right:.55rem;background:var(--bg);border:1px solid var(--border);color:var(--fg-muted);font-family:var(--mono);font-size:.72rem;padding:.25rem .55rem;border-radius:var(--radius-sm);cursor:pointer;transition:color var(--transition-fast),border-color var(--transition-fast)}.cite-copy[data-astro-cid-p234urri]:hover,.cite-copy[data-astro-cid-p234urri].copied{color:var(--accent);border-color:var(--accent)}
+</style></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/archive">archive</a><a href="/blog/map">map</a><a href="/blog/writeups">writeups</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>
+  (() => {
+    const apply = (theme) => {
+      document.documentElement.setAttribute('data-theme', theme);
+      const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+      if (meta) meta.setAttribute('content', theme === 'dark' ? '#0e1116' : '#fbfaf6');
+      // Sync giscus iframe if present
+      const giscus = document.querySelector('iframe.giscus-frame');
+      if (giscus && giscus.contentWindow) {
+        giscus.contentWindow.postMessage(
+          { giscus: { setConfig: { theme: theme === 'dark' ? 'dark' : 'light' } } },
+          'https://giscus.app'
+        );
+      }
+    };
+
+    const init = () => {
+      const btns = document.querySelectorAll('[data-theme-toggle]');
+      btns.forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', () => {
+          const current = document.documentElement.getAttribute('data-theme')
+            || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          const next = current === 'dark' ? 'light' : 'dark';
+          localStorage.setItem('theme', next);
+          apply(next);
+        });
+      });
+    };
+
+    init();
+    document.addEventListener('astro:after-swap', init);
+    document.addEventListener('astro:page-load', init);
+  })();
+</script> </nav> </div> </header> <main id="main">  <div class="reading-progress" data-reading-progress aria-hidden="true"></div> <script>
+  (() => {
+    const init = () => {
+      const bar = document.querySelector('[data-reading-progress]');
+      if (!bar) return;
+      const update = () => {
+        const h = document.documentElement;
+        const scrolled = h.scrollTop;
+        const max = h.scrollHeight - h.clientHeight;
+        const pct = max > 0 ? Math.min(100, (scrolled / max) * 100) : 0;
+        bar.style.width = pct + '%';
+      };
+      // Coalesce scroll events into one paint per frame so fast/touch
+      // scrolling stays smooth.
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => { update(); ticking = false; });
+      };
+      update();
+      window.removeEventListener('scroll', window.__rp_onScroll || (() => {}));
+      window.removeEventListener('resize', window.__rp_onScroll || (() => {}));
+      window.__rp_onScroll = onScroll;
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+    };
+    init();
+    document.addEventListener('astro:page-load', init);
+    document.addEventListener('astro:after-swap', init);
+  })();
+</script> <article data-blog-post data-pagefind-body data-pagefind-meta="date:2026-07-09"> <header class="post-header">  <h1 data-pagefind-meta="title">A Velocity Ledger for Transformers, in JAX/Flax NNX</h1> <p class="meta"> <time datetime="2026-07-09T17:00:00.000Z">July 9, 2026</time>   · 11 min read </p> <p style="margin-top:0.65rem" data-pagefind-meta="tags:ml,transformers,residual-stream,momentum,nGPT,jax,flax,nnx,implementation,dynamical-systems,deep-learning"> <a class="tag" href="/blog/tag/ml/">#ml</a><a class="tag" href="/blog/tag/transformers/">#transformers</a><a class="tag" href="/blog/tag/residual-stream/">#residual-stream</a><a class="tag" href="/blog/tag/momentum/">#momentum</a><a class="tag" href="/blog/tag/nGPT/">#nGPT</a><a class="tag" href="/blog/tag/jax/">#jax</a><a class="tag" href="/blog/tag/flax/">#flax</a><a class="tag" href="/blog/tag/nnx/">#nnx</a><a class="tag" href="/blog/tag/implementation/">#implementation</a><a class="tag" href="/blog/tag/dynamical-systems/">#dynamical-systems</a><a class="tag" href="/blog/tag/deep-learning/">#deep-learning</a> </p> </header> <details class="series-nav" data-astro-cid-w7ld43o3><summary data-astro-cid-w7ld43o3><span class="sn-strip" data-astro-cid-w7ld43o3><span class="sn-part" data-astro-cid-w7ld43o3>Part 2 of 2</span><span class="sn-sep" aria-hidden="true" data-astro-cid-w7ld43o3>·</span><span class="sn-series" data-astro-cid-w7ld43o3>Networks as Integrators</span></span><span class="sn-chevron" aria-hidden="true" data-astro-cid-w7ld43o3><svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" data-astro-cid-w7ld43o3><path d="M2.5 4.5 6 8l3.5-3.5" data-astro-cid-w7ld43o3></path></svg></span></summary><ol class="sn-list" data-astro-cid-w7ld43o3><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/skip-connections-are-half-of-newton/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>1</span><span class="sn-title" data-astro-cid-w7ld43o3>Your Skip Connection Is Half of Newton</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/transformers-with-a-velocity-ledger/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>2</span><span class="sn-title" data-astro-cid-w7ld43o3>Transformers With a Velocity Ledger</span><span class="sn-note" data-astro-cid-w7ld43o3>this post's explainer</span></a></li></ol></details> <a class="companion-callout companion" href="/blog/transformers-with-a-velocity-ledger/" data-astro-cid-x4o4rwnl><span class="cc-icon" aria-hidden="true" data-astro-cid-x4o4rwnl>📖</span><span class="cc-body" data-astro-cid-x4o4rwnl><span class="cc-eyebrow" data-astro-cid-x4o4rwnl>Explainer companion</span><span class="cc-title" data-astro-cid-x4o4rwnl>Transformers With a Velocity Ledger</span><span class="cc-lead" data-astro-cid-x4o4rwnl>Want the full intuition first? This is the runnable companion to the explainer.</span></span><span class="cc-cta" data-astro-cid-x4o4rwnl>Read the explainer<span aria-hidden="true" data-astro-cid-x4o4rwnl>→</span></span></a>  <p><em>The <a href="/blog/transformers-with-a-velocity-ledger/">explainer</a> read a pre-norm Transformer layer <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi><mo>+</mo><mo>=</mo><mrow><mi mathvariant="normal">A</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">n</mi></mrow><mo stretchy="false">(</mo><mrow><mi mathvariant="normal">n</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">m</mi></mrow><mtext> </mtext><mi>x</mi><mo stretchy="false">)</mo><mo separator="true">;</mo><mtext> </mtext><mi>x</mi><mo>+</mo><mo>=</mo><mrow><mi mathvariant="normal">M</mi><mi mathvariant="normal">L</mi><mi mathvariant="normal">P</mi></mrow><mo stretchy="false">(</mo><mrow><mi mathvariant="normal">n</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">m</mi></mrow><mtext> </mtext><mi>x</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">x \mathrel{+}= \mathrm{Attn}(\mathrm{norm}\,x);\ x \mathrel{+}= \mathrm{MLP}(\mathrm{norm}\,x)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6667em;vertical-align:-0.0833em"></span><span class="mord mathnormal">x</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel"><span class="mord">+</span></span></span><span class="base"><span class="strut" style="height:0.3669em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathrm">Attn</span></span><span class="mopen">(</span><span class="mord"><span class="mord mathrm">norm</span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal">x</span><span class="mclose">)</span><span class="mpunct">;</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal">x</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel"><span class="mord">+</span></span></span><span class="base"><span class="strut" style="height:0.3669em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathrm">MLP</span></span><span class="mopen">(</span><span class="mord"><span class="mord mathrm">norm</span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal">x</span><span class="mclose">)</span></span></span></span> as two forward-Euler steps and asked what a velocity stream in the residual stream buys a real language model. The answer split: on quality the four variants tie, on dynamics the ledger makes the residual-stream path far shorter and straighter. This is the implementation: the plain block as Euler, the velocity ledger as one line of Flax NNX state, the ngpt-lite retraction variant, best-val early-stopped training, and the depth telemetry that measures the path. Every published number is from <code>scripts/velocity_ledger.py</code>; every figure is rendered from that run’s bundle by <code>scripts/render_velocity_ledger_gifs.py</code>.</em></p>
+<h2 id="the-plain-block-is-one-euler-step">The plain block is one Euler step<a class="heading-anchor-link" aria-label="Link to heading" href="#the-plain-block-is-one-euler-step"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Before any ledger, the block the whole post leans on, small enough to trust. A pre-norm Transformer layer reads a normalized copy of the residual stream, runs it through attention, adds the raw result back, and does the same with the MLP. Two sub-updates, each a state plus an increment, each forward Euler on the stream:</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> plain_step</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(x, ln, f, mask</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">None</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#6A737D;--shiki-dark:#768390">    # x  += f(norm x):  read a normalized copy, integrate the field, write back.</span></span>
+<span class="line"><span style="color:#6A737D;--shiki-dark:#768390">    # This is one forward-Euler step on the residual stream x (Delta t = 1).</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> x </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> f(ln(x))</span></span></code></pre>
+<p>The <code>norm</code> is the only wrinkle the ResNet did not have: the field is integrated on a <em>normalized</em> copy of the stream, then the raw increment is written to the un-normalized state. That is a preconditioning of the field, not a change to the integrator. The update is still position-plus-increment. Which means, exactly as in D1, there is no velocity anywhere: each sub-update moves the stream directly and forgets the direction of the last.</p>
+<h2 id="the-ledger-is-one-line-of-state">The ledger is one line of state<a class="heading-anchor-link" aria-label="Link to heading" href="#the-ledger-is-one-line-of-state"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>What does it take to give the residual stream a velocity? One persistent array, threaded through the layers, that the blocks write into instead of the stream. D1’s heavy-ball update, verbatim, now shared across both sub-updates of every layer:</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>v</mi><mi>l</mi></msub><mo>=</mo><mi>μ</mi><mtext> </mtext><msub><mi>v</mi><mrow><mi>l</mi><mo>−</mo><mn>1</mn></mrow></msub><mo>+</mo><mo stretchy="false">(</mo><mn>1</mn><mo>−</mo><mi>μ</mi><mo stretchy="false">)</mo><mtext> </mtext><mi>F</mi><mo stretchy="false">(</mo><mrow><mi mathvariant="normal">n</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">m</mi></mrow><mtext> </mtext><msub><mi>x</mi><mrow><mi>l</mi><mo>−</mo><mn>1</mn></mrow></msub><mo stretchy="false">)</mo><mo separator="true">,</mo><mspace width="2em"></mspace><msub><mi>x</mi><mi>l</mi></msub><mo>=</mo><msub><mi>x</mi><mrow><mi>l</mi><mo>−</mo><mn>1</mn></mrow></msub><mo>+</mo><mi>h</mi><mtext> </mtext><msub><mi>v</mi><mi>l</mi></msub><mo separator="true">,</mo><mspace width="2em"></mspace><msub><mi>v</mi><mn>0</mn></msub><mo>=</mo><mn>0.</mn></mrow><annotation encoding="application/x-tex">v_{l} = \mu\, v_{l-1} + (1-\mu)\, F(\mathrm{norm}\,x_{l-1}), \qquad x_l = x_{l-1} + h\, v_l, \qquad v_0 = 0.</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em">v</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0197em">l</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.7917em;vertical-align:-0.2083em"></span><span class="mord mathnormal">μ</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em">v</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0197em">l</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord mathnormal">μ</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.1389em">F</span><span class="mopen">(</span><span class="mord"><span class="mord mathrm">norm</span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0197em">l</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em"></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0197em">l</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.7917em;vertical-align:-0.2083em"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0197em">l</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em"></span><span class="mord mathnormal">h</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em">v</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0197em">l</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em"></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em">v</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">0.</span></span></span></span></span>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> ledger_step</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(x, v, ln, f, mu</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0.9</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, h</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1.0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, mask</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">None</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#6A737D;--shiki-dark:#768390">    # the block writes to the velocity stream; the velocity moves the state.</span></span>
+<span class="line"><span style="color:#6A737D;--shiki-dark:#768390">    # mu = 0 recovers plain_step EXACTLY. v is depth-state, not a weight: 0 params.</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    v </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> mu </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> v </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1.0</span><span style="color:#D73A49;--shiki-dark:#F47067"> -</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> mu) </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> f(ln(x))</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    x </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> x </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> h </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> v</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> x, v</span></span></code></pre>
+<p>At <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>μ</mi><mo>=</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\mu = 0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em"></span><span class="mord mathnormal">μ</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">0</span></span></span></span> the ledger forgets instantly and <code>ledger_step</code> <em>is</em> <code>plain_step</code>: one dial from Euler to heavy-ball, at identical parameter count, because <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>μ</mi></mrow><annotation encoding="application/x-tex">\mu</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em"></span><span class="mord mathnormal">μ</span></span></span></span> and <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>h</mi></mrow><annotation encoding="application/x-tex">h</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em"></span><span class="mord mathnormal">h</span></span></span></span> are fixed scalars, not learned. The velocity <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>v</mi></mrow><annotation encoding="application/x-tex">v</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em"></span><span class="mord mathnormal" style="margin-right:0.0359em">v</span></span></span></span> is depth-state (it lives only during the forward pass, zero-initialized at the embedding), so the ledger adds exactly zero parameters, verified in the bundle: plain and ledger both weigh 2,724,864 params.</p>
+<p>Both blocks live in one Flax NNX module, and the residual stream is threaded as a plain loop over the layers. The full model in <code>scripts/velocity_ledger.py</code> builds the four variants from the same <code>Block</code>; here is the residual-stream core, the part that differs:</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">class</span><span style="color:#6F42C1;--shiki-dark:#F69D50"> Block</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(</span><span style="color:#6F42C1;--shiki-dark:#6CB6FF">nnx</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.</span><span style="color:#6F42C1;--shiki-dark:#6CB6FF">Module</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> __init__</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(s, variant, dm, ff, heads, drop, </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, rngs):</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        if</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> variant.startswith(</span><span style="color:#032F62;--shiki-dark:#96D0FF">&#39;ngpt&#39;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">            s.alpha1 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Param(jnp.ones((dm,)))   </span><span style="color:#6A737D;--shiki-dark:#768390"># per-dim step scale (attn)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">            s.alpha2 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Param(jnp.ones((dm,)))   </span><span style="color:#6A737D;--shiki-dark:#768390"># per-dim step scale (mlp)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        else</span><span style="color:#24292E;--shiki-dark:#ADBAC7">:</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">            s.ln1 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.LayerNorm(dm, </span><span style="color:#E36209;--shiki-dark:#F69D50">rngs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">rngs)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">            s.ln2 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.LayerNorm(dm, </span><span style="color:#E36209;--shiki-dark:#F69D50">rngs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">rngs)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        s.attn </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.MultiHeadAttention(</span><span style="color:#E36209;--shiki-dark:#F69D50">num_heads</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">heads, </span><span style="color:#E36209;--shiki-dark:#F69D50">in_features</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">dm,</span></span>
+<span class="line"><span style="color:#E36209;--shiki-dark:#F69D50">                                        dropout_rate</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">drop, </span><span style="color:#E36209;--shiki-dark:#F69D50">decode</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">False</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">rngs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">rngs)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        s.fc1 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Linear(dm, ff, </span><span style="color:#E36209;--shiki-dark:#F69D50">rngs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">rngs)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        s.fc2 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Linear(ff, dm, </span><span style="color:#E36209;--shiki-dark:#F69D50">rngs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">rngs)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        s.drop1 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Dropout(drop, </span><span style="color:#E36209;--shiki-dark:#F69D50">rngs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">rngs)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        s.drop2 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Dropout(drop, </span><span style="color:#E36209;--shiki-dark:#F69D50">rngs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">rngs)</span></span></code></pre>
+<p>The stream loop, one branch per variant, is where D1’s dictionary becomes code. <code>led</code> toggles the velocity; <code>ngpt</code> toggles the sphere:</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">v </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.zeros_like(x)                       </span><span style="color:#6A737D;--shiki-dark:#768390"># the velocity stream, zero at embed</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">for</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> b </span><span style="color:#D73A49;--shiki-dark:#F47067">in</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> s.blocks:</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    for</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> which </span><span style="color:#D73A49;--shiki-dark:#F47067">in</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (</span><span style="color:#032F62;--shiki-dark:#96D0FF">&#39;attn&#39;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#032F62;--shiki-dark:#96D0FF">&#39;mlp&#39;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        inp </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> x </span><span style="color:#D73A49;--shiki-dark:#F47067">if</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> ngpt </span><span style="color:#D73A49;--shiki-dark:#F47067">else</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (b.ln1 </span><span style="color:#D73A49;--shiki-dark:#F47067">if</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> which </span><span style="color:#D73A49;--shiki-dark:#F47067">==</span><span style="color:#032F62;--shiki-dark:#96D0FF"> &#39;attn&#39;</span><span style="color:#D73A49;--shiki-dark:#F47067"> else</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> b.ln2)(x)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        f </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (b.drop1(b.attn(inp, </span><span style="color:#E36209;--shiki-dark:#F69D50">mask</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">mask)) </span><span style="color:#D73A49;--shiki-dark:#F47067">if</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> which </span><span style="color:#D73A49;--shiki-dark:#F47067">==</span><span style="color:#032F62;--shiki-dark:#96D0FF"> &#39;attn&#39;</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">             else</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> b.drop2(b.fc2(jax.nn.gelu(b.fc1(inp)))))</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        if</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> led:                             </span><span style="color:#6A737D;--shiki-dark:#768390"># the velocity ledger (heavy-ball)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">            v </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> MU</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> v </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1.0</span><span style="color:#D73A49;--shiki-dark:#F47067"> -</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> MU</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> f</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">            step </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> H_STEP</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> v</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        else</span><span style="color:#24292E;--shiki-dark:#ADBAC7">:</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">            step </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> f</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        if</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> ngpt:                            </span><span style="color:#6A737D;--shiki-dark:#768390"># per-dim step scale</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">            step </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (b.alpha1 </span><span style="color:#D73A49;--shiki-dark:#F47067">if</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> which </span><span style="color:#D73A49;--shiki-dark:#F47067">==</span><span style="color:#032F62;--shiki-dark:#96D0FF"> &#39;attn&#39;</span><span style="color:#D73A49;--shiki-dark:#F47067"> else</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> b.alpha2).value </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> step</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        x </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> x </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> step</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        if</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> ngpt:</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">            x </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> retract(x, math.sqrt(s.dm)) </span><span style="color:#6A737D;--shiki-dark:#768390"># back to the sphere of radius sqrt(D)</span></span></code></pre>
+<h2 id="the-sphere-variant-and-what-it-is-not">The sphere variant, and what it is not<a class="heading-anchor-link" aria-label="Link to heading" href="#the-sphere-variant-and-what-it-is-not"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>nGPT (Loshchilov et al., 2024) is the deliberate contrast: a first-order optimizer on the hypersphere, no velocity. Our ngpt-lite is a simplified version: the state is retracted to the sphere of radius <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msqrt><mi>D</mi></msqrt></mrow><annotation encoding="application/x-tex">\sqrt{D}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.04em;vertical-align:-0.1133em"></span><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9267em"><span class="svg-align" style="top:-3em"><span class="pstrut" style="height:3em"></span><span class="mord" style="padding-left:0.833em"><span class="mord mathnormal" style="margin-right:0.0278em">D</span></span></span><span style="top:-2.8867em"><span class="pstrut" style="height:3em"></span><span class="hide-tail" style="min-width:0.853em;height:1.08em"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="1.08em" viewBox="0 0 400000 1080" preserveAspectRatio="xMinYMin slice"><path d="M95,702
+c-2.7,0,-7.17,-2.7,-13.5,-8c-5.8,-5.3,-9.5,-10,-9.5,-14
+c0,-2,0.3,-3.3,1,-4c1.3,-2.7,23.83,-20.7,67.5,-54
+c44.2,-33.3,65.8,-50.3,66.5,-51c1.3,-1.3,3,-2,5,-2c4.7,0,8.7,3.3,12,10
+s173,378,173,378c0.7,0,35.3,-71,104,-213c68.7,-142,137.5,-285,206.5,-429
+c69,-144,104.5,-217.7,106.5,-221
+l0 -0
+c5.3,-9.3,12,-14,20,-14
+H400000v40H845.2724
+s-225.272,467,-225.272,467s-235,486,-235,486c-2.7,4.7,-9,7,-19,7
+c-6,0,-10,-1,-12,-3s-194,-422,-194,-422s-65,47,-65,47z
+M834 80h400000v40h-400000z"></path></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1133em"><span></span></span></span></span></span></span></span></span> after the embedding and after every sub-update, the in-block LayerNorms are dropped (the state is already normalized), and the eigen learning rates become a per-layer, per-dimension learnable step scale <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi></mrow><annotation encoding="application/x-tex">\alpha</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em"></span><span class="mord mathnormal" style="margin-right:0.0037em">α</span></span></span></span>. What we do <em>not</em> claim is full nGPT: no weight-matrix normalization, no logit scale, no QK normalization. The retraction is one line:</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> retract</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(z, radius):</span></span>
+<span class="line"><span style="color:#6A737D;--shiki-dark:#768390">    # renormalize each token vector back onto the sphere of the given radius</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> z </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (radius </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (jnp.linalg.norm(z, </span><span style="color:#E36209;--shiki-dark:#F69D50">axis</span><span style="color:#D73A49;--shiki-dark:#F47067">=-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">keepdims</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">True</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1e-8</span><span style="color:#24292E;--shiki-dark:#ADBAC7">))</span></span></code></pre>
+<p>ngpt-ledger is the synthesis: run the heavy-ball ledger in ambient space from the block output, take the scaled step, then retract. It is the accelerated optimizer on the sphere, the natural experiment the explainer flagged.</p>
+<h2 id="best-val-not-the-endpoint">Best-val, not the endpoint<a class="heading-anchor-link" aria-label="Link to heading" href="#best-val-not-the-endpoint"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Two loss numbers at the end of training would mislead, because a Transformer can over-train and the endpoint measures memorization, not quality. The headline metric is the <em>best</em> (early-stopped) validation loss over the whole run, and it is worth writing the loop that way explicitly:</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">best_val </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> float</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(</span><span style="color:#032F62;--shiki-dark:#96D0FF">&#39;inf&#39;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">for</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> it </span><span style="color:#D73A49;--shiki-dark:#F47067">in</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> range</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">STEPS</span><span style="color:#D73A49;--shiki-dark:#F47067"> +</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    x, y </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> get_batch(</span><span style="color:#032F62;--shiki-dark:#96D0FF">&#39;train&#39;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">BATCH</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, seed </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1000003</span><span style="color:#D73A49;--shiki-dark:#F47067"> +</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> it)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    loss </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> step(model, opt, x, y)                 </span><span style="color:#6A737D;--shiki-dark:#768390"># dropout ON (model.train())</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    if</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> it </span><span style="color:#D73A49;--shiki-dark:#F47067">%</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> VAL_LOG</span><span style="color:#D73A49;--shiki-dark:#F47067"> ==</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 0</span><span style="color:#D73A49;--shiki-dark:#F47067"> or</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> it </span><span style="color:#D73A49;--shiki-dark:#F47067">==</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> STEPS</span><span style="color:#24292E;--shiki-dark:#ADBAC7">:</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        model.eval()                              </span><span style="color:#6A737D;--shiki-dark:#768390"># dropout OFF for val + telemetry</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        vl </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.mean([eval_loss(model, vx, vy) </span><span style="color:#D73A49;--shiki-dark:#F47067">for</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> vx, vy </span><span style="color:#D73A49;--shiki-dark:#F47067">in</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> val_batches])</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        model.train()</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        best_val </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> min</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(best_val, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">float</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(vl))</span></span></code></pre>
+<p>Run all four variants, three seeds, on the complete works of Shakespeare (character level, about 5.4M characters, so 12000 steps is roughly 14 epochs, not the 90 that memorized an earlier tinyshakespeare run). The four converge on top of each other:</p>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/velocity-ledger-curves.png" alt="Train and validation loss curves for the four variants over 12000 steps, seed 0: all four fall together from about 2.2 to near 1.43, the faint train curves slightly below the bold validation curves, with ngpt-lite a hair lower and ngpt-ledger a hair higher" loading="lazy" width="880" height="450"/><figcaption>Train (faint) and validation (bold) loss, seed 0, all four variants. The four converge together; final val sits essentially on best val for every variant (blow-up ratio 1.00), so dropout tamed the over-training an earlier run showed. From <code>scripts/velocity_ledger.py</code>; rendered by <code>scripts/render_velocity_ledger_gifs.py</code>.</figcaption></figure>
+<p>Across three seeds the best-val numbers are a tie: plain 1.433, ledger 1.435, ngpt-lite 1.420, ngpt-ledger 1.456, a spread of 0.036 against a per-seed noise of about 0.005. The velocity ledger did not move quality.</p>
+<figure class="jax-fig"><img src="/blog/velocity-ledger-tie.png" alt="Best validation loss for the four variants, three seeds each, drawn as a dot at the seed mean with a bar from best to worst seed; the four intervals nearly overlap around 1.42 to 1.46" loading="lazy" width="760" height="360"/><figcaption>Best (early-stopped) val loss, 3 seeds: dot = mean, bar = min to max across seeds. The four intervals nearly overlap. On quality this is a tie, and that is the headline. From <code>scripts/velocity_ledger.py</code>.</figcaption></figure>
+<h2 id="the-telemetry-that-finds-the-signal">The telemetry that finds the signal<a class="heading-anchor-link" aria-label="Link to heading" href="#the-telemetry-that-finds-the-signal"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>If the four tie on quality, the interesting question is what they do differently to get there, and D1 already told us where to look: the geometry of the residual-stream path. The telemetry runs the field on a fixed probe batch (dropout off) and, at each of four checkpoints, records the per-sub-update displacement and the turning angle:</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> depth_stats</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(model, probe):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    _, rec </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> model._stream(probe, </span><span style="color:#E36209;--shiki-dark:#F69D50">collect</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">True</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)         </span><span style="color:#6A737D;--shiki-dark:#768390"># collect x at every node</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    xs </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.stack([np.asarray(a) </span><span style="color:#D73A49;--shiki-dark:#F47067">for</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> a </span><span style="color:#D73A49;--shiki-dark:#F47067">in</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> rec[</span><span style="color:#032F62;--shiki-dark:#96D0FF">&#39;x&#39;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">]])    </span><span style="color:#6A737D;--shiki-dark:#768390"># [2L+1, B, T, D]</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    seg </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.diff(xs, </span><span style="color:#E36209;--shiki-dark:#F69D50">axis</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)                            </span><span style="color:#6A737D;--shiki-dark:#768390"># per-sub-update step</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    seglen </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.linalg.norm(seg, </span><span style="color:#E36209;--shiki-dark:#F69D50">axis</span><span style="color:#D73A49;--shiki-dark:#F47067">=-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)               </span><span style="color:#6A737D;--shiki-dark:#768390"># path length per step</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    d1, d2 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> seg[:</span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">], seg[</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">:]</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    cos </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (d1 </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> d2).sum(</span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (np.linalg.norm(d1, </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.linalg.norm(d2, </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1e-12</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    turn </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.degrees(np.arccos(np.clip(cos, </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)))   </span><span style="color:#6A737D;--shiki-dark:#768390"># turning angle per step</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> {</span><span style="color:#032F62;--shiki-dark:#96D0FF">&#39;seglen&#39;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">: seglen.mean((</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)), </span><span style="color:#032F62;--shiki-dark:#96D0FF">&#39;turn&#39;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">: turn.mean((</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)), </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">...</span><span style="color:#24292E;--shiki-dark:#ADBAC7">}</span></span></code></pre>
+<p>Summed over the twelve sub-updates, the total path lengths (3-seed mean, final checkpoint) separate cleanly: plain 128, ngpt-lite 58, ledger 48, ngpt-ledger 32. The turning angles do too: plain 75 degrees a step, ledger 29, ngpt-lite 98, ngpt-ledger 47. The velocity ledger cuts the path to roughly a third and the sharpness to under half, at a tied best-val.</p>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/velocity-ledger-pathbars.png" alt="Two bar panels: left, total residual-stream path length per variant (plain 128, ngpt-lite 58, ledger 48, ngpt-ledger 32); right, mean turning angle per sub-update (plain 75 degrees, ngpt-lite 98, ledger 29, ngpt-ledger 47)" loading="lazy" width="880" height="380"/><figcaption>The depth-dynamics table, where the real difference lives. Left, total path length; right, mean turning angle, both 3-seed mean at the final checkpoint. The ledger shortens and straightens the path; ngpt-lite (first-order on the sphere) bends the most of all, and adding the ledger to it straightens even that. From <code>scripts/velocity_ledger.py</code>.</figcaption></figure>
+<p>The mechanism is the <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>1</mn><mo>−</mo><mi>μ</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(1-\mu)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord mathnormal">μ</span><span class="mclose">)</span></span></span></span> damping: a plain layer writes the full block output into the stream, while the ledger writes a running average of it, so no single block output can move the state far. Watch the step sizes and the velocity that funds them:</p>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/velocity-ledger-steps.png" alt="Left, step size per sub-update for the four variants: the plain line balloons to 25 at the readout while ledger and ngpt-ledger stay low; right, velocity-stream norm through depth for the two ledger variants, both rising smoothly from zero at the embedding" loading="lazy" width="880" height="380"/><figcaption>Left, the displacement the stream takes at each of the twelve sub-updates: the plain step balloons toward the readout (25 units), the ledger keeps each step small and even. Right, the velocity-stream norm through depth for the two ledger variants, filling smoothly from zero at the embedding. Momentum carries the state instead of dumping the raw block output into it. From <code>scripts/velocity_ledger.py</code>.</figcaption></figure>
+<h2 id="the-path-straightening-as-it-happens">The path straightening, as it happens<a class="heading-anchor-link" aria-label="Link to heading" href="#the-path-straightening-as-it-happens"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The one thing here that is a real <em>process</em> is how the path changes over training. All four start short at initialization (an untrained field is small); training is what pushes the plain net’s path out into a long wander while the ledger holds its short. The telemetry was dumped at four checkpoints, so we can watch the two paths form, side by side, and watch the gap open:</p>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/velocity-ledger-straighten.gif" alt="Two panels forming the residual-stream 2D path over four training checkpoints: on the left the plain path grows from a short line into a long zigzag wander reaching path length 130; on the right the ledger path stays a short smooth arc at path length 48; earlier checkpoints ghost faintly behind" loading="lazy" width="880" height="470"/><figcaption>The residual-stream path forming through training, plain (left) vs ledger (right), drawn as a 2D shadow whose every segment length and every bend is the real measured number from the probe batch. Each checkpoint’s path draws in segment by segment, with earlier checkpoints ghosted behind. The plain path grows into a long kinked wander (128); the ledger’s stays a short smooth arc (48). The straightness is a trained property of carrying a velocity, not an artifact of initialization. Rendered by <code>scripts/render_velocity_ledger_gifs.py</code>. (The other figures are static: a best-val tie and a path-length bar are categorical scoreboards, not processes, so they are stills, not GIFs.)</figcaption></figure>
+<h2 id="what-carried-over">What carried over<a class="heading-anchor-link" aria-label="Link to heading" href="#what-carried-over"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>D1’s prediction transferred to a Transformer and held, at the level where it actually applies. The pre-norm block is forward Euler on the residual stream; the velocity ledger is one line of NNX state and zero parameters; and at <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>μ</mi><mo>=</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\mu = 0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em"></span><span class="mord mathnormal">μ</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">0</span></span></span></span> it collapses exactly to the plain block. On this small char-level GPT it does not move quality, the four variants tie on best-val to within seed noise, and it is not an upgrade. What it moves is the dynamics: the residual stream reaches an equally-good answer along a path a third as long (48 against 128 units) and less than half as sharp (29 against 75 degrees a step), whether the geometry is flat or spherical. A skip connection is half of Newton in a Transformer too, and the other half is a calmer, straighter path to the same destination.</p>
+<hr/>
+<p><em>The four residual-stream updates and their telemetry are from <code>scripts/velocity_ledger.py</code> (JAX + Flax NNX, run once on Kaggle); the momentum residual network the ledger borrows is from <a href="https://arxiv.org/abs/2102.07870">Sander et al. (2021)</a>; the hypersphere variant is a simplified <a href="https://arxiv.org/abs/2410.01131">nGPT</a>; the depth-as-dynamics reading of Transformers is <a href="https://arxiv.org/abs/1906.02762">Lu et al. (2019)</a>. The conceptual companion is <a href="/blog/transformers-with-a-velocity-ledger/">Transformers With a Velocity Ledger</a>.</em></p>
+<section class="cite-as" aria-labelledby="cite-transformers-with-a-velocity-ledger-jax-flax-nnx" data-astro-cid-p234urri> <h2 id="cite-transformers-with-a-velocity-ledger-jax-flax-nnx" data-astro-cid-p234urri>Cite as</h2> <p class="cite-line" data-astro-cid-p234urri>
+Bouhsine, T. (<time datetime="2026-07-09T17:00:00.000Z" data-astro-cid-p234urri>2026, July 9</time>).
+<em data-astro-cid-p234urri>A Velocity Ledger for Transformers, in JAX/Flax NNX</em>. Records of the !mmortal Data Scientist.
+<a href="https://tahabouhsine.com/blog/transformers-with-a-velocity-ledger-jax-flax-nnx/" data-astro-cid-p234urri>https://tahabouhsine.com/blog/transformers-with-a-velocity-ledger-jax-flax-nnx/</a> </p> <details class="cite-bib" data-astro-cid-p234urri> <summary data-astro-cid-p234urri>BibTeX</summary> <pre data-astro-cid-p234urri><code class="bibtex" data-astro-cid-p234urri>@misc{bouhsine2026transformerswithavelocityledgerjaxflaxnnx,
+  author       = {Bouhsine, Taha},
+  title        = {A Velocity Ledger for Transformers, in JAX/Flax NNX},
+  year         = {2026},
+  month        = {jul},
+  howpublished = {\url{https://tahabouhsine.com/blog/transformers-with-a-velocity-ledger-jax-flax-nnx/}},
+  note         = {Blog post, Records of the !mmortal Data Scientist}
+}</code></pre> <button type="button" class="cite-copy" data-copy="@misc{bouhsine2026transformerswithavelocityledgerjaxflaxnnx,
+  author       = {Bouhsine, Taha},
+  title        = {A Velocity Ledger for Transformers, in JAX/Flax NNX},
+  year         = {2026},
+  month        = {jul},
+  howpublished = {\url{https://tahabouhsine.com/blog/transformers-with-a-velocity-ledger-jax-flax-nnx/}},
+  note         = {Blog post, Records of the !mmortal Data Scientist}
+}" aria-label="Copy BibTeX" data-astro-cid-p234urri>copy</button> </details>  </section>  <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('.cite-copy').forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(btn.dataset.copy || '');
+            const original = btn.textContent;
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = original;
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>
+<style>
+.jax-fig { margin: 1.8rem auto; text-align: center; }
+.jax-fig img { max-width: 520px; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; background: #fbf8f1; }
+.jax-fig-wide img { max-width: 880px; }
+.jax-fig figcaption { margin-top: 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--fg-muted); max-width: 64ch; margin-left: auto; margin-right: auto; }
+</style>  <section class="references" aria-labelledby="references-heading" data-astro-cid-rn7nvbl4><h2 id="references-heading" data-astro-cid-rn7nvbl4>References</h2><ol data-astro-cid-rn7nvbl4><li id="ref-1" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Anonymous</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2026)</span>. <a class="ref-title" href="https://arxiv.org/abs/2605.24425" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>Momentum Streams for Optimizer-Inspired Transformers</a>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>preprint</span>.<a class="ref-ext" href="https://arxiv.org/abs/2605.24425" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:2605.24425</a></li><li id="ref-2" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Loshchilov, I., Hsieh, C.-P., Sun, S., Ginsburg, B.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2024)</span>. <a class="ref-title" href="https://arxiv.org/abs/2410.01131" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>nGPT: Normalized Transformer with Representation Learning on the Hypersphere</a>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>preprint</span>.<a class="ref-ext" href="https://arxiv.org/abs/2410.01131" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:2410.01131</a></li><li id="ref-3" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Sander, M. E., Ablin, P., Blondel, M., Peyré, G.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2021)</span>. <a class="ref-title" href="https://arxiv.org/abs/2102.07870" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>Momentum Residual Neural Networks</a>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>ICML 2021</span>.<a class="ref-ext" href="https://arxiv.org/abs/2102.07870" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:2102.07870</a></li><li id="ref-4" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Lu, Y., Li, Z., He, D., Sun, Z., Dong, B., Qin, T., Wang, L., Liu, T.-Y.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2019)</span>. <a class="ref-title" href="https://arxiv.org/abs/1906.02762" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>Understanding and Improving Transformer From a Multi-Particle Dynamic System Point of View</a>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>ICLR 2020 Workshop</span>.<a class="ref-ext" href="https://arxiv.org/abs/1906.02762" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:1906.02762</a></li></ol></section> <aside class="colophon" aria-label="How this was written" data-astro-cid-hgpgqpeo> <p data-astro-cid-hgpgqpeo>
+A note on how this is written. I think mostly in mathematics, pictures, and
+    intuition, and much less in words. So I reason many of these ideas out in
+    conversation with an AI and lean on it to turn the thinking into language.
+    Some of these pieces, the stories especially, began as exactly those
+    discourses about life and math. The reasoning, the claims, and the mistakes
+    are mine; the help is in the wording. I would rather tell you that plainly
+    than pretend the sentences arrived on their own.
+</p> </aside>  </article> <script>(function(){const payload = {"post_title":"A Velocity Ledger for Transformers, in JAX/Flax NNX","post_slug":"transformers-with-a-velocity-ledger-jax-flax-nnx","post_path":"/blog/transformers-with-a-velocity-ledger-jax-flax-nnx/","post_tags":"ml,transformers,residual-stream,momentum,nGPT,jax,flax,nnx,implementation,dynamical-systems,deep-learning","word_count":2200,"reading_time_minutes":11,"is_draft":false};
+
+  (() => {
+    const thresholds = [25, 50, 75, 90, 100];
+    const state = { viewed: false, sent: new Set() };
+
+    const track = (name, params = {}) => {
+      if (typeof window.__trackGA === 'function') {
+        window.__trackGA(name, {
+          ...payload,
+          ...params,
+          non_interaction: name === 'blog_post_view',
+        });
+      }
+    };
+
+    const init = () => {
+      const article = document.querySelector('[data-blog-post]');
+      if (!article) return;
+
+      if (!state.viewed) {
+        state.viewed = true;
+        track('blog_post_view');
+      }
+
+      const progress = () => {
+        const rect = article.getBoundingClientRect();
+        const articleTop = window.scrollY + rect.top;
+        const articleHeight = Math.max(1, article.offsetHeight);
+        const viewportBottom = window.scrollY + window.innerHeight;
+        return Math.max(0, Math.min(100, ((viewportBottom - articleTop) / articleHeight) * 100));
+      };
+
+      const update = () => {
+        const pct = progress();
+        thresholds.forEach((threshold) => {
+          if (pct >= threshold && !state.sent.has(threshold)) {
+            state.sent.add(threshold);
+            track('blog_post_read_depth', { read_percent: threshold });
+            if (threshold === 90) {
+              track('blog_post_read', { read_percent: threshold });
+            }
+          }
+        });
+      };
+
+      if (window.__postAnalyticsCleanup) window.__postAnalyticsCleanup();
+
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => {
+          update();
+          ticking = false;
+        });
+      };
+
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+      window.__postAnalyticsCleanup = () => {
+        window.removeEventListener('scroll', onScroll);
+        window.removeEventListener('resize', onScroll);
+      };
+      update();
+    };
+
+    init();
+    document.addEventListener('astro:page-load', init, { once: true });
+  })();
+})();</script> <aside class="related" aria-labelledby="related-heading" data-astro-cid-dpgbfi7r><h2 id="related-heading" data-astro-cid-dpgbfi7r>Related posts</h2><ul data-astro-cid-dpgbfi7r><li data-astro-cid-dpgbfi7r><a href="/blog/momentum-resnet-jax-flax-nnx/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>Skip Connections With Inertia, in JAX/Flax NNX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion: the residual block as a forward-Euler step, then the momentum residual network as a Flax NNX module with one extra state, a velocity the blocks write into. Train both on the rings task a first-order flow cannot separate exactly, watch the training crystallize, and run the trained network exactly backward until floating point, amplified by 1/mu per layer, steals the past.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-07-04T17:00:00.000Z" data-astro-cid-dpgbfi7r>Jul 4, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/transformers-with-a-velocity-ledger/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>Transformers With a Velocity Ledger</span><span class="related-desc" data-astro-cid-dpgbfi7r>A pre-norm Transformer&#39;s residual stream is forward Euler: x += Attn(norm x); x += MLP(norm x). So D1&#39;s whole dictionary transfers, and the same question follows: does a velocity ledger in the residual stream buy in a Transformer what it bought in a ResNet? The answer splits. On quality, four variants tie. On dynamics, the ledger changes everything: the residual-stream path through depth gets dramatically shorter and straighter, reaching the same answer by a calmer journey. Same destination, gentler road.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-07-09T00:00:00.000Z" data-astro-cid-dpgbfi7r>Jul 9, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/calibration-of-a-bounded-net-jax-flax-nnx/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>Calibrating a Bounded Net, in JAX/Flax NNX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion: build the matched Yat and ReLU MLPs in Flax NNX with the same softmax head, then measure their honesty. The reliability diagram and ECE, temperature scaling fit on a held-out split, NLL and Brier, and the two out-of-distribution channels, kernel-field magnitude versus softmax confidence, all in JAX with every number from a real three-seed run.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-07-04T17:00:00.000Z" data-astro-cid-dpgbfi7r>Jul 4, 2026</time></span></a></li></ul></aside> <nav class="post-nav" aria-label="Adjacent posts"><a href="/blog/transformers-with-a-velocity-ledger/" class="prev" rel="prev"><div class="label">← Explainer</div><div class="title">Transformers With a Velocity Ledger</div></a><span></span></nav> <script data-astro-rerun>(function(){const postSlug = "transformers-with-a-velocity-ledger-jax-flax-nnx";
+const lastRead = {"slug":"transformers-with-a-velocity-ledger-jax-flax-nnx","title":"A Velocity Ledger for Transformers, in JAX/Flax NNX","series":"Networks as Integrators","part":2,"total":2};
+
+    try {
+      const raw = JSON.parse(localStorage.getItem('read-posts') || '[]');
+      const read = (Array.isArray(raw) ? raw : []).filter((s) => s !== postSlug);
+      read.push(postSlug);
+      while (read.length > 200) read.shift();
+      localStorage.setItem('read-posts', JSON.stringify(read));
+      if (lastRead) localStorage.setItem('last-read', JSON.stringify(lastRead));
+    } catch {}
+  })();</script> <section aria-label="Comments" id="giscus-mount" style="margin-top:3rem" data-giscus="{&#34;repo&#34;:&#34;mlnomadpy/blog&#34;,&#34;repoId&#34;:&#34;MDEwOlJlcG9zaXRvcnk0MDQ4MzY2NDU=&#34;,&#34;category&#34;:&#34;Announcements&#34;,&#34;categoryId&#34;:&#34;DIC_kwDOGCFRJc4C9EiR&#34;,&#34;mapping&#34;:&#34;pathname&#34;,&#34;reactionsEnabled&#34;:&#34;1&#34;,&#34;emitMetadata&#34;:&#34;0&#34;,&#34;inputPosition&#34;:&#34;top&#34;,&#34;theme&#34;:&#34;preferred_color_scheme&#34;,&#34;lang&#34;:&#34;en&#34;}"></section><script>
+    (() => {
+      const load = () => {
+        const mount = document.getElementById('giscus-mount');
+        if (!mount || mount.dataset.loaded === '1') return;
+        const cfg = JSON.parse(mount.dataset.giscus);
+        const theme = document.documentElement.getAttribute('data-theme')
+          || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        const s = document.createElement('script');
+        s.src = 'https://giscus.app/client.js';
+        s.async = true;
+        s.crossOrigin = 'anonymous';
+        const attrs = {
+          'data-repo': cfg.repo,
+          'data-repo-id': cfg.repoId,
+          'data-category': cfg.category,
+          'data-category-id': cfg.categoryId,
+          'data-mapping': cfg.mapping,
+          'data-strict': '0',
+          'data-reactions-enabled': cfg.reactionsEnabled,
+          'data-emit-metadata': cfg.emitMetadata,
+          'data-input-position': cfg.inputPosition,
+          'data-theme': theme,
+          'data-lang': cfg.lang,
+          'data-loading': 'lazy',
+        };
+        for (const k in attrs) s.setAttribute(k, attrs[k]);
+        mount.appendChild(s);
+        mount.dataset.loaded = '1';
+      };
+      load();
+      document.addEventListener('astro:page-load', load);
+      document.addEventListener('astro:after-swap', load);
+    })();
+  </script> <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('pre').forEach((pre) => {
+        if (pre.dataset.copyEnhanced) return;
+        pre.dataset.copyEnhanced = '1';
+        const btn = document.createElement('button');
+        btn.className = 'code-copy';
+        btn.type = 'button';
+        btn.textContent = 'copy';
+        btn.setAttribute('aria-label', 'Copy code');
+        btn.addEventListener('click', async () => {
+          const code = pre.querySelector('code');
+          const text = (code ? code.innerText : pre.innerText) || '';
+          try {
+            await navigator.clipboard.writeText(text);
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = 'copy';
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+        pre.appendChild(btn);
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>  </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span class="site-footer__links"> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> <a class="site-footer__support" href="https://buymeacoffee.com/mlnomadpy" target="_blank" rel="noopener noreferrer" aria-label="Support this blog on Buy Me a Coffee">
+buy me a coffee
+</a> </span> </footer> <div id="consent-banner" class="consent-banner" role="dialog" aria-live="polite" aria-label="Analytics consent" hidden><p class="consent-text">
+I use Google Analytics to see which posts get read. It sets cookies only
+      if you accept. No ads, no selling data.
+</p><div class="consent-actions"><button type="button" id="consent-decline" class="consent-btn consent-decline">Decline</button><button type="button" id="consent-accept" class="consent-btn consent-accept">Accept</button></div></div>
+
+  <script>
+    (() => {
+      const KEY = 'analytics-consent';
+      const setup = () => {
+        const banner = document.getElementById('consent-banner');
+        if (!banner) return;
+        let choice = null;
+        try { choice = localStorage.getItem(KEY); } catch (e) {}
+        // Already decided → keep hidden.
+        if (choice === 'granted' || choice === 'denied') { banner.hidden = true; return; }
+        banner.hidden = false;
+
+        const decide = (value) => {
+          try { localStorage.setItem(KEY, value); } catch (e) {}
+          banner.hidden = true;
+          if (value === 'granted' && typeof window.__loadGA === 'function') window.__loadGA();
+        };
+        const accept = document.getElementById('consent-accept');
+        const decline = document.getElementById('consent-decline');
+        if (accept && !accept.dataset.bound) {
+          accept.dataset.bound = '1';
+          accept.addEventListener('click', () => decide('granted'));
+        }
+        if (decline && !decline.dataset.bound) {
+          decline.dataset.bound = '1';
+          decline.addEventListener('click', () => decide('denied'));
+        }
+      };
+      setup();
+      document.addEventListener('astro:page-load', setup);
+    })();
+  </script>
+
+  <style>
+    /* Author `display:flex` below would otherwise override the UA [hidden]
+       rule, leaving the banner visible after a choice. This wins on specificity. */
+    .consent-banner[hidden] { display: none !important; }
+    .consent-banner {
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      right: 1rem;
+      max-width: 30rem;
+      margin-left: auto;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+      padding: 0.95rem 1.1rem;
+      background: var(--bg-elev, #fff);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      font-family: var(--sans);
+    }
+    .consent-text {
+      margin: 0;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: var(--fg-muted);
+    }
+    .consent-actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+    }
+    .consent-btn {
+      font-family: var(--sans);
+      font-size: 0.82rem;
+      padding: 0.4rem 0.95rem;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    }
+    .consent-decline {
+      background: transparent;
+      color: var(--fg-muted);
+    }
+    .consent-decline:hover { color: var(--fg); border-color: var(--fg-faint); }
+    .consent-accept {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg);
+      font-weight: 600;
+    }
+    .consent-accept:hover { filter: brightness(1.05); }
+    @media (max-width: 520px) {
+      .consent-banner { left: 0.6rem; right: 0.6rem; bottom: 0.6rem; }
+    }
+  </style> <script>
+      // Inject a fullscreen toggle button onto every .viz figure on the page.
+      (() => {
+        const ENTER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10V4h6"/><path d="M20 10V4h-6"/><path d="M4 14v6h6"/><path d="M20 14v6h-6"/></svg>';
+        const EXIT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H4v6"/><path d="M14 4h6v6"/><path d="M10 20H4v-6"/><path d="M14 20h6v-6"/></svg>';
+        const inFs = () => document.fullscreenElement || document.webkitFullscreenElement;
+        const enhance = () => {
+          document.querySelectorAll('.viz').forEach((fig) => {
+            if (fig.dataset.fsReady) return;
+            fig.dataset.fsReady = '1';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'viz-fs-btn';
+            btn.setAttribute('aria-label', 'Toggle fullscreen');
+            btn.innerHTML = ENTER_SVG + '<span>fullscreen</span>';
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              try {
+                if (inFs() === fig) {
+                  await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen?.());
+                } else if (fig.requestFullscreen) {
+                  await fig.requestFullscreen();
+                } else if (fig.webkitRequestFullscreen) {
+                  await fig.webkitRequestFullscreen();
+                }
+              } catch (_) {}
+            });
+            fig.appendChild(btn);
+          });
+          const sync = () => {
+            document.querySelectorAll('.viz-fs-btn').forEach((b) => {
+              const fig = b.parentElement;
+              const open = inFs() === fig;
+              b.innerHTML = (open ? EXIT_SVG : ENTER_SVG) + '<span>' + (open ? 'exit' : 'fullscreen') + '</span>';
+            });
+          };
+          document.addEventListener('fullscreenchange', sync);
+          document.addEventListener('webkitfullscreenchange', sync);
+        };
+        enhance();
+        document.addEventListener('astro:page-load', enhance);
+        document.addEventListener('astro:after-swap', enhance);
+      })();
+    </script> </body> </html>
