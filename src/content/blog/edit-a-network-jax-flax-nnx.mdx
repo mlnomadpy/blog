@@ -179,7 +179,7 @@ Sandal recall goes to **0**: nothing in the network resembles a sandal anymore, 
 
 ## Why the edits are exact, in one sentence
 
-In an ordinary network the knowledge of a class is smeared across shared weights, so adding a class with gradient descent overwrites a little of every other class (catastrophic forgetting) and deleting one is a research problem (machine unlearning) whose honest baseline is to retrain from scratch. Here a class is a contiguous block of rows, so protecting it during an edit is *do not index those rows* and erasing it is *index them out*. `jnp.concatenate` and a boolean mask are the entire continual-learning and unlearning stack, because the architecture stores knowledge in a form you can address.
+In an ordinary network the knowledge of a class is smeared across shared weights, so adding a class with gradient descent overwrites a little of every other class (catastrophic forgetting) and deleting one is a research problem (machine unlearning) whose exact baseline is to retrain from scratch. Here a class is a contiguous block of rows, so protecting it during an edit is *do not index those rows* and erasing it is *index them out*. `jnp.concatenate` and a boolean mask are the entire continual-learning and unlearning stack, because the architecture stores knowledge in a form you can address.
 
 ## What this leaves out
 

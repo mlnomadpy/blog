@@ -228,7 +228,7 @@ assert jnp.allclose(a1 @ R, y) and jnp.allclose(a2 @ R, y)          # both give 
 print("same y, different shares:", a1, a2)
 ```
 
-The honest readout of a contribution number is therefore: it describes *this* coefficient vector, the one the layer happened to produce, not a canonical property recoverable from the output.
+A contribution number therefore describes *this* coefficient vector, the one the layer happened to produce, not a canonical property recoverable from the output.
 
 And those two decompositions are only the endpoints. Because the set of valid decompositions is convex, every interpolation $(1-t)\,a_1 + t\,a_2$ is another exact convex decomposition of the same $y$. The animation below sweeps through the whole family, recomputing $a(t)\,R$ in JAX each frame and tracking the largest deviation of $y$ it ever sees.
 

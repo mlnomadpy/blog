@@ -113,9 +113,9 @@ Once the weight is priced by modes, the bill breaks down line by line: each mode
   <figcaption>Where the RKHS bill comes from. Each bar is a mode's line on the bill, $c_k^2/\lambda_k$, ordered largest first; the curve is the running total, which reaches the real $\alpha^\top K \alpha = 4.31$, the same number the direct one-line formula returns. A handful of modes carry almost the whole bill: the top mode alone is $29\%$ of it, the top five are $73\%$. Rendered by <code>scripts/render_reg_gifs.py</code>.</figcaption>
 </figure>
 
-## The honest shrink: graded, never zero
+## The shrink is graded, never zero
 
-The explainer was careful on one point and this companion keeps it: kernel ridge is not a support-vector machine. It solves $(K + \lambda I)\,\alpha = y$, and unlike a hinge loss it never sets a coefficient exactly to zero. Tightening $\lambda$ shrinks every $\alpha_i$ smoothly, just at very different rates, so what you get is a graded hierarchy, not a hard roster of survivors. On the six-point, two-class miniature from the explainer, the coefficients start at $|\alpha_i| \in \{1.27, 0.66, 1.16, 1.11, 0.46, 1.10\}$ and, at the tightest budget, all sink toward a common floor with a minimum of $0.01$, still strictly positive.
+The explainer drew one distinction and this companion keeps it: kernel ridge is not a support-vector machine. It solves $(K + \lambda I)\,\alpha = y$, and unlike a hinge loss it never sets a coefficient exactly to zero. Tightening $\lambda$ shrinks every $\alpha_i$ smoothly, just at very different rates, so what you get is a graded hierarchy, not a hard roster of survivors. On the six-point, two-class miniature from the explainer, the coefficients start at $|\alpha_i| \in \{1.27, 0.66, 1.16, 1.11, 0.46, 1.10\}$ and, at the tightest budget, all sink toward a common floor with a minimum of $0.01$, still strictly positive.
 
 ```python
 for lam in lambdas:                                   # the sweep, one solve each
@@ -125,7 +125,7 @@ for lam in lambdas:                                   # the sweep, one solve eac
 
 <figure class="jax-fig">
   <img src="/blog/reg-shrink.gif" alt="Six coefficient bars all sinking smoothly as lambda tightens, the two redundant points slipping under a dashed reading-aid line first, none reaching zero" loading="lazy" width="660" height="500" />
-  <figcaption>The honest shrink. Every $|\alpha_i|$ bar sinks smoothly as $\lambda$ tightens, and the two redundant points (whose lists a neighbor can substitute) slip under the dashed line first. The line is a reading aid, not a mechanism: nothing is ever set to zero, the running minimum stays strictly positive. This is graded shrinkage, not the hard sparsity of an SVM. Rendered by <code>scripts/render_reg_gifs.py</code>.</figcaption>
+  <figcaption>The graded shrink. Every $|\alpha_i|$ bar sinks smoothly as $\lambda$ tightens, and the two redundant points (whose lists a neighbor can substitute) slip under the dashed line first. The line is a reading aid, not a mechanism: nothing is ever set to zero, the running minimum stays strictly positive. This is graded shrinkage, not the hard sparsity of an SVM. Rendered by <code>scripts/render_reg_gifs.py</code>.</figcaption>
 </figure>
 
 ## Why smooth generalizes: the sweep

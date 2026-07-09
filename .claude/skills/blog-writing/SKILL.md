@@ -113,6 +113,23 @@ thesis"). Open instead on a question, a turn ("But..."), a concrete image, or a
 stake. Run the section-opening test: read the first sentence of every section in
 isolation; if it could open a paper subsection, rewrite it.
 
+**Never write in the apologetic/defensive register (user: "it sounds like shit
+and breaks the narrative").** State the finding; do not narrate your own honesty
+or apologize for a claim before making it. Banned tics: "honestly", "the honest
+answer/read/story/result/verdict", "to be honest/fair", "I want to be careful
+not to", "I would be lying if", "let me be honest", "reported straight",
+"we are not overselling", any sentence whose job is to assure the reader you are
+being truthful rather than to say the thing. Honesty is a property of the
+content (real numbers, stated limits), never a topic of the prose. Hedging lives
+in ONE dedicated place per post (a scope note near the claim it bounds), written
+as plain statements of scope, not as apology; everywhere else, claims are made
+cleanly and limits are facts, not confessions. A tie is "they tie", not "the
+honest result is a tie". A loss is "it costs two points on X", not "we report
+this straight". If you find yourself defending a sentence, delete the defense
+and strengthen the sentence. This applies to prose, captions, descriptions,
+readouts, and the prompts you write for sub-agents (do not inject "frame
+honestly" boilerplate that seeds the tic).
+
 ## Hard rules (non-negotiable, they have all cost rewrites)
 
 - **No em dashes anywhere in reader-facing text** (prose, captions, on-canvas

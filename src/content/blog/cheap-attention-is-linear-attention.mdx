@@ -249,7 +249,7 @@ A causal linear-attention layer is literally a **recurrent network** with an $m 
 
 Quadratic versus linear is an asymptotic story, and asymptotic stories can hide bad constants. The opening plot showed the curve shape; the practical question is not "which curve wins eventually?" It is "when does eventually begin?"
 
-Two honest caveats the curves make obvious. First, there is a crossover: random features only win once $N$ is comfortably past $\sim m$. For short sequences the $m$ features are pure overhead and plain softmax is faster. That is why production stacks reach for [exact-but-IO-aware](https://arxiv.org/abs/2205.14135) softmax at moderate lengths and save linearization for genuinely long context.
+Two caveats the curves make obvious. First, there is a crossover: random features only win once $N$ is comfortably past $\sim m$. For short sequences the $m$ features are pure overhead and plain softmax is faster. That is why production stacks reach for [exact-but-IO-aware](https://arxiv.org/abs/2205.14135) softmax at moderate lengths and save linearization for genuinely long context.
 
 <FeatureTradeoff caption="The m tradeoff. More random features reduce approximation error, but they also raise the linear-attention cost. For a fixed sequence length N, drag m to find the useful middle: small enough to preserve the linear advantage, large enough that the kernel sketch is not too crude. Sharper tasks need more features." />
 
@@ -257,7 +257,7 @@ Second, the quieter axis is memory. The $N^2$ that hurts most in practice is oft
 
 ## What you give up
 
-None of this is free, and the honest accounting is short. Random features are an *approximation*: each kernel entry is unbiased, but the normalized output is a *ratio* of two such estimates, so it carries variance, and a small bias, that only shrinks as $m$ grows.
+None of this is free, and the accounting is short. Random features are an *approximation*: each kernel entry is unbiased, but the normalized output is a *ratio* of two such estimates, so it carries variance, and a small bias, that only shrinks as $m$ grows.
 
 At small $m$ this shows up as degraded quality, most visibly on tasks that need sharp, near-one-hot attention: retrieval, induction, copying, exact lookup. In those cases the exact attention matrix is effectively *high-rank*, close to a permutation, and a rank-$m$ feature average simply cannot reproduce it. A lookup table wants the exact seat number; a sketch of the room is not enough. Positive features and orthogonality tame the variance but do not abolish it. And the crossover is real: below it you are paying for features you do not need.
 

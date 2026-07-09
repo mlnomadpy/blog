@@ -250,7 +250,7 @@ Second, it reduces computation. The model can compute all queries and keys once,
 
 Third, it makes the relation legible. Query features and key features are separable objects. In circuit terms, you can ask what directions write into $Q$, what directions write into $K$, and what pairings between them produce a head's pattern.
 
-A caveat keeps that legibility honest. Only the product $B=W_QW_K^\top$ affects the scores; the split into $Q$ and $K$ is not unique. For any invertible $M$, replacing $(W_Q, W_K)$ with $(W_Q M,\,W_K M^{-\top})$ leaves every score unchanged, a gauge freedom in the factorization. So an individual query coordinate has no canonical meaning; what is identified is the relation $B$ and the query/key *subspaces* it pairs, not a privileged basis inside them. It is the same non-identifiability that attends any factored representation: the factors are a chosen coordinatization of a product that is the only observable object.
+That legibility has one limit. Only the product $B=W_QW_K^\top$ affects the scores; the split into $Q$ and $K$ is not unique. For any invertible $M$, replacing $(W_Q, W_K)$ with $(W_Q M,\,W_K M^{-\top})$ leaves every score unchanged, a gauge freedom in the factorization. So an individual query coordinate has no canonical meaning; what is identified is the relation $B$ and the query/key *subspaces* it pairs, not a privileged basis inside them. It is the same non-identifiability that attends any factored representation: the factors are a chosen coordinatization of a product that is the only observable object.
 
 The factorization is not merely a trick for speed. It is the head's relational vocabulary.
 

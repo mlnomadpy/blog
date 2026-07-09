@@ -1,7 +1,7 @@
 ---
 title: "What a Weight Can Be, in JAX/Flax NNX"
 seoTitle: "Kernel RKHS spectra and norms in JAX"
-description: "A runnable companion: compute the price list of a kernel in JAX. The eigenvalues are the kernel's spectral density, found with an FFT; the RKHS norm of a weight is a sum over them. A corner is affordable only under a Sobolev kernel, and the same numbers place the Yat kernel honestly: universal and smooth, roomier than a Gaussian but not a Sobolev space."
+description: "A runnable companion: compute the price list of a kernel in JAX. The eigenvalues are the kernel's spectral density, found with an FFT; the RKHS norm of a weight is a sum over them. A corner is affordable only under a Sobolev kernel, and the same numbers place the Yat kernel: universal and smooth, roomier than a Gaussian but not a Sobolev space."
 seoDescription: "Compute kernel eigenvalues and RKHS norms in JAX. A corner is finite only under Sobolev; the Yat kernel's IMQ spectrum is exponential, not polynomial."
 pubDate: 2026-06-26T10:00:00-07:00
 draft: false
@@ -32,7 +32,7 @@ keywords:
 ---
 import CiteAs from '../../components/CiteAs.astro';
 
-*The [explainer](/blog/what-can-a-weight-be/) said a kernel is a price list for roughness: its eigenvalues set a cost for every frequency, and the RKHS is the weights you can afford. This is that, in JAX. The eigenvalues are the kernel's spectral density, which a fast Fourier transform hands you for free; the RKHS norm of a weight is a single sum over them; and the same numbers settle, honestly, where the Yat kernel actually lives. Every number is from a real run; the script is `scripts/render_weight_be_gifs.py`.*
+*The [explainer](/blog/what-can-a-weight-be/) said a kernel is a price list for roughness: its eigenvalues set a cost for every frequency, and the RKHS is the weights you can afford. This is that, in JAX. The eigenvalues are the kernel's spectral density, which a fast Fourier transform hands you for free; the RKHS norm of a weight is a single sum over them; and the same numbers settle where the Yat kernel actually lives. Every number is from a real run; the script is `scripts/render_weight_be_gifs.py`.*
 
 *Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/what-can-a-weight-be-jax-flax-nnx): the same code, block by block, with the math written out and every figure reproduced from a real run.*
 

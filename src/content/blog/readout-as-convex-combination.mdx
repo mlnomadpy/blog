@@ -177,7 +177,7 @@ $$
 
 This is the whole mechanism. The hidden layer is a detector bank. The output matrix is a dictionary of things the detector bank can write. The MLP output is the detector-weighted mixture of that dictionary. This is not just a notational trick: Geva et al. (2021) found empirically that exactly this decomposition holds in trained language models, the rows of $W_{\text{in}}$ act as *keys* that fire on human-interpretable input patterns, and the columns of $W_{\text{out}}$ act as *values* that write predictable updates to the stream. The feed-forward layer is a key-value memory, and the readout is the composition of its memories.
 
-Two bookkeeping points keep the geometry honest. First, the prototype sum is written into the residual stream as an *additive update*, not as the stream's new state, $y(x)$ is a delta the block contributes, in the spirit of the residual-stream view of Elhage et al. (2021). Second, the bias $b_{\text{out}}$ **anchors** the picture: the readout is affine, so the prototype hull is centered at $b_{\text{out}}$ rather than the origin. The convex/conic/affine/linear taxonomy describes where $y-b_{\text{out}}$ can land.
+Two bookkeeping points pin the geometry down. First, the prototype sum is written into the residual stream as an *additive update*, not as the stream's new state, $y(x)$ is a delta the block contributes, in the spirit of the residual-stream view of Elhage et al. (2021). Second, the bias $b_{\text{out}}$ **anchors** the picture: the readout is affine, so the prototype hull is centered at $b_{\text{out}}$ rather than the origin. The convex/conic/affine/linear taxonomy describes where $y-b_{\text{out}}$ can land.
 
 Once written this way, several interpretability operations become obvious.
 
