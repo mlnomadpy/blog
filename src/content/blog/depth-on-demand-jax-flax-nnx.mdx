@@ -1,0 +1,102 @@
+---
+title: "An Error Controller for a Trained Net, in JAX"
+seoTitle: "Adaptive-Step Inference for a Trained Network in JAX"
+description: "A runnable companion to the depth-on-demand post: the leapfrog classifier trained with lax.scan at fixed depth, the step-doubling controller that re-renders it to tolerance at inference, the honest work accounting (probes included), and the measured tol^(-1/3) power law. Every figure is rendered from the real Kaggle run."
+seoDescription: "Step-doubling error control on a trained JAX leapfrog net: reference-grade fidelity, per-input work, and the measured one-third power law, code included."
+pubDate: 2026-07-16T15:00:00-07:00
+draft: false
+tags: [integrators, adaptive-step, depth, jax, flax, nnx, implementation]
+references:
+  - authors: "Hairer, E., Nørsett, S. P., Wanner, G."
+    year: 1993
+    title: "Solving Ordinary Differential Equations I: Nonstiff Problems"
+    venue: "Springer"
+keywords:
+  - step doubling jax
+  - adaptive step size inference
+  - error control neural network
+  - leapfrog classifier
+---
+import CiteAs from '../../components/CiteAs.astro';
+import SeriesNav from '../../components/SeriesNav.astro';
+
+<SeriesNav />
+
+*The [explainer](/blog/depth-on-demand/) hands a trained leapfrog classifier to a numerical analyst's error controller and lets the controller choose depth per input. This is the implementation: the fixed-depth training (nothing new there), the step-doubling renderer, the accounting that keeps the claims honest, and the figures from the run. Everything below is `scripts/adaptive_depth.py`, the script the Kaggle run executed (bundle `kgl_blog-adaptive-v2`); code blocks are quoted from it.*
+
+## Train fixed, render free
+
+Training is the [previous post's](/blog/a-network-that-conserves-energy-jax-flax-nnx/) leapfrog net, sixteen kick-drift-kick steps of a learned potential as a `lax.scan`, trained end to end and never touched again. The controller is pure inference. Its unit of work is one leapfrog evaluation, and its whole intelligence is a comparison:
+
+```python
+def render_adaptive(p, x, tol, h0=T_TOTAL / L_TRAIN, h_min=T_TOTAL / 4096):
+    z = np_affine(x[None], p["enc"])
+    q, pm = z[:, :DIM], z[:, DIM:]
+    t, h, work, accepted = 0.0, h0, 0, 0
+    while t < T_TOTAL - 1e-9:
+        h = min(h, T_TOTAL - t)
+        q1, p1 = np_leap(p, h, q, pm)                    # one h step
+        qh, ph = np_leap(p, h / 2, q, pm)                # two h/2 steps
+        q2, p2 = np_leap(p, h / 2, qh, ph)
+        work += 3
+        err = float(np.max(np.abs(np.concatenate([q1 - q2, p1 - p2], 1))))
+        if err > tol and h > h_min:
+            h = h / 2                                     # too sharp: refine, retry
+            continue
+        q, pm = q2, p2                                    # accept the finer render
+        accepted += 2                                     # two committed h/2 steps
+        t += h
+        if err < tol / 4:
+            h = min(h * 2, T_TOTAL / 4)                   # gentle: stride out
+    lg = np_affine(np.concatenate([q, pm], 1), p["dec"])[0]
+    return lg, work, accepted
+```
+
+Two bookkeeping decisions matter for honesty. `work` counts *every* leapfrog evaluation, including the probes of rejected steps, because that is what the controller actually costs; `accepted` counts only committed steps, the rendered resolution. The explainer's efficiency claims use `work`; the power law lives in `accepted`. Conflating them flatters the method by a factor of about two, so the run keeps both.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/adepth-controller.gif" alt="A real input stepped through the trained flow by the controller: accepted states accumulate along the trajectory, a rejected probe flashes as an X, and the step-size bar below breathes, shrinking at stiff stretches and doubling on gentle ones" loading="lazy" />
+  <figcaption>The controller on one real spirals input, from the exported weights. Blue dots are accepted states; the X is a rejected probe forcing a halve-and-retry; the bar is the step size breathing against the dashed training step. Every decision is the run's arithmetic.</figcaption>
+</figure>
+
+The same decisions, seen as the step size breathing in time, once per tolerance:
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/adepth-h-breathing.gif" alt="Three staircase traces of step size against integration time for tolerances 0.3, 0.03, 0.003, each drawing forward in time, shrinking at the same stiff stretch of the flow and striding out on the gentle stretches" loading="lazy" />
+  <figcaption>The step size along one input's render at three tolerances, drawing in integration time. All three breathe at the same places, the stiff stretches of this input's trajectory, and tightening the tolerance shrinks every step rather than adding uniform ones: 9, 15, and 36 accepted steps for the same journey. The dashed line is the uniform training step.</figcaption>
+</figure>
+
+## The dial in numbers
+
+Sweeping the tolerance re-renders the same inputs at five precisions. The work histogram moves; the verdicts do not:
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/adepth-tol-sweep.png" alt="Five side-by-side histograms of per-input work at tolerances 0.3 to 0.003: the distribution slides right and spreads while the accuracy in each title stays fixed" loading="lazy" />
+  <figcaption>The tolerance sweep on the trained spirals net, 100 held-out inputs re-rendered at each dial setting. The bill moves; the accuracy in the titles barely does. The distribution also spreads: precision is bought input by input, not in bulk.</figcaption>
+</figure>
+
+The mean of that moving histogram is lawful. Accepted steps against tolerance on log-log axes, all three datasets, with the second-order method's slope drawn once:
+
+<figure class="jax-fig">
+  <img src="/adepth-power-law.png" alt="Log-log plot of accepted steps against tolerance for moons, rings, spirals, all three lying along a dashed slope minus one-third guide line" loading="lazy" />
+  <figcaption>The measured accepted-step means across the tolerance sweep, three datasets, three seeds each. The dashed guide is the tol^(-1/3) a second-order integrator's error control predicts; the measured log-log slope is 0.32.</figcaption>
+</figure>
+
+## Where the money goes
+
+The run's most useful negative result is the geography of effort. Rendering every point of the input plane at one tolerance and coloring by work:
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/adepth-effort-field.gif" alt="The input plane being swept row by row, each cell colored by the work the controller spent there, with the data points overlaid; the bright expensive ridges do not follow the class boundary" loading="lazy" />
+  <figcaption>The effort field computed row by row by the real renderer at tol 0.03, data points overlaid. The expensive ridges follow the stiff regions of the learned potential, not the decision boundary; the correlation between work and classification margin stays near zero on all seeds.</figcaption>
+</figure>
+
+The explainer draws the moral; the implementation note is just that this field costs nothing to explore, because the controller is inference-only: no gradient, no retraining, one while-loop per pixel.
+
+*Every number above is from `scripts/adaptive_depth.py` run on Kaggle (bundle `kgl_blog-adaptive-v2`); the figures are rendered from the bundle's exported seed-0 weights by `scripts/render_adaptive_gifs.py`, replaying the identical controller arithmetic.*
+
+<CiteAs
+  slug="depth-on-demand-jax-flax-nnx"
+  title="An Error Controller for a Trained Net, in JAX"
+  pubDate="2026-07-16"
+/>

@@ -106,6 +106,7 @@ testable prediction about trained hidden states.
 | live | transformers-with-a-velocity-ledger | transformers-with-a-velocity-ledger-jax-flax-nnx |
 | live | a-network-that-conserves-energy | a-network-that-conserves-energy-jax-flax-nnx |
 | live | backprop-without-the-memory | backprop-without-the-memory-jax-flax-nnx |
+| live | depth-on-demand | depth-on-demand-jax-flax-nnx |
 
 ---
 
@@ -367,6 +368,38 @@ conservation/leapfrog (D3); new-derived: recompute-vs-store bookkeeping,
 custom_vjp-by-inversion, the noise-budget napkin L*, memory_analysis as
 instrument, dissipation-destroys-information bridge.
 
+### D5. depth-on-demand  (LIVE, 2026-07-16; + companion)
+Title: "Depth on Demand." D3's depth-as-resolution taken to its integrator
+conclusion: an error controller (step doubling, Hairer) re-renders the TRAINED
+leapfrog classifier to tolerance at inference, no retraining; depth becomes a
+per-input expenditure. Experiment `scripts/adaptive_depth.py` (Kaggle CPU,
+bundle `kgl_blog-adaptive-v2` with seed-0 weight export; v1 numbers identical).
+E1 fidelity: agreement with a 256-step uniform reference 99-100% at ALL
+tolerances (0.3..0.003), ~16 accepted steps at the loosest vs the reference's
+256. Accuracy flat across the whole dial on moons/rings (99.9-100). E2 the
+power law: accepted steps ~ tol^(-1/3) (measured log-log slope 0.32, predicted
+1/3 from the leapfrog's 2nd order, h^3 local error), the sibling of D3's h^2
+band, now in the compute bill. E3 spread: max/min work 3-4x per input (spirals
+tol .003: 111..282). E4 the NEGATIVE (kept honest): work does NOT correlate
+with classification difficulty (r between -0.2 and +0.3, no consistent sign,
+all seeds/datasets); effort maps the STIFFNESS of the learned flow, not the
+margin; explicitly contrasted with C5's residual halting (distance-to-
+convergence, which did track the boundary): two adaptive-depth signals, two
+different physical quantities, neither is the margin. Wrinkle stated: on
+spirals the fully-resolved flow and the training render disagree on a few
+percent of inputs (3-seed mean 94.7 vs fixed 97.4, direction varies by seed):
+trained-at-16 calibrates to the 16-step render. Panels (fresh, adepth.js runs
+the exported weights + the same controller live): StepDoubler (probe/accept/
+reject with breathing h bar), TolDial (live re-render of 120 inputs per dial
+setting + the measured power-law chart), PersonalBudget (run's margin-vs-work
+scatter, hover, near-zero r printed), EffortField (live effort field over the
+plane vs the boundary overlay). Companion: controller code quoted, work-vs-
+accepted accounting note, 3 GIFs (controller stepping, h breathing at 3 tols,
+effort field swept) + 2 PNGs (tol-sweep small multiples, power law). Spends:
+depth-as-resolution + leapfrog (D3), residual halting (C5) by link;
+new-derived: error-controlled inference rendering, tol^(-1/3) law in a
+network, effort-measures-stiffness-not-difficulty.
+
 ## 4. Concept ledger (what is already spent, do not re-explain)
 
 | concept | established in |
@@ -410,6 +443,7 @@ instrument, dissipation-destroys-information bridge.
 | conservation by construction (HNN: field = rotated gradient of a learned scalar, dH/dt = 0 identically, "a loss says please, the architecture says cannot"); the free-field drift diagnosis (errors need a direction to leak; level sets remove it) | D3 |
 | symplectic/leapfrog residual block (kick-drift-kick of a learned potential, state (q,p), h=T/L); the h² shadow-Hamiltonian band measured in a trained net; depth-as-resolution extrapolation (fixed T; the integrator not weight-tying is what survives); learned energy as the missing row (undefined vs unmeasured); marble-on-terrain dictionary table | D3 |
 | reversible backprop by block inversion (custom_vjp with endpoint-only residuals, recompute-vs-store); O(1) activation memory measured flat to depth 512; the (1/mu)^L noise-budget napkin L* = ln(1/eps)/ln(1/mu) locating gradient death; XLA memory_analysis + fresh-process peaks as the honest instruments; dissipation-destroys-information (friction breaks time-reversal); conservation = reversibility = constant-memory training, one property three coats | D4 |
+| error-controlled inference rendering (step doubling on a trained flow, no retraining); depth as a per-input expenditure with a tolerance dial; the tol^(-1/3) cost law (integrator order in the compute bill); effort measures flow stiffness, NOT classification difficulty (measured negative, contrast with C5's convergence-based halting); train-resolution calibration (the fully-resolved flow is a slightly different function than the training render) | D5 |
 
 Reuse these only by reference (link the prior post), never by re-derivation.
 

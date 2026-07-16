@@ -1,0 +1,150 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 470 } = Astro.props;
+---
+<figure class="viz effortfield" data-caption={caption} data-height={height} data-height-mobile="560" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Where does the controller spend its steps? This panel runs the adaptive
+// renderer on a grid over the input plane, live, and colors each cell by the
+// work it took to reach tolerance. The decision boundary is drawn on top. If
+// effort were a measure of classification difficulty, the bright ridges would
+// hug the boundary. They do not: they follow the stiff regions of the learned
+// flow, which is a different map.
+import { defineViz } from './engine/vizkit.js';
+import { T, dot, fmt, axes, gate, loadingText, legend } from './engine/draw.js';
+import { load, forwardFixed, renderAdaptive } from './adepth.js';
+
+const GRID = 36, TOL = 0.03, RANGE = 2.2;
+
+defineViz('effortfield', {
+  title: 'The geography of effort',
+  height: 470,
+  stepsPerFrame: 2,
+  autoplay: false,
+  controls: [
+    { type: 'play' }, { type: 'reset' }, { type: 'speed' },
+    { type: 'select', name: 'ds', label: 'dataset', value: 'spirals',
+      options: [{ value: 'moons', label: 'moons' }, { value: 'rings', label: 'rings' }, { value: 'spirals', label: 'spirals' }] },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    const st = api.state;
+    st.row = 0; st.work = null; st.ds = api.get('ds');
+    gate(api, () => load('models'), (a, d) => { a.state.models = d; });
+  },
+
+  step(api) {
+    const st = api.state;
+    if (!st.ready || !st.models) return;
+    const ds = api.get('ds');
+    if (!st.work || st.ds !== ds) {
+      st.ds = ds; st.row = 0;
+      st.work = new Float32Array(GRID * GRID);
+      st.bound = new Float32Array(GRID * GRID);
+    }
+    if (st.row >= GRID) { api.pause?.(); return; }
+    const m = st.models[st.ds].model, r = st.row;
+    for (let c = 0; c < GRID; c++) {
+      const x = [-RANGE + (2 * RANGE * c) / (GRID - 1),
+                 RANGE - (2 * RANGE * r) / (GRID - 1)];
+      const res = renderAdaptive(m, x, TOL);
+      st.work[r * GRID + c] = res.work;
+      const lg = forwardFixed(m, x, 16);
+      st.bound[r * GRID + c] = lg[1] - lg[0];
+    }
+    st.row++;
+  },
+
+  draw(api) {
+    const { ctx, colors, size: { W, H } } = api, st = api.state;
+    if (!st.ready || !st.models) { loadingText(api); return; }
+    if (!st.work || (st.row === 0 && st.ds === api.get('ds'))) {
+      // first paint: compute the opening rows so the field is already visible
+      const ds = api.get('ds');
+      st.ds = ds; st.row = 0;
+      st.work = new Float32Array(GRID * GRID);
+      st.bound = new Float32Array(GRID * GRID);
+      const m = st.models[ds].model;
+      while (st.row < 8) {
+        const r = st.row;
+        for (let c = 0; c < GRID; c++) {
+          const x = [-RANGE + (2 * RANGE * c) / (GRID - 1),
+                     RANGE - (2 * RANGE * r) / (GRID - 1)];
+          st.work[r * GRID + c] = renderAdaptive(m, x, TOL).work;
+          const lg = forwardFixed(m, x, 16);
+          st.bound[r * GRID + c] = lg[1] - lg[0];
+        }
+        st.row++;
+      }
+    }
+    const pad = 16, box = { x: pad, y: 30, w: Math.min(W - 150, H - 140), h: Math.min(W - 150, H - 140) };
+    box.x = (W - box.w - 110) / 2;
+    axes(ctx, box, { xMin: -RANGE, xMax: RANGE, yMin: -RANGE, yMax: RANGE }, colors);
+    T(ctx, colors, 'label');
+    ctx.fillText(`work to render each input at tol ${TOL}, computed live (${st.row}/${GRID} rows)`, box.x, box.y - 8);
+
+    if (st.work && st.row > 0) {
+      let wmax = 30, wmin = 1e9;
+      for (let i = 0; i < st.row * GRID; i++) { wmax = Math.max(wmax, st.work[i]); wmin = Math.min(wmin, st.work[i]); }
+      const off = document.createElement('canvas'); off.width = GRID; off.height = GRID;
+      const octx = off.getContext('2d'), img = octx.createImageData(GRID, GRID);
+      for (let i = 0; i < st.row * GRID; i++) {
+        const t = Math.min(1, (st.work[i] - wmin) / Math.max(1, wmax - wmin));
+        img.data[i * 4] = 30 + 200 * t;
+        img.data[i * 4 + 1] = 60 + 90 * (1 - t);
+        img.data[i * 4 + 2] = 150 - 90 * t;
+        img.data[i * 4 + 3] = 200;
+      }
+      octx.putImageData(img, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.save(); ctx.beginPath(); ctx.rect(box.x, box.y, box.w, box.h); ctx.clip();
+      ctx.drawImage(off, 0, 0, GRID, st.row, box.x, box.y, box.w, (st.row / GRID) * box.h);
+      // boundary: zero-crossings of the logit gap
+      ctx.strokeStyle = colors.ink; ctx.lineWidth = 1.4;
+      for (let r = 0; r < st.row - 1; r++) for (let c = 0; c < GRID - 1; c++) {
+        const a = st.bound[r * GRID + c], b = st.bound[r * GRID + c + 1], d = st.bound[(r + 1) * GRID + c];
+        if (a * b < 0 || a * d < 0) {
+          const x = box.x + (c / (GRID - 1)) * box.w, y = box.y + (r / (GRID - 1)) * box.h;
+          ctx.strokeRect(x, y, 1.6, 1.6);
+        }
+      }
+      ctx.restore();
+      // colorbar
+      const cbx = box.x + box.w + 18, cbw = 16;
+      for (let i = 0; i < 60; i++) {
+        const t = 1 - i / 59;
+        ctx.fillStyle = `rgb(${30 + 200 * t}, ${60 + 90 * (1 - t)}, ${150 - 90 * t})`;
+        ctx.fillRect(cbx, box.y + (i / 60) * box.h, cbw, box.h / 60 + 1);
+      }
+      T(ctx, colors, 'small');
+      ctx.fillText(`${fmt(wmax, 0)}`, cbx + cbw + 4, box.y + 10);
+      ctx.fillText(`${fmt(wmin, 0)}`, cbx + cbw + 4, box.y + box.h);
+      ctx.fillText('work', cbx, box.y - 8);
+      // data points
+      const X = st.models[st.ds].X, y = st.models[st.ds].y, cls = ['#3a8f5e', '#9a4f9c'];
+      for (let i = 0; i < Math.min(160, X.length); i++) {
+        const x = box.x + ((X[i][0] + RANGE) / (2 * RANGE)) * box.w;
+        const yy = box.y + (1 - (X[i][1] + RANGE) / (2 * RANGE)) * box.h;
+        if (x > box.x && x < box.x + box.w && yy > box.y && yy < box.y + box.h) dot(ctx, x, yy, 1.6, cls[y[i]]);
+      }
+    }
+    legend(ctx, pad, H - 64, [
+      { color: '#e0553a', label: 'expensive to render (stiff flow)' },
+      { color: '#2a8f6e', label: 'cheap to render (gentle flow)' },
+      { color: colors.ink, label: 'decision boundary of the same net' },
+    ], colors);
+    T(ctx, colors, 'small');
+    ctx.fillText('if effort meant difficulty, the red ridges would trace the boundary; watch where they actually run', pad, H - 20);
+    api.readout('rd', st.row === 0
+      ? 'press play: the renderer sweeps the plane, one row of inputs per tick'
+      : st.row < GRID ? `rendering row ${st.row}/${GRID}` : 'done: effort maps the stiffness of the learned flow, not the margin');
+  },
+});
+</script>

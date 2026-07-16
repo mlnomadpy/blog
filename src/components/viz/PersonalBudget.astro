@@ -1,0 +1,88 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 420 } = Astro.props;
+---
+<figure class="viz personalbudget" data-caption={caption} data-height={height} data-height-mobile="500" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The run's per-input record, one dot per test input: how much work its
+// render took against how confidently the net classifies it. If effort were
+// difficulty, the cloud would slope down to the right. Hover any dot for its
+// numbers. The correlation, seed by seed, stays near zero: the controller is
+// billing for the terrain it crossed, not for how close the destination sits
+// to the border.
+import { defineViz } from './engine/vizkit.js';
+import { T, dot, fmt, axes, gate, loadingText } from './engine/draw.js';
+import { load } from './adepth.js';
+
+defineViz('personalbudget', {
+  title: 'Effort against difficulty, one dot per input',
+  height: 420,
+  autoplay: false,
+  controls: [
+    { type: 'select', name: 'ds', label: 'dataset', value: 'spirals',
+      options: [{ value: 'moons', label: 'moons' }, { value: 'rings', label: 'rings' }, { value: 'spirals', label: 'spirals' }] },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    api.state.hover = null;
+    gate(api, () => load('sweep'), (a, d) => { a.state.sweep = d; });
+  },
+
+  pointer(api, ev) {
+    const st = api.state;
+    if (!st.pts) return;
+    let best = null, bd = 22;
+    st.pts.forEach((p) => {
+      const d = Math.hypot(p.px - ev.x, p.py - ev.y);
+      if (d < bd) { bd = d; best = p; }
+    });
+    st.hover = best;
+    api.requestDraw?.();
+  },
+
+  draw(api) {
+    const { ctx, colors, size: { W, H } } = api, st = api.state;
+    if (!st.ready || !st.sweep) { loadingText(api); return; }
+    const ds = api.get('ds');
+    const sc = st.sweep[ds].scatter;
+    const rows = st.sweep[ds].rows;
+    const corrRow = rows.find((r) => r.tol === sc.tol);
+    const pad = 16, box = { x: pad + 40, y: 34, w: W - 2 * pad - 50, h: H - 160 };
+
+    const margins = sc.margins, works = sc.works;
+    const mMax = Math.max(...margins), wMin = Math.min(...works), wMax = Math.max(...works);
+    axes(ctx, box, { xMin: 0, xMax: mMax, yMin: wMin, yMax: wMax, grid: true,
+                     xTicks: [0, mMax / 2, mMax].map((v) => Math.round(v)),
+                     yTicks: [wMin, Math.round((wMin + wMax) / 2), wMax] }, colors);
+    T(ctx, colors, 'label');
+    ctx.fillText(`margin (how decisively classified) against work to render, tol ${sc.tol}, from the run`, box.x, box.y - 8);
+    ctx.save(); ctx.translate(pad + 4, box.y + box.h / 2); ctx.rotate(-Math.PI / 2);
+    T(ctx, colors, 'small'); ctx.textAlign = 'center'; ctx.fillText('work', 0, 0); ctx.restore(); ctx.textAlign = 'left';
+
+    st.pts = [];
+    margins.forEach((m, i) => {
+      const px = box.x + (m / mMax) * box.w;
+      const py = box.y + (1 - (works[i] - wMin) / (wMax - wMin)) * box.h;
+      const isH = st.hover && st.hover.i === i;
+      dot(ctx, px, py, isH ? 5 : 2.6, isH ? '#e8a33a' : '#4a7fb3');
+      st.pts.push({ px, py, i, m, w: works[i] });
+    });
+
+    T(ctx, colors, 'small');
+    const cs = corrRow.corr.map((c) => (c >= 0 ? '+' : '') + fmt(c, 2)).join(', ');
+    ctx.fillText(`correlation between work and difficulty (-log margin), three seeds: ${cs}`, pad, H - 64);
+    ctx.fillText('a real link would slope this cloud; the controller charges for the path, not the verdict', pad, H - 44);
+
+    api.readout('rd', st.hover
+      ? `input ${st.hover.i}: margin ${fmt(st.hover.m, 2)}, work ${st.hover.w} evaluations`
+      : 'hover a dot: one held-out input, its decisiveness and its bill');
+  },
+});
+</script>

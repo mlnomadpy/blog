@@ -109,6 +109,7 @@ export const SERIES: SeriesDef[] = [
       'transformers-with-a-velocity-ledger',
       'a-network-that-conserves-energy',
       'backprop-without-the-memory',
+      'depth-on-demand',
     ],
   },
 ];
