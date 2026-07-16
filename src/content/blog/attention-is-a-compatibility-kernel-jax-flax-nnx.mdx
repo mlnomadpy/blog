@@ -1,0 +1,119 @@
+---
+title: "Softmax-Free Attention in JAX/Flax NNX"
+seoTitle: "Yat-Kernel Attention in JAX/Flax NNX"
+description: "A runnable companion to the compatibility-kernel post: the attention module where one branch computes softmax and the other computes the Yat kernel with no exponential anywhere, the parameter-matched training harness, the telemetry that measured our bounded-scores belief dead, and the checkpointed attention maps. Every number is from the real Kaggle runs."
+seoDescription: "Yat-kernel attention in Flax NNX: kappa/sum(kappa) routing with no softmax, parameter-matched against exp(qk), within 1.4% on char-level Shakespeare."
+pubDate: 2026-07-16T17:00:00-07:00
+draft: false
+tags: [attention, kernels, yat, jax, flax, nnx, implementation]
+references:
+  - authors: "Bouhsine, T., Choromanski, K., et al."
+    year: 2026
+    title: "SLAY: Scalable Linear Attention with Yat Kernels"
+    arxiv: "2602.04915"
+keywords:
+  - yat attention jax
+  - softmax-free attention
+  - kernel attention implementation
+  - flax nnx transformer
+---
+import CiteAs from '../../components/CiteAs.astro';
+import SeriesNav from '../../components/SeriesNav.astro';
+
+<SeriesNav />
+
+*The [explainer](/blog/attention-is-a-compatibility-kernel/) swaps attention's exp(q·k) for the Yat kernel and reports what a parameter-matched contest measures. This is the implementation: one attention module with two score branches, the training harness that holds everything else fixed, and the telemetry. Everything below is `scripts/yat_attention.py`, the script both Kaggle runs executed (quality bundle `kgl_blog-yatattn-v1`, telemetry bundle `kgl_blog-yatattn-telem`); code blocks are quoted from it.*
+
+## One module, two compatibility functions
+
+The entire experimental contrast lives inside `Attention.__call__`. Same projections, same heads, same causal mask, same value aggregation; the branch chooses only how a query and key become a score, and how scores become weights:
+
+```python
+if s.variant == "softmax":
+    logits = (q @ k.transpose(0, 1, 3, 2)) / math.sqrt(s.dh)
+    logits = jnp.where(mask, logits, -jnp.inf)
+    w = jax.nn.softmax(logits, axis=-1)
+else:
+    dots = q @ k.transpose(0, 1, 3, 2)                       # (B,h,T,T)
+    d2 = (jnp.sum(q * q, -1, keepdims=True)
+          + jnp.sum(k * k, -1, keepdims=True).swapaxes(-1, -2)
+          - 2 * dots)
+    kappa = (dots * dots) / (jnp.maximum(d2, 0.0) + EPS)     # >= 0, Mercer
+    kappa = jnp.where(mask, kappa, 0.0)
+    mass = kappa.sum(-1, keepdims=True)                       # (B,h,T,1)
+    w = kappa / (mass + 1e-9)
+```
+
+Read the kernel branch against the softmax branch and notice what is missing. There is no exponential, so there is no max-subtraction trick and no shift gauge. The causal mask is `0.0`, not `-inf`, because zero kernel mass *is* exclusion. And `mass`, the row sum that softmax divides away inside its own definition, is a first-class tensor here, kept for telemetry. The pairwise distance is assembled from the same `dots` the score already needed, so the kernel branch costs one extra elementwise pass over the attention matrix, not an extra matmul.
+
+Everything around this branch is deliberately boring: the same `nnx.MultiHead`-style projections, the same pre-norm GPT skeleton, the same AdamW, the same batches in the same order. Both models count 2,719,169 parameters, exactly, because the branch touches no parameter shapes.
+
+## The contest
+
+Three seeds per variant, 12,000 steps, best validation loss on held-out Shakespeare:
+
+| | best-val (nats/char) | bits/char |
+| --- | --- | --- |
+| softmax | 1.4923 ± 0.0060 | 2.153 |
+| yat kernel | 1.5131 ± 0.0071 | 2.183 |
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/yatattn-curves.gif" alt="Validation loss curves for all six runs drawing through 12000 training steps, softmax in red and yat in blue, braiding together and settling 1.4 percent apart" loading="lazy" />
+  <figcaption>All six runs' validation losses drawing through training, from the run's eval checkpoints. The families braid; the gap at the end is 1.4 percent. No LR sweep favors either side: both use the schedule that the softmax baseline was tuned with, which if anything spots the incumbent a head start.</figcaption>
+</figure>
+
+## The telemetry that killed a claim
+
+The run logs the maximum attention score each model produces on held-out batches. We expected to caption this "bounded kernel, roaming logits". The data said otherwise, and the companion is where the numbers live:
+
+| | trained score, mean | trained score, max |
+| --- | --- | --- |
+| softmax logits | 15 to 18 | 34.5 |
+| yat kernel | 17,000 to 68,000 | 443,508 |
+
+The kernel's scores are five orders of magnitude *larger*, because $\kappa(q,q) = \lVert q \rVert^4 / \varepsilon$ and training grows the projection norms. The lesson the explainer draws is the honest one: boundedness-for-bounded-inputs is not boundedness-under-training, and what actually matters is that a ratio of polynomials digests $4 \times 10^5$ without a max trick, while $e^{34.5}$ does not exist in float32 at all.
+
+The mass channel's naive test is measured with a rank statistic, mass against next-token correctness:
+
+```python
+order = np.argsort(m)
+ranks = np.empty_like(order, dtype=float); ranks[order] = np.arange(len(m))
+pos = ranks[c == 1]
+auroc = (pos.sum() - len(pos) * (len(pos) - 1) / 2) / (len(pos) * (c == 0).sum() + 1e-9)
+```
+
+AUROC 0.509, 0.501, 0.508 across seeds. Null, reported as such.
+
+## The routing, watched
+
+The telemetry run snapshots both models' full attention tensors on one fixed validation window at four checkpoints. Two honest ways to look at them: through depth, and through training.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/yatattn-depth-grid.png" alt="Trained attention maps for all six layers, both models side by side, causal structure changing character with depth" loading="lazy" />
+  <figcaption>The trained routing through depth, layer 1 to 6, both models on the same Shakespeare window, all heads averaged. Both develop the standard anatomy, local bands early, sparser long-range columns late; six layers are six facts, so this is a grid. The kernel model's maps are the ones computed without an exponential anywhere, and its bands are visibly fatter, the diffuseness the explainer measures as an entropy gap.</figcaption>
+</figure>
+
+Watching a single head read is where the diffuseness difference stops being a statistic. One query position advancing through the window, its full attention row at every position:
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/yatattn-reading.gif" alt="Two attention-row traces advancing across the sequence as the query position moves, the softmax row spiking hard onto single keys while the yat row spreads its mass over several" loading="lazy" />
+  <figcaption>Layer 4, one head, the attention row of each query position as the models read the window left to right, from the trained checkpoints. The softmax row (top) repeatedly spikes onto a single key; the kernel row (bottom) spreads over several. An exponential is a soft argmax; a ratio of polynomials is a genuine weighted average.</figcaption>
+</figure>
+
+<figure class="jax-fig">
+  <img src="/yatattn-checkpoints.png" alt="A grid of attention maps, four training checkpoints by two models, one layer and head, showing near-uniform haze at step 0 sharpening to structured routing at step 12000" loading="lazy" />
+  <figcaption>One layer and head at the four telemetry checkpoints, both models: from causal haze to structure. Four snapshots are four facts, so this is a grid, not an animation.</figcaption>
+</figure>
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/yatattn-score-orbit.gif" alt="The two score landscapes over the key plane while the query orbits: the bilinear ramp rotates rigidly while the yat kernel's bright peak travels with the query" loading="lazy" />
+  <figcaption>The two compatibility functions computed live from their formulas while the query orbits the plane: the bilinear ramp only rotates, scoring direction; the kernel's peak travels with the query, scoring direction and place at once. This is the geometry the explainer's draggable panel lets you feel; here it is as one continuous sweep.</figcaption>
+</figure>
+
+*Every number above is from `scripts/yat_attention.py` on Kaggle (bundles `kgl_blog-yatattn-v1` and `kgl_blog-yatattn-telem`); figures are rendered from the bundles by `scripts/render_yatattn_gifs.py`. The linear-time road, positive random features for exactly this kernel, is SLAY (arXiv 2602.04915).*
+
+<CiteAs
+  slug="attention-is-a-compatibility-kernel-jax-flax-nnx"
+  title="Softmax-Free Attention in JAX/Flax NNX"
+  pubDate="2026-07-16"
+/>

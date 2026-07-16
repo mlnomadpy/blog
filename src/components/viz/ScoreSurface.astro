@@ -1,0 +1,107 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 440 } = Astro.props;
+---
+<figure class="viz scoresurface" data-caption={caption} data-height={height} data-height-mobile="540" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The two compatibility functions, computed live over the plane of keys for
+// one draggable query. Left: the bilinear score q.k, which grows without
+// bound along the query's direction and cannot tell near from far. Right:
+// the Yat kernel, whose score wants BOTH alignment and proximity: the bright
+// region hugs the query. Drag the white query dot and watch both landscapes
+// reorganize.
+import { defineViz } from './engine/vizkit.js';
+import { T, dot, fmt, axes, gate, loadingText } from './engine/draw.js';
+import { drag } from './engine/pointer.js';
+import { scoreBilinear, scoreYat } from './yatattn.js';
+
+const GRID = 56, R = 2.4;
+
+defineViz('scoresurface', {
+  title: 'Two answers to "how compatible?"',
+  height: 440,
+  autoplay: false,
+  controls: [{ type: 'readout', name: 'rd' }],
+
+  setup(api) {
+    const st = api.state;
+    st.q = [1.1, 0.7];
+    gate(api, () => Promise.resolve(true), (a) => { a.state.ok = true; });
+    const toWorld = (p, b) => [
+      Math.max(-R, Math.min(R, -R + (2 * R * (p.x - b.x)) / b.w)),
+      Math.max(-R, Math.min(R, R - (2 * R * (p.y - b.y)) / b.h)),
+    ];
+    drag(api.canvas, {
+      cursor: 'grab',
+      onStart(p) {
+        const bs = st.boxes || [];
+        st.dragBox = bs.findIndex((b) => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h);
+        st.dragging = st.dragBox >= 0;
+      },
+      onMove(p) {
+        if (!st.dragging) return;
+        const b = st.boxes?.[st.dragBox];
+        if (!b) return;
+        st.q = toWorld(p, b);
+        api.requestDraw?.();
+      },
+      onEnd() { st.dragging = false; },
+    });
+  },
+
+  draw(api) {
+    const { ctx, colors, size: { W, H } } = api, st = api.state;
+    if (!st.ready) { loadingText(api); return; }
+    const pad = 16, half = (W - 3 * pad) / 2, boxH = H - 150;
+    const boxes = [
+      { x: pad, y: 34, w: half, h: boxH, name: 'bilinear: q . k', fn: scoreBilinear },
+      { x: 2 * pad + half, y: 34, w: half, h: boxH, name: 'Yat kernel: (q . k)^2 / (dist^2 + 1)', fn: scoreYat },
+    ];
+    st.boxes = boxes;
+    boxes.forEach((b, bi) => {
+      // score field over the key plane
+      const vals = new Float32Array(GRID * GRID);
+      let vmax = -1e9, vmin = 1e9;
+      for (let r = 0; r < GRID; r++) for (let c = 0; c < GRID; c++) {
+        const k = [-R + (2 * R * c) / (GRID - 1), R - (2 * R * r) / (GRID - 1)];
+        const v = b.fn(st.q, k);
+        vals[r * GRID + c] = v;
+        vmax = Math.max(vmax, v); vmin = Math.min(vmin, v);
+      }
+      const off = document.createElement('canvas'); off.width = GRID; off.height = GRID;
+      const octx = off.getContext('2d'), img = octx.createImageData(GRID, GRID);
+      for (let i = 0; i < vals.length; i++) {
+        const t = (vals[i] - vmin) / (vmax - vmin + 1e-9);
+        img.data[i * 4] = 25 + 215 * t;
+        img.data[i * 4 + 1] = 40 + 110 * t;
+        img.data[i * 4 + 2] = 120 - 40 * t;
+        img.data[i * 4 + 3] = 210;
+      }
+      octx.putImageData(img, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(off, b.x, b.y, b.w, b.h);
+      axes(ctx, b, { xMin: -R, xMax: R, yMin: -R, yMax: R }, colors);
+      T(ctx, colors, 'label');
+      ctx.fillText(b.name, b.x, b.y - 8);
+      // the query
+      const qx = b.x + ((st.q[0] + R) / (2 * R)) * b.w;
+      const qy = b.y + (1 - (st.q[1] + R) / (2 * R)) * b.h;
+      ctx.strokeStyle = colors.ink;
+      dot(ctx, qx, qy, 7, '#fff');
+      ctx.beginPath(); ctx.arc(qx, qy, 7, 0, 2 * Math.PI); ctx.stroke();
+      if (bi === 0) st.px = [qx, qy];
+    });
+    T(ctx, colors, 'small');
+    ctx.fillText('brighter = higher score for a key at that position; the white dot is the query q, drag it', pad, H - 66);
+    ctx.fillText('bilinear rewards direction and cannot see distance; the kernel rewards direction AND nearness at once', pad, H - 46);
+    const bl = scoreBilinear(st.q, st.q), yt = scoreYat(st.q, st.q);
+    api.readout('rd', `at k = q: bilinear ${fmt(bl, 2)} (and still growing past it), kernel ${fmt(yt, 2)} (its own peak, ||q||^4 over eps)`);
+  },
+});
+</script>

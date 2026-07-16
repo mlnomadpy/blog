@@ -1,0 +1,89 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 430 } = Astro.props;
+---
+<figure class="viz qualitytiebxc" data-caption={caption} data-height={height} data-height-mobile="520" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The existence proof in one chart: validation loss through training for all
+// six runs, three seeds per attention. The two families braid; the final gap
+// is 1.4 percent. Hover a curve for its exact best value. The readouts carry
+// the two facts the curves cannot show: identical parameter counts, and the
+// mass channel's null AUROC, reported as measured.
+import { defineViz } from './engine/vizkit.js';
+import { T, fmt, dot, axes, gate, loadingText, legend } from './engine/draw.js';
+import { load } from './yatattn.js';
+
+defineViz('qualitytiebxc', {
+  title: 'Six runs, two attentions',
+  height: 430,
+  autoplay: false,
+  controls: [{ type: 'readout', name: 'rd' }],
+
+  setup(api) {
+    api.state.hover = null;
+    gate(api, () => load('runs'), (a, d) => { a.state.runs = d; });
+  },
+
+  pointer(api, ev) {
+    const st = api.state;
+    if (!st.segs) return;
+    let best = null, bd = 14;
+    st.segs.forEach((s) => {
+      const d = Math.hypot(s.px - ev.x, s.py - ev.y);
+      if (d < bd) { bd = d; best = s; }
+    });
+    st.hover = best;
+    api.requestDraw?.();
+  },
+
+  draw(api) {
+    const { ctx, colors, size: { W, H } } = api, st = api.state;
+    if (!st.ready || !st.runs) { loadingText(api); return; }
+    const pad = 16, box = { x: pad + 36, y: 34, w: W - 2 * pad - 44, h: H - 170 };
+    const S = st.runs.cfg.STEPS;
+    axes(ctx, box, { xMin: 0, xMax: S, yMin: 1.4, yMax: 2.2, grid: true,
+                     xTicks: [0, S / 2, S], yTicks: [1.4, 1.8, 2.2] }, colors);
+    T(ctx, colors, 'label');
+    ctx.fillText('validation loss through training, three seeds per attention', box.x, box.y - 8);
+    ctx.save(); ctx.translate(pad + 4, box.y + box.h / 2); ctx.rotate(-Math.PI / 2);
+    T(ctx, colors, 'small'); ctx.textAlign = 'center'; ctx.fillText('val loss (nats/char)', 0, 0);
+    ctx.restore(); ctx.textAlign = 'left';
+
+    st.segs = [];
+    st.runs.curves.forEach((r) => {
+      const col = r.variant === 'softmax' ? '#c2553a' : '#4a7fb3';
+      ctx.strokeStyle = col + 'bb'; ctx.lineWidth = 1.4; ctx.beginPath();
+      r.curve.forEach((p, i) => {
+        const x = box.x + (p.step / S) * box.w;
+        const y = box.y + (1 - (Math.min(2.2, p.val) - 1.4) / 0.8) * box.h;
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+        st.segs.push({ px: x, py: y, variant: r.variant, seed: r.seed,
+                       step: p.step, val: p.val, best: r.best_val });
+      });
+      ctx.stroke();
+    });
+    if (st.hover) dot(ctx, st.hover.px, st.hover.py, 5, '#e8a33a');
+
+    const sm = st.runs.summary.softmax, yt = st.runs.summary.yat;
+    legend(ctx, pad, H - 96, [
+      { color: '#c2553a', label: `softmax attention: best-val ${fmt(sm.best_val_mean, 4)} +- ${fmt(sm.best_val_std, 4)}` },
+      { color: '#4a7fb3', label: `yat-kernel attention (no softmax anywhere): ${fmt(yt.best_val_mean, 4)} +- ${fmt(yt.best_val_std, 4)}` },
+    ], colors);
+    T(ctx, colors, 'small');
+    ctx.fillText('both models: 2,719,169 parameters exactly; same data order, schedule, dropout, and evaluation', pad, H - 44);
+    const mass = st.runs.mass;
+    const aur = mass.map((m) => fmt(m.mass_auroc, 3)).join(', ');
+    ctx.fillText(`the mass channel's naive test, AUROC of row mass predicting next-token correctness: ${aur} (null, three seeds)`, pad, H - 24);
+
+    api.readout('rd', st.hover
+      ? `${st.hover.variant} seed ${st.hover.seed}, step ${st.hover.step}: val ${fmt(st.hover.val, 4)} (best ${fmt(st.hover.best, 4)})`
+      : 'hover a curve for its exact values');
+  },
+});
+</script>

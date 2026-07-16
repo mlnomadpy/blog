@@ -1,0 +1,109 @@
+---
+title: "The Kernel Between the Roles"
+seoTitle: "Yat Attention: A Mercer Kernel in the Score Slot"
+description: "The QK post in this series ended on a construction it refused to build: keep the query and key roles, but replace the bilinear-then-exponential score with a genuine Mercer kernel between them. This post builds it. Because the Yat kernel is nonnegative by construction, attention needs no softmax at all, routing becomes a literal Nadaraya-Watson smoother, and the exponential's whole job disappears. Trained head to head at 2,719,169 parameters each, the kernel transformer lands within 1.4 percent of softmax attention on character-level Shakespeare, and the differences that survive are the interesting part: no gauge, no max-trick, a mass channel softmax cannot represent, and one cherished assumption of ours measured dead."
+seoDescription: "Replace exp(q.k) with the Yat kernel and attention needs no softmax: a Nadaraya-Watson transformer within 1.4% of softmax at matched parameters."
+pubDate: 2026-07-16T16:00:00-07:00
+draft: false
+companion: attention-is-a-compatibility-kernel-jax-flax-nnx
+tags: [attention, kernels, yat, transformers, existence-proof, jax]
+references:
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+  - authors: "Bouhsine, T., Choromanski, K., et al."
+    year: 2026
+    title: "SLAY: Scalable Linear Attention with Yat Kernels"
+    arxiv: "2602.04915"
+  - authors: "Choromanski, K., et al."
+    year: 2021
+    title: "Rethinking Attention with Performers"
+    arxiv: "2009.14794"
+  - authors: "Vaswani, A., et al."
+    year: 2017
+    title: "Attention Is All You Need"
+    arxiv: "1706.03762"
+keywords:
+  - yat attention
+  - kernel attention
+  - nadaraya-watson transformer
+  - softmax-free attention
+  - compatibility kernel
+---
+import ScoreSurface from '../../components/viz/ScoreSurface.astro';
+import GaugeAndMass from '../../components/viz/GaugeAndMass.astro';
+import QualityTieBxC from '../../components/viz/QualityTieBxC.astro';
+import HeadsAtWork from '../../components/viz/HeadsAtWork.astro';
+import CiteAs from '../../components/CiteAs.astro';
+import SeriesNav from '../../components/SeriesNav.astro';
+
+<SeriesNav />
+
+*Two threads of this blog have been walking toward each other for months. One read attention as kernel machinery: [a Nadaraya-Watson smoother](/blog/attention-is-a-kernel) whose exp(q·k) plays the kernel's part [without being one](/blog/why-attention-needs-qk-projections). The other built a program on a kernel that actually is one, [the Yat kernel](/blog/what-a-finite-kernel-buys-an-mlp), and spent it on MLPs, editing, survival models, fixed points. The QK post closed on the meeting point and then refused to build it: the trap, it said, is that a Mercer kernel on tokens is symmetric, which deletes the query and key roles that make attention directional; the right move is to kernelize the compatibility* between *the roles, $s_{ij} = \kappa(f_Q(x_i), f_K(x_j))$, and that construction deserves a post of its own. This is that post.*
+
+## What the exponential was hired to do
+
+Strip attention to its bookkeeping and one requirement stands out. The mechanism turns scores into a weighted average, so the weights must be nonnegative and sum to one. Bilinear scores $q \cdot k$ come out of a matrix multiply signed, positive here, negative there, useless as weights. The exponential is the repair: $e^x$ is positive whatever $x$ was, so wrap the scores and divide by the sum. That is the whole softmax, and it works, and everything distinctive about softmax attention follows from that one repair rather than from anything attention asked for. The scores gain a gauge: shift every logit by a constant and the weights do not move, so the absolute level of compatibility is deleted information, [the same shift-invariance that deletes a kernel's field magnitude in a classifier head](/blog/calibration-of-a-bounded-net). The implementation gains the max-subtraction trick, because $e^{30}$ overflows what floats can hold. And the geometry gains the property the QK post lingered on: $e^{q \cdot k}$ behaves like a kernel smoother operationally while being no Mercer kernel at all.
+
+But suppose the score arrived positive on its own. A Mercer kernel with a nonnegative range needs no repair: weights are $\kappa_{ij} / \sum_j \kappa_{ij}$, done. No exponential, no gauge, no overflow trick, and the smoother is not an analogy anymore, it is the literal Nadaraya-Watson estimator that [the first attention post](/blog/attention-is-a-kernel) could only read into the formula. The Yat kernel is exactly such an object, positive semidefinite with a nonnegative range (arXiv 2605.03262):
+
+$$
+\kappa(q, k) \;=\; \frac{(q \cdot k)^2}{\lVert q - k \rVert^2 + \varepsilon}.
+$$
+
+Positive semidefiniteness here is a fact, not a hope, and the proof fits in a breath. $(q \cdot k)^2$ is the square of the linear kernel, hence a kernel; $1 / (\lVert q - k \rVert^2 + \varepsilon)$ is the inverse multiquadric, a classical kernel in its own right; and the Schur product theorem says the pointwise product of two kernels is a kernel. So $\kappa$ inherits a genuine reproducing-kernel Hilbert space, a feature map, a representer theorem, the entire apparatus [this series built its network program on](/blog/what-a-finite-kernel-buys-an-mlp). The $\varepsilon$ is the same softening the prototype posts used: it caps the peak at $\lVert q \rVert^4 / \varepsilon$ when key meets query, and we run everything at $\varepsilon = 1$, untouched.
+
+And the trap from the QK post is disarmed the way that post prescribed. The kernel is symmetric in its two arguments, but its arguments are not tokens: they are $f_Q(x_i)$ and $f_K(x_j)$, the learned query and key projections. Directionality lives in the roles, $f_Q \neq f_K$, exactly where it lived under softmax. Only the comparison between the roles changes.
+
+## What the kernel scores that a dot product cannot
+
+Before any training, the two compatibility functions disagree about geometry, and the disagreement is visible. A bilinear score rewards one thing: projection onto the query's direction. It grows without bound along that ray and cannot tell a key sitting on the query from a key ten times farther out along the same line. The Yat kernel multiplies alignment by proximity: its numerator wants the directions to agree, its denominator wants the vectors *near each other*, and its peak sits at the query itself.
+
+<ScoreSurface caption="Both compatibility functions computed live over the plane of possible keys, for one query you can drag. Left: the bilinear score, a tilted ramp that rises forever along the query's direction and never peaks. Right: the Yat kernel, whose bright region hugs the query: alignment and nearness at once, the locality this series has spent a dozen posts on, now sitting in attention's score slot." />
+
+This is [the prototype geometry this series built for neurons](/blog/your-neuron-is-a-picture) transplanted into attention: under a Yat score, a key is not a direction to project onto but a *place*, and a query attends hardest to keys that are near it in the projected space. Whether a language model wants that inductive bias is precisely what an existence-proof experiment is for.
+
+## What each normalizer forgets
+
+The second structural difference needs no training either. Softmax's shift gauge means the row of weights is all that survives; the *level* of the scores, how compatible the best match actually was, is deleted by construction. The kernel's normalization also produces weights summing to one, but the raw row sum, $m_i = \sum_j \kappa_{ij}$, is a real nonnegative number that survives as a separate channel: how much total compatibility this query found, before normalization spent it.
+
+<GaugeAndMass caption="One query and eight keys, live. Slide the gauge to add a constant to every bilinear logit: the softmax bars refuse to move, the level is gone. The kernel row normalizes to one as well, but its raw total, the mass, survives as a readout: drag the query into the cluster of keys and watch it rise, drag it away and watch it fall. Softmax has no place to keep this number." />
+
+The mass channel is the attention version of [the kernel field magnitude](/blog/calibration-of-a-bounded-net) that a bounded network keeps beneath its softmax, the quantity [the prototype network's abstention story](/blog/your-neuron-is-a-picture) was built on. Structurally, it is free information. What it is worth in a transformer, the run below measures, and the measurement deserves to be reported exactly as it came out.
+
+## The run
+
+Two character-level GPTs on Shakespeare, identical in every respect except the score slot: 6 layers, 4 heads, model width 192, context 128, and 2,719,169 parameters each, exactly. The softmax model computes $\mathrm{softmax}(q \cdot k / \sqrt{d})$; the Yat model computes $\kappa / \sum \kappa$ with $\varepsilon = 1$, and contains no softmax anywhere in its attention. Three seeds each, same data order, 12,000 steps, best validation loss (`scripts/yat_attention.py`, bundle `kgl_blog-yatattn-v1`).
+
+<QualityTieBxC caption="All six training runs, validation loss per checkpoint, softmax in red and the kernel in blue. The families braid through training and land 1.4 percent apart: 1.4923 against 1.5131 nats per character at identical parameter counts. Hover any curve for exact values. The footnote carries the mass channel's measured null." />
+
+Softmax finishes at 1.4923 ± 0.0060 nats per character, the kernel at 1.5131 ± 0.0071, a 1.4 percent gap. Per the standing frame of this whole program: the number is not a victory and is not trying to be one. The claim is the existence proof, the same one [the solve post](/blog/you-dont-have-to-solve-a-kernel-machine) made for kernel machines and [the Yat MLP posts](/blog/what-a-finite-kernel-buys-an-mlp) made for networks: a transformer whose routing is a genuine Mercer-kernel smoother, with no exponential in the path, trains by plain gradient descent to within a hair of the mechanism that has monopolized the architecture since 2017, while keeping the kernel's structure, the geometry, the mass channel, the theory, intact underneath.
+
+And here is what the trained routing looks like, side by side on one Shakespeare window, from the telemetry run's checkpoints:
+
+<HeadsAtWork caption="The real attention maps of both trained models on the same 128-character window, from the run's checkpoints. Scrub training: both begin as causal haze and sharpen into structure, columns of attention onto specific characters, diagonal bands of local context. Pick layers and compare: two different compatibility functions, converging on recognizably similar routing, one of them without an exponential anywhere." />
+
+Similar, but not the same, and the difference is measurable rather than aesthetic. Score each trained query row by its normalized entropy, zero for a row that stakes everything on one key, one for a row spread evenly, and the two mechanisms separate cleanly: the softmax model averages 0.48, with 22 percent of its rows sharpened nearly to a single key; the kernel model averages 0.74, with *zero* rows that sharp and a third of them diffuse. This is not a training accident, it is the arithmetic of the two normalizers. An exponential turns score gaps into weight *ratios* that grow without limit, which is why softmax is rightly described as a soft argmax: give one key a few logits of advantage and it takes essentially everything. A ratio of polynomials cannot do that; for one key to take 99 percent of the row, its kernel value must exceed the *sum* of all others hundredfold on the raw scale, not the log scale. The kernel buys its geometry at the price of concentration, and that price is a plausible reading of the 1.4 percent: character-level language leans hard on copy-like heads that want to be nearly one-hot. It also names the obvious dial for closing the gap, raising the numerator's power, $(q \cdot k)^{2m}$, which sharpens the kernel's peak while every structural property above survives.
+
+## Two of our beliefs, measured
+
+An existence proof earns its keep by what it refuses to fudge, and this run falsified two things we expected to write.
+
+The first was the word *bounded*. The Yat kernel is bounded for bounded inputs, and we expected the kernel scores to stay tame while softmax logits roamed. The opposite happened. The trained softmax logits top out around 35; the trained kernel scores reach 440,000. Nothing in the kernel bounds its value when training is free to grow $\lVert q \rVert$, since $\kappa(q, q) = \lVert q \rVert^4 / \varepsilon$, and training grew the norms. What survives is the claim that actually matters: none of this is dangerous *because there is no exponential downstream*. A logit of 35 under softmax overflows float32 without the max trick; a kernel score of $4 \times 10^5$ passes through a ratio of polynomials untouched. The exponential was the hazard. Remove it and scores can be as large as the geometry wants.
+
+The second was the mass channel's obvious use. If mass measures how much compatibility a query found, low mass should flag tokens the model handles badly, the attention version of [the prototype network's abstention](/blog/your-neuron-is-a-picture). Measured: the AUROC of row mass predicting next-token correctness is 0.509, 0.501, 0.508 across the three seeds. Null, three times. The channel exists, softmax genuinely cannot represent it, and its naive reading as token confidence carries no signal at this scale. Both facts go in the ledger; whether mass means something else, out-of-distribution text, retrieval quality, head specialization, is an open thread, not a promise.
+
+*Scope: all numbers are from `scripts/yat_attention.py` on Kaggle (quality bundle `kgl_blog-yatattn-v1`, three seeds; attention-map telemetry bundle `kgl_blog-yatattn-telem`, one seed): character-level tinyshakespeare, parameter-matched GPTs, best-epoch validation loss, kernel and softmax telemetry on held-out batches; the entropy statistics replay the telemetry bundle's trained maps (`scripts/render_yatattn_gifs.py`). One dataset, one scale, one epsilon; the existence claim is scoped to exactly that.*
+
+## Where the bridge goes
+
+The construction closes the loop the two threads opened, and it comes with a road onward. A kernel in the score slot is not just a philosophical upgrade: kernels have an approximation theory, and the SLAY paper (arXiv 2602.04915) builds positive random features for exactly this kernel, the same move Performers made for the softmax surrogate, which turns the quadratic attention matrix into a linear-time product without abandoning the Mercer object. The kernel view of attention stops being a reading and becomes an implementation choice with a dial: exact and quadratic, or featurized and linear. [Cheap attention](/blog/cheap-attention-is-linear-attention) was the survey of that trick from the outside; the Yat version owns it from the inside.
+
+The two threads are one story now. Attention was always a kernel smoother wearing a surrogate; the surrogate can be swapped for the real thing at a measured, small, honestly-reported cost; and everything this series knows about the real thing, its geometry, its prototypes, its theory, its features, is now standing inside the transformer, not beside it.
+
+<CiteAs
+  slug="attention-is-a-compatibility-kernel"
+  title="The Kernel Between the Roles"
+  pubDate="2026-07-16"
+/>
