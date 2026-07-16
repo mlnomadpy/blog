@@ -1,0 +1,160 @@
+---
+title: "Reversible Backprop as a custom_vjp in JAX"
+seoTitle: "Reversible Backprop in JAX: custom_vjp, O(1) Memory"
+description: "A runnable companion to the memory post: the momentum block and its exact inverse, the custom_vjp whose backward pass reconstructs the trajectory instead of storing it, XLA's memory_analysis as the measuring instrument, and the (1/mu)^L float cliff reproduced in numpy float32. Every number is from the real Kaggle run."
+seoDescription: "Reversible backprop in JAX: a custom_vjp that inverts the momentum block layer by layer, measured flat at 3.2 MB to depth 512 against 674 MB standard."
+pubDate: 2026-07-16T13:00:00-07:00
+draft: false
+tags: [integrators, reversibility, memory, jax, flax, nnx, implementation]
+references:
+  - authors: "Gomez, A. N., Ren, M., Urtasun, R., Grosse, R. B."
+    year: 2017
+    title: "The Reversible Residual Network: Backpropagation Without Storing Activations"
+    arxiv: "1707.04585"
+  - authors: "Sander, M. E., Ablin, P., Blondel, M., Peyré, G."
+    year: 2021
+    title: "Momentum Residual Neural Networks"
+    arxiv: "2102.07870"
+keywords:
+  - custom vjp
+  - reversible backpropagation jax
+  - memory analysis xla
+  - constant memory training
+---
+import CiteAs from '../../components/CiteAs.astro';
+import SeriesNav from '../../components/SeriesNav.astro';
+
+<SeriesNav />
+
+*The [explainer](/blog/backprop-without-the-memory/) argues that a momentum residual network can be trained without storing its forward pass, because the block inverts. This is the implementation: the exact inverse, the `jax.custom_vjp` whose backward pass walks the trajectory backward, the XLA instrument that measured 674 MB against a flat 3.2, and the float32 cliff reproduced in twenty lines of numpy. Everything below is `scripts/reversible_memory.py`, the script the Kaggle run executed (bundle `kgl_blog-revmem-v1`); code blocks are quoted from it, not paraphrased.*
+
+## The block and its undo
+
+One momentum layer, and the two lines that reverse it:
+
+```python
+def block(p, x):
+    return jnp.tanh(x @ p["w1"] + p["b1"]) @ p["w2"] + p["b2"]
+
+# forward:  v' = MU * v + block(p, x);  x' = x + H_STEP * v'
+# inverse:  x  = x' - H_STEP * v';      v = (v' - block(p, x)) / MU
+```
+
+The inverse needs nothing but the endpoint and the same `block`. That is the entire storage story: if the backward pass can call these two lines, it does not need the forward pass to have banked anything.
+
+## The custom_vjp that recomputes instead of remembering
+
+JAX lets a function declare its own backward rule. The forward rule saves *only the output state* as residuals, a constant amount of memory at any depth. The backward rule then reconstructs each layer's input by inversion, and having just recovered it, backprops through that one layer with an ordinary `jax.vjp`, accumulating parameter gradients as it walks:
+
+```python
+@jax.custom_vjp
+def rev_forward(p, x0, v0, L_arr):
+    L = L_arr.shape[0]
+    return fwd_scan(p, x0, v0, L)
+
+def rev_fwd(p, x0, v0, L_arr):
+    out = rev_forward(p, x0, v0, L_arr)
+    # residuals: ONLY the output state (constant in depth), never the trajectory
+    return out, (p, out[0], out[1], L_arr)
+
+def rev_bwd(res, g):
+    p, xL, vL, L_arr = res
+    gx, gv = g
+
+    def back(carry, _):
+        x_next, v_next, gx_n, gv_n, gp = carry
+        # invert one layer to recover its input
+        x_prev = x_next - H_STEP * v_next
+        f_val, f_vjp = jax.vjp(lambda pp, xx: block(pp, xx), p, x_prev)
+        v_prev = (v_next - f_val) / MU
+        # backprop the same layer given recovered inputs
+        gv_local = gv_n + H_STEP * gx_n
+        gp_f, gx_f = f_vjp(gv_local)
+        gx_p = gx_n + gx_f
+        gv_p = MU * gv_local
+        gp = jax.tree.map(jnp.add, gp, gp_f)
+        return (x_prev, v_prev, gx_p, gv_p, gp), None
+
+    gp0 = jax.tree.map(jnp.zeros_like, p)
+    (x0r, v0r, gx0, gv0, gp), _ = jax.lax.scan(
+        back, (xL, vL, gx, gv, gp0), None, length=L_arr.shape[0])
+    return gp, gx0, gv0, None
+
+rev_forward.defvjp(rev_fwd, rev_bwd)
+```
+
+Two details carry the memory claim. The residual tuple in `rev_fwd` holds the endpoint and the parameters, nothing indexed by depth. And the backward `lax.scan` re-derives `x_prev` before calling `f_vjp`, so the local VJP always has the input it needs without anyone having stored it. The bookkeeping through the ledger, `gv_local = gv_n + H_STEP * gx_n` and `gv_p = MU * gv_local`, is just the chain rule of the two forward lines, written by hand once.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/revmem-ledger.gif" alt="Two lanes of layer cells animated through one training step: the standard lane banks an activation per layer and its memory meter climbs; the reversible lane carries a single moving state and its meter stays flat; meters labeled with the measured 674.0 and 3.2 MB at depth 512" loading="lazy" />
+  <figcaption>The two disciplines, one training step. The standard lane's bank fills during the forward sweep and drains during the backward; the reversible lane never holds more than one state. Meters carry the run's measured activation memory at depth 512.</figcaption>
+</figure>
+
+## Measuring memory honestly
+
+Peak memory is easy to measure wrong. Two disciplines from the run. First, each (depth, mode) point runs in a *fresh process*, because the allocator's `peak_bytes_in_use` is a process-lifetime high-water mark and later measurements inherit earlier peaks. Second, alongside the runtime allocator, the run reads XLA's static analysis of the compiled step, which reports exactly how much scratch the executable reserves:
+
+```python
+compiled = g.lower(p).compile()
+temp_mb = compiled.memory_analysis().temp_size_in_bytes / 1e6
+```
+
+The two instruments agree on the story:
+
+| depth | standard temp | reversible temp | standard step | reversible step |
+| --- | --- | --- | --- | --- |
+| 8 | 13.4 MB | 3.2 MB | 1.9 ms | 2.3 ms |
+| 32 | 44.8 MB | 3.2 MB | 6.1 ms | 7.4 ms |
+| 128 | 170.7 MB | 3.2 MB | 22.7 ms | 27.2 ms |
+| 512 | 674.0 MB | 3.2 MB | 83.0 ms | 103.1 ms |
+
+<figure class="jax-fig">
+  <img src="/revmem-wall.png" alt="Log-log plot of activation memory against depth: the standard line climbs linearly from 13.4 to 674 MB while the reversible line is flat at 3.2 MB" loading="lazy" />
+  <figcaption>The wall, measured by XLA's own analysis of each compiled step. Standard backprop's scratch grows linearly in depth; the reversible pass does not know how deep the network is.</figcaption>
+</figure>
+
+The time column is the price: the backward pass runs `block` once more per layer, and at depth 512 that costs 24%. Recompute for memory, the same trade RevNets built into their architecture (Gomez et al., 2017), paid here by the integrator's own inverse (Sander et al., 2021).
+
+## The cliff, in numpy float32
+
+The explainer's noise budget says the rewind amplifies float error by $(1/\mu)$ per layer. You do not need a GPU to watch that happen; you need `np.float32` and the same twenty lines:
+
+```python
+def rewind(F, xL, vL, mu, L):
+    mu = np.float32(mu)
+    x, v = xL.astype(np.float32), vL.astype(np.float32)
+    for _ in range(L):
+        x = (x - v).astype(np.float32)
+        v = ((v - field(F, x)) / mu).astype(np.float32)
+```
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/revmem-rewind-shear.gif" alt="Three panels, mu 0.9, 0.6, 0.3: blue forward trajectories through 64 float32 momentum layers, then orange reconstructed states rewound from the endpoint; at 0.9 the dots land on the trails, at 0.6 they deviate visibly, at 0.3 they scatter with error 1e10" loading="lazy" />
+  <figcaption>The same rewind at three frictions, real float32 arithmetic. At mu = 0.9 the reconstruction lands on every footprint (error 4e-05 over 64 layers). At 0.6 it visibly shears. At 0.3 the error reaches ten billion: the algebra is exact and the arithmetic is not.</figcaption>
+</figure>
+
+And the growth is not vaguely exponential, it is the *predicted* exponential. Plotting the reconstruction error as the rewind proceeds, against the budget $\varepsilon_{32} (1/\mu)^{\ell}$ drawn dashed:
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/revmem-error-growth.gif" alt="Log-scale reconstruction error growing with each backward step for mu 0.9, 0.6, 0.3, each measured curve running parallel to its dashed predicted budget line" loading="lazy" />
+  <figcaption>Reconstruction error, measured at every backward step (solid) against the noise budget (dashed), one color per friction. Each curve rides its prediction's slope. The budget is not a bound, it is the mechanism.</figcaption>
+</figure>
+
+On the full network the run measures gradient agreement (cosine between the rewind gradient and the stored-activation gradient on identical weights and batch): 1.000000 everywhere the budget is small, 0.30 at $\mu = 0.6$, depth 32, where the budget crosses one, and nan at $\mu = 0.3$, depth 128, where the budget is $10^{66}$.
+
+<figure class="jax-fig">
+  <img src="/revmem-cliff.png" alt="Gradient cosine against depth for three mus with dashed verticals at each mu's predicted death depth; measured cliffs align with predictions" loading="lazy" />
+  <figcaption>Where the gradient dies, measured against the napkin prediction L* = ln(1/eps)/ln(1/mu) drawn before looking. Inside the budget the rewind gradient is exact to float precision; outside it there is nothing to rescue.</figcaption>
+</figure>
+
+## Training on the rewind
+
+Inside the budget the two gradients are the same numbers, so training should be indistinguishable up to noise, and the run checks at depth 64, $\mu = 0.9$: standard 81.6% test accuracy, reversible 79.7%, one seed each, reversible 17% slower on the wall. The [explainer](/blog/backprop-without-the-memory/) closes the loop with the architectural moral: the amplification exists because $\mu < 1$, and the [frictionless leapfrog block](/blog/a-network-that-conserves-energy) rewinds by subtraction alone, no division, no budget, no cliff.
+
+*Every number above is from `scripts/reversible_memory.py` run on Kaggle (bundle `kgl_blog-revmem-v1`); the float32 demonstrations are rendered by `scripts/render_revmem_gifs.py` from the same arithmetic the panels run live.*
+
+<CiteAs
+  slug="backprop-without-the-memory-jax-flax-nnx"
+  title="Reversible Backprop as a custom_vjp in JAX"
+  pubDate="2026-07-16"
+/>

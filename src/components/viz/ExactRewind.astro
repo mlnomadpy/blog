@@ -1,0 +1,126 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 440 } = Astro.props;
+---
+<figure class="viz exactrewind" data-caption={caption} data-height={height} data-height-mobile="520" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Twelve particles pushed through 64 momentum-residual layers in genuine
+// float32 (every operation rounded with Math.fround, the same arithmetic a
+// GPU does), then rewound from the endpoint alone. At mu = 0.9 the rewind
+// lands on every footprint. Lower mu and the same algebra, still exact on
+// paper, shears away from history: each backward step divides by mu and
+// multiplies the float noise.
+import { defineViz } from './engine/vizkit.js';
+import { T, dot, fmt, axes, gate, loadingText, legend } from './engine/draw.js';
+import { makeField, forwardF32, rewindF32 } from './revmem.js';
+
+const LDEPTH = 64, NPTS = 12;
+const EPS32 = 1.1920929e-7;
+
+function ensureRuns(api) {
+  const st = api.state;
+  const mu = parseFloat(api.get('mu'));
+  if (st.runs && st.mu === mu) return;
+  st.mu = mu; st.t = 0;
+  st.runs = [];
+  for (let i = 0; i < NPTS; i++) {
+    const ang = (i / NPTS) * 2 * Math.PI;
+    const x0 = [0.9 * Math.cos(ang), 0.9 * Math.sin(ang)], v0 = [0, 0];
+    const fw = forwardF32(st.F, x0, v0, mu, LDEPTH);
+    const end = fw[fw.length - 1];
+    const bw = rewindF32(st.F, end.x, end.v, mu, LDEPTH);
+    st.runs.push({ fw, bw });
+  }
+}
+
+defineViz('exactrewind', {
+  title: 'The rewind, priced in float32',
+  height: 440,
+  stepsPerFrame: 1,
+  autoplay: false,
+  controls: [
+    { type: 'play' }, { type: 'reset' }, { type: 'speed' },
+    { type: 'select', name: 'mu', label: 'friction mu', value: '0.9',
+      options: [{ value: '0.9', label: 'mu = 0.9' }, { value: '0.6', label: 'mu = 0.6' }, { value: '0.3', label: 'mu = 0.3' }] },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    const st = api.state;
+    st.F = makeField(7);
+    st.mu = parseFloat(api.get('mu'));
+    st.t = 0;
+    st.runs = null;
+    gate(api, () => Promise.resolve(true), (a) => { a.state.ok = true; });
+  },
+
+  step(api) {
+    const st = api.state;
+    if (!st.ready) return;
+    ensureRuns(api);
+    if (st.t < 2 * LDEPTH) st.t++;
+    else api.pause?.();
+  },
+
+  draw(api) {
+    const { ctx, colors, size: { W, H } } = api, st = api.state;
+    if (!st.ready) { loadingText(api); return; }
+    ensureRuns(api);
+    if (st.t === 0) st.t = 20;   // first paint shows the forward run in progress
+    const pad = 16, box = { x: pad, y: 30, w: W - 2 * pad, h: H - 130 };
+    // world bounds from the forward trails
+    let R = 1.2;
+    st.runs.forEach((r) => r.fw.forEach((s) => { R = Math.max(R, Math.abs(s.x[0]), Math.abs(s.x[1])); }));
+    R = Math.min(R * 1.08, 40);
+    axes(ctx, box, { xMin: -R, xMax: R, yMin: -R, yMax: R }, colors);
+    const px = (p) => [box.x + ((p[0] + R) / (2 * R)) * box.w,
+                       box.y + (1 - (p[1] + R) / (2 * R)) * box.h];
+    const fwN = Math.min(st.t, LDEPTH), bwN = Math.max(0, st.t - LDEPTH);
+
+    // forward footprints (blue), drawn up to fwN
+    st.runs.forEach((r) => {
+      ctx.strokeStyle = '#4a7fb388'; ctx.lineWidth = 1.2; ctx.beginPath();
+      for (let i = 0; i <= fwN; i++) {
+        const [x, y] = px(r.fw[i].x);
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.stroke();
+      for (let i = 0; i <= fwN; i += 8) dot(ctx, ...px(r.fw[i].x), 2, '#4a7fb3');
+    });
+    // rewind overlay (orange), walking backward from the endpoint
+    let maxErr = 0;
+    if (bwN > 0) {
+      ctx.save();
+      ctx.beginPath(); ctx.rect(box.x, box.y, box.w, box.h); ctx.clip();
+      st.runs.forEach((r) => {
+        for (let i = LDEPTH; i >= LDEPTH - bwN; i--) {
+          const [x, y] = px(r.bw[i].x);
+          dot(ctx, x, y, 2.4, '#c2553a');
+          const e = Math.hypot(r.bw[i].x[0] - r.fw[i].x[0], r.bw[i].x[1] - r.fw[i].x[1]);
+          maxErr = Math.max(maxErr, e);
+        }
+      });
+      ctx.restore();
+    }
+    legend(ctx, pad, H - 66, [
+      { color: '#4a7fb3', label: 'forward states (the history backprop needs)' },
+      { color: '#c2553a', label: 'states reconstructed from the endpoint alone' },
+    ], colors);
+    T(ctx, colors, 'small');
+    ctx.fillText('12 particles, 64 momentum layers, float32 throughout; the field f is a fixed random MLP (the algebra holds for any f)', pad, H - 22);
+
+    const budget = Math.pow(1 / st.mu, LDEPTH) * EPS32;
+    api.readout('rd', st.t === 0
+      ? 'press play: forward through 64 layers, then rewind from the endpoint'
+      : st.t <= LDEPTH
+        ? `forward, layer ${fwN}/64`
+        : `rewind, layer ${LDEPTH - bwN}/64: max reconstruction error ${maxErr < 1e-4 ? maxErr.toExponential(1) : fmt(maxErr, 2)} (noise budget (1/mu)^64 x eps32 = ${budget.toExponential(1)})`);
+  },
+});
+</script>

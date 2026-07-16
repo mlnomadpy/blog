@@ -1,0 +1,136 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 430 } = Astro.props;
+---
+<figure class="viz frictionarrow" data-caption={caption} data-height={height} data-height-mobile="520" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Why friction and rewinding are enemies, in the physics where the metaphor
+// lives. Two pendulums integrated live: one frictionless, one damped. Both
+// run forward for a while; then time is reversed. The frictionless pendulum
+// retraces its own history. The damped one cannot: friction destroyed the
+// information its rewind would need, and the backward trajectory departs from
+// the recorded one. Dissipation is one-way. mu < 1 is dissipation.
+import { defineViz } from './engine/vizkit.js';
+import { T, dot, fmt, axes, gate, loadingText, legend } from './engine/draw.js';
+import { pendStep, pendStepBack } from './revmem.js';
+
+const DT = 0.03, NFWD = 260, GAMMA = 0.22;
+
+defineViz('frictionarrow', {
+  title: 'Dissipation is a one-way door',
+  height: 430,
+  stepsPerFrame: 2,
+  autoplay: false,
+  controls: [
+    { type: 'play' }, { type: 'reset' }, { type: 'speed' },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    const st = api.state;
+    st.t = 0;
+    st.free = { q: 2.1, p: 0, hist: [[2.1, 0]] };
+    st.damp = { q: 2.1, p: 0, hist: [[2.1, 0]] };
+    st.freeBack = null; st.dampBack = null;
+    gate(api, () => Promise.resolve(true), (a) => { a.state.ok = true; });
+  },
+
+  step(api) {
+    const st = api.state;
+    if (!st.ready) return;
+    if (st.t < NFWD) {
+      [st.free.q, st.free.p] = pendStep(st.free.q, st.free.p, DT, 0);
+      st.free.hist.push([st.free.q, st.free.p]);
+      [st.damp.q, st.damp.p] = pendStep(st.damp.q, st.damp.p, DT, GAMMA);
+      st.damp.hist.push([st.damp.q, st.damp.p]);
+      st.t++;
+    } else if (st.t < 2 * NFWD) {
+      if (!st.freeBack) {
+        st.freeBack = { q: st.free.q, p: st.free.p, hist: [[st.free.q, st.free.p]] };
+        st.dampBack = { q: st.damp.q, p: st.damp.p, hist: [[st.damp.q, st.damp.p]] };
+      }
+      [st.freeBack.q, st.freeBack.p] = pendStepBack(st.freeBack.q, st.freeBack.p, DT, 0);
+      st.freeBack.hist.push([st.freeBack.q, st.freeBack.p]);
+      [st.dampBack.q, st.dampBack.p] = pendStepBack(st.dampBack.q, st.dampBack.p, DT, GAMMA);
+      st.dampBack.hist.push([st.dampBack.q, st.dampBack.p]);
+      st.t++;
+    } else api.pause?.();
+  },
+
+  draw(api) {
+    const { ctx, colors, size: { W, H } } = api, st = api.state;
+    if (!st.ready) { loadingText(api); return; }
+    if (st.t === 0) {
+      // pre-run part of the forward phase so the first paint shows the spirals
+      for (let k = 0; k < 150; k++) {
+        [st.free.q, st.free.p] = pendStep(st.free.q, st.free.p, DT, 0);
+        st.free.hist.push([st.free.q, st.free.p]);
+        [st.damp.q, st.damp.p] = pendStep(st.damp.q, st.damp.p, DT, GAMMA);
+        st.damp.hist.push([st.damp.q, st.damp.p]);
+        st.t++;
+      }
+    }
+    const pad = 16, half = (W - 3 * pad) / 2, boxH = H - 140;
+    const panels = [
+      { x: pad, name: 'no friction', sys: st.free, back: st.freeBack },
+      { x: 2 * pad + half, name: `friction gamma = ${GAMMA}`, sys: st.damp, back: st.dampBack },
+    ];
+    const R = 2.6;
+    panels.forEach((p) => {
+      const box = { x: p.x, y: 34, w: half, h: boxH };
+      axes(ctx, box, { xMin: -R, xMax: R, yMin: -R, yMax: R }, colors);
+      T(ctx, colors, 'label'); ctx.fillText(p.name, box.x, box.y - 8);
+      const px = (q, mom) => [box.x + ((q + R) / (2 * R)) * box.w,
+                              box.y + (1 - (mom + R) / (2 * R)) * box.h];
+      // forward history (blue)
+      ctx.strokeStyle = '#4a7fb3'; ctx.lineWidth = 1.4; ctx.beginPath();
+      p.sys.hist.forEach(([q, mom], i) => {
+        const [x, y] = px(q, mom);
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      });
+      ctx.stroke();
+      // time-reversed run (orange)
+      if (p.back) {
+        ctx.strokeStyle = '#c2553a'; ctx.lineWidth = 1.6; ctx.beginPath();
+        p.back.hist.forEach(([q, mom], i) => {
+          const [x, y] = px(q, mom);
+          i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+        });
+        ctx.stroke();
+        const last = p.back.hist[p.back.hist.length - 1];
+        dot(ctx, ...px(last[0], last[1]), 4, '#c2553a');
+      } else {
+        const last = p.sys.hist[p.sys.hist.length - 1];
+        dot(ctx, ...px(last[0], last[1]), 4, '#4a7fb3');
+      }
+    });
+    legend(ctx, pad, H - 62, [
+      { color: '#4a7fb3', label: 'forward in time (phase space: angle vs momentum)' },
+      { color: '#c2553a', label: 'time reversed from the endpoint' },
+    ], colors);
+    T(ctx, colors, 'small');
+    ctx.fillText('both pendulums integrated live; the reversed run replays the same physics with time negated', pad, H - 22);
+
+    // rewind mismatch for the damped system
+    let msg;
+    if (st.t === 0) msg = 'press play: forward first, then time turns around';
+    else if (st.t <= NFWD) msg = `forward, t = ${fmt(st.t * DT, 1)}s`;
+    else {
+      const k = st.t - NFWD;
+      const idxF = NFWD - k;
+      if (idxF >= 0 && st.dampBack) {
+        const [qb] = st.dampBack.hist[st.dampBack.hist.length - 1];
+        const [qf] = st.damp.hist[Math.max(0, idxF)];
+        msg = `reversed, t = ${fmt(idxF * DT, 1)}s: frictionless retraces; damped rewind is off by ${fmt(Math.abs(qb - qf), 2)} rad and growing`;
+      } else msg = 'reversed';
+    }
+    api.readout('rd', msg);
+  },
+});
+</script>
