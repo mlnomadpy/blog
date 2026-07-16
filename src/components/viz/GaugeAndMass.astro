@@ -1,0 +1,116 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 460 } = Astro.props;
+---
+<figure class="viz gaugeandmass" data-caption={caption} data-height={height} data-height-mobile="560" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// What each normalizer forgets. Eight keys and one query, live. Top row: the
+// softmax weights of the bilinear scores; slide the gauge and add a constant
+// to every logit: the weights do not move, softmax is shift-invariant, so the
+// scores' absolute level is deleted information. Bottom row: the kernel
+// weights kappa / sum kappa; the weights are scale-covariant too, but the
+// SUM, the row's total kernel mass, survives as a real number that changes
+// as you drag the query toward or away from the keys. One normalizer keeps a
+// channel the other cannot represent.
+import { defineViz } from './engine/vizkit.js';
+import { T, dot, fmt, axes, gate, loadingText } from './engine/draw.js';
+import { drag } from './engine/pointer.js';
+import { scoreBilinear, scoreYat, softmaxRow, kappaRow } from './yatattn.js';
+
+const KEYS = [
+  [-1.6, 0.9], [-0.9, -1.2], [-0.3, 1.4], [0.4, 0.5],
+  [0.9, -0.8], [1.5, 1.1], [1.9, -0.3], [-1.9, -0.4],
+];
+const R = 2.4;
+
+defineViz('gaugeandmass', {
+  title: 'What each normalizer forgets',
+  height: 460,
+  autoplay: false,
+  controls: [
+    { type: 'range', name: 'gauge', label: 'add to every logit', min: -6, max: 6, step: 0.5, value: 0 },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    const st = api.state;
+    st.q = [0.6, 0.3];
+    gate(api, () => Promise.resolve(true), (a) => { a.state.ok = true; });
+    drag(api.canvas, {
+      cursor: 'grab',
+      onStart(p) {
+        st.dragging = !!(st.px && Math.hypot(p.x - st.px[0], p.y - st.px[1]) < 20);
+      },
+      onMove(p) {
+        if (!st.dragging || !st.box) return;
+        const b = st.box;
+        st.q = [
+          Math.max(-R, Math.min(R, -R + (2 * R * (p.x - b.x)) / b.w)),
+          Math.max(-R, Math.min(R, R - (2 * R * (p.y - b.y)) / b.h)),
+        ];
+        api.requestDraw?.();
+      },
+      onEnd() { st.dragging = false; },
+    });
+  },
+
+  draw(api) {
+    const { ctx, colors, size: { W, H } } = api, st = api.state;
+    if (!st.ready) { loadingText(api); return; }
+    const gauge = parseFloat(api.get('gauge'));
+    const pad = 16, mapW = Math.min(W * 0.42, H - 160);
+    const box = { x: pad, y: 34, w: mapW, h: mapW };
+    st.box = box;
+    axes(ctx, box, { xMin: -R, xMax: R, yMin: -R, yMax: R }, colors);
+    T(ctx, colors, 'label');
+    ctx.fillText('one query (drag), eight keys', box.x, box.y - 8);
+    const P = (p) => [box.x + ((p[0] + R) / (2 * R)) * box.w,
+                      box.y + (1 - (p[1] + R) / (2 * R)) * box.h];
+    KEYS.forEach((k, i) => {
+      const [x, y] = P(k);
+      dot(ctx, x, y, 4.5, '#8a6fb3');
+      T(ctx, colors, 'small'); ctx.fillText(String(i + 1), x + 6, y - 5);
+    });
+    const [qx, qy] = P(st.q);
+    ctx.strokeStyle = colors.ink;
+    dot(ctx, qx, qy, 7, '#fff');
+    ctx.beginPath(); ctx.arc(qx, qy, 7, 0, 2 * Math.PI); ctx.stroke();
+    st.px = [qx, qy];
+
+    // rows
+    const rows = [
+      { y: 34, name: `softmax of bilinear + gauge (${gauge >= 0 ? '+' : ''}${gauge})`, col: '#c2553a' },
+      { y: 34 + (H - 190) / 2 + 8, name: 'kernel weights kappa / mass', col: '#4a7fb3' },
+    ];
+    const bx = box.x + box.w + 26, bw = W - bx - pad;
+    const logits = KEYS.map((k) => scoreBilinear(st.q, k) + gauge);
+    const wSoft = softmaxRow(logits);
+    const kappas = KEYS.map((k) => scoreYat(st.q, k));
+    const { w: wYat, mass } = kappaRow(kappas);
+    [[wSoft, rows[0]], [wYat, rows[1]]].forEach(([w, row]) => {
+      T(ctx, colors, 'label');
+      ctx.fillText(row.name, bx, row.y - 8);
+      const bh = (H - 210) / 2 - 20, colW = bw / KEYS.length;
+      w.forEach((v, i) => {
+        ctx.fillStyle = row.col + '99';
+        const h = v * bh;
+        ctx.fillRect(bx + i * colW + 3, row.y + bh - h, colW - 6, h);
+        ctx.strokeStyle = colors.border;
+        ctx.strokeRect(bx + i * colW + 3, row.y, colW - 6, bh);
+        T(ctx, colors, 'small');
+        ctx.fillText(String(i + 1), bx + i * colW + colW / 2 - 3, row.y + bh + 13);
+      });
+    });
+    T(ctx, colors, 'small');
+    ctx.fillText('slide the gauge: the softmax bars refuse to move (shift invariance), so absolute score level is deleted', pad, H - 64);
+    ctx.fillText('the kernel row sums to one too, but its raw total survives as the mass readout below', pad, H - 44);
+    api.readout('rd', `row mass (sum of kappa) = ${fmt(mass, 2)}: drag the query into the cluster and watch it rise; no such number exists after a softmax`);
+  },
+});
+</script>

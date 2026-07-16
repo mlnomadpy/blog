@@ -113,6 +113,25 @@ thesis"). Open instead on a question, a turn ("But..."), a concrete image, or a
 stake. Run the section-opening test: read the first sentence of every section in
 isolation; if it could open a paper subsection, rewrite it.
 
+**Never let series-internal shorthand reach a reader.** "Arc C", "D1", "C4.5",
+"the catalog", "this arc", "the beat" are the bible's private vocabulary
+(docs/blog-series.md) and mean nothing to a reader; the user calls this register
+"shit". Refer to prior work by what it IS, with a link: "the skip-connections
+post", "the prototype network's abstention", "the velocity ledger". Grep before
+shipping: `grep -nE '\b(C[0-9]|D[1-5])\b|[Aa]rc [A-D]|the catalog|this arc' <post>`
+(mind the "an arc(hitecture)" false positive).
+
+**Depth = derive + measure, per mechanism.** A post that states a result and shows
+a table is "just here is a thing" (user's words); the house standard derives the
+math in-post (the one-line proof AFTER the picture makes it obvious) and MEASURES
+every mechanism it asserts. If prose says "effort tracks the flow's stiffness" or
+"the kernel is more diffuse", there must be a number: compute the correlation, the
+entropy, the budget, and put the measurement in the post with its provenance. Each
+claim of mechanism is a checkable sub-experiment; run it (a local seconds-scale
+replay of exported weights is fine). One-beat posts are not done: aim for the
+derive -> predict -> measure -> surprise loop per section, like the strong posts
+(edit-a-network-by-hand, your-network-is-a-fixed-point).
+
 **Never write in the apologetic/defensive register (user: "it sounds like shit
 and breaks the narrative").** State the finding; do not narrate your own honesty
 or apologize for a claim before making it. Banned tics: "honestly", "the honest
@@ -147,6 +166,16 @@ honestly" boilerplate that seeds the tic).
 
 ## Visualizations (explainer only)
 
+- **A viz must stage something a sentence cannot.** Never re-draw the results
+  table as a panel: bars-of-the-scoreboard, a dial over four numbers, a list
+  with icons are numbers turned into pixels, and the user calls them what they
+  are ("just for the sake of visualization, no story"). Before building any
+  panel ask what the reader DOES or WATCHES here: a live process running
+  (gradient descent converging, a solve happening), a manipulable cause with a
+  recomputed effect (drag a point, both machines re-fit), a spatial structure
+  that genuinely lives in 2D. If the answer is "they see the numbers," put the
+  numbers in a table and cut the panel. Fewer strong panels beat a full set of
+  chart-dressing.
 - **Fresh per post.** Never reuse another post's viz component; build new ones. A
   new post earns new visuals, and not redundant with concepts already shown.
 - **One concept per viz.** Do not pack teach+forget+vote into one panel. Aim for

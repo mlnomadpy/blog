@@ -231,3 +231,33 @@ if __name__ == "__main__":
     png_tol_sweep()
     gif_effort_field()
     png_power_law()
+
+
+def check_stiffness():
+    """The mechanism check quoted in the explainer: correlate per-input work
+    with the mean force magnitude ||grad V|| along the accepted path, the
+    first-order proxy for the flow's local stiffness. Replays the bundle's
+    exported weights with the identical controller arithmetic."""
+    for ds in ("moons", "rings", "spirals"):
+        m, X, y = get_model(ds)
+        works, stiffs = [], []
+        for i in range(250):
+            q, p = encode(m, X[i])
+            t, h, work = 0.0, T_TOTAL / L_TRAIN, 0
+            gs, gn, guard = 0.0, 0, 0
+            while t < T_TOTAL - 1e-9 and guard < 2000:
+                guard += 1
+                h = min(h, T_TOTAL - t)
+                q1, p1 = leap(m, h, q.copy(), p.copy())
+                qh, ph = leap(m, h / 2, q.copy(), p.copy())
+                q2, p2 = leap(m, h / 2, qh, ph)
+                work += 3
+                err = max(np.abs(q1 - q2).max(), np.abs(p1 - p2).max())
+                if err > 0.03 and h > T_TOTAL / 4096:
+                    h /= 2; continue
+                q, p = q2, p2; t += h
+                gs += np.linalg.norm(gradV(m, q)); gn += 1
+                if err < 0.03 / 4: h = min(h * 2, T_TOTAL / 4)
+            works.append(work); stiffs.append(gs / max(1, gn))
+        r = np.corrcoef(works, stiffs)[0, 1]
+        print(f"  {ds}: r(work, mean force along path) = {r:+.3f}")

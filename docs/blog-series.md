@@ -66,6 +66,7 @@ post); keep that file in sync with this catalog when a post publishes.
 | live | what-an-mlp-knows | -- (companion wanted; would also fix its number provenance, see open thread 5) |
 | live | cheap-attention-is-linear-attention | linear-attention-jax-flax-nnx |
 | live | why-attention-needs-qk-projections | qk-projections-jax-flax-nnx |
+| live | attention-is-a-compatibility-kernel | attention-is-a-compatibility-kernel-jax-flax-nnx |
 
 ### Arc B.5: weights in kernel space (the RKHS-foundations interlude)
 Sits between Arcs B and C: what a weight is once everything is a kernel.
@@ -400,6 +401,38 @@ depth-as-resolution + leapfrog (D3), residual halting (C5) by link;
 new-derived: error-controlled inference rendering, tol^(-1/3) law in a
 network, effort-measures-stiffness-not-difficulty.
 
+### BxC. attention-is-a-compatibility-kernel  (LIVE, 2026-07-16; + companion)
+Title: "The Kernel Between the Roles" (slug attention-is-a-compatibility-kernel).
+The Arc B x Arc C bridge the qk-projections post teed up: keep the Q/K roles,
+kernelize the compatibility BETWEEN them, s_ij = kappa(f_Q x_i, f_K x_j) with
+the Yat kernel. kappa >= 0 (Mercer: squared-linear x IMQ, Schur; proof sketch
+in-post per the never-hedge rule), so NO softmax anywhere: weights =
+kappa/sum kappa, a literal Nadaraya-Watson smoother; no max-trick, no shift
+gauge; the row mass sum kappa survives as a channel softmax cannot represent.
+Experiment `scripts/yat_attention.py` (Kaggle GPU; quality bundle
+`kgl_blog-yatattn-v1` 3 seeds, telemetry bundle `kgl_blog-yatattn-telem` with
+checkpointed attention maps on a fixed window). Existence proof: parameter-
+matched char-GPTs (2,719,169 params EXACTLY, 6L/4H/D192/T128, 12k steps),
+softmax best-val 1.4923+-0.0060 vs yat 1.5131+-0.0071 (1.4% gap, stated
+straight). TWO BELIEFS MEASURED DEAD (kept, not buried): (a) "bounded scores"
+FALSE: trained kappa reaches 443,508 vs softmax logits ~35 (kappa(q,q) =
+||q||^4/eps and norms grow); the honest claim is no-exp-downstream (4e5 passes
+a polynomial ratio; e^35 overflows f32); (b) mass-as-token-confidence NULL:
+AUROC 0.509/0.501/0.508. Map reading (measured): yat routing is systematically
+MORE DIFFUSE (normalized entropy 0.74 vs 0.48; sharp rows 0% vs 22%) because
+exp is a soft-argmax (log-scale ratios) while polynomial ratios cannot
+concentrate; plausible source of the 1.4%; sharpening dial named ((q.k)^(2m)).
+SLAY (arXiv 2602.04915) = the linear-time payoff. Panels (fresh, yatattn.js):
+ScoreSurface (drag the query, both score landscapes live), GaugeAndMass (the
+shift gauge freezing softmax bars vs the live mass readout), QualityTieBxC
+(six real curves + nulls), HeadsAtWork (real checkpointed maps, scrub
+training). Companion: the two-branch attention module quoted, 3 GIFs (curves,
+score-orbit, reading-traversal) + 2 PNGs (depth grid, checkpoint grid);
+the entropy check lives in render_yatattn_gifs.py. Spends: attention-is-a-kernel, qk-projections,
+cheap-attention, calibration's shift-invariance, prototype geometry, Mercer
+memory; new-derived: no-softmax normalization, the mass channel, the
+diffuseness mechanism, boundedness-vs-training distinction.
+
 ## 4. Concept ledger (what is already spent, do not re-explain)
 
 | concept | established in |
@@ -444,6 +477,7 @@ network, effort-measures-stiffness-not-difficulty.
 | symplectic/leapfrog residual block (kick-drift-kick of a learned potential, state (q,p), h=T/L); the h² shadow-Hamiltonian band measured in a trained net; depth-as-resolution extrapolation (fixed T; the integrator not weight-tying is what survives); learned energy as the missing row (undefined vs unmeasured); marble-on-terrain dictionary table | D3 |
 | reversible backprop by block inversion (custom_vjp with endpoint-only residuals, recompute-vs-store); O(1) activation memory measured flat to depth 512; the (1/mu)^L noise-budget napkin L* = ln(1/eps)/ln(1/mu) locating gradient death; XLA memory_analysis + fresh-process peaks as the honest instruments; dissipation-destroys-information (friction breaks time-reversal); conservation = reversibility = constant-memory training, one property three coats | D4 |
 | error-controlled inference rendering (step doubling on a trained flow, no retraining); depth as a per-input expenditure with a tolerance dial; the tol^(-1/3) cost law (integrator order in the compute bill); effort measures flow stiffness, NOT classification difficulty (measured negative, contrast with C5's convergence-based halting); train-resolution calibration (the fully-resolved flow is a slightly different function than the training render) | D5 |
+| no-softmax attention (kappa/sum kappa as literal Nadaraya-Watson); the row-mass channel (softmax's shift gauge deletes level, the kernel keeps it); boundedness-for-bounded-inputs is not boundedness-under-training (kappa(q,q)=||q||^4/eps); exp-as-soft-argmax vs polynomial ratios (measured diffuseness gap, entropy 0.74 vs 0.48); kernelize BETWEEN the roles (directionality lives in f_Q != f_K) | BxC |
 
 Reuse these only by reference (link the prior post), never by re-derivation.
 
@@ -453,7 +487,7 @@ Reuse these only by reference (link the prior post), never by re-derivation.
 
 **Redundancy watch (2026-07-16 audit).** The ledger discipline is holding: shared concepts are mostly reused by link, not re-derived (C4 credits C3's ladder and the shared 83.2/85.7 numbers by reference; not-all-infinities uses orthogonality as an *analogy* for the KL singularity, a distinct argument). Two live items to fix rather than grow: (a) `welch-bound-good-latent-space` re-states the opposition-collapses-a-dimension / orthogonality-is-the-real-target claim that `opposite-is-not-different` owns, with no cross-link (a one-clause credit closes it; done 2026-07-16). (b) The negation/possessive title families are near saturation (see the title-pattern watch in §1). No true duplicate post exists. The root cause of Arc A re-derivation was that the concept ledger had no Arc A ownership rows; those are now added (see §4).
 
-**Active build queue (opened 2026-07-16; status 2026-07-16 evening).** Four posts committed, sequenced. Kaggle launches work from this workspace (auth = access_token; kgl.py in the skill dir). Status:
+**Active build queue (opened 2026-07-16; CLOSED 2026-07-16 night: all four published).** Four posts committed, sequenced. Kaggle launches work from this workspace (auth = access_token; kgl.py in the skill dir). Status:
 - **D3 ~done:** run v1 complete (bundle `kgl_blog-hamiltonian-v1`); explainer `a-network-that-conserves-energy` fully drafted and REWRITTEN to the style guide (question-driven, marble-on-terrain dictionary table, h² surprise promoted); 4 live panels (PendulumRace, LearnedEnergyMap, DepthLedger, FinerTime + `hamnet.js`), vizcheck 0/0; companion + NNX check (`hamiltonian_nnx_check.py`, ran green on Kaggle) + 4 GIFs rendered. Headline numbers: pendulum drift 9.6% plain vs 0.2% HNN; acc parity (spirals 98.8 vs 92.9±5.4, plain ahead, stated straight); 4L extrapolation spirals 68.0% plain vs 92.4% ham; energy band shrinks x16-22 when h shrinks x4 (the h² signature). KNOWN FIX IN FLIGHT: v1 exported a single-class viz sample (unshuffled Xte[:400]); v2 rerun (`blog-hamiltonian-v2`) with balanced sample is running; then re-export (`export_hamiltonian_viz.py` points at v2), re-render 2 GIFs, final screenshot pass, publish.
 - **D4 validated:** `scripts/reversible_memory.py` smoke green (`kgl_blog-revmem-smoke2`): XLA temp memory 13.4->44.8 MB standard vs FLAT 3.2 MB reversible; grad cosine 1.000000 with rel err tracking (1/mu)^L; trains to identical acc. Full run queued behind v2 (GPU cap 2).
 - **D5 scripted:** `scripts/adaptive_depth.py` (step-doubling adaptive renderer on the trained D3-style leapfrog net; fidelity/effort-histogram/difficulty-correlation/acc-vs-mean-steps). Smoke running on CPU kernel (`blog-adaptive-smoke2`).
