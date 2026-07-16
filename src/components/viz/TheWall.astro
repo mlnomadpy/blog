@@ -1,0 +1,314 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 400 } = Astro.props;
+---
+<figure class="viz thewall" data-caption={caption} data-height={height} data-height-mobile="440" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The reader feels the wall. One slider, cohort size n from 100 to 1,000,000,
+// and two live tracks: the exact solve (time on the left axis, Gram memory on
+// the right) and one gradient epoch. The solve-time curve is anchored by the
+// measured CPU float64 timings from wall.json plus any dots the reader measures
+// in their own browser (the button really builds an n x n Yat Gram over
+// synthetic 1-D points and runs Gaussian elimination with partial pivoting,
+// timed with performance.now). Beyond the last anchor the curve extends
+// cubically, dashed. Where n^2 * 8 bytes crosses the device memory from
+// wall.json, the wall goes up; past it the solve track greys out and only the
+// gradient track keeps answering.
+import { defineViz } from './engine/vizkit.js';
+import { gate, loadingText, T, frame, dot } from './engine/draw.js';
+import { loadWall, loadScale, fmtCount, humanTime, humanGB } from './solvewall.js';
+
+const LOG_MIN = 2, LOG_MAX = 6, CAP = 700;
+const WALL_COL = '#c2553a';
+
+defineViz('thewall', {
+  title: 'Slide the cohort until the solve dies',
+  height: 400,
+  autoplay: false,
+  annotation: true,
+  controls: [
+    { type: 'range', name: 'logn', label: 'cohort size n', min: LOG_MIN, max: LOG_MAX, step: 0.005, value: 2.6,
+      play: { period: 16000 }, fmt: (v) => fmtCount(Math.pow(10, v)) },
+    { type: 'newrow' },
+    { type: 'button', name: 'time', label: 'time the solve at this n in your browser' },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    const st = api.state;
+    st.dots = st.dots || [];              // the reader's own measured solves {n, s}
+    st.timing = false;
+    const fig = api.canvas.closest('figure');
+    st.btn = fig ? [...fig.querySelectorAll('.vk-btn')].find((b) => b.textContent.startsWith('time the solve')) : null;
+    gate(api, () => Promise.all([loadWall(), loadScale()]), (api, [wall, scale]) => {
+      st.d = wall;
+      st.eps = (scale && scale.eps) || 1.0;
+      st.wallN = Math.sqrt((wall.gpu_gb * 2 ** 30) / 8);   // where the float64 Gram alone fills the device
+    });
+  },
+
+  onAction(name, api) {
+    const st = api.state;
+    if (name !== 'time' || st.timing || !st.ready) return;
+    const n = Math.round(10 ** api.get('logn'));
+    if (n > CAP) { api.readout('rd', `browser timing runs up to n = ${CAP}; slide left`); return; }
+    st.timing = true;
+    api.readout('rd', `building the ${n} x ${n} Gram and solving it...`);
+    api.render();
+    // yield one tick so the readout paints before the O(n^3) loop takes the thread
+    setTimeout(() => {
+      const r = timeSolve(n, st.eps);
+      st.dots.push({ n, s: r.s });
+      st.timing = false;
+      api.readout('rd', `your browser: n = ${n} solved in ${humanTime(r.s)}, residual ${r.res.toExponential(1)}`);
+      api.render();
+    }, 30);
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (!st.ready) { loadingText(api); return; }
+    const d = st.d;
+    const n = Math.round(10 ** api.get('logn'));
+    if (st.btn) {
+      const off = n > CAP || st.timing;
+      st.btn.disabled = off; st.btn.style.opacity = off ? 0.45 : 1; st.btn.style.cursor = off ? 'default' : 'pointer';
+      st.btn.title = off ? `browser timing available up to n = ${CAP}` : '';
+    }
+
+    const padL = 50, padR = 54, padT = 8, padB = 34;
+    const box = { x: padL, y: padT, w: W - padL - padR, h: H - padT - padB };
+    const lx = (v) => box.x + ((Math.log10(v) - LOG_MIN) / (LOG_MAX - LOG_MIN)) * box.w;
+
+    // anchors: the measured box timings merged with the reader's own dots
+    const solveA = mergeAnchors(d.rows.map((r) => ({ n: r.n, s: r.solve_cpu_s })).concat(st.dots));
+    const sgdA = mergeAnchors(d.rows.map((r) => ({ n: r.n, s: r.sgd_epoch_s })));
+    const solveAt = (v) => evalCurve(solveA, v, 0, 3);   // flat before, cubic beyond the anchors
+    const sgdAt = (v) => evalCurve(sgdA, v, 1, 1);       // linear both ways
+    const lastSolveN = solveA[solveA.length - 1].n;
+    const lastSgdN = sgdA[sgdA.length - 1].n;
+
+    // left axis: log time; right axis: log Gram gigabytes
+    const gb = (v) => (v * v * 8) / 2 ** 30;
+    const tLo = -4, tHi = Math.max(2, Math.ceil(Math.log10(solveAt(10 ** LOG_MAX))));
+    const ty = (s) => box.y + box.h - ((Math.log10(Math.max(s, 10 ** tLo)) - tLo) / (tHi - tLo)) * box.h;
+    const mLo = Math.floor(Math.log10(gb(10 ** LOG_MIN))), mHi = Math.ceil(Math.log10(gb(10 ** LOG_MAX)));
+    const my = (g) => box.y + box.h - ((Math.log10(Math.max(g, 10 ** mLo)) - mLo) / (mHi - mLo)) * box.h;
+
+    const wallX = lx(st.wallN), past = n > st.wallN;
+
+    // canvas: background, dead region, frame
+    ctx.fillStyle = colors.cellBg; ctx.fillRect(box.x, box.y, box.w, box.h);
+    ctx.fillStyle = colors.fg; ctx.globalAlpha = past ? 0.09 : 0.045;
+    ctx.fillRect(wallX, box.y, box.x + box.w - wallX, box.h); ctx.globalAlpha = 1;
+
+    // axes
+    T(ctx, colors, 'small', { align: 'center', baseline: 'top', color: colors.faint });
+    for (const t of [100, 1e3, 1e4, 1e5, 1e6]) ctx.fillText(fmtCount(t), lx(t), box.y + box.h + 4);
+    ctx.fillText('cohort size n (log)', box.x + box.w / 2, box.y + box.h + 18);
+    T(ctx, colors, 'small', { align: 'right', baseline: 'middle', color: colors.faint });
+    for (const [s, lab] of [[1e-3, '1 ms'], [1, '1 s'], [60, '1 min'], [3600, '1 h'], [86400, '1 day'], [3.156e7, '1 yr']])
+      if (s >= 10 ** tLo && s <= 10 ** tHi) ctx.fillText(lab, box.x - 5, ty(s));
+    T(ctx, colors, 'small', { align: 'left', baseline: 'middle', color: colors.blue });
+    for (const [g, lab] of [[1e-3, '1 MB'], [1, '1 GB'], [1024, '1 TB']])
+      if (g >= 10 ** mLo && g <= 10 ** mHi) ctx.fillText(lab, box.x + box.w + 5, my(g));
+    sideTitle(ctx, colors, 'time to fit (log)', box.x - 36, box.y + box.h / 2, colors.muted);
+    sideTitle(ctx, colors, 'Gram memory (log)', box.x + box.w + 44, box.y + box.h / 2, colors.blue);
+
+    // the device-memory line and the wall it raises
+    ctx.strokeStyle = colors.blue; ctx.globalAlpha = 0.7; ctx.setLineDash([3, 4]);
+    line(ctx, box.x, my(d.gpu_gb), box.x + box.w, my(d.gpu_gb)); ctx.setLineDash([]); ctx.globalAlpha = 1;
+    T(ctx, colors, 'small', { align: 'right', baseline: 'bottom', color: colors.blue });
+    ctx.fillText(`device memory, ${humanGB(d.gpu_gb)}`, box.x + box.w - 6, my(d.gpu_gb) - 3);
+
+    // Gram memory curve (n^2 * 8 bytes), blue, right axis
+    strokePath(ctx, box, (px) => my(gb(nAt(px, box))), colors.blue, 1.6);
+
+    // the wall
+    ctx.strokeStyle = WALL_COL; ctx.lineWidth = 2.5; line(ctx, wallX, box.y, wallX, box.y + box.h);
+    T(ctx, colors, 'label', { align: 'left', baseline: 'top', color: WALL_COL, weight: 'b' });
+    ctx.fillText('the wall', wallX + 6, box.y + 6);
+    T(ctx, colors, 'small', { align: 'left', baseline: 'top', color: WALL_COL });
+    ctx.fillText(`the Gram alone fills ${humanGB(d.gpu_gb)}`, wallX + 6, box.y + 20);
+    ctx.fillText(`at n = ${fmtCount(st.wallN)}`, wallX + 6, box.y + 32);
+
+    // solve time: solid through the anchors, dashed cubic projection beyond
+    const solveCol = past ? colors.faint : colors.accent;
+    strokePath(ctx, box, (px) => ty(solveAt(nAt(px, box))), solveCol, 2.2, { toN: lastSolveN });
+    ctx.setLineDash([5, 4]);
+    strokePath(ctx, box, (px) => ty(solveAt(nAt(px, box))), solveCol, 1.8, { fromN: lastSolveN });
+    ctx.setLineDash([]);
+    const midProj = Math.sqrt(lastSolveN * 10 ** LOG_MAX);
+    T(ctx, colors, 'small', { align: 'center', baseline: 'bottom', color: solveCol });
+    ctx.fillText('projected, O(n³)', lx(midProj), ty(solveAt(midProj)) - 8);
+
+    // one gradient epoch: solid through the anchors, dashed linear extension
+    strokePath(ctx, box, (px) => ty(sgdAt(nAt(px, box))), colors.green, 2.2, { toN: lastSgdN });
+    ctx.setLineDash([5, 4]);
+    strokePath(ctx, box, (px) => ty(sgdAt(nAt(px, box))), colors.green, 1.8, { fromN: lastSgdN });
+    ctx.setLineDash([]);
+    T(ctx, colors, 'small', { align: 'right', baseline: 'top', color: colors.green });
+    ctx.fillText('one epoch, O(n)', box.x + box.w - 8, ty(sgdAt(10 ** LOG_MAX)) + 6);
+
+    // measured markers: box anchors (diamonds/squares), the reader's dots (rings)
+    for (const a of d.rows) { diamond(ctx, lx(a.n), ty(a.solve_cpu_s), 4, past ? colors.faint : colors.accent); }
+    for (const a of d.rows) { ctx.fillStyle = colors.green; ctx.fillRect(lx(a.n) - 3, ty(a.sgd_epoch_s) - 3, 6, 6); }
+    for (const p of st.dots) { ctx.strokeStyle = colors.accent; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(lx(p.n), ty(p.s), 4, 0, 6.283); ctx.stroke(); }
+
+    // cursor: where the slider stands right now
+    const cx = lx(n);
+    ctx.strokeStyle = colors.fg; ctx.globalAlpha = 0.35; ctx.setLineDash([2, 3]);
+    line(ctx, cx, box.y, cx, box.y + box.h); ctx.setLineDash([]); ctx.globalAlpha = 1;
+    dot(ctx, cx, ty(sgdAt(n)), 4, colors.green);
+    if (!past) dot(ctx, cx, ty(solveAt(n)), 4, colors.accent);
+    else {
+      const yv = ty(solveAt(n));
+      ctx.strokeStyle = colors.faint; ctx.lineWidth = 2;
+      line(ctx, cx - 4, yv - 4, cx + 4, yv + 4); line(ctx, cx + 4, yv - 4, cx - 4, yv + 4);
+      T(ctx, colors, 'small', { align: 'left', baseline: 'middle', color: colors.faint });
+      ctx.fillText('does not fit', cx + 8, yv);
+    }
+
+    // legend, in the empty upper-left of the plot
+    const li = [
+      { kind: 'line', col: colors.accent, lab: 'the solve (Cholesky, float64)' },
+      { kind: 'line', col: colors.green, lab: 'one gradient epoch' },
+      { kind: 'line', col: colors.blue, lab: 'Gram matrix memory' },
+      { kind: 'diamond', col: colors.accent, lab: 'measured on the experiment box' },
+      { kind: 'ring', col: colors.accent, lab: 'your browser, measured now' },
+    ];
+    let ly = box.y + 12;
+    for (const it of li) {
+      const lxx = box.x + 12;
+      if (it.kind === 'line') { ctx.strokeStyle = it.col; ctx.lineWidth = 2.2; line(ctx, lxx, ly, lxx + 16, ly); }
+      else if (it.kind === 'diamond') diamond(ctx, lxx + 8, ly, 4, it.col);
+      else { ctx.strokeStyle = it.col; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(lxx + 8, ly, 3.5, 0, 6.283); ctx.stroke(); }
+      T(ctx, colors, 'small', { align: 'left', baseline: 'middle', color: colors.muted });
+      ctx.fillText(it.lab, lxx + 22, ly);
+      ly += 13;
+    }
+
+    frame(ctx, colors, box.x, box.y, box.w, box.h);
+
+    // the running verdict under the panel
+    const gramNow = gb(n);
+    const solveTxt = past
+      ? `<span style="color:${colors.faint}">the solve: the Gram alone needs ${humanGB(gramNow)}; does not fit</span>`
+      : `<span style="color:${colors.accent}">the solve: ~${humanTime(solveAt(n))}${n > lastSolveN ? ' (projected)' : ''}, Gram ${humanGB(gramNow)}</span>`;
+    api.note(`at n = <b>${fmtCount(n)}</b> &nbsp; ${solveTxt} &nbsp;·&nbsp; <span style="color:${colors.green}">one epoch: ${humanTime(sgdAt(n))}</span>`);
+    if (!st.dots.length && !st.timing && n <= CAP) api.readout('rd', 'the button runs a real solve on this page');
+  },
+});
+
+// ── curve machinery ──
+// merge {n, s} anchors sorted by n, averaging duplicates so log-interp is safe
+function mergeAnchors(list) {
+  const a = list.slice().sort((p, q) => p.n - q.n);
+  const out = [];
+  for (const p of a) {
+    const last = out[out.length - 1];
+    if (last && Math.abs(Math.log(p.n / last.n)) < 1e-9) last.s = (last.s + p.s) / 2;
+    else out.push({ n: p.n, s: p.s });
+  }
+  return out;
+}
+
+// piecewise log-log interpolation through the anchors; power-law extension
+// below the first anchor (powLo) and beyond the last (powHi)
+function evalCurve(A, n, powLo, powHi) {
+  if (!A.length) return NaN;
+  if (n <= A[0].n) return A[0].s * Math.pow(n / A[0].n, powLo);
+  const last = A[A.length - 1];
+  if (n >= last.n) return last.s * Math.pow(n / last.n, powHi);
+  for (let i = 1; i < A.length; i++) if (n <= A[i].n) {
+    const a = A[i - 1], b = A[i];
+    const t = Math.log(n / a.n) / Math.log(b.n / a.n);
+    return Math.exp(Math.log(a.s) + t * Math.log(b.s / a.s));
+  }
+  return last.s;
+}
+
+function nAt(px, box) { return 10 ** (LOG_MIN + ((px - box.x) / box.w) * (LOG_MAX - LOG_MIN)); }
+
+// stroke y(px) across the box, optionally clipped to [fromN, toN]
+function strokePath(ctx, box, yOf, col, lw, { fromN, toN } = {}) {
+  const x0 = fromN ? Math.max(box.x, box.x + (Math.log10(fromN) - LOG_MIN) / (LOG_MAX - LOG_MIN) * box.w) : box.x;
+  const x1 = toN ? Math.min(box.x + box.w, box.x + (Math.log10(toN) - LOG_MIN) / (LOG_MAX - LOG_MIN) * box.w) : box.x + box.w;
+  if (x1 <= x0) return;
+  ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.lineJoin = 'round'; ctx.beginPath();
+  for (let px = x0; px <= x1; px += 2) {
+    const y = Math.max(box.y + 1, Math.min(box.y + box.h - 1, yOf(px)));
+    px === x0 ? ctx.moveTo(px, y) : ctx.lineTo(px, y);
+  }
+  ctx.stroke();
+}
+
+function line(ctx, x0, y0, x1, y1) { ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); }
+function diamond(ctx, x, y, r, col) { ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.fill(); }
+function sideTitle(ctx, colors, txt, x, y, col) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(-Math.PI / 2);
+  T(ctx, colors, 'small', { align: 'center', baseline: 'middle', color: col }); ctx.fillText(txt, 0, 0); ctx.restore();
+}
+
+// ── the real browser solve ──
+// Build the n x n Yat Gram over n synthetic 1-D points, then time Gaussian
+// elimination with partial pivoting + back-substitution with performance.now.
+// The residual max|K a - y| is returned so the timing provably solved something.
+function timeSolve(n, eps) {
+  const rnd = mulberry32(1234567);
+  const x = new Float64Array(n), y = new Float64Array(n);
+  for (let i = 0; i < n; i++) { x[i] = (rnd() - 0.5) * 4; y[i] = Math.sin(3 * x[i]); }
+  const A = new Float64Array(n * n);
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+    const dp = x[i] * x[j], df = x[i] - x[j];
+    A[i * n + j] = (dp * dp) / (df * df + eps) + (i === j ? 1e-8 : 0);
+  }
+  const K = A.slice(), rhs = y.slice();
+  const t0 = performance.now();
+  for (let k = 0; k < n; k++) {
+    let p = k, mx = Math.abs(A[k * n + k]);
+    for (let i = k + 1; i < n; i++) { const v = Math.abs(A[i * n + k]); if (v > mx) { mx = v; p = i; } }
+    if (p !== k) {
+      for (let j = k; j < n; j++) { const t = A[k * n + j]; A[k * n + j] = A[p * n + j]; A[p * n + j] = t; }
+      const t = rhs[k]; rhs[k] = rhs[p]; rhs[p] = t;
+    }
+    const piv = A[k * n + k] || 1e-12;
+    for (let i = k + 1; i < n; i++) {
+      const f = A[i * n + k] / piv;
+      if (f === 0) continue;
+      for (let j = k; j < n; j++) A[i * n + j] -= f * A[k * n + j];
+      rhs[i] -= f * rhs[k];
+    }
+  }
+  const sol = new Float64Array(n);
+  for (let i = n - 1; i >= 0; i--) {
+    let acc = rhs[i];
+    for (let j = i + 1; j < n; j++) acc -= A[i * n + j] * sol[j];
+    sol[i] = acc / (A[i * n + i] || 1e-12);
+  }
+  const s = (performance.now() - t0) / 1000;
+  let res = 0;
+  for (let i = 0; i < n; i++) {
+    let acc = 0;
+    for (let j = 0; j < n; j++) acc += K[i * n + j] * sol[j];
+    const e = Math.abs(acc - y[i]); if (e > res) res = e;
+  }
+  return { s, res };
+}
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+</script>

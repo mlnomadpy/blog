@@ -93,6 +93,7 @@ export const SERIES: SeriesDef[] = [
       'survival-model-on-trial',
       'your-network-is-a-fixed-point',
       'edit-a-fixed-point',
+      'you-dont-have-to-solve-a-kernel-machine',
     ],
   },
   {

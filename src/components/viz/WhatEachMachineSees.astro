@@ -1,0 +1,130 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 400 } = Astro.props;
+---
+<figure class="viz machinesees" data-caption={caption} data-height={height} data-height-mobile="440" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// What each machine sees. A solved kernel machine compares the representation
+// you hand it, forever: for raw Fashion-MNIST that is the pixels. The descended
+// machine has layers under the kernel, so gradient descent rewrites the
+// representation itself. Pick a garment; the images are the real test garments,
+// the feature maps are the trunk's real conv1 activations (frozen random vs
+// trained end to end), and the three verdicts are the real predictions of the
+// three fits from the run.
+import { defineViz } from './engine/vizkit.js';
+import { gate, loadingText, T, frame, text } from './engine/draw.js';
+import { drag } from './engine/pointer.js';
+import { loadPanel } from './solvewall.js';
+
+defineViz('machinesees', {
+  title: 'What each machine sees',
+  height: 430,
+  autoplay: false,
+  controls: [{ type: 'readout', name: 'rd' }],
+
+  setup(api) {
+    api.state.sel = 0;
+    gate(api, loadPanel, (api, d) => {
+      const st = api.state;
+      if (!d.meta || !d.img) { st.pending = true; return; }
+      st.d = d;
+      st.thumbs = [];
+      if (!st.wired) { st.wired = true; wireClicks(api); }
+    });
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    if (!st.ready) { loadingText(api); return; }
+    if (st.pending) { loadingText(api, 'data pending'); return; }
+    const { meta, img, compose } = st.d;
+    const W = size.W, H = size.H, pad = 14;
+    const n = meta.n, cs = meta.cell * meta.scale;
+
+    // ── thumbnail strip (row 0 of the sprite), selected one ringed
+    const tw = Math.min(44, (W - 2 * pad - (n - 1) * 6) / n);
+    st.thumbs.length = 0;
+    let tx = pad;
+    const ty = 30;
+    T(ctx, colors, 'kicker');
+    ctx.fillText('pick a garment', pad, 20);
+    for (let i = 0; i < n; i++) {
+      ctx.drawImage(img, i * cs, 0, cs, cs, tx, ty, tw, tw);
+      if (i === st.sel) { ctx.strokeStyle = colors.accent; ctx.lineWidth = 2.4; ctx.strokeRect(tx - 1.5, ty - 1.5, tw + 3, tw + 3); }
+      else frame(ctx, colors, tx, ty, tw, tw);
+      st.thumbs.push({ x: tx, y: ty, w: tw, h: tw });
+      tx += tw + 6;
+    }
+
+    // ── the three representations of the selected garment
+    const i = st.sel;
+    const top = ty + tw + 34;
+    const big = Math.min(H - top - 92, (W - 4 * pad) / 3, 170);
+    const x1 = pad, x2 = pad + big + pad + 6, x3 = x2 + big + pad + 6;
+
+    T(ctx, colors, 'kicker');
+    ctx.fillText('what the solve compares', x1, top - 8);
+    ctx.fillText('random trunk, frozen', x2, top - 8);
+    ctx.fillText('after end-to-end descent', x3, top - 8);
+
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, i * cs, 0, cs, cs, x1, top, big, big);
+    ctx.drawImage(img, i * cs, cs, cs, cs, x2, top, big, big);
+    ctx.drawImage(img, i * cs, 2 * cs, cs, cs, x3, top, big, big);
+    ctx.imageSmoothingEnabled = true;
+    frame(ctx, colors, x1, top, big, big);
+    frame(ctx, colors, x2, top, big, big);
+    frame(ctx, colors, x3, top, big, big);
+    T(ctx, colors, 'small', { color: colors.faint });
+    ctx.fillText('the pixels themselves', x1, top + big + 14);
+    ctx.fillText('conv1 activations, untrained', x2, top + big + 14);
+    ctx.fillText('conv1 activations, trained', x3, top + big + 14);
+
+    // ── verdict chips: the three fits' real predictions for this garment
+    const cy = top + big + 30;
+    const truth = meta.classes[meta.true[i]];
+    chip(ctx, colors, x1, cy, big, `solve on pixels: ${meta.classes[meta.pred_raw[i]]}`, meta.pred_raw[i] === meta.true[i]);
+    chip(ctx, colors, x2, cy, big, `solve on frozen: ${meta.classes[meta.pred_frozen[i]]}`, meta.pred_frozen[i] === meta.true[i]);
+    chip(ctx, colors, x3, cy, big, `descended end to end: ${meta.classes[meta.pred_e2e[i]]}`, meta.pred_e2e[i] === meta.true[i]);
+
+    if (compose) {
+      T(ctx, colors, 'small', { color: colors.faint });
+      ctx.fillText(
+        `test accuracy over all 10,000 garments: pixels+solve ${(compose.solve_raw * 100).toFixed(1)}%  ·  frozen+solve ${(compose.solve_frozen * 100).toFixed(1)}%  ·  end to end ${(compose.e2e_small_mean * 100).toFixed(1)}% at the same 8k, ${(compose.e2e_full_mean * 100).toFixed(1)}% on the full 60k`,
+        pad, cy + 40);
+    }
+
+    api.readout('rd', `garment ${i + 1}/${n}: a ${truth}`);
+  },
+});
+
+function chip(ctx, colors, x, y, w, label, ok) {
+  const h = 22;
+  ctx.fillStyle = ok ? 'rgba(58,143,94,.14)' : 'rgba(194,85,58,.14)';
+  ctx.strokeStyle = ok ? '#3a8f5e' : '#c2553a';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.roundRect(x, y, w, h, 5); ctx.fill(); ctx.stroke();
+  text(ctx, label, x + 8, y + h / 2, colors, { size: 11, baseline: 'middle', color: ok ? '#3a8f5e' : '#c2553a' });
+}
+
+function wireClicks(api) {
+  drag(api.canvas, {
+    onStart(p) {
+      const st = api.state;
+      if (!st.thumbs) return;
+      for (let i = 0; i < st.thumbs.length; i++) {
+        const t = st.thumbs[i];
+        if (p.x >= t.x && p.x <= t.x + t.w && p.y >= t.y && p.y <= t.y + t.h) {
+          st.sel = i; api.render(); return;
+        }
+      }
+    },
+  });
+}
+</script>

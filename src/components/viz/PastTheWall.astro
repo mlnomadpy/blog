@@ -1,0 +1,208 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 380 } = Astro.props;
+---
+<figure class="viz pastwall" data-caption={caption} data-height={height} data-height-mobile="420" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The reader pushes one machine off a cliff. Covtype, half a million rows:
+// both machines fit the same Yat kernel, and the slider feeds them more data.
+// Every dot is a measured accuracy from scale.json (whiskers are the seed
+// spread); the connecting lines are deliberately light, nothing between dots is
+// invented. The solve's measurements stop where its Gram stops fitting in
+// memory; past that barrier its readout can only say so, while the descended
+// net keeps reporting better numbers all the way to the full pool.
+import { defineViz } from './engine/vizkit.js';
+import { gate, loadingText, T, frame, dot, softPanel } from './engine/draw.js';
+import { loadScale, fmtCount } from './solvewall.js';
+
+const WALL_COL = '#c2553a';
+let pctToN = null;   // set once scale.json is in; the slider label reads through it
+
+defineViz('pastwall', {
+  title: 'Feed the same kernel more data than the solve can hold',
+  height: 380,
+  autoplay: false,
+  annotation: true,
+  controls: [
+    { type: 'range', name: 'pct', label: 'rows of data used', min: 0, max: 1, step: 0.002, value: 0.1,
+      play: { period: 14000 }, fmt: (v) => (pctToN ? fmtCount(pctToN(v)) : '') },
+  ],
+
+  setup(api) {
+    const st = api.state;
+    gate(api, loadScale, (api, d) => {
+      st.d = d;
+      st.lgMin = Math.log10(Math.min(d.solve[0].n, d.sgd[0].n));
+      st.lgMax = Math.log10(d.n_pool);
+      pctToN = (p) => Math.round(10 ** (st.lgMin + p * (st.lgMax - st.lgMin)));
+      st.lastSolveN = d.solve[d.solve.length - 1].n;
+      // the capacity ladder: the sgd_big rows grouped by prototype count K
+      st.big = [];
+      for (const r of d.sgd_big || []) {
+        let g = st.big.find((s) => s.K === r.K);
+        if (!g) { g = { K: r.K, rows: [] }; st.big.push(g); }
+        g.rows.push(r);
+      }
+      st.big.sort((a, b) => a.K - b.K);
+      st.big.forEach((g) => g.rows.sort((a, b) => a.n - b.n));
+      st.solveBest = Math.max(...d.solve.map((r) => r.acc_mean));
+      const all = d.solve.concat(d.sgd, d.sgd_big || []);
+      st.yLo = Math.floor((Math.min(...all.map((r) => r.acc_mean - r.acc_std)) - 0.015) * 40) / 40;
+      st.yHi = Math.ceil((Math.max(...all.map((r) => r.acc_mean + r.acc_std)) + 0.015) * 40) / 40;
+    });
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    if (!st.ready) { loadingText(api); return; }
+    const d = st.d;
+    const n = pctToN(api.get('pct'));
+
+    const padL = 44, padR = 14, padT = 8, padB = 34;
+    const box = { x: padL, y: padT, w: W - padL - padR, h: H - padT - padB };
+    const lx = (v) => box.x + ((Math.log10(v) - st.lgMin) / (st.lgMax - st.lgMin)) * box.w;
+    const sy = (a) => box.y + box.h - ((a - st.yLo) / (st.yHi - st.yLo)) * box.h;
+
+    ctx.fillStyle = colors.cellBg; ctx.fillRect(box.x, box.y, box.w, box.h);
+
+    // the dead region: past the solve's last possible n
+    const wallX = lx(st.lastSolveN), past = n > st.lastSolveN;
+    ctx.fillStyle = colors.fg; ctx.globalAlpha = past ? 0.09 : 0.045;
+    ctx.fillRect(wallX, box.y, box.x + box.w - wallX, box.h); ctx.globalAlpha = 1;
+
+    // axes
+    T(ctx, colors, 'small', { align: 'center', baseline: 'top', color: colors.faint });
+    const xt = [10 ** Math.ceil(st.lgMin), 1e4, 1e5].filter((v) => v > 10 ** st.lgMin * 1.15 && v < d.n_pool / 1.3);
+    for (const t of [10 ** st.lgMin, ...xt, d.n_pool]) ctx.fillText(fmtCount(t), lx(t), box.y + box.h + 4);
+    ctx.fillText('rows of covtype used (log)', box.x + box.w / 2, box.y + box.h + 18);
+    T(ctx, colors, 'small', { align: 'right', baseline: 'middle', color: colors.faint });
+    for (let a = st.yLo; a <= st.yHi + 1e-9; a += 0.025) {
+      const y = sy(a);
+      ctx.fillText(a.toFixed(3), box.x - 5, y);
+      ctx.strokeStyle = colors.border; ctx.globalAlpha = 0.5;
+      ctx.beginPath(); ctx.moveTo(box.x, y); ctx.lineTo(box.x + box.w, y); ctx.stroke(); ctx.globalAlpha = 1;
+    }
+    ctx.save(); ctx.translate(box.x - 34, box.y + box.h / 2); ctx.rotate(-Math.PI / 2);
+    T(ctx, colors, 'small', { align: 'center', baseline: 'middle', color: colors.muted });
+    ctx.fillText('held-out accuracy', 0, 0); ctx.restore();
+
+    // the wall barrier + why (the memory note from the run)
+    ctx.strokeStyle = WALL_COL; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(wallX, box.y); ctx.lineTo(wallX, box.y + box.h); ctx.stroke();
+    T(ctx, colors, 'label', { align: 'left', baseline: 'top', color: WALL_COL, weight: 'b' });
+    ctx.fillText('the wall', wallX + 6, box.y + 6);
+    T(ctx, colors, 'small', { align: 'left', baseline: 'top', color: colors.muted });
+    wrapText(ctx, d.wall_note, wallX + 6, box.y + 21, box.x + box.w - wallX - 12, 12);
+
+    // the solve's high-water mark: a guide the capacity ladder has to cross
+    const hwY = sy(st.solveBest);
+    ctx.strokeStyle = past ? colors.faint : colors.accent; ctx.globalAlpha = 0.7; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(box.x, hwY); ctx.lineTo(box.x + box.w, hwY); ctx.stroke();
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+    T(ctx, colors, 'small', { align: 'right', baseline: 'bottom', color: past ? colors.faint : colors.accent });
+    ctx.fillText(`the solve's best, from inside the wall (${st.solveBest.toFixed(3)})`, box.x + box.w - 6, hwY - 3);
+
+    // all tracks: light dashed lines between measured dots, whiskers, dots
+    const BIG_COLS = ['#9a4f9c', '#4a7fb3'];
+    track(ctx, d.solve, lx, sy, past ? colors.faint : colors.accent);
+    track(ctx, d.sgd, lx, sy, colors.green);
+    st.big.forEach((g, i) => track(ctx, g.rows, lx, sy, BIG_COLS[i % BIG_COLS.length]));
+    const sEnd = d.solve[d.solve.length - 1], gEnd = d.sgd[d.sgd.length - 1];
+    T(ctx, colors, 'small', { align: 'right', baseline: 'middle', color: past ? colors.faint : colors.accent });
+    ctx.fillText('the solve', lx(sEnd.n) - 9, sy(sEnd.acc_mean));
+    T(ctx, colors, 'small', { align: 'right', baseline: 'bottom', color: colors.green });
+    ctx.fillText(`descended, K = ${d.K}`, lx(gEnd.n) - 6, sy(gEnd.acc_mean + gEnd.acc_std) - 4);
+    st.big.forEach((g, i) => {
+      const e = g.rows[g.rows.length - 1];
+      T(ctx, colors, 'small', { align: 'right', baseline: 'bottom', color: BIG_COLS[i % BIG_COLS.length] });
+      ctx.fillText(`K = ${g.K.toLocaleString('en-US')}`, lx(e.n) - 6, sy(e.acc_mean) - 6);
+    });
+
+    // cursor + nearest measured readings for whichever machines are still alive
+    const cx = lx(n);
+    ctx.strokeStyle = colors.fg; ctx.globalAlpha = 0.35; ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(cx, box.y); ctx.lineTo(cx, box.y + box.h); ctx.stroke();
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+
+    const sNear = past ? null : nearest(d.solve, n);
+    // the descended reading is the best machine gradient descent can field at
+    // this n: the base K or, where the capacity ladder has a measured point
+    // nearby, the biggest K
+    let gNear = nearest(d.sgd, n), gCol = colors.green, gK = d.K;
+    st.big.forEach((g, i) => {
+      const r = nearest(g.rows, n);
+      if (r && Math.abs(Math.log(r.n / n)) < 0.35 && r.acc_mean > gNear.acc_mean) {
+        gNear = r; gCol = ['#9a4f9c', '#4a7fb3'][i % 2]; gK = g.K;
+      }
+    });
+    if (sNear) ring(ctx, lx(sNear.n), sy(sNear.acc_mean), colors.accent);
+    if (gNear) ring(ctx, lx(gNear.n), sy(gNear.acc_mean), gCol);
+
+    const bw = 216, bh = 60;
+    const bx = Math.max(box.x + 4, Math.min(cx + 12, box.x + box.w - bw - 4));
+    const by = box.y + box.h - bh - 8;
+    softPanel(ctx, bx, by, bw, bh, colors, { r: 8 });
+    T(ctx, colors, 'small', { align: 'left', baseline: 'top', color: colors.muted, weight: 'b' });
+    ctx.fillText(`at n = ${fmtCount(n)}`, bx + 10, by + 8);
+    T(ctx, colors, 'small', { align: 'left', baseline: 'top', color: past ? colors.faint : colors.accent });
+    ctx.fillText(past ? 'solve: cannot run, the Gram does not fit' : `solve: ${reading(sNear)}`, bx + 10, by + 23);
+    T(ctx, colors, 'small', { align: 'left', baseline: 'top', color: gCol });
+    ctx.fillText(`descended, K = ${gK.toLocaleString('en-US')}: ${reading(gNear)}`, bx + 10, by + 38);
+
+    frame(ctx, colors, box.x, box.y, box.w, box.h);
+
+    const ladderEnd = st.big.length ? st.big[st.big.length - 1].rows.slice(-1)[0] : gEnd;
+    api.note(past
+      ? `no machine here can build this Gram, and the kernel does not care: descended with ${ladderEnd.K ? ladderEnd.K.toLocaleString('en-US') + ' prototypes' : 'K = ' + d.K} it reaches <b>${ladderEnd.acc_mean.toFixed(3)}</b> on the full pool, above the solve's best ${st.solveBest.toFixed(3)} from inside the wall`
+      : 'both machines can still fit at this n; keep sliding right until only one of them survives');
+  },
+});
+
+function track(ctx, rows, lx, sy, col) {
+  ctx.strokeStyle = col; ctx.globalAlpha = 0.45; ctx.lineWidth = 1.2; ctx.setLineDash([3, 4]);
+  ctx.beginPath();
+  rows.forEach((r, i) => (i ? ctx.lineTo(lx(r.n), sy(r.acc_mean)) : ctx.moveTo(lx(r.n), sy(r.acc_mean))));
+  ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+  for (const r of rows) {
+    const x = lx(r.n);
+    if (r.acc_std > 0) {
+      ctx.strokeStyle = col; ctx.lineWidth = 1.2; ctx.globalAlpha = 0.8;
+      ctx.beginPath(); ctx.moveTo(x, sy(r.acc_mean - r.acc_std)); ctx.lineTo(x, sy(r.acc_mean + r.acc_std)); ctx.stroke();
+      for (const s of [-1, 1]) { const y = sy(r.acc_mean + s * r.acc_std); ctx.beginPath(); ctx.moveTo(x - 3, y); ctx.lineTo(x + 3, y); ctx.stroke(); }
+      ctx.globalAlpha = 1;
+    }
+    dot(ctx, x, sy(r.acc_mean), 3.4, col);
+  }
+}
+
+function nearest(rows, n) {
+  let best = null, bd = Infinity;
+  for (const r of rows) { const dd = Math.abs(Math.log(r.n / n)); if (dd < bd) { bd = dd; best = r; } }
+  return best;
+}
+
+function reading(r) {
+  if (!r) return '';
+  const spread = (r.acc_seeds || []).length > 1 ? ` ± ${r.acc_std.toFixed(3)}` : '';
+  return `${r.acc_mean.toFixed(3)}${spread} (n = ${fmtCount(r.n)})`;
+}
+
+function ring(ctx, x, y, col) { ctx.strokeStyle = col; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(x, y, 6.5, 0, 6.283); ctx.stroke(); }
+
+function wrapText(ctx, str, x, y, w, lh) {
+  const words = String(str).split(' '); let line = '', yy = y;
+  for (const wd of words) {
+    const t = line ? line + ' ' + wd : wd;
+    if (ctx.measureText(t).width > w && line) { ctx.fillText(line, x, yy); line = wd; yy += lh; }
+    else line = t;
+  }
+  if (line) ctx.fillText(line, x, yy);
+}
+</script>

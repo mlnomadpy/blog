@@ -1,0 +1,246 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 400 } = Astro.props;
+---
+<figure class="viz smtwice" data-caption={caption} data-height={height} data-height-mobile="450" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The same kernel machine, fitted twice, live in the page. The blue curve is the
+// exact kernel machine: alpha = (K + lam I)^-1 y, re-solved from scratch (a real
+// linear solve runs here) every time the data changes. The orange curve is the
+// SAME kernel descended: a bank of prototype units trained by real gradient
+// steps. Drag any data point and watch the asymmetry: the solve is a fresh
+// factorization each time, the descent just keeps flowing from where it was.
+import { defineViz } from './engine/vizkit.js';
+import { T, axes, dot, legend, fmt } from './engine/draw.js';
+import { drag } from './engine/pointer.js';
+
+const N = 80, EPS = 0.35, LAM = 3e-3, XMIN = -2.4, XMAX = 2.4;
+const GRID = 160;
+
+// the one kernel both machines carry: k(x,x') = (xx'+1)^2 / ((x-x')^2 + eps)
+const kern = (a, b) => { const d = a - b, p = a * b + 1; return (p * p) / (d * d + EPS); };
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function makeData() {
+  const rnd = mulberry32(11), xs = [], ys = [];
+  for (let i = 0; i < N; i++) {
+    const x = XMIN + (XMAX - XMIN) * (i + 0.5) / N + (rnd() - 0.5) * 0.03;
+    const y = Math.sin(2.1 * x) * (1 + 0.45 * x) + 0.55 * Math.exp(-4 * (x - 1.1) * (x - 1.1)) + (rnd() - 0.5) * 0.24;
+    xs.push(x); ys.push(y);
+  }
+  return { xs, ys };
+}
+
+// ---- the solved machine: Gaussian elimination on (K + lam I), timed for real
+function solveExact(xs, ys) {
+  const t0 = performance.now();
+  const n = xs.length, A = new Float64Array(n * n), b = Float64Array.from(ys);
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) A[i * n + j] = kern(xs[i], xs[j]) + (i === j ? LAM : 0);
+  for (let c = 0; c < n; c++) {                       // partial-pivot elimination
+    let piv = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(A[r * n + c]) > Math.abs(A[piv * n + c])) piv = r;
+    if (piv !== c) {
+      for (let j = 0; j < n; j++) { const t = A[c * n + j]; A[c * n + j] = A[piv * n + j]; A[piv * n + j] = t; }
+      const t = b[c]; b[c] = b[piv]; b[piv] = t;
+    }
+    const d = A[c * n + c];
+    for (let r = c + 1; r < n; r++) {
+      const f = A[r * n + c] / d; if (f === 0) continue;
+      for (let j = c; j < n; j++) A[r * n + j] -= f * A[c * n + j];
+      b[r] -= f * b[c];
+    }
+  }
+  const alpha = new Float64Array(n);
+  for (let r = n - 1; r >= 0; r--) {
+    let s = b[r];
+    for (let j = r + 1; j < n; j++) s -= A[r * n + j] * alpha[j];
+    alpha[r] = s / A[r * n + r];
+  }
+  return { alpha, ms: performance.now() - t0 };
+}
+
+const evalSolve = (alpha, xs, x) => { let s = 0; for (let i = 0; i < xs.length; i++) s += alpha[i] * kern(x, xs[i]); return s; };
+
+// ---- the descended machine: K prototype units, hand-derived gradients + adam
+function initNet(K, xs, ys) {
+  const w = new Float64Array(K), b = new Float64Array(K), a = new Float64Array(K);
+  for (let u = 0; u < K; u++) {                       // prototypes start at data quantiles
+    const i = Math.floor((u + 0.5) / K * xs.length);
+    w[u] = xs[i]; b[u] = 1; a[u] = 0.01 * ((u % 2) * 2 - 1);
+  }
+  const z = () => ({ m: new Float64Array(K), v: new Float64Array(K) });
+  return { K, w, b, a, opt: { t: 0, w: z(), b: z(), a: z() } };
+}
+
+function netEval(net, x) {
+  let s = 0;
+  for (let u = 0; u < net.K; u++) {
+    const p = net.w[u] * x + net.b[u], d = x - net.w[u];
+    s += net.a[u] * (p * p) / (d * d + EPS);
+  }
+  return s;
+}
+
+function netStep(net, xs, ys, lr) {
+  const K = net.K, n = xs.length;
+  const gw = new Float64Array(K), gb = new Float64Array(K), ga = new Float64Array(K);
+  let loss = 0;
+  for (let i = 0; i < n; i++) {
+    const x = xs[i];
+    let h = 0; const phi = new Float64Array(K), P = new Float64Array(K), D = new Float64Array(K);
+    for (let u = 0; u < K; u++) {
+      P[u] = net.w[u] * x + net.b[u]; const d = x - net.w[u]; D[u] = d * d + EPS;
+      phi[u] = (P[u] * P[u]) / D[u]; h += net.a[u] * phi[u];
+    }
+    const r = h - ys[i]; loss += r * r;
+    const g = 2 * r / n;
+    for (let u = 0; u < K; u++) {
+      ga[u] += g * phi[u];
+      gb[u] += g * net.a[u] * 2 * P[u] / D[u];
+      gw[u] += g * net.a[u] * (2 * x * P[u] * D[u] + 2 * P[u] * P[u] * (x - net.w[u])) / (D[u] * D[u]);
+    }
+  }
+  const o = net.opt; o.t++;
+  const adam = (p, gr, s) => {
+    const b1 = 0.9, b2 = 0.999, c1 = 1 - Math.pow(b1, o.t), c2 = 1 - Math.pow(b2, o.t);
+    for (let u = 0; u < K; u++) {
+      s.m[u] = b1 * s.m[u] + (1 - b1) * gr[u];
+      s.v[u] = b2 * s.v[u] + (1 - b2) * gr[u] * gr[u];
+      p[u] -= lr * (s.m[u] / c1) / (Math.sqrt(s.v[u] / c2) + 1e-8);
+    }
+  };
+  adam(net.w, gw, o.w); adam(net.b, gb, o.b); adam(net.a, ga, o.a);
+  return Math.sqrt(loss / n);
+}
+
+defineViz('smtwice', {
+  title: 'The same kernel machine, solved and descended, live',
+  height: 400,
+  stepsPerFrame: 5,
+  autoplay: false,
+  controls: [
+    { type: 'play' }, { type: 'reset' }, { type: 'speed' },
+    { type: 'range', name: 'K', label: 'prototypes K', min: 3, max: 24, step: 1, value: 9, int: true, reset: true },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    const st = api.state;
+    st.data = makeData();
+    st.sol = solveExact(st.data.xs, st.data.ys);
+    st.net = initNet(api.get('K'), st.data.xs, st.data.ys);
+    st.netRmse = null; st.dragI = -1; st.solves = 1;
+    if (!st.dragWired) { st.dragWired = true; wireDrag(api); }
+  },
+
+  step(api) {
+    const st = api.state;
+    st.netRmse = netStep(st.net, st.data.xs, st.data.ys, 0.02);
+  },
+
+  draw(api) {
+    const { ctx, colors, size, state: st } = api;
+    const W = size.W, H = size.H;
+    const pad = { l: 44, r: 14, t: 30, b: 44 };
+    const box = { x: pad.l, y: pad.t, w: W - pad.l - pad.r, h: H - pad.t - pad.b };
+    st.box = box;
+    const yMin = -1.8, yMax = 2.3;
+    const sx = (x) => box.x + (x - XMIN) / (XMAX - XMIN) * box.w;
+    const sy = (y) => box.y + (yMax - y) / (yMax - yMin) * box.h;
+    st.sx = sx; st.sy = sy; st.yMin = yMin; st.yMax = yMax;
+
+    axes(ctx, box, {
+      xMin: XMIN, xMax: XMAX, yMin, yMax, grid: true,
+      xTicks: [-2, -1, 0, 1, 2], yTicks: [-1, 0, 1, 2],
+    }, colors);
+
+    // solved curve (blue): re-solved for real every time the data changes
+    const blue = '#4a7fb3', orange = colors.accent;
+    ctx.beginPath();
+    for (let g = 0; g <= GRID; g++) {
+      const x = XMIN + (XMAX - XMIN) * g / GRID, y = evalSolve(st.sol.alpha, st.data.xs, x);
+      g ? ctx.lineTo(sx(x), sy(Math.max(yMin, Math.min(yMax, y)))) : ctx.moveTo(sx(x), sy(Math.max(yMin, Math.min(yMax, y))));
+    }
+    ctx.strokeStyle = blue; ctx.lineWidth = 2.6; ctx.stroke();
+
+    // descended curve (orange), and the gap between the two machines
+    let gap = 0;
+    ctx.beginPath();
+    for (let g = 0; g <= GRID; g++) {
+      const x = XMIN + (XMAX - XMIN) * g / GRID, y = netEval(st.net, x);
+      gap += (y - evalSolve(st.sol.alpha, st.data.xs, x)) ** 2;
+      g ? ctx.lineTo(sx(x), sy(Math.max(yMin, Math.min(yMax, y)))) : ctx.moveTo(sx(x), sy(Math.max(yMin, Math.min(yMax, y))));
+    }
+    gap = Math.sqrt(gap / (GRID + 1));
+    ctx.strokeStyle = orange; ctx.lineWidth = 2.2; ctx.stroke();
+
+    // data points (draggable)
+    for (let i = 0; i < st.data.xs.length; i++) {
+      dot(ctx, sx(st.data.xs[i]), sy(st.data.ys[i]), i === st.dragI ? 5 : 3, i === st.dragI ? orange : colors.fgMuted);
+    }
+
+    // prototype positions: the descended machine's centers, live
+    for (let u = 0; u < st.net.K; u++) {
+      const x = sx(Math.max(XMIN, Math.min(XMAX, st.net.w[u])));
+      ctx.strokeStyle = orange; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(x, box.y + box.h + 4); ctx.lineTo(x, box.y + box.h + 12); ctx.stroke();
+    }
+    T(ctx, colors, 'small', { color: colors.faint });
+    ctx.fillText('orange ticks: the K prototypes, moving under gradient descent', box.x, box.y + box.h + 26);
+
+    legend(ctx, box.x, 16, [
+      { color: blue, label: `solved once per change (${st.sol.ms.toFixed(1)} ms, n=${N})` },
+      { color: orange, label: 'descended, same kernel' },
+    ], colors);
+
+    api.readout('rd', api.iter === 0
+      ? 'press Play, or drag a point: the blue fit re-solves, the orange one re-descends'
+      : `step ${api.iter} · curves ${fmt(gap, 3)} apart · solve rmse ${fmt(rmse(st, (x) => evalSolve(st.sol.alpha, st.data.xs, x)), 3)} · net rmse ${fmt(st.netRmse ?? rmse(st, (x) => netEval(st.net, x)), 3)} · ${st.solves} solves so far`);
+  },
+});
+
+function rmse(st, f) {
+  let s = 0;
+  for (let i = 0; i < st.data.xs.length; i++) s += (f(st.data.xs[i]) - st.data.ys[i]) ** 2;
+  return Math.sqrt(s / st.data.xs.length);
+}
+
+function wireDrag(api) {
+  drag(api.canvas, {
+    cursor: 'grabbing',
+    onStart(p) {
+      const st = api.state; if (!st.box) return;
+      let best = -1, bd = 14 * 14;
+      for (let i = 0; i < st.data.xs.length; i++) {
+        const dx = st.sx(st.data.xs[i]) - p.x, dy = st.sy(st.data.ys[i]) - p.y, d = dx * dx + dy * dy;
+        if (d < bd) { bd = d; best = i; }
+      }
+      st.dragI = best;
+    },
+    onMove(p) {
+      const st = api.state;
+      if (st.dragI < 0 || !st.box) return;
+      const y = st.yMax - (p.y - st.box.y) / st.box.h * (st.yMax - st.yMin);
+      st.data.ys[st.dragI] = Math.max(st.yMin, Math.min(st.yMax, y));
+      st.sol = solveExact(st.data.xs, st.data.ys);   // a real fresh solve, every frame of the drag
+      st.solves++;
+      api.render();
+    },
+    onEnd() { api.state.dragI = -1; api.render(); },
+  });
+}
+</script>
