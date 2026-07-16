@@ -1,0 +1,576 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="generator" content="Astro v5.18.1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#fbfaf6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)"><title>Reversible Backprop in JAX: custom_vjp, O(1) Memory</title><meta name="description" content="Reversible backprop in JAX: a custom_vjp that inverts the momentum block layer by layer, measured flat at 3.2 MB to depth 512 against 674 MB standard."><meta name="keywords" content="custom vjp, reversible backpropagation jax, memory analysis xla, constant memory training, integrators, reversibility, memory, jax, flax, nnx, implementation"><meta name="author" content="Taha Bouhsine"><link rel="canonical" href="https://tahabouhsine.com/blog/backprop-without-the-memory-jax-flax-nnx/"><link rel="icon" href="/blog/favicon.svg" type="image/svg+xml"><link rel="alternate" type="application/rss+xml" title="Records of the !mmortal Data Scientist" href="/blog/rss.xml"><link rel="sitemap" href="/blog/sitemap-index.xml"><link rel="me" href="https://github.com/mlnomadpy"><link rel="me" href="https://x.com/mlnomadpy"><link rel="me" href="https://www.linkedin.com/in/tahabsn/"><link rel="me" href="https://scholar.google.com/citations?user=IsBjb3EAAAAJ"><link rel="me" href="https://g.dev/tahabsn"><link rel="author" href="https://github.com/mlnomadpy"><meta property="og:type" content="article"><meta property="og:site_name" content="Records of the !mmortal Data Scientist"><meta property="og:title" content="Reversible Backprop in JAX: custom_vjp, O(1) Memory"><meta property="og:description" content="Reversible backprop in JAX: a custom_vjp that inverts the momentum block layer by layer, measured flat at 3.2 MB to depth 512 against 674 MB standard."><meta property="og:url" content="https://tahabouhsine.com/blog/backprop-without-the-memory-jax-flax-nnx/"><meta property="og:locale" content="en_US"><meta property="og:image" content="https://tahabouhsine.com/blog/og/backprop-without-the-memory-jax-flax-nnx.png"><meta property="og:image:alt" content="Reversible Backprop as a custom_vjp in JAX — Records of the !mmortal Data Scientist"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:type" content="image/png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@mlnomadpy"><meta name="twitter:creator" content="@mlnomadpy"><meta name="twitter:title" content="Reversible Backprop in JAX: custom_vjp, O(1) Memory"><meta name="twitter:description" content="Reversible backprop in JAX: a custom_vjp that inverts the momentum block layer by layer, measured flat at 3.2 MB to depth 512 against 674 MB standard."><meta name="twitter:image" content="https://tahabouhsine.com/blog/og/backprop-without-the-memory-jax-flax-nnx.png"><meta name="twitter:image:alt" content="Reversible Backprop as a custom_vjp in JAX — Records of the !mmortal Data Scientist"><meta property="article:published_time" content="2026-07-16T20:00:00.000Z"><meta property="article:author" content="Taha Bouhsine"><meta property="article:section" content="Integrators"><meta property="article:tag" content="integrators"><meta property="article:tag" content="reversibility"><meta property="article:tag" content="memory"><meta property="article:tag" content="jax"><meta property="article:tag" content="flax"><meta property="article:tag" content="nnx"><meta property="article:tag" content="implementation"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","@id":"https://tahabouhsine.com/blog/backprop-without-the-memory-jax-flax-nnx/#article","headline":"Reversible Backprop as a custom_vjp in JAX","name":"Reversible Backprop as a custom_vjp in JAX","description":"Reversible backprop in JAX: a custom_vjp that inverts the momentum block layer by layer, measured flat at 3.2 MB to depth 512 against 674 MB standard.","image":["https://tahabouhsine.com/blog/og/backprop-without-the-memory-jax-flax-nnx.png"],"datePublished":"2026-07-16T20:00:00.000Z","dateModified":"2026-07-16T20:00:00.000Z","author":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#author","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","jobTitle":"Machine Learning Researcher","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"publisher":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#publisher","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"mainEntityOfPage":{"@type":"WebPage","@id":"https://tahabouhsine.com/blog/backprop-without-the-memory-jax-flax-nnx/"},"keywords":"custom vjp, reversible backpropagation jax, memory analysis xla, constant memory training, integrators, reversibility, memory, jax, flax, nnx, implementation","url":"https://tahabouhsine.com/blog/backprop-without-the-memory-jax-flax-nnx/","inLanguage":"en-US","wordCount":1361,"timeRequired":"PT7M","articleSection":"Integrators","isPartOf":{"@type":"Blog","@id":"https://tahabouhsine.com/blog/","name":"Records of the !mmortal Data Scientist","url":"https://tahabouhsine.com/blog/"}}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Blog","item":"https://tahabouhsine.com/blog/"},{"@type":"ListItem","position":2,"name":"Integrators","item":"https://tahabouhsine.com/blog/tag/integrators/"},{"@type":"ListItem","position":3,"name":"Reversible Backprop as a custom_vjp in JAX","item":"https://tahabouhsine.com/blog/backprop-without-the-memory-jax-flax-nnx/"}]}</script><script>
+    (function () {
+      if (window.__gaSetup) return;
+      window.__gaSetup = true;
+      var GA_ID = 'G-373438VHJB';
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ dataLayer.push(arguments); }
+      window.gtag = window.gtag || gtag;
+      window.__gaEventQueue = window.__gaEventQueue || [];
+      window.__trackGA = function (eventName, params) {
+        if (!eventName) return;
+        var item = { name: eventName, params: params || {} };
+        if (window.__gaLoaded) {
+          gtag('event', item.name, item.params);
+        } else {
+          window.__gaEventQueue.push(item);
+        }
+      };
+
+      // Track whether the first astro:page-load has fired, so a mid-session
+      // Accept can still record the current page.
+      window.__gaFirstLoadDone = window.__gaFirstLoadDone || false;
+      document.addEventListener('astro:page-load', function () { window.__gaFirstLoadDone = true; });
+
+      window.__loadGA = function () {
+        if (window.__gaLoaded) return;
+        window.__gaLoaded = true;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+        document.head.appendChild(s);
+        gtag('js', new Date());
+        gtag('config', GA_ID, { send_page_view: false });
+        (window.__gaEventQueue || []).splice(0).forEach(function (item) {
+          gtag('event', item.name, item.params);
+        });
+        function sendPV() {
+          gtag('event', 'page_view', {
+            page_title: document.title,
+            page_location: location.href,
+            page_path: location.pathname + location.search,
+          });
+        }
+        document.addEventListener('astro:page-load', sendPV);
+        // If the initial page-load already happened (accept mid-session),
+        // record this page now; otherwise the listener catches the first one.
+        if (window.__gaFirstLoadDone) sendPV();
+      };
+
+      try {
+        if (localStorage.getItem('analytics-consent') === 'granted') window.__loadGA();
+      } catch (e) {}
+    })();
+  </script><script>
+  (() => {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'light' || stored === 'dark') {
+      document.documentElement.setAttribute('data-theme', stored);
+    }
+  })();
+</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.DstInXr_.css">
+<link rel="stylesheet" href="/blog/_astro/_slug_.1UYF8z3a.css">
+<style>.series-nav[data-astro-cid-w7ld43o3]{margin:0 0 1.1rem;border:1px solid var(--border);border-radius:8px;background:var(--bg-sunken);overflow:hidden}summary[data-astro-cid-w7ld43o3]{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.55rem .9rem;cursor:pointer;list-style:none;user-select:none;transition:background var(--transition-fast)}summary[data-astro-cid-w7ld43o3]::-webkit-details-marker{display:none}summary[data-astro-cid-w7ld43o3]:hover{background:color-mix(in srgb,var(--accent) 6%,var(--bg-sunken))}.sn-strip[data-astro-cid-w7ld43o3]{display:flex;align-items:baseline;gap:.5rem;min-width:0;font-family:var(--mono);font-size:.68rem;letter-spacing:.11em;text-transform:uppercase}.sn-part[data-astro-cid-w7ld43o3]{color:var(--accent);white-space:nowrap}.sn-sep[data-astro-cid-w7ld43o3]{color:var(--fg-faint)}.sn-series[data-astro-cid-w7ld43o3]{color:var(--fg-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sn-chevron[data-astro-cid-w7ld43o3]{flex:none;display:inline-flex;color:var(--fg-faint);transition:transform var(--transition-fast),color var(--transition-fast)}summary[data-astro-cid-w7ld43o3]:hover .sn-chevron[data-astro-cid-w7ld43o3]{color:var(--accent)}.series-nav[data-astro-cid-w7ld43o3][open] .sn-chevron[data-astro-cid-w7ld43o3]{transform:rotate(180deg)}.sn-list[data-astro-cid-w7ld43o3]{list-style:none;margin:0;padding:.25rem .9rem .55rem;border-top:1px dashed var(--border)}.sn-list[data-astro-cid-w7ld43o3] li[data-astro-cid-w7ld43o3]{margin:0}.sn-item[data-astro-cid-w7ld43o3]{display:flex;align-items:baseline;gap:.6rem;padding:.32rem 0;text-decoration:none;color:inherit}.sn-num[data-astro-cid-w7ld43o3]{flex:none;width:1.1rem;font-family:var(--mono);font-size:.72rem;color:var(--fg-faint);text-align:right;font-variant-numeric:tabular-nums}.sn-title[data-astro-cid-w7ld43o3]{font-family:var(--serif);font-size:.93rem;line-height:1.4;color:var(--fg-muted);transition:color var(--transition-fast)}a[data-astro-cid-w7ld43o3].sn-item:hover .sn-title[data-astro-cid-w7ld43o3],li[data-astro-cid-w7ld43o3].current .sn-num[data-astro-cid-w7ld43o3]{color:var(--accent)}li[data-astro-cid-w7ld43o3].current .sn-title[data-astro-cid-w7ld43o3]{color:var(--fg);font-weight:600}.sn-note[data-astro-cid-w7ld43o3]{flex:none;font-family:var(--mono);font-size:.6rem;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 55%,transparent);border-radius:4px;padding:.06rem .38rem;white-space:nowrap;align-self:center}@media(max-width:600px){.sn-series[data-astro-cid-w7ld43o3]{white-space:normal}.sn-strip[data-astro-cid-w7ld43o3]{flex-wrap:wrap;row-gap:.15rem}.sn-note[data-astro-cid-w7ld43o3]{display:none}li[data-astro-cid-w7ld43o3].current .sn-note[data-astro-cid-w7ld43o3]{display:inline-block}}
+</style><style>.cite-as[data-astro-cid-p234urri]{margin:3.5rem 0 0;padding-top:1.5rem;border-top:1px solid var(--border)}.cite-as[data-astro-cid-p234urri] h2[data-astro-cid-p234urri]{font-family:var(--mono);font-size:.82rem;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-faint);font-weight:500;margin:0 0 .75rem}.cite-as[data-astro-cid-p234urri] h3[data-astro-cid-p234urri]{font-family:var(--mono);font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-faint);font-weight:500;margin:1.5rem 0 .6rem}.cite-line[data-astro-cid-p234urri]{font-family:var(--serif);font-size:.98rem;line-height:1.55;color:var(--fg-muted);margin:0 0 .5rem}.cite-line[data-astro-cid-p234urri] em[data-astro-cid-p234urri]{color:var(--fg)}.cite-bib[data-astro-cid-p234urri]{margin:.4rem 0 0;position:relative}.cite-bib[data-astro-cid-p234urri] summary[data-astro-cid-p234urri]{cursor:pointer;font-family:var(--mono);font-size:.78rem;color:var(--fg-muted);padding:.25rem 0;user-select:none}.cite-bib[data-astro-cid-p234urri] summary[data-astro-cid-p234urri]:hover{color:var(--accent)}.cite-bib[data-astro-cid-p234urri] pre[data-astro-cid-p234urri]{margin:.4rem 0 0;padding:.85rem 1rem;background:var(--bg-elev);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;font-size:.82rem;line-height:1.55}.cite-bib[data-astro-cid-p234urri] pre[data-astro-cid-p234urri] code[data-astro-cid-p234urri]{background:transparent;border:0;padding:0}.cite-copy[data-astro-cid-p234urri]{position:absolute;top:2.1rem;right:.55rem;background:var(--bg);border:1px solid var(--border);color:var(--fg-muted);font-family:var(--mono);font-size:.72rem;padding:.25rem .55rem;border-radius:var(--radius-sm);cursor:pointer;transition:color var(--transition-fast),border-color var(--transition-fast)}.cite-copy[data-astro-cid-p234urri]:hover,.cite-copy[data-astro-cid-p234urri].copied{color:var(--accent);border-color:var(--accent)}
+</style></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/archive">archive</a><a href="/blog/map">map</a><a href="/blog/writeups">writeups</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>
+  (() => {
+    const apply = (theme) => {
+      document.documentElement.setAttribute('data-theme', theme);
+      const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+      if (meta) meta.setAttribute('content', theme === 'dark' ? '#0e1116' : '#fbfaf6');
+      // Sync giscus iframe if present
+      const giscus = document.querySelector('iframe.giscus-frame');
+      if (giscus && giscus.contentWindow) {
+        giscus.contentWindow.postMessage(
+          { giscus: { setConfig: { theme: theme === 'dark' ? 'dark' : 'light' } } },
+          'https://giscus.app'
+        );
+      }
+    };
+
+    const init = () => {
+      const btns = document.querySelectorAll('[data-theme-toggle]');
+      btns.forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', () => {
+          const current = document.documentElement.getAttribute('data-theme')
+            || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          const next = current === 'dark' ? 'light' : 'dark';
+          localStorage.setItem('theme', next);
+          apply(next);
+        });
+      });
+    };
+
+    init();
+    document.addEventListener('astro:after-swap', init);
+    document.addEventListener('astro:page-load', init);
+  })();
+</script> </nav> </div> </header> <main id="main">  <div class="reading-progress" data-reading-progress aria-hidden="true"></div> <script>
+  (() => {
+    const init = () => {
+      const bar = document.querySelector('[data-reading-progress]');
+      if (!bar) return;
+      const update = () => {
+        const h = document.documentElement;
+        const scrolled = h.scrollTop;
+        const max = h.scrollHeight - h.clientHeight;
+        const pct = max > 0 ? Math.min(100, (scrolled / max) * 100) : 0;
+        bar.style.width = pct + '%';
+      };
+      // Coalesce scroll events into one paint per frame so fast/touch
+      // scrolling stays smooth.
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => { update(); ticking = false; });
+      };
+      update();
+      window.removeEventListener('scroll', window.__rp_onScroll || (() => {}));
+      window.removeEventListener('resize', window.__rp_onScroll || (() => {}));
+      window.__rp_onScroll = onScroll;
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+    };
+    init();
+    document.addEventListener('astro:page-load', init);
+    document.addEventListener('astro:after-swap', init);
+  })();
+</script> <article data-blog-post data-pagefind-body data-pagefind-meta="date:2026-07-16"> <header class="post-header">  <h1 data-pagefind-meta="title">Reversible Backprop as a custom_vjp in JAX</h1> <p class="meta"> <time datetime="2026-07-16T20:00:00.000Z">July 16, 2026</time>   · 7 min read </p> <p style="margin-top:0.65rem" data-pagefind-meta="tags:integrators,reversibility,memory,jax,flax,nnx,implementation"> <a class="tag" href="/blog/tag/integrators/">#integrators</a><a class="tag" href="/blog/tag/reversibility/">#reversibility</a><a class="tag" href="/blog/tag/memory/">#memory</a><a class="tag" href="/blog/tag/jax/">#jax</a><a class="tag" href="/blog/tag/flax/">#flax</a><a class="tag" href="/blog/tag/nnx/">#nnx</a><a class="tag" href="/blog/tag/implementation/">#implementation</a> </p> </header> <details class="series-nav" data-astro-cid-w7ld43o3><summary data-astro-cid-w7ld43o3><span class="sn-strip" data-astro-cid-w7ld43o3><span class="sn-part" data-astro-cid-w7ld43o3>Part 4 of 4</span><span class="sn-sep" aria-hidden="true" data-astro-cid-w7ld43o3>·</span><span class="sn-series" data-astro-cid-w7ld43o3>Networks as Integrators</span></span><span class="sn-chevron" aria-hidden="true" data-astro-cid-w7ld43o3><svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" data-astro-cid-w7ld43o3><path d="M2.5 4.5 6 8l3.5-3.5" data-astro-cid-w7ld43o3></path></svg></span></summary><ol class="sn-list" data-astro-cid-w7ld43o3><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/skip-connections-are-half-of-newton/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>1</span><span class="sn-title" data-astro-cid-w7ld43o3>Your Skip Connection Is Half of Newton</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/transformers-with-a-velocity-ledger/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>2</span><span class="sn-title" data-astro-cid-w7ld43o3>Transformers With a Velocity Ledger</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/a-network-that-conserves-energy/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>3</span><span class="sn-title" data-astro-cid-w7ld43o3>A Network That Conserves Energy</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/backprop-without-the-memory/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>4</span><span class="sn-title" data-astro-cid-w7ld43o3>Backprop Without the Memory</span><span class="sn-note" data-astro-cid-w7ld43o3>this post's explainer</span></a></li></ol></details> <a class="companion-callout companion" href="/blog/backprop-without-the-memory/" data-astro-cid-x4o4rwnl><span class="cc-icon" aria-hidden="true" data-astro-cid-x4o4rwnl>📖</span><span class="cc-body" data-astro-cid-x4o4rwnl><span class="cc-eyebrow" data-astro-cid-x4o4rwnl>Explainer companion</span><span class="cc-title" data-astro-cid-x4o4rwnl>Backprop Without the Memory</span><span class="cc-lead" data-astro-cid-x4o4rwnl>Want the full intuition first? This is the runnable companion to the explainer.</span></span><span class="cc-cta" data-astro-cid-x4o4rwnl>Read the explainer<span aria-hidden="true" data-astro-cid-x4o4rwnl>→</span></span></a>  
+<p><em>The <a href="/blog/backprop-without-the-memory/">explainer</a> argues that a momentum residual network can be trained without storing its forward pass, because the block inverts. This is the implementation: the exact inverse, the <code>jax.custom_vjp</code> whose backward pass walks the trajectory backward, the XLA instrument that measured 674 MB against a flat 3.2, and the float32 cliff reproduced in twenty lines of numpy. Everything below is <code>scripts/reversible_memory.py</code>, the script the Kaggle run executed (bundle <code>kgl_blog-revmem-v1</code>); code blocks are quoted from it, not paraphrased.</em></p>
+<h2 id="the-block-and-its-undo">The block and its undo<a class="heading-anchor-link" aria-label="Link to heading" href="#the-block-and-its-undo"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>One momentum layer, and the two lines that reverse it:</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> block</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(p, x):</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.tanh(x </span><span style="color:#D73A49;--shiki-dark:#F47067">@</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> p[</span><span style="color:#032F62;--shiki-dark:#96D0FF">&quot;w1&quot;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">] </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> p[</span><span style="color:#032F62;--shiki-dark:#96D0FF">&quot;b1&quot;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">]) </span><span style="color:#D73A49;--shiki-dark:#F47067">@</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> p[</span><span style="color:#032F62;--shiki-dark:#96D0FF">&quot;w2&quot;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">] </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> p[</span><span style="color:#032F62;--shiki-dark:#96D0FF">&quot;b2&quot;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">]</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D;--shiki-dark:#768390"># forward:  v&#39; = MU * v + block(p, x);  x&#39; = x + H_STEP * v&#39;</span></span>
+<span class="line"><span style="color:#6A737D;--shiki-dark:#768390"># inverse:  x  = x&#39; - H_STEP * v&#39;;      v = (v&#39; - block(p, x)) / MU</span></span></code></pre>
+<p>The inverse needs nothing but the endpoint and the same <code>block</code>. That is the entire storage story: if the backward pass can call these two lines, it does not need the forward pass to have banked anything.</p>
+<h2 id="the-custom_vjp-that-recomputes-instead-of-remembering">The custom_vjp that recomputes instead of remembering<a class="heading-anchor-link" aria-label="Link to heading" href="#the-custom_vjp-that-recomputes-instead-of-remembering"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>JAX lets a function declare its own backward rule. The forward rule saves <em>only the output state</em> as residuals, a constant amount of memory at any depth. The backward rule then reconstructs each layer’s input by inversion, and having just recovered it, backprops through that one layer with an ordinary <code>jax.vjp</code>, accumulating parameter gradients as it walks:</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6F42C1;--shiki-dark:#DCBDFB">@jax.custom_vjp</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> rev_forward</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(p, x0, v0, L_arr):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    L </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> L_arr.shape[</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">]</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> fwd_scan(p, x0, v0, L)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> rev_fwd</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(p, x0, v0, L_arr):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    out </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> rev_forward(p, x0, v0, L_arr)</span></span>
+<span class="line"><span style="color:#6A737D;--shiki-dark:#768390">    # residuals: ONLY the output state (constant in depth), never the trajectory</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> out, (p, out[</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">], out[</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">], L_arr)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> rev_bwd</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(res, g):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    p, xL, vL, L_arr </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> res</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    gx, gv </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> g</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> back</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(carry, _):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        x_next, v_next, gx_n, gv_n, gp </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> carry</span></span>
+<span class="line"><span style="color:#6A737D;--shiki-dark:#768390">        # invert one layer to recover its input</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        x_prev </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> x_next </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> H_STEP</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> v_next</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        f_val, f_vjp </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jax.vjp(</span><span style="color:#D73A49;--shiki-dark:#F47067">lambda</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> pp, xx: block(pp, xx), p, x_prev)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        v_prev </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (v_next </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> f_val) </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> MU</span></span>
+<span class="line"><span style="color:#6A737D;--shiki-dark:#768390">        # backprop the same layer given recovered inputs</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        gv_local </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> gv_n </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> H_STEP</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> gx_n</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        gp_f, gx_f </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> f_vjp(gv_local)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        gx_p </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> gx_n </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> gx_f</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        gv_p </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> MU</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> gv_local</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        gp </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jax.tree.map(jnp.add, gp, gp_f)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (x_prev, v_prev, gx_p, gv_p, gp), </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">None</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    gp0 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jax.tree.map(jnp.zeros_like, p)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    (x0r, v0r, gx0, gv0, gp), _ </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jax.lax.scan(</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        back, (xL, vL, gx, gv, gp0), </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">None</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">length</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">L_arr.shape[</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">])</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> gp, gx0, gv0, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">None</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">rev_forward.defvjp(rev_fwd, rev_bwd)</span></span></code></pre>
+<p>Two details carry the memory claim. The residual tuple in <code>rev_fwd</code> holds the endpoint and the parameters, nothing indexed by depth. And the backward <code>lax.scan</code> re-derives <code>x_prev</code> before calling <code>f_vjp</code>, so the local VJP always has the input it needs without anyone having stored it. The bookkeeping through the ledger, <code>gv_local = gv_n + H_STEP * gx_n</code> and <code>gv_p = MU * gv_local</code>, is just the chain rule of the two forward lines, written by hand once.</p>
+<figure class="jax-fig jax-fig-wide"><img src="/revmem-ledger.gif" alt="Two lanes of layer cells animated through one training step: the standard lane banks an activation per layer and its memory meter climbs; the reversible lane carries a single moving state and its meter stays flat; meters labeled with the measured 674.0 and 3.2 MB at depth 512" loading="lazy"/><figcaption>The two disciplines, one training step. The standard lane’s bank fills during the forward sweep and drains during the backward; the reversible lane never holds more than one state. Meters carry the run’s measured activation memory at depth 512.</figcaption></figure>
+<h2 id="measuring-memory-honestly">Measuring memory honestly<a class="heading-anchor-link" aria-label="Link to heading" href="#measuring-memory-honestly"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Peak memory is easy to measure wrong. Two disciplines from the run. First, each (depth, mode) point runs in a <em>fresh process</em>, because the allocator’s <code>peak_bytes_in_use</code> is a process-lifetime high-water mark and later measurements inherit earlier peaks. Second, alongside the runtime allocator, the run reads XLA’s static analysis of the compiled step, which reports exactly how much scratch the executable reserves:</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">compiled </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> g.lower(p).compile()</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">temp_mb </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> compiled.memory_analysis().temp_size_in_bytes </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 1e6</span></span></code></pre>
+<p>The two instruments agree on the story:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>depth</th><th>standard temp</th><th>reversible temp</th><th>standard step</th><th>reversible step</th></tr></thead><tbody><tr><td>8</td><td>13.4 MB</td><td>3.2 MB</td><td>1.9 ms</td><td>2.3 ms</td></tr><tr><td>32</td><td>44.8 MB</td><td>3.2 MB</td><td>6.1 ms</td><td>7.4 ms</td></tr><tr><td>128</td><td>170.7 MB</td><td>3.2 MB</td><td>22.7 ms</td><td>27.2 ms</td></tr><tr><td>512</td><td>674.0 MB</td><td>3.2 MB</td><td>83.0 ms</td><td>103.1 ms</td></tr></tbody></table>
+<figure class="jax-fig"><img src="/revmem-wall.png" alt="Log-log plot of activation memory against depth: the standard line climbs linearly from 13.4 to 674 MB while the reversible line is flat at 3.2 MB" loading="lazy"/><figcaption>The wall, measured by XLA’s own analysis of each compiled step. Standard backprop’s scratch grows linearly in depth; the reversible pass does not know how deep the network is.</figcaption></figure>
+<p>The time column is the price: the backward pass runs <code>block</code> once more per layer, and at depth 512 that costs 24%. Recompute for memory, the same trade RevNets built into their architecture (Gomez et al., 2017), paid here by the integrator’s own inverse (Sander et al., 2021).</p>
+<h2 id="the-cliff-in-numpy-float32">The cliff, in numpy float32<a class="heading-anchor-link" aria-label="Link to heading" href="#the-cliff-in-numpy-float32"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The explainer’s noise budget says the rewind amplifies float error by <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>1</mn><mi mathvariant="normal">/</mi><mi>μ</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(1/\mu)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mopen">(</span><span class="mord">1/</span><span class="mord mathnormal">μ</span><span class="mclose">)</span></span></span></span> per layer. You do not need a GPU to watch that happen; you need <code>np.float32</code> and the same twenty lines:</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> rewind</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(F, xL, vL, mu, L):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    mu </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.float32(mu)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    x, v </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> xL.astype(np.float32), vL.astype(np.float32)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    for</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> _ </span><span style="color:#D73A49;--shiki-dark:#F47067">in</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> range</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(L):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        x </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (x </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> v).astype(np.float32)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        v </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> ((v </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> field(F, x)) </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> mu).astype(np.float32)</span></span></code></pre>
+<figure class="jax-fig jax-fig-wide"><img src="/revmem-rewind-shear.gif" alt="Three panels, mu 0.9, 0.6, 0.3: blue forward trajectories through 64 float32 momentum layers, then orange reconstructed states rewound from the endpoint; at 0.9 the dots land on the trails, at 0.6 they deviate visibly, at 0.3 they scatter with error 1e10" loading="lazy"/><figcaption>The same rewind at three frictions, real float32 arithmetic. At mu = 0.9 the reconstruction lands on every footprint (error 4e-05 over 64 layers). At 0.6 it visibly shears. At 0.3 the error reaches ten billion: the algebra is exact and the arithmetic is not.</figcaption></figure>
+<p>And the growth is not vaguely exponential, it is the <em>predicted</em> exponential. Plotting the reconstruction error as the rewind proceeds, against the budget <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>ε</mi><mn>32</mn></msub><mo stretchy="false">(</mo><mn>1</mn><mi mathvariant="normal">/</mi><mi>μ</mi><msup><mo stretchy="false">)</mo><mi mathvariant="normal">ℓ</mi></msup></mrow><annotation encoding="application/x-tex">\varepsilon_{32} (1/\mu)^{\ell}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0991em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathnormal">ε</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">32</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord">1/</span><span class="mord mathnormal">μ</span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">ℓ</span></span></span></span></span></span></span></span></span></span></span></span> drawn dashed:</p>
+<figure class="jax-fig jax-fig-wide"><img src="/revmem-error-growth.gif" alt="Log-scale reconstruction error growing with each backward step for mu 0.9, 0.6, 0.3, each measured curve running parallel to its dashed predicted budget line" loading="lazy"/><figcaption>Reconstruction error, measured at every backward step (solid) against the noise budget (dashed), one color per friction. Each curve rides its prediction’s slope. The budget is not a bound, it is the mechanism.</figcaption></figure>
+<p>On the full network the run measures gradient agreement (cosine between the rewind gradient and the stored-activation gradient on identical weights and batch): 1.000000 everywhere the budget is small, 0.30 at <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>μ</mi><mo>=</mo><mn>0.6</mn></mrow><annotation encoding="application/x-tex">\mu = 0.6</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em"></span><span class="mord mathnormal">μ</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">0.6</span></span></span></span>, depth 32, where the budget crosses one, and nan at <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>μ</mi><mo>=</mo><mn>0.3</mn></mrow><annotation encoding="application/x-tex">\mu = 0.3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em"></span><span class="mord mathnormal">μ</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">0.3</span></span></span></span>, depth 128, where the budget is <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mn>10</mn><mn>66</mn></msup></mrow><annotation encoding="application/x-tex">10^{66}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">66</span></span></span></span></span></span></span></span></span></span></span></span>.</p>
+<figure class="jax-fig"><img src="/revmem-cliff.png" alt="Gradient cosine against depth for three mus with dashed verticals at each mu's predicted death depth; measured cliffs align with predictions" loading="lazy"/><figcaption>Where the gradient dies, measured against the napkin prediction L* = ln(1/eps)/ln(1/mu) drawn before looking. Inside the budget the rewind gradient is exact to float precision; outside it there is nothing to rescue.</figcaption></figure>
+<h2 id="training-on-the-rewind">Training on the rewind<a class="heading-anchor-link" aria-label="Link to heading" href="#training-on-the-rewind"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Inside the budget the two gradients are the same numbers, so training should be indistinguishable up to noise, and the run checks at depth 64, <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>μ</mi><mo>=</mo><mn>0.9</mn></mrow><annotation encoding="application/x-tex">\mu = 0.9</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em"></span><span class="mord mathnormal">μ</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">0.9</span></span></span></span>: standard 81.6% test accuracy, reversible 79.7%, one seed each, reversible 17% slower on the wall. The <a href="/blog/backprop-without-the-memory/">explainer</a> closes the loop with the architectural moral: the amplification exists because <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>μ</mi><mo>&lt;</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">\mu &lt; 1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7335em;vertical-align:-0.1944em"></span><span class="mord mathnormal">μ</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">&lt;</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">1</span></span></span></span>, and the <a href="/blog/a-network-that-conserves-energy">frictionless leapfrog block</a> rewinds by subtraction alone, no division, no budget, no cliff.</p>
+<p><em>Every number above is from <code>scripts/reversible_memory.py</code> run on Kaggle (bundle <code>kgl_blog-revmem-v1</code>); the float32 demonstrations are rendered by <code>scripts/render_revmem_gifs.py</code> from the same arithmetic the panels run live.</em></p>
+<section class="cite-as" aria-labelledby="cite-backprop-without-the-memory-jax-flax-nnx" data-astro-cid-p234urri> <h2 id="cite-backprop-without-the-memory-jax-flax-nnx" data-astro-cid-p234urri>Cite as</h2> <p class="cite-line" data-astro-cid-p234urri>
+Bouhsine, T. (<time datetime="2026-07-16T00:00:00.000Z" data-astro-cid-p234urri>2026, July 16</time>).
+<em data-astro-cid-p234urri>Reversible Backprop as a custom_vjp in JAX</em>. Records of the !mmortal Data Scientist.
+<a href="https://tahabouhsine.com/blog/backprop-without-the-memory-jax-flax-nnx/" data-astro-cid-p234urri>https://tahabouhsine.com/blog/backprop-without-the-memory-jax-flax-nnx/</a> </p> <details class="cite-bib" data-astro-cid-p234urri> <summary data-astro-cid-p234urri>BibTeX</summary> <pre data-astro-cid-p234urri><code class="bibtex" data-astro-cid-p234urri>@misc{bouhsine2026backpropwithoutthememoryjaxflaxnnx,
+  author       = {Bouhsine, Taha},
+  title        = {Reversible Backprop as a custom_vjp in JAX},
+  year         = {2026},
+  month        = {jul},
+  howpublished = {\url{https://tahabouhsine.com/blog/backprop-without-the-memory-jax-flax-nnx/}},
+  note         = {Blog post, Records of the !mmortal Data Scientist}
+}</code></pre> <button type="button" class="cite-copy" data-copy="@misc{bouhsine2026backpropwithoutthememoryjaxflaxnnx,
+  author       = {Bouhsine, Taha},
+  title        = {Reversible Backprop as a custom_vjp in JAX},
+  year         = {2026},
+  month        = {jul},
+  howpublished = {\url{https://tahabouhsine.com/blog/backprop-without-the-memory-jax-flax-nnx/}},
+  note         = {Blog post, Records of the !mmortal Data Scientist}
+}" aria-label="Copy BibTeX" data-astro-cid-p234urri>copy</button> </details>  </section>  <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('.cite-copy').forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(btn.dataset.copy || '');
+            const original = btn.textContent;
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = original;
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>  <section class="references" aria-labelledby="references-heading" data-astro-cid-rn7nvbl4><h2 id="references-heading" data-astro-cid-rn7nvbl4>References</h2><ol data-astro-cid-rn7nvbl4><li id="ref-1" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Gomez, A. N., Ren, M., Urtasun, R., Grosse, R. B.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2017)</span>. <a class="ref-title" href="https://arxiv.org/abs/1707.04585" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>The Reversible Residual Network: Backpropagation Without Storing Activations</a>.
+<a class="ref-ext" href="https://arxiv.org/abs/1707.04585" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:1707.04585</a></li><li id="ref-2" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Sander, M. E., Ablin, P., Blondel, M., Peyré, G.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2021)</span>. <a class="ref-title" href="https://arxiv.org/abs/2102.07870" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>Momentum Residual Neural Networks</a>.
+<a class="ref-ext" href="https://arxiv.org/abs/2102.07870" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:2102.07870</a></li></ol></section> </article> <script>(function(){const payload = {"post_title":"Reversible Backprop as a custom_vjp in JAX","post_slug":"backprop-without-the-memory-jax-flax-nnx","post_path":"/blog/backprop-without-the-memory-jax-flax-nnx/","post_tags":"integrators,reversibility,memory,jax,flax,nnx,implementation","word_count":1361,"reading_time_minutes":7,"is_draft":false};
+
+  (() => {
+    const thresholds = [25, 50, 75, 90, 100];
+    const state = { viewed: false, sent: new Set() };
+
+    const track = (name, params = {}) => {
+      if (typeof window.__trackGA === 'function') {
+        window.__trackGA(name, {
+          ...payload,
+          ...params,
+          non_interaction: name === 'blog_post_view',
+        });
+      }
+    };
+
+    const init = () => {
+      const article = document.querySelector('[data-blog-post]');
+      if (!article) return;
+
+      if (!state.viewed) {
+        state.viewed = true;
+        track('blog_post_view');
+      }
+
+      const progress = () => {
+        const rect = article.getBoundingClientRect();
+        const articleTop = window.scrollY + rect.top;
+        const articleHeight = Math.max(1, article.offsetHeight);
+        const viewportBottom = window.scrollY + window.innerHeight;
+        return Math.max(0, Math.min(100, ((viewportBottom - articleTop) / articleHeight) * 100));
+      };
+
+      const update = () => {
+        const pct = progress();
+        thresholds.forEach((threshold) => {
+          if (pct >= threshold && !state.sent.has(threshold)) {
+            state.sent.add(threshold);
+            track('blog_post_read_depth', { read_percent: threshold });
+            if (threshold === 90) {
+              track('blog_post_read', { read_percent: threshold });
+            }
+          }
+        });
+      };
+
+      if (window.__postAnalyticsCleanup) window.__postAnalyticsCleanup();
+
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => {
+          update();
+          ticking = false;
+        });
+      };
+
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+      window.__postAnalyticsCleanup = () => {
+        window.removeEventListener('scroll', onScroll);
+        window.removeEventListener('resize', onScroll);
+      };
+      update();
+    };
+
+    init();
+    document.addEventListener('astro:page-load', init, { once: true });
+  })();
+})();</script> <aside class="related" aria-labelledby="related-heading" data-astro-cid-dpgbfi7r><h2 id="related-heading" data-astro-cid-dpgbfi7r>Related posts</h2><ul data-astro-cid-dpgbfi7r><li data-astro-cid-dpgbfi7r><a href="/blog/a-network-that-conserves-energy-jax-flax-nnx/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>Building the Energy-Conserving Net in JAX/Flax NNX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion to the energy-conservation post: the HNN pendulum field as the symplectic gradient of one learned scalar, the plain field model it beats on drift, and the leapfrog classifier whose residual block is a kick-drift-kick step of a learned potential, all as Flax NNX modules with lax.scan doing depth. Every figure is rendered from the real Kaggle run.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-07-16T17:00:00.000Z" data-astro-cid-dpgbfi7r>Jul 16, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/backprop-without-the-memory/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>Backprop Without the Memory</span><span class="related-desc" data-astro-cid-dpgbfi7r>Training memory is a tax nobody chose: backprop must hold every activation of the forward pass hostage until the backward pass consumes it, so depth costs memory even when it costs little compute. This post spends the invertibility this series proved two posts ago: a momentum residual block can be run backward, so the backward pass can recompute the past instead of storing it. Measured on the same network, standard backprop&#39;s activation memory grows from 13 MB to 674 MB as depth goes 8 to 512; the reversible pass holds flat at 3.2 MB, pays 24% in step time, and returns the same gradient, until a one-line arithmetic of friction and float noise says it cannot.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-07-16T19:00:00.000Z" data-astro-cid-dpgbfi7r>Jul 16, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/survival-model-on-trial-jax-flax-nnx/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>Running the Survival Trial, in JAX/Flax NNX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion to the survival-model trial: the Yat DeepSurv trunk in Flax NNX, the Cox partial-likelihood loss, an LR-fair per-model training loop with best-epoch selection, the concordance / integrated-Brier / time-dependent-AUC evaluation, and the classical baselines wired through sksurv and lifelines. Every figure is a real number from a real run across five datasets, with the prototypes and the risk stratification captured as they form over training.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-07-09T17:00:00.000Z" data-astro-cid-dpgbfi7r>Jul 9, 2026</time></span></a></li></ul></aside> <nav class="post-nav" aria-label="Adjacent posts"><a href="/blog/backprop-without-the-memory/" class="prev" rel="prev"><div class="label">← Explainer</div><div class="title">Backprop Without the Memory</div></a><span></span></nav> <script data-astro-rerun>(function(){const postSlug = "backprop-without-the-memory-jax-flax-nnx";
+const lastRead = {"slug":"backprop-without-the-memory-jax-flax-nnx","title":"Reversible Backprop as a custom_vjp in JAX","series":"Networks as Integrators","part":4,"total":4};
+
+    try {
+      const raw = JSON.parse(localStorage.getItem('read-posts') || '[]');
+      const read = (Array.isArray(raw) ? raw : []).filter((s) => s !== postSlug);
+      read.push(postSlug);
+      while (read.length > 200) read.shift();
+      localStorage.setItem('read-posts', JSON.stringify(read));
+      if (lastRead) localStorage.setItem('last-read', JSON.stringify(lastRead));
+    } catch {}
+  })();</script> <section aria-label="Comments" id="giscus-mount" style="margin-top:3rem" data-giscus="{&#34;repo&#34;:&#34;mlnomadpy/blog&#34;,&#34;repoId&#34;:&#34;MDEwOlJlcG9zaXRvcnk0MDQ4MzY2NDU=&#34;,&#34;category&#34;:&#34;Announcements&#34;,&#34;categoryId&#34;:&#34;DIC_kwDOGCFRJc4C9EiR&#34;,&#34;mapping&#34;:&#34;pathname&#34;,&#34;reactionsEnabled&#34;:&#34;1&#34;,&#34;emitMetadata&#34;:&#34;0&#34;,&#34;inputPosition&#34;:&#34;top&#34;,&#34;theme&#34;:&#34;preferred_color_scheme&#34;,&#34;lang&#34;:&#34;en&#34;}"></section><script>
+    (() => {
+      const load = () => {
+        const mount = document.getElementById('giscus-mount');
+        if (!mount || mount.dataset.loaded === '1') return;
+        const cfg = JSON.parse(mount.dataset.giscus);
+        const theme = document.documentElement.getAttribute('data-theme')
+          || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        const s = document.createElement('script');
+        s.src = 'https://giscus.app/client.js';
+        s.async = true;
+        s.crossOrigin = 'anonymous';
+        const attrs = {
+          'data-repo': cfg.repo,
+          'data-repo-id': cfg.repoId,
+          'data-category': cfg.category,
+          'data-category-id': cfg.categoryId,
+          'data-mapping': cfg.mapping,
+          'data-strict': '0',
+          'data-reactions-enabled': cfg.reactionsEnabled,
+          'data-emit-metadata': cfg.emitMetadata,
+          'data-input-position': cfg.inputPosition,
+          'data-theme': theme,
+          'data-lang': cfg.lang,
+          'data-loading': 'lazy',
+        };
+        for (const k in attrs) s.setAttribute(k, attrs[k]);
+        mount.appendChild(s);
+        mount.dataset.loaded = '1';
+      };
+      load();
+      document.addEventListener('astro:page-load', load);
+      document.addEventListener('astro:after-swap', load);
+    })();
+  </script> <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('pre').forEach((pre) => {
+        if (pre.dataset.copyEnhanced) return;
+        pre.dataset.copyEnhanced = '1';
+        const btn = document.createElement('button');
+        btn.className = 'code-copy';
+        btn.type = 'button';
+        btn.textContent = 'copy';
+        btn.setAttribute('aria-label', 'Copy code');
+        btn.addEventListener('click', async () => {
+          const code = pre.querySelector('code');
+          const text = (code ? code.innerText : pre.innerText) || '';
+          try {
+            await navigator.clipboard.writeText(text);
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = 'copy';
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+        pre.appendChild(btn);
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>  </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span class="site-footer__links"> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> <a class="site-footer__support" href="https://buymeacoffee.com/mlnomadpy" target="_blank" rel="noopener noreferrer" aria-label="Support this blog on Buy Me a Coffee">
+buy me a coffee
+</a> </span> </footer> <div id="consent-banner" class="consent-banner" role="dialog" aria-live="polite" aria-label="Analytics consent" hidden><p class="consent-text">
+I use Google Analytics to see which posts get read. It sets cookies only
+      if you accept. No ads, no selling data.
+</p><div class="consent-actions"><button type="button" id="consent-decline" class="consent-btn consent-decline">Decline</button><button type="button" id="consent-accept" class="consent-btn consent-accept">Accept</button></div></div>
+
+  <script>
+    (() => {
+      const KEY = 'analytics-consent';
+      const setup = () => {
+        const banner = document.getElementById('consent-banner');
+        if (!banner) return;
+        let choice = null;
+        try { choice = localStorage.getItem(KEY); } catch (e) {}
+        // Already decided → keep hidden.
+        if (choice === 'granted' || choice === 'denied') { banner.hidden = true; return; }
+        banner.hidden = false;
+
+        const decide = (value) => {
+          try { localStorage.setItem(KEY, value); } catch (e) {}
+          banner.hidden = true;
+          if (value === 'granted' && typeof window.__loadGA === 'function') window.__loadGA();
+        };
+        const accept = document.getElementById('consent-accept');
+        const decline = document.getElementById('consent-decline');
+        if (accept && !accept.dataset.bound) {
+          accept.dataset.bound = '1';
+          accept.addEventListener('click', () => decide('granted'));
+        }
+        if (decline && !decline.dataset.bound) {
+          decline.dataset.bound = '1';
+          decline.addEventListener('click', () => decide('denied'));
+        }
+      };
+      setup();
+      document.addEventListener('astro:page-load', setup);
+    })();
+  </script>
+
+  <style>
+    /* Author `display:flex` below would otherwise override the UA [hidden]
+       rule, leaving the banner visible after a choice. This wins on specificity. */
+    .consent-banner[hidden] { display: none !important; }
+    .consent-banner {
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      right: 1rem;
+      max-width: 30rem;
+      margin-left: auto;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+      padding: 0.95rem 1.1rem;
+      background: var(--bg-elev, #fff);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      font-family: var(--sans);
+    }
+    .consent-text {
+      margin: 0;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: var(--fg-muted);
+    }
+    .consent-actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+    }
+    .consent-btn {
+      font-family: var(--sans);
+      font-size: 0.82rem;
+      padding: 0.4rem 0.95rem;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    }
+    .consent-decline {
+      background: transparent;
+      color: var(--fg-muted);
+    }
+    .consent-decline:hover { color: var(--fg); border-color: var(--fg-faint); }
+    .consent-accept {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg);
+      font-weight: 600;
+    }
+    .consent-accept:hover { filter: brightness(1.05); }
+    @media (max-width: 520px) {
+      .consent-banner { left: 0.6rem; right: 0.6rem; bottom: 0.6rem; }
+    }
+  </style> <script>
+      // Inject a fullscreen toggle button onto every .viz figure on the page.
+      (() => {
+        const ENTER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10V4h6"/><path d="M20 10V4h-6"/><path d="M4 14v6h6"/><path d="M20 14v6h-6"/></svg>';
+        const EXIT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H4v6"/><path d="M14 4h6v6"/><path d="M10 20H4v-6"/><path d="M14 20h6v-6"/></svg>';
+        const inFs = () => document.fullscreenElement || document.webkitFullscreenElement;
+        const enhance = () => {
+          document.querySelectorAll('.viz').forEach((fig) => {
+            if (fig.dataset.fsReady) return;
+            fig.dataset.fsReady = '1';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'viz-fs-btn';
+            btn.setAttribute('aria-label', 'Toggle fullscreen');
+            btn.innerHTML = ENTER_SVG + '<span>fullscreen</span>';
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              try {
+                if (inFs() === fig) {
+                  await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen?.());
+                } else if (fig.requestFullscreen) {
+                  await fig.requestFullscreen();
+                } else if (fig.webkitRequestFullscreen) {
+                  await fig.webkitRequestFullscreen();
+                }
+              } catch (_) {}
+            });
+            fig.appendChild(btn);
+          });
+          const sync = () => {
+            document.querySelectorAll('.viz-fs-btn').forEach((b) => {
+              const fig = b.parentElement;
+              const open = inFs() === fig;
+              b.innerHTML = (open ? EXIT_SVG : ENTER_SVG) + '<span>' + (open ? 'exit' : 'fullscreen') + '</span>';
+            });
+          };
+          document.addEventListener('fullscreenchange', sync);
+          document.addEventListener('webkitfullscreenchange', sync);
+        };
+        enhance();
+        document.addEventListener('astro:page-load', enhance);
+        document.addEventListener('astro:after-swap', enhance);
+      })();
+    </script> </body> </html>
