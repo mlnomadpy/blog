@@ -104,6 +104,7 @@ testable prediction about trained hidden states.
 | --- | --- | --- |
 | live | skip-connections-are-half-of-newton | momentum-resnet-jax-flax-nnx |
 | live | transformers-with-a-velocity-ledger | transformers-with-a-velocity-ledger-jax-flax-nnx |
+| live | a-network-that-conserves-energy | a-network-that-conserves-energy-jax-flax-nnx |
 
 ---
 
@@ -294,6 +295,46 @@ PathLengthBars, ResidualStreamPath, PathStraightens, VelocityThroughDepth
 velocity-ledger dictionary from D1; new-derived: depth telemetry (path length +
 turning angle per sub-update) as an instrument.
 
+### D3. a-network-that-conserves-energy  (LIVE, 2026-07-16; + companion)
+Title: "A Network That Conserves Energy." The symplectic entry of the Arc D
+catalog (Greydanus et al. 2019 HNN + a leapfrog residual block). Part A: fit a
+pendulum's field two ways from the same arrows (`scripts/hamiltonian_net.py`,
+Kaggle, bundle `kgl_blog-hamiltonian-v2`): a free 2-output MLP (MSE 4.4e-05)
+vs an HNN (one scalar H, field = its rotated gradient; MSE 3.1e-05, the
+constraint is information). Integrated: free field drifts **36%** of E0, HNN
+holds **0.6%** (the rollout drift is a chaotic functional of the fit, run-
+sensitive; the ~60x structural gap is the claim, and prose numbers must match
+the shipped bundle whose weights the panels run). dH/dt = 0 identically by
+antisymmetry: a loss says please, the architecture says cannot. Part B: hidden
+state (q,p) in R^4 each, block = kick-drift-kick leapfrog of a learned V(q),
+h = T/L, weight-tied, plain GD. Scoreboard (3 seeds, parameter-matched plain
+residual net): moons 100.0/99.9, rings 100.0/99.9, spirals 98.8 vs 92.9±5.4
+(free net ahead, stated straight; existence proof). What the law buys: (1) the
+learned energy is a row the plain net does not possess (undefined, not
+unmeasured), held in an **h² band**: 0.05-0.19 at L=16 collapsing to
+0.003-0.011 at L=64, a x16-22 shrink for a x4 step refinement, the textbook
+second-order signature measured inside a trained classifier; (2) **depth =
+resolution**: trained at 16, run at 64, plain drops spirals 98.8->68.0 and
+rings 100->86 while leapfrog holds 92.9->92.4 and 99.8->99.8; BOTH nets are
+weight-tied, so the extrapolation lives in the integrator (fixed T, steps
+that mean time), not the tying, sharpening C5's lesson; (3) leapfrog is
+algebraically invertible (tees D4). Does NOT buy: accuracy, or a state-norm
+bound (both nets' RMS grows, stated). Physics bridge: marble-on-terrain
+dictionary table; V is the series' landscape world made into the model itself.
+Four fresh live panels running the real exported weights (hamnet.js):
+PendulumRace (both fields integrated live, draggable start, pre-integrated
+first paint), LearnedEnergyMap (banded H landscape, click to drop on a level
+set), DepthLedger (state clouds through depth + the energy row only one net
+has), FinerTime (live accuracy + boundary re-render at depths 4->128).
+Companion (code verified by `hamiltonian_nnx_check.py`, Kaggle CPU): HNNField /
+PlainField / LeapfrogNet in NNX, depth as lax.scan; 4 GIFs from the run
+(pendulum race, level-set ride, state clouds with the undefined-row readout,
+boundary sweep 4->128). Gotcha recorded: v1 exported an unshuffled
+single-class viz sample; v2 fixed (balanced perm). Spends: depth=time (D1),
+existence-proof framing; new-derived: conservation-by-construction,
+symplectic/leapfrog block, h² shadow-Hamiltonian band, depth-as-resolution
+extrapolation, learned-energy-as-missing-row.
+
 ## 4. Concept ledger (what is already spent, do not re-explain)
 
 | concept | established in |
@@ -334,6 +375,8 @@ turning angle per sub-update) as an instrument.
 | exact closed-form cohort deletion on dense covariates (delta h = -a_u phi_u(x)); "exact and local" vs "provably unchanged"; kernel-max OOD on tabular clinical data | C7 |
 | the O(n³) Gram solve is plumbing not the deal; solve-vs-descend equivalence of one kernel (r=0.95); the three walls a solve dies at (memory / scale / composition); random features (Rahimi-Recht) as the historical escape that kept the gradient step by dropping the kernel object | C9 |
 | depth-telemetry as an instrument (residual-stream path length + per-sub-update turning angle through depth); pre-norm Transformer residual = forward Euler so D1's dictionary transfers; nGPT as first-order-on-a-sphere | D2 |
+| conservation by construction (HNN: field = rotated gradient of a learned scalar, dH/dt = 0 identically, "a loss says please, the architecture says cannot"); the free-field drift diagnosis (errors need a direction to leak; level sets remove it) | D3 |
+| symplectic/leapfrog residual block (kick-drift-kick of a learned potential, state (q,p), h=T/L); the h² shadow-Hamiltonian band measured in a trained net; depth-as-resolution extrapolation (fixed T; the integrator not weight-tying is what survives); learned energy as the missing row (undefined vs unmeasured); marble-on-terrain dictionary table | D3 |
 
 Reuse these only by reference (link the prior post), never by re-derivation.
 
@@ -342,6 +385,16 @@ Reuse these only by reference (link the prior post), never by re-derivation.
 ## 5. Open threads / candidate next posts
 
 **Redundancy watch (2026-07-16 audit).** The ledger discipline is holding: shared concepts are mostly reused by link, not re-derived (C4 credits C3's ladder and the shared 83.2/85.7 numbers by reference; not-all-infinities uses orthogonality as an *analogy* for the KL singularity, a distinct argument). Two live items to fix rather than grow: (a) `welch-bound-good-latent-space` re-states the opposition-collapses-a-dimension / orthogonality-is-the-real-target claim that `opposite-is-not-different` owns, with no cross-link (a one-clause credit closes it; done 2026-07-16). (b) The negation/possessive title families are near saturation (see the title-pattern watch in §1). No true duplicate post exists. The root cause of Arc A re-derivation was that the concept ledger had no Arc A ownership rows; those are now added (see §4).
+
+**Active build queue (opened 2026-07-16; status 2026-07-16 evening).** Four posts committed, sequenced. Kaggle launches work from this workspace (auth = access_token; kgl.py in the skill dir). Status:
+- **D3 ~done:** run v1 complete (bundle `kgl_blog-hamiltonian-v1`); explainer `a-network-that-conserves-energy` fully drafted and REWRITTEN to the style guide (question-driven, marble-on-terrain dictionary table, h² surprise promoted); 4 live panels (PendulumRace, LearnedEnergyMap, DepthLedger, FinerTime + `hamnet.js`), vizcheck 0/0; companion + NNX check (`hamiltonian_nnx_check.py`, ran green on Kaggle) + 4 GIFs rendered. Headline numbers: pendulum drift 9.6% plain vs 0.2% HNN; acc parity (spirals 98.8 vs 92.9±5.4, plain ahead, stated straight); 4L extrapolation spirals 68.0% plain vs 92.4% ham; energy band shrinks x16-22 when h shrinks x4 (the h² signature). KNOWN FIX IN FLIGHT: v1 exported a single-class viz sample (unshuffled Xte[:400]); v2 rerun (`blog-hamiltonian-v2`) with balanced sample is running; then re-export (`export_hamiltonian_viz.py` points at v2), re-render 2 GIFs, final screenshot pass, publish.
+- **D4 validated:** `scripts/reversible_memory.py` smoke green (`kgl_blog-revmem-smoke2`): XLA temp memory 13.4->44.8 MB standard vs FLAT 3.2 MB reversible; grad cosine 1.000000 with rel err tracking (1/mu)^L; trains to identical acc. Full run queued behind v2 (GPU cap 2).
+- **D5 scripted:** `scripts/adaptive_depth.py` (step-doubling adaptive renderer on the trained D3-style leapfrog net; fidelity/effort-histogram/difficulty-correlation/acc-vs-mean-steps). Smoke running on CPU kernel (`blog-adaptive-smoke2`).
+- **BxC scripted:** `scripts/yat_attention.py` (softmax vs Yat-kernel score slot, no softmax needed since kappa>=0: weights = kappa/sum kappa; telemetry: bounded scores + kernel-mass AUROC vs correctness). Needs smoke then full (GPU).
+1. **D3 - "A Network That Conserves Energy" (Hamiltonian nets, Greydanus 2019).** Hidden state (q,p); block = symplectic/leapfrog step of a learned scalar energy, so energy is conserved by construction. Existence proof: matches a plain ResNet on moons/rings/spirals while its learned energy stays flat through depth and the plain net's drifts, plus stability when depth is pushed past training (fixed T, h=T/L). Physics anchor: pendulum, HNN energy drift ~0 vs a plain MLP field. Experiment script written: `scripts/hamiltonian_net.py` (compiles; awaiting Kaggle run -> `public/hamiltonian-net/{physics,networks,results}.json`). Then explainer (4 fresh viz: pendulum energy-drift race, the (q,p) phase portrait through depth, energy-trace-through-depth plain-vs-ham, depth-extrapolation stability) + companion (GIFs: rollout energy holding vs leaking, phase-space area preserved, energy flat through depth).
+2. **D4 - "Backprop Without the Memory" (reversible nets, O(1)-memory training).** D1's exact invertibility (rewind by dividing by mu) lets you recompute activations backward instead of storing them: peak memory flat in depth vs linear, at matched accuracy; reconstruction error IS D1's (1/mu)^L float-noise budget, now load-bearing.
+3. **D5 - "Depth on Demand" (adaptive-step / learned computation time).** Ties C5's residual-halting to Arc D: an adaptive-step integrator spends more steps on hard inputs; steps-to-tolerance correlates with difficulty, accuracy holds while average depth drops.
+4. **BxC - "Attention Is a Compatibility Kernel" (Yat attention).** `why-attention-needs-qk-projections` closes on exactly `s_ij = kappa(f_Q(x_i), f_K(x_j))`: kernelize the compatibility BETWEEN roles (asymmetry kept via f_Q != f_K). Yat kernel in the score slot: bounded scores, prototypes in token space, heads that abstain; SLAY (arXiv 2602.04915, Yat kernel + positive random features) makes it linear-time. Bridges Arc B and Arc C. Existence-proof framing (see the yat-program memory), not a benchmark contest.
 
 Audited against the catalog (re-audited 2026-07-02); these are genuinely uncovered.
 
