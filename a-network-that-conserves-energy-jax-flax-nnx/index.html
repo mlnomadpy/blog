@@ -1,0 +1,576 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="generator" content="Astro v5.18.1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#fbfaf6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)"><title>Hamiltonian Neural Networks in JAX/Flax NNX</title><meta name="description" content="HNN and leapfrog-ResNet in Flax NNX: learned scalar, symplectic gradient, kick-drift-kick blocks, depth as lax.scan, with GIFs from the real run."><meta name="keywords" content="hamiltonian neural network jax, flax nnx, leapfrog residual network, symplectic gradient, integrators, hamiltonian, resnets, jax, flax, nnx, implementation"><meta name="author" content="Taha Bouhsine"><link rel="canonical" href="https://tahabouhsine.com/blog/a-network-that-conserves-energy-jax-flax-nnx/"><link rel="icon" href="/blog/favicon.svg" type="image/svg+xml"><link rel="alternate" type="application/rss+xml" title="Records of the !mmortal Data Scientist" href="/blog/rss.xml"><link rel="sitemap" href="/blog/sitemap-index.xml"><link rel="me" href="https://github.com/mlnomadpy"><link rel="me" href="https://x.com/mlnomadpy"><link rel="me" href="https://www.linkedin.com/in/tahabsn/"><link rel="me" href="https://scholar.google.com/citations?user=IsBjb3EAAAAJ"><link rel="me" href="https://g.dev/tahabsn"><link rel="author" href="https://github.com/mlnomadpy"><meta property="og:type" content="article"><meta property="og:site_name" content="Records of the !mmortal Data Scientist"><meta property="og:title" content="Hamiltonian Neural Networks in JAX/Flax NNX"><meta property="og:description" content="HNN and leapfrog-ResNet in Flax NNX: learned scalar, symplectic gradient, kick-drift-kick blocks, depth as lax.scan, with GIFs from the real run."><meta property="og:url" content="https://tahabouhsine.com/blog/a-network-that-conserves-energy-jax-flax-nnx/"><meta property="og:locale" content="en_US"><meta property="og:image" content="https://tahabouhsine.com/blog/og/a-network-that-conserves-energy-jax-flax-nnx.png"><meta property="og:image:alt" content="Building the Energy-Conserving Net in JAX/Flax NNX — Records of the !mmortal Data Scientist"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:type" content="image/png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@mlnomadpy"><meta name="twitter:creator" content="@mlnomadpy"><meta name="twitter:title" content="Hamiltonian Neural Networks in JAX/Flax NNX"><meta name="twitter:description" content="HNN and leapfrog-ResNet in Flax NNX: learned scalar, symplectic gradient, kick-drift-kick blocks, depth as lax.scan, with GIFs from the real run."><meta name="twitter:image" content="https://tahabouhsine.com/blog/og/a-network-that-conserves-energy-jax-flax-nnx.png"><meta name="twitter:image:alt" content="Building the Energy-Conserving Net in JAX/Flax NNX — Records of the !mmortal Data Scientist"><meta property="article:published_time" content="2026-07-16T17:00:00.000Z"><meta property="article:author" content="Taha Bouhsine"><meta property="article:section" content="Integrators"><meta property="article:tag" content="integrators"><meta property="article:tag" content="hamiltonian"><meta property="article:tag" content="resnets"><meta property="article:tag" content="jax"><meta property="article:tag" content="flax"><meta property="article:tag" content="nnx"><meta property="article:tag" content="implementation"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","@id":"https://tahabouhsine.com/blog/a-network-that-conserves-energy-jax-flax-nnx/#article","headline":"Building the Energy-Conserving Net in JAX/Flax NNX","name":"Building the Energy-Conserving Net in JAX/Flax NNX","description":"HNN and leapfrog-ResNet in Flax NNX: learned scalar, symplectic gradient, kick-drift-kick blocks, depth as lax.scan, with GIFs from the real run.","image":["https://tahabouhsine.com/blog/og/a-network-that-conserves-energy-jax-flax-nnx.png"],"datePublished":"2026-07-16T17:00:00.000Z","dateModified":"2026-07-16T17:00:00.000Z","author":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#author","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","jobTitle":"Machine Learning Researcher","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"publisher":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#publisher","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"mainEntityOfPage":{"@type":"WebPage","@id":"https://tahabouhsine.com/blog/a-network-that-conserves-energy-jax-flax-nnx/"},"keywords":"hamiltonian neural network jax, flax nnx, leapfrog residual network, symplectic gradient, integrators, hamiltonian, resnets, jax, flax, nnx, implementation","url":"https://tahabouhsine.com/blog/a-network-that-conserves-energy-jax-flax-nnx/","inLanguage":"en-US","wordCount":1366,"timeRequired":"PT7M","articleSection":"Integrators","isPartOf":{"@type":"Blog","@id":"https://tahabouhsine.com/blog/","name":"Records of the !mmortal Data Scientist","url":"https://tahabouhsine.com/blog/"}}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Blog","item":"https://tahabouhsine.com/blog/"},{"@type":"ListItem","position":2,"name":"Integrators","item":"https://tahabouhsine.com/blog/tag/integrators/"},{"@type":"ListItem","position":3,"name":"Building the Energy-Conserving Net in JAX/Flax NNX","item":"https://tahabouhsine.com/blog/a-network-that-conserves-energy-jax-flax-nnx/"}]}</script><script>
+    (function () {
+      if (window.__gaSetup) return;
+      window.__gaSetup = true;
+      var GA_ID = 'G-373438VHJB';
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ dataLayer.push(arguments); }
+      window.gtag = window.gtag || gtag;
+      window.__gaEventQueue = window.__gaEventQueue || [];
+      window.__trackGA = function (eventName, params) {
+        if (!eventName) return;
+        var item = { name: eventName, params: params || {} };
+        if (window.__gaLoaded) {
+          gtag('event', item.name, item.params);
+        } else {
+          window.__gaEventQueue.push(item);
+        }
+      };
+
+      // Track whether the first astro:page-load has fired, so a mid-session
+      // Accept can still record the current page.
+      window.__gaFirstLoadDone = window.__gaFirstLoadDone || false;
+      document.addEventListener('astro:page-load', function () { window.__gaFirstLoadDone = true; });
+
+      window.__loadGA = function () {
+        if (window.__gaLoaded) return;
+        window.__gaLoaded = true;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+        document.head.appendChild(s);
+        gtag('js', new Date());
+        gtag('config', GA_ID, { send_page_view: false });
+        (window.__gaEventQueue || []).splice(0).forEach(function (item) {
+          gtag('event', item.name, item.params);
+        });
+        function sendPV() {
+          gtag('event', 'page_view', {
+            page_title: document.title,
+            page_location: location.href,
+            page_path: location.pathname + location.search,
+          });
+        }
+        document.addEventListener('astro:page-load', sendPV);
+        // If the initial page-load already happened (accept mid-session),
+        // record this page now; otherwise the listener catches the first one.
+        if (window.__gaFirstLoadDone) sendPV();
+      };
+
+      try {
+        if (localStorage.getItem('analytics-consent') === 'granted') window.__loadGA();
+      } catch (e) {}
+    })();
+  </script><script>
+  (() => {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'light' || stored === 'dark') {
+      document.documentElement.setAttribute('data-theme', stored);
+    }
+  })();
+</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.DstInXr_.css">
+<link rel="stylesheet" href="/blog/_astro/_slug_.1UYF8z3a.css">
+<style>.series-nav[data-astro-cid-w7ld43o3]{margin:0 0 1.1rem;border:1px solid var(--border);border-radius:8px;background:var(--bg-sunken);overflow:hidden}summary[data-astro-cid-w7ld43o3]{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.55rem .9rem;cursor:pointer;list-style:none;user-select:none;transition:background var(--transition-fast)}summary[data-astro-cid-w7ld43o3]::-webkit-details-marker{display:none}summary[data-astro-cid-w7ld43o3]:hover{background:color-mix(in srgb,var(--accent) 6%,var(--bg-sunken))}.sn-strip[data-astro-cid-w7ld43o3]{display:flex;align-items:baseline;gap:.5rem;min-width:0;font-family:var(--mono);font-size:.68rem;letter-spacing:.11em;text-transform:uppercase}.sn-part[data-astro-cid-w7ld43o3]{color:var(--accent);white-space:nowrap}.sn-sep[data-astro-cid-w7ld43o3]{color:var(--fg-faint)}.sn-series[data-astro-cid-w7ld43o3]{color:var(--fg-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sn-chevron[data-astro-cid-w7ld43o3]{flex:none;display:inline-flex;color:var(--fg-faint);transition:transform var(--transition-fast),color var(--transition-fast)}summary[data-astro-cid-w7ld43o3]:hover .sn-chevron[data-astro-cid-w7ld43o3]{color:var(--accent)}.series-nav[data-astro-cid-w7ld43o3][open] .sn-chevron[data-astro-cid-w7ld43o3]{transform:rotate(180deg)}.sn-list[data-astro-cid-w7ld43o3]{list-style:none;margin:0;padding:.25rem .9rem .55rem;border-top:1px dashed var(--border)}.sn-list[data-astro-cid-w7ld43o3] li[data-astro-cid-w7ld43o3]{margin:0}.sn-item[data-astro-cid-w7ld43o3]{display:flex;align-items:baseline;gap:.6rem;padding:.32rem 0;text-decoration:none;color:inherit}.sn-num[data-astro-cid-w7ld43o3]{flex:none;width:1.1rem;font-family:var(--mono);font-size:.72rem;color:var(--fg-faint);text-align:right;font-variant-numeric:tabular-nums}.sn-title[data-astro-cid-w7ld43o3]{font-family:var(--serif);font-size:.93rem;line-height:1.4;color:var(--fg-muted);transition:color var(--transition-fast)}a[data-astro-cid-w7ld43o3].sn-item:hover .sn-title[data-astro-cid-w7ld43o3],li[data-astro-cid-w7ld43o3].current .sn-num[data-astro-cid-w7ld43o3]{color:var(--accent)}li[data-astro-cid-w7ld43o3].current .sn-title[data-astro-cid-w7ld43o3]{color:var(--fg);font-weight:600}.sn-note[data-astro-cid-w7ld43o3]{flex:none;font-family:var(--mono);font-size:.6rem;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 55%,transparent);border-radius:4px;padding:.06rem .38rem;white-space:nowrap;align-self:center}@media(max-width:600px){.sn-series[data-astro-cid-w7ld43o3]{white-space:normal}.sn-strip[data-astro-cid-w7ld43o3]{flex-wrap:wrap;row-gap:.15rem}.sn-note[data-astro-cid-w7ld43o3]{display:none}li[data-astro-cid-w7ld43o3].current .sn-note[data-astro-cid-w7ld43o3]{display:inline-block}}
+</style><style>.cite-as[data-astro-cid-p234urri]{margin:3.5rem 0 0;padding-top:1.5rem;border-top:1px solid var(--border)}.cite-as[data-astro-cid-p234urri] h2[data-astro-cid-p234urri]{font-family:var(--mono);font-size:.82rem;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-faint);font-weight:500;margin:0 0 .75rem}.cite-as[data-astro-cid-p234urri] h3[data-astro-cid-p234urri]{font-family:var(--mono);font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-faint);font-weight:500;margin:1.5rem 0 .6rem}.cite-line[data-astro-cid-p234urri]{font-family:var(--serif);font-size:.98rem;line-height:1.55;color:var(--fg-muted);margin:0 0 .5rem}.cite-line[data-astro-cid-p234urri] em[data-astro-cid-p234urri]{color:var(--fg)}.cite-bib[data-astro-cid-p234urri]{margin:.4rem 0 0;position:relative}.cite-bib[data-astro-cid-p234urri] summary[data-astro-cid-p234urri]{cursor:pointer;font-family:var(--mono);font-size:.78rem;color:var(--fg-muted);padding:.25rem 0;user-select:none}.cite-bib[data-astro-cid-p234urri] summary[data-astro-cid-p234urri]:hover{color:var(--accent)}.cite-bib[data-astro-cid-p234urri] pre[data-astro-cid-p234urri]{margin:.4rem 0 0;padding:.85rem 1rem;background:var(--bg-elev);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;font-size:.82rem;line-height:1.55}.cite-bib[data-astro-cid-p234urri] pre[data-astro-cid-p234urri] code[data-astro-cid-p234urri]{background:transparent;border:0;padding:0}.cite-copy[data-astro-cid-p234urri]{position:absolute;top:2.1rem;right:.55rem;background:var(--bg);border:1px solid var(--border);color:var(--fg-muted);font-family:var(--mono);font-size:.72rem;padding:.25rem .55rem;border-radius:var(--radius-sm);cursor:pointer;transition:color var(--transition-fast),border-color var(--transition-fast)}.cite-copy[data-astro-cid-p234urri]:hover,.cite-copy[data-astro-cid-p234urri].copied{color:var(--accent);border-color:var(--accent)}
+</style></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/archive">archive</a><a href="/blog/map">map</a><a href="/blog/writeups">writeups</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>
+  (() => {
+    const apply = (theme) => {
+      document.documentElement.setAttribute('data-theme', theme);
+      const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+      if (meta) meta.setAttribute('content', theme === 'dark' ? '#0e1116' : '#fbfaf6');
+      // Sync giscus iframe if present
+      const giscus = document.querySelector('iframe.giscus-frame');
+      if (giscus && giscus.contentWindow) {
+        giscus.contentWindow.postMessage(
+          { giscus: { setConfig: { theme: theme === 'dark' ? 'dark' : 'light' } } },
+          'https://giscus.app'
+        );
+      }
+    };
+
+    const init = () => {
+      const btns = document.querySelectorAll('[data-theme-toggle]');
+      btns.forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', () => {
+          const current = document.documentElement.getAttribute('data-theme')
+            || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          const next = current === 'dark' ? 'light' : 'dark';
+          localStorage.setItem('theme', next);
+          apply(next);
+        });
+      });
+    };
+
+    init();
+    document.addEventListener('astro:after-swap', init);
+    document.addEventListener('astro:page-load', init);
+  })();
+</script> </nav> </div> </header> <main id="main">  <div class="reading-progress" data-reading-progress aria-hidden="true"></div> <script>
+  (() => {
+    const init = () => {
+      const bar = document.querySelector('[data-reading-progress]');
+      if (!bar) return;
+      const update = () => {
+        const h = document.documentElement;
+        const scrolled = h.scrollTop;
+        const max = h.scrollHeight - h.clientHeight;
+        const pct = max > 0 ? Math.min(100, (scrolled / max) * 100) : 0;
+        bar.style.width = pct + '%';
+      };
+      // Coalesce scroll events into one paint per frame so fast/touch
+      // scrolling stays smooth.
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => { update(); ticking = false; });
+      };
+      update();
+      window.removeEventListener('scroll', window.__rp_onScroll || (() => {}));
+      window.removeEventListener('resize', window.__rp_onScroll || (() => {}));
+      window.__rp_onScroll = onScroll;
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+    };
+    init();
+    document.addEventListener('astro:page-load', init);
+    document.addEventListener('astro:after-swap', init);
+  })();
+</script> <article data-blog-post data-pagefind-body data-pagefind-meta="date:2026-07-16"> <header class="post-header">  <h1 data-pagefind-meta="title">Building the Energy-Conserving Net in JAX/Flax NNX</h1> <p class="meta"> <time datetime="2026-07-16T17:00:00.000Z">July 16, 2026</time>   · 7 min read </p> <p style="margin-top:0.65rem" data-pagefind-meta="tags:integrators,hamiltonian,resnets,jax,flax,nnx,implementation"> <a class="tag" href="/blog/tag/integrators/">#integrators</a><a class="tag" href="/blog/tag/hamiltonian/">#hamiltonian</a><a class="tag" href="/blog/tag/resnets/">#resnets</a><a class="tag" href="/blog/tag/jax/">#jax</a><a class="tag" href="/blog/tag/flax/">#flax</a><a class="tag" href="/blog/tag/nnx/">#nnx</a><a class="tag" href="/blog/tag/implementation/">#implementation</a> </p> </header> <details class="series-nav" data-astro-cid-w7ld43o3><summary data-astro-cid-w7ld43o3><span class="sn-strip" data-astro-cid-w7ld43o3><span class="sn-part" data-astro-cid-w7ld43o3>Part 3 of 3</span><span class="sn-sep" aria-hidden="true" data-astro-cid-w7ld43o3>·</span><span class="sn-series" data-astro-cid-w7ld43o3>Networks as Integrators</span></span><span class="sn-chevron" aria-hidden="true" data-astro-cid-w7ld43o3><svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" data-astro-cid-w7ld43o3><path d="M2.5 4.5 6 8l3.5-3.5" data-astro-cid-w7ld43o3></path></svg></span></summary><ol class="sn-list" data-astro-cid-w7ld43o3><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/skip-connections-are-half-of-newton/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>1</span><span class="sn-title" data-astro-cid-w7ld43o3>Your Skip Connection Is Half of Newton</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/transformers-with-a-velocity-ledger/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>2</span><span class="sn-title" data-astro-cid-w7ld43o3>Transformers With a Velocity Ledger</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/a-network-that-conserves-energy/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>3</span><span class="sn-title" data-astro-cid-w7ld43o3>A Network That Conserves Energy</span><span class="sn-note" data-astro-cid-w7ld43o3>this post's explainer</span></a></li></ol></details> <a class="companion-callout companion" href="/blog/a-network-that-conserves-energy/" data-astro-cid-x4o4rwnl><span class="cc-icon" aria-hidden="true" data-astro-cid-x4o4rwnl>📖</span><span class="cc-body" data-astro-cid-x4o4rwnl><span class="cc-eyebrow" data-astro-cid-x4o4rwnl>Explainer companion</span><span class="cc-title" data-astro-cid-x4o4rwnl>A Network That Conserves Energy</span><span class="cc-lead" data-astro-cid-x4o4rwnl>Want the full intuition first? This is the runnable companion to the explainer.</span></span><span class="cc-cta" data-astro-cid-x4o4rwnl>Read the explainer<span aria-hidden="true" data-astro-cid-x4o4rwnl>→</span></span></a>  
+<p><em>The <a href="/blog/a-network-that-conserves-energy/">explainer</a> trains a network whose motion is derived from a learned scalar, so the scalar is conserved by construction, then turns the same idea into a residual block. This is the implementation: both field models and the leapfrog classifier as <a href="https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html">Flax NNX</a> modules, depth as a <code>lax.scan</code>, and the structural claims re-checked from scratch. The published numbers are from <code>scripts/hamiltonian_net.py</code> on Kaggle; every code block below runs as written in <code>scripts/hamiltonian_nnx_check.py</code>, and every figure is rendered from the real run by <code>scripts/render_hamiltonian_gifs.py</code>.</em></p>
+<h2 id="one-scalar-two-outputs-for-free">One scalar, two outputs for free<a class="heading-anchor-link" aria-label="Link to heading" href="#one-scalar-two-outputs-for-free"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The whole trick fits in a class definition. A plain field model maps a state to two numbers and both are free. The HNN maps a state to <em>one</em> number and manufactures the two outputs from its gradient, rotated a quarter turn:</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">class</span><span style="color:#6F42C1;--shiki-dark:#F69D50"> HNNField</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(</span><span style="color:#6F42C1;--shiki-dark:#6CB6FF">nnx</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.</span><span style="color:#6F42C1;--shiki-dark:#6CB6FF">Module</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#032F62;--shiki-dark:#96D0FF">    &quot;&quot;&quot;One scalar H(q, p); the field is (dH/dp, -dH/dq).&quot;&quot;&quot;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> __init__</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(self, hidden</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">64</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, rngs):</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.l1 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Linear(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, hidden, </span><span style="color:#E36209;--shiki-dark:#F69D50">rngs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">rngs)</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.l2 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Linear(hidden, hidden, </span><span style="color:#E36209;--shiki-dark:#F69D50">rngs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">rngs)</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.l3 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Linear(hidden, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">rngs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">rngs)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> energy</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(self, qp):                      </span><span style="color:#6A737D;--shiki-dark:#768390"># (..., 2) -&gt; (...,)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        h </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.tanh(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.l1(qp))</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        h </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.tanh(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.l2(h))</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        return</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.l3(h)[</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">...</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">]</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> __call__</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(self, qp):                    </span><span style="color:#6A737D;--shiki-dark:#768390"># the symplectic gradient</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        g </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jax.vmap(jax.grad(</span><span style="color:#D73A49;--shiki-dark:#F47067">lambda</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> s: </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.energy(s)))(qp)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.stack([g[:, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">], </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7">g[:, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">]], </span><span style="color:#E36209;--shiki-dark:#F69D50">axis</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span></code></pre>
+<p><code>jax.grad</code> through the module is the entire implementation of “derive the motion from the energy”. The control is the same MLP with two output units and no scalar anywhere:</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">class</span><span style="color:#6F42C1;--shiki-dark:#F69D50"> PlainField</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(</span><span style="color:#6F42C1;--shiki-dark:#6CB6FF">nnx</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.</span><span style="color:#6F42C1;--shiki-dark:#6CB6FF">Module</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> __init__</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(self, hidden</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">64</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, rngs):</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.l1 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Linear(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, hidden, </span><span style="color:#E36209;--shiki-dark:#F69D50">rngs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">rngs)</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.l2 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Linear(hidden, hidden, </span><span style="color:#E36209;--shiki-dark:#F69D50">rngs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">rngs)</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.l3 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Linear(hidden, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">rngs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">rngs)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> __call__</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(self, qp):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        h </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.tanh(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.l1(qp))</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        h </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.tanh(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.l2(h))</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        return</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.l3(h)</span></span></code></pre>
+<p>Both fit the same pendulum arrows, <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mover accent="true"><mi>q</mi><mo>˙</mo></mover><mo separator="true">,</mo><mover accent="true"><mi>p</mi><mo>˙</mo></mover><mo stretchy="false">)</mo><mo>=</mo><mo stretchy="false">(</mo><mi>p</mi><mo separator="true">,</mo><mo>−</mo><mi>sin</mi><mo>⁡</mo><mi>q</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(\dot q, \dot p) = (p, -\sin q)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mopen">(</span><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6679em"><span style="top:-3em"><span class="pstrut" style="height:3em"></span><span class="mord mathnormal" style="margin-right:0.0359em">q</span></span><span style="top:-3em"><span class="pstrut" style="height:3em"></span><span class="accent-body" style="left:-0.0556em"><span class="mord">˙</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em"><span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6679em"><span style="top:-3em"><span class="pstrut" style="height:3em"></span><span class="mord mathnormal">p</span></span><span style="top:-3em"><span class="pstrut" style="height:3em"></span><span class="accent-body" style="left:-0.0556em"><span class="mord">˙</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em"><span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mopen">(</span><span class="mord mathnormal">p</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord">−</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mop">sin</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0359em">q</span><span class="mclose">)</span></span></span></span> sampled on a band of states, with the same loop:</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> fit</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(model, S, T, steps</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1500</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, lr</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1e-3</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    opt </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Optimizer(model, optax.adam(lr), </span><span style="color:#E36209;--shiki-dark:#F69D50">wrt</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">nnx.Param)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6F42C1;--shiki-dark:#DCBDFB">    @nnx.jit</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> step</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(model, opt):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        loss, grads </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.value_and_grad(</span><span style="color:#D73A49;--shiki-dark:#F47067">lambda</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> m: jnp.mean((m(S) </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> T) </span><span style="color:#D73A49;--shiki-dark:#F47067">**</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">))(model)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        opt.update(model, grads)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> loss</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    for</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> _ </span><span style="color:#D73A49;--shiki-dark:#F47067">in</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> range</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(steps):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        loss </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> step(model, opt)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> float</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(loss)</span></span></code></pre>
+<p>In the check run both models fit the arrows well (plain 3.4e-04, HNN 1.1e-04). On the fit, nothing distinguishes them. The distinction is dynamical, so integrate.</p>
+<h2 id="roll-both-out-and-watch-the-invariant">Roll both out and watch the invariant<a class="heading-anchor-link" aria-label="Link to heading" href="#roll-both-out-and-watch-the-invariant"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>RK4 as a <code>lax.scan</code>, recording the state so we can price each model’s energy behavior:</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> rollout_energy</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(model, q0</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1.6</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, p0</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0.0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, dt</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0.05</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, n</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">600</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> rk4</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(s, _):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        k1 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> model(s); k2 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> model(s </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 0.5</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> dt </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> k1)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        k3 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> model(s </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 0.5</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> dt </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> k2); k4 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> model(s </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> dt </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> k3)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        s2 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> s </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (dt </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 6</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (k1 </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> k2 </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> k3 </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> k4)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> s2, s2[</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">]</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    s0 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.array([[q0, p0]], </span><span style="color:#E36209;--shiki-dark:#F69D50">dtype</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">jnp.float32)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    _, traj </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jax.lax.scan(rk4, s0, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">None</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">length</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">n)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    E </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 0.5</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> traj[:, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">] </span><span style="color:#D73A49;--shiki-dark:#F47067">**</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#D73A49;--shiki-dark:#F47067"> +</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#D73A49;--shiki-dark:#F47067"> -</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.cos(traj[:, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">]))</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    E0 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 0.5</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> p0 </span><span style="color:#D73A49;--shiki-dark:#F47067">**</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#D73A49;--shiki-dark:#F47067"> +</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#D73A49;--shiki-dark:#F47067"> -</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.cos(q0))</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> float</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(jnp.max(jnp.abs(E </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> E0)) </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> E0)</span></span></code></pre>
+<p>In the check run the plain field drifts 6.4% of the starting energy over the rollout; the HNN holds within 0.4%. The published run’s longer rollout is the figure below, drawn from the exported trajectories.</p>
+<figure class="jax-fig jax-fig-wide"><img src="/hamnet-pendulum-race.gif" alt="Two learned pendulum fields integrated from the same start: phase-space trajectories drawing left, true energy along each rollout drawing right; the plain field's energy leaves the dashed starting level while the HNN's stays on it" loading="lazy"/><figcaption>The race, from the real run’s exported rollouts. Left: phase space. Right: the true pendulum energy along each trajectory, dashes at the starting level. The plain field model reproduces the arrows and still leaks; the HNN cannot leak, because its arrows are built from a level set.</figcaption></figure>
+<p>What the HNN learned is worth looking at directly: one scalar over phase space whose level sets <em>are</em> the orbits.</p>
+<figure class="jax-fig jax-fig-wide"><img src="/hamnet-level-set.gif" alt="The learned scalar H(q,p) as a contoured landscape with the HNN trajectory tracing along a single level set" loading="lazy"/><figcaption>The trained HNN’s scalar, contoured, with the rollout riding it. The trajectory follows one stripe because the field is the rotated gradient of this exact surface: conservation is the geometry, not a fit.</figcaption></figure>
+<h2 id="the-leapfrog-classifier">The leapfrog classifier<a class="heading-anchor-link" aria-label="Link to heading" href="#the-leapfrog-classifier"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The explainer’s second move turns the integrator into an architecture. Hidden state <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mi>q</mi><mo separator="true">,</mo><mi>p</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(q, p)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0359em">q</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal">p</span><span class="mclose">)</span></span></span></span>, and the <em>only</em> learned thing in the block is a scalar potential <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>V</mi><mi>θ</mi></msub><mo stretchy="false">(</mo><mi>q</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">V_\theta(q)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em">V</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em">θ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0359em">q</span><span class="mclose">)</span></span></span></span>; one layer is one kick-drift-kick step. In NNX, with depth as a <code>lax.scan</code> over the shared block:</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">class</span><span style="color:#6F42C1;--shiki-dark:#F69D50"> LeapfrogNet</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(</span><span style="color:#6F42C1;--shiki-dark:#6CB6FF">nnx</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.</span><span style="color:#6F42C1;--shiki-dark:#6CB6FF">Module</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#032F62;--shiki-dark:#96D0FF">    &quot;&quot;&quot;Hidden state (q, p); one shared block = one leapfrog step of V(q).&quot;&quot;&quot;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> __init__</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(self, hidden</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">32</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, rngs):</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.enc </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Linear(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">2</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> DIM</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">rngs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">rngs)</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.v1 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Linear(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">DIM</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, hidden, </span><span style="color:#E36209;--shiki-dark:#F69D50">rngs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">rngs)</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.v2 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Linear(hidden, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">DIM</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">rngs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">rngs)</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">        self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.dec </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Linear(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">2</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> DIM</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">rngs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">rngs)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> potential</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(self, q):                    </span><span style="color:#6A737D;--shiki-dark:#768390"># scalar V per row</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.v2(jnp.tanh(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.v1(q)))).sum(</span><span style="color:#E36209;--shiki-dark:#F69D50">axis</span><span style="color:#D73A49;--shiki-dark:#F47067">=-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> grad_v</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(self, q):</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jax.vmap(jax.grad(</span><span style="color:#D73A49;--shiki-dark:#F47067">lambda</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> qi: </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.potential(qi[</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">None</span><span style="color:#24292E;--shiki-dark:#ADBAC7">])[</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">]))(q)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> __call__</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(self, x, L</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">16</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        h </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> T_TOTAL</span><span style="color:#D73A49;--shiki-dark:#F47067"> /</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> L</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        z </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.enc(x)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        q, p </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> z[:, :</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">DIM</span><span style="color:#24292E;--shiki-dark:#ADBAC7">], z[:, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">DIM</span><span style="color:#24292E;--shiki-dark:#ADBAC7">:]</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> step</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(carry, _):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">            q, p </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> carry</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">            p </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> p </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 0.5</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> h </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.grad_v(q)   </span><span style="color:#6A737D;--shiki-dark:#768390"># kick</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">            q </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> q </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> h </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> p                      </span><span style="color:#6A737D;--shiki-dark:#768390"># drift</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">            p </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> p </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 0.5</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> h </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.grad_v(q)   </span><span style="color:#6A737D;--shiki-dark:#768390"># kick</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">            return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (q, p), </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">None</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        (q, p), _ </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jax.lax.scan(step, (q, p), </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">None</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">length</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">L)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        return</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> self</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.dec(jnp.concatenate([q, p], </span><span style="color:#E36209;--shiki-dark:#F69D50">axis</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">))</span></span></code></pre>
+<p>Three things to notice. The step size is <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>h</mi><mo>=</mo><mi>T</mi><mi mathvariant="normal">/</mi><mi>L</mi></mrow><annotation encoding="application/x-tex">h = T/L</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em"></span><span class="mord mathnormal">h</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord mathnormal" style="margin-right:0.1389em">T</span><span class="mord">/</span><span class="mord mathnormal">L</span></span></span></span> with <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>T</mi></mrow><annotation encoding="application/x-tex">T</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em"></span><span class="mord mathnormal" style="margin-right:0.1389em">T</span></span></span></span> fixed, so depth is a resolution, not a budget: <code>net(x, L=64)</code> runs the same trained weights at four times finer steps. The block is shared across depth, so a deeper call invents no new parameters. And the training loop is completely ordinary:</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">net </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> LeapfrogNet(</span><span style="color:#E36209;--shiki-dark:#F69D50">rngs</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">nnx.Rngs(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">))</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">opt </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Optimizer(net, optax.adam(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">3e-3</span><span style="color:#24292E;--shiki-dark:#ADBAC7">), </span><span style="color:#E36209;--shiki-dark:#F69D50">wrt</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">nnx.Param)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6F42C1;--shiki-dark:#DCBDFB">@nnx.jit</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> step</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(net, opt):</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#6F42C1;--shiki-dark:#DCBDFB"> loss_fn</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(m):</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> optax.softmax_cross_entropy_with_integer_labels(m(X), y).mean()</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    loss, grads </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.value_and_grad(loss_fn)(net)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    opt.update(net, grads)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> loss</span></span></code></pre>
+<p>In the check run this reaches 100% on held-out moons at its training depth and 100% again at four times that depth, with the learned energy <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>E</mi><mi>θ</mi></msub><mo>=</mo><mstyle scriptlevel="0" displaystyle="false"><mfrac><mn>1</mn><mn>2</mn></mfrac></mstyle><mi mathvariant="normal">∥</mi><mi>p</mi><msup><mi mathvariant="normal">∥</mi><mn>2</mn></msup><mo>+</mo><msub><mi>V</mi><mi>θ</mi></msub><mo stretchy="false">(</mo><mi>q</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">E_\theta = \tfrac12\|p\|^2 + V_\theta(q)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0576em">E</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:-0.0576em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em">θ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em"><span style="top:-2.655em"><span class="pstrut" style="height:3em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2</span></span></span></span><span style="top:-3.23em"><span class="pstrut" style="height:3em"></span><span class="frac-line" style="border-bottom-width:0.04em"></span></span><span style="top:-3.394em"><span class="pstrut" style="height:3em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mord">∥</span><span class="mord mathnormal">p</span><span class="mord"><span class="mord">∥</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em">V</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em">θ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0359em">q</span><span class="mclose">)</span></span></span></span> oscillating in a bounded band through the layers rather than trending anywhere. The published three-seed comparison against the parameter-matched plain net is in the explainer’s table, along with the run’s cleanest structural result: the energy band shrinks sixteen-fold when the step halves twice, the <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>h</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">h^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em"></span><span class="mord"><span class="mord mathnormal">h</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span> signature of a second-order symplectic integrator measured inside a trained classifier. Here is the hidden state itself, from the exported seed-0 weights.</p>
+<figure class="jax-fig jax-fig-wide"><img src="/hamnet-state-cloud.gif" alt="Two scatter clouds of hidden states advancing layer by layer, with a readout tracking the leapfrog net's learned energy, which stays in a narrow band, while the plain net's readout shows the quantity is undefined" loading="lazy"/><figcaption>The hidden state through depth, layer by layer, real weights on real test points, with the readout tracking the one quantity only the leapfrog network possesses: its learned energy, holding in a band while the clouds move. The plain net’s entry reads undefined, and that is the finding: not a smaller number, a missing row.</figcaption></figure>
+<h2 id="depth-as-a-dial-you-can-turn-after-training">Depth as a dial you can turn after training<a class="heading-anchor-link" aria-label="Link to heading" href="#depth-as-a-dial-you-can-turn-after-training"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The payoff figure re-runs both trained networks at depths they never trained at, from 4 to 128 layers, and draws each decision boundary as the sweep passes through.</p>
+<figure class="jax-fig jax-fig-wide"><img src="/hamnet-boundary-sweep.gif" alt="Two decision boundary maps side by side as depth sweeps from 4 to 128 layers: the leapfrog net's boundary stays put while the plain net's boundary deforms and its accuracy readout falls" loading="lazy"/><figcaption>Trained at depth 16 (marked in the title as the sweep passes), run everywhere from 4 to 128. The leapfrog net’s boundary sharpens into place and stays; it learned a flow, and more layers only render the same flow finer. The plain net learned a sixteen-fold composition, and at other depths it is a different function, visibly and in the accuracy readout.</figcaption></figure>
+<p>The one-line summary of the whole build: put the learnable thing one derivative <em>inside</em> the dynamics, and the dynamics inherit a law no loss term has to police.</p>
+<hr/>
+<p><em>Published numbers: <code>scripts/hamiltonian_net.py</code> (Kaggle, three seeds; bundle <code>scripts/results/kgl_blog-hamiltonian-v1/</code>). The code blocks in this post run as written in <code>scripts/hamiltonian_nnx_check.py</code> (Kaggle, bundle <code>scripts/results/kgl_blog-hamiltonian-nnx-check/</code>). Figures: <code>scripts/render_hamiltonian_gifs.py</code> from the run bundle.</em></p>
+<section class="cite-as" aria-labelledby="cite-a-network-that-conserves-energy-jax-flax-nnx" data-astro-cid-p234urri> <h2 id="cite-a-network-that-conserves-energy-jax-flax-nnx" data-astro-cid-p234urri>Cite as</h2> <p class="cite-line" data-astro-cid-p234urri>
+Bouhsine, T. (<time datetime="2026-07-16T00:00:00.000Z" data-astro-cid-p234urri>2026, July 16</time>).
+<em data-astro-cid-p234urri>Building the Energy-Conserving Net in JAX/Flax NNX</em>. Records of the !mmortal Data Scientist.
+<a href="https://tahabouhsine.com/blog/a-network-that-conserves-energy-jax-flax-nnx/" data-astro-cid-p234urri>https://tahabouhsine.com/blog/a-network-that-conserves-energy-jax-flax-nnx/</a> </p> <details class="cite-bib" data-astro-cid-p234urri> <summary data-astro-cid-p234urri>BibTeX</summary> <pre data-astro-cid-p234urri><code class="bibtex" data-astro-cid-p234urri>@misc{bouhsine2026anetworkthatconservesenergyjaxflaxnnx,
+  author       = {Bouhsine, Taha},
+  title        = {Building the Energy-Conserving Net in JAX/Flax NNX},
+  year         = {2026},
+  month        = {jul},
+  howpublished = {\url{https://tahabouhsine.com/blog/a-network-that-conserves-energy-jax-flax-nnx/}},
+  note         = {Blog post, Records of the !mmortal Data Scientist}
+}</code></pre> <button type="button" class="cite-copy" data-copy="@misc{bouhsine2026anetworkthatconservesenergyjaxflaxnnx,
+  author       = {Bouhsine, Taha},
+  title        = {Building the Energy-Conserving Net in JAX/Flax NNX},
+  year         = {2026},
+  month        = {jul},
+  howpublished = {\url{https://tahabouhsine.com/blog/a-network-that-conserves-energy-jax-flax-nnx/}},
+  note         = {Blog post, Records of the !mmortal Data Scientist}
+}" aria-label="Copy BibTeX" data-astro-cid-p234urri>copy</button> </details>  </section>  <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('.cite-copy').forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(btn.dataset.copy || '');
+            const original = btn.textContent;
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = original;
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>  <section class="references" aria-labelledby="references-heading" data-astro-cid-rn7nvbl4><h2 id="references-heading" data-astro-cid-rn7nvbl4>References</h2><ol data-astro-cid-rn7nvbl4><li id="ref-1" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Greydanus, S., Dzamba, M., Sprague, N.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2019)</span>. <a class="ref-title" href="https://arxiv.org/abs/1906.01563" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>Hamiltonian Neural Networks</a>.
+<a class="ref-ext" href="https://arxiv.org/abs/1906.01563" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:1906.01563</a></li></ol></section> </article> <script>(function(){const payload = {"post_title":"Building the Energy-Conserving Net in JAX/Flax NNX","post_slug":"a-network-that-conserves-energy-jax-flax-nnx","post_path":"/blog/a-network-that-conserves-energy-jax-flax-nnx/","post_tags":"integrators,hamiltonian,resnets,jax,flax,nnx,implementation","word_count":1366,"reading_time_minutes":7,"is_draft":false};
+
+  (() => {
+    const thresholds = [25, 50, 75, 90, 100];
+    const state = { viewed: false, sent: new Set() };
+
+    const track = (name, params = {}) => {
+      if (typeof window.__trackGA === 'function') {
+        window.__trackGA(name, {
+          ...payload,
+          ...params,
+          non_interaction: name === 'blog_post_view',
+        });
+      }
+    };
+
+    const init = () => {
+      const article = document.querySelector('[data-blog-post]');
+      if (!article) return;
+
+      if (!state.viewed) {
+        state.viewed = true;
+        track('blog_post_view');
+      }
+
+      const progress = () => {
+        const rect = article.getBoundingClientRect();
+        const articleTop = window.scrollY + rect.top;
+        const articleHeight = Math.max(1, article.offsetHeight);
+        const viewportBottom = window.scrollY + window.innerHeight;
+        return Math.max(0, Math.min(100, ((viewportBottom - articleTop) / articleHeight) * 100));
+      };
+
+      const update = () => {
+        const pct = progress();
+        thresholds.forEach((threshold) => {
+          if (pct >= threshold && !state.sent.has(threshold)) {
+            state.sent.add(threshold);
+            track('blog_post_read_depth', { read_percent: threshold });
+            if (threshold === 90) {
+              track('blog_post_read', { read_percent: threshold });
+            }
+          }
+        });
+      };
+
+      if (window.__postAnalyticsCleanup) window.__postAnalyticsCleanup();
+
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => {
+          update();
+          ticking = false;
+        });
+      };
+
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+      window.__postAnalyticsCleanup = () => {
+        window.removeEventListener('scroll', onScroll);
+        window.removeEventListener('resize', onScroll);
+      };
+      update();
+    };
+
+    init();
+    document.addEventListener('astro:page-load', init, { once: true });
+  })();
+})();</script> <aside class="related" aria-labelledby="related-heading" data-astro-cid-dpgbfi7r><h2 id="related-heading" data-astro-cid-dpgbfi7r>Related posts</h2><ul data-astro-cid-dpgbfi7r><li data-astro-cid-dpgbfi7r><a href="/blog/a-network-that-conserves-energy/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>A Network That Conserves Energy</span><span class="related-desc" data-astro-cid-dpgbfi7r>A pendulum never forgets its energy, and a trained network has no such number to forget. This post builds a residual network whose hidden state carries a conservation law by construction: the block is a symplectic step of a learned energy, so the quantity is held by the architecture, not encouraged by a loss. The learned pendulum keeps its energy to 0.6% where a plain field model leaks 36%, the classifier lands in the pack on accuracy, and the law pays where composition fails: trained at depth 16 and run at four times that, the plain net gives up 31 points on spirals while the leapfrog net holds.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-07-16T00:00:00.000Z" data-astro-cid-dpgbfi7r>Jul 16, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/survival-model-on-trial-jax-flax-nnx/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>Running the Survival Trial, in JAX/Flax NNX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion to the survival-model trial: the Yat DeepSurv trunk in Flax NNX, the Cox partial-likelihood loss, an LR-fair per-model training loop with best-epoch selection, the concordance / integrated-Brier / time-dependent-AUC evaluation, and the classical baselines wired through sksurv and lifelines. Every figure is a real number from a real run across five datasets, with the prototypes and the risk stratification captured as they form over training.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-07-09T17:00:00.000Z" data-astro-cid-dpgbfi7r>Jul 9, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/transformers-with-a-velocity-ledger-jax-flax-nnx/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>A Velocity Ledger for Transformers, in JAX/Flax NNX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion: the pre-norm Transformer block as a forward-Euler step, then the residual-stream velocity ledger as one line of Flax NNX state (mu = 0 recovers plain), the ngpt-lite retraction variant, best-val early-stopped training, and the depth telemetry (path length and turning angle per sub-update). Four parameter-matched char-level GPTs that tie on quality and split on dynamics: the ledger&#39;s residual-stream path is a third as long and half as sharp.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-07-09T17:00:00.000Z" data-astro-cid-dpgbfi7r>Jul 9, 2026</time></span></a></li></ul></aside> <nav class="post-nav" aria-label="Adjacent posts"><a href="/blog/a-network-that-conserves-energy/" class="prev" rel="prev"><div class="label">← Explainer</div><div class="title">A Network That Conserves Energy</div></a><span></span></nav> <script data-astro-rerun>(function(){const postSlug = "a-network-that-conserves-energy-jax-flax-nnx";
+const lastRead = {"slug":"a-network-that-conserves-energy-jax-flax-nnx","title":"Building the Energy-Conserving Net in JAX/Flax NNX","series":"Networks as Integrators","part":3,"total":3};
+
+    try {
+      const raw = JSON.parse(localStorage.getItem('read-posts') || '[]');
+      const read = (Array.isArray(raw) ? raw : []).filter((s) => s !== postSlug);
+      read.push(postSlug);
+      while (read.length > 200) read.shift();
+      localStorage.setItem('read-posts', JSON.stringify(read));
+      if (lastRead) localStorage.setItem('last-read', JSON.stringify(lastRead));
+    } catch {}
+  })();</script> <section aria-label="Comments" id="giscus-mount" style="margin-top:3rem" data-giscus="{&#34;repo&#34;:&#34;mlnomadpy/blog&#34;,&#34;repoId&#34;:&#34;MDEwOlJlcG9zaXRvcnk0MDQ4MzY2NDU=&#34;,&#34;category&#34;:&#34;Announcements&#34;,&#34;categoryId&#34;:&#34;DIC_kwDOGCFRJc4C9EiR&#34;,&#34;mapping&#34;:&#34;pathname&#34;,&#34;reactionsEnabled&#34;:&#34;1&#34;,&#34;emitMetadata&#34;:&#34;0&#34;,&#34;inputPosition&#34;:&#34;top&#34;,&#34;theme&#34;:&#34;preferred_color_scheme&#34;,&#34;lang&#34;:&#34;en&#34;}"></section><script>
+    (() => {
+      const load = () => {
+        const mount = document.getElementById('giscus-mount');
+        if (!mount || mount.dataset.loaded === '1') return;
+        const cfg = JSON.parse(mount.dataset.giscus);
+        const theme = document.documentElement.getAttribute('data-theme')
+          || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        const s = document.createElement('script');
+        s.src = 'https://giscus.app/client.js';
+        s.async = true;
+        s.crossOrigin = 'anonymous';
+        const attrs = {
+          'data-repo': cfg.repo,
+          'data-repo-id': cfg.repoId,
+          'data-category': cfg.category,
+          'data-category-id': cfg.categoryId,
+          'data-mapping': cfg.mapping,
+          'data-strict': '0',
+          'data-reactions-enabled': cfg.reactionsEnabled,
+          'data-emit-metadata': cfg.emitMetadata,
+          'data-input-position': cfg.inputPosition,
+          'data-theme': theme,
+          'data-lang': cfg.lang,
+          'data-loading': 'lazy',
+        };
+        for (const k in attrs) s.setAttribute(k, attrs[k]);
+        mount.appendChild(s);
+        mount.dataset.loaded = '1';
+      };
+      load();
+      document.addEventListener('astro:page-load', load);
+      document.addEventListener('astro:after-swap', load);
+    })();
+  </script> <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('pre').forEach((pre) => {
+        if (pre.dataset.copyEnhanced) return;
+        pre.dataset.copyEnhanced = '1';
+        const btn = document.createElement('button');
+        btn.className = 'code-copy';
+        btn.type = 'button';
+        btn.textContent = 'copy';
+        btn.setAttribute('aria-label', 'Copy code');
+        btn.addEventListener('click', async () => {
+          const code = pre.querySelector('code');
+          const text = (code ? code.innerText : pre.innerText) || '';
+          try {
+            await navigator.clipboard.writeText(text);
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = 'copy';
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+        pre.appendChild(btn);
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>  </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span class="site-footer__links"> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> <a class="site-footer__support" href="https://buymeacoffee.com/mlnomadpy" target="_blank" rel="noopener noreferrer" aria-label="Support this blog on Buy Me a Coffee">
+buy me a coffee
+</a> </span> </footer> <div id="consent-banner" class="consent-banner" role="dialog" aria-live="polite" aria-label="Analytics consent" hidden><p class="consent-text">
+I use Google Analytics to see which posts get read. It sets cookies only
+      if you accept. No ads, no selling data.
+</p><div class="consent-actions"><button type="button" id="consent-decline" class="consent-btn consent-decline">Decline</button><button type="button" id="consent-accept" class="consent-btn consent-accept">Accept</button></div></div>
+
+  <script>
+    (() => {
+      const KEY = 'analytics-consent';
+      const setup = () => {
+        const banner = document.getElementById('consent-banner');
+        if (!banner) return;
+        let choice = null;
+        try { choice = localStorage.getItem(KEY); } catch (e) {}
+        // Already decided → keep hidden.
+        if (choice === 'granted' || choice === 'denied') { banner.hidden = true; return; }
+        banner.hidden = false;
+
+        const decide = (value) => {
+          try { localStorage.setItem(KEY, value); } catch (e) {}
+          banner.hidden = true;
+          if (value === 'granted' && typeof window.__loadGA === 'function') window.__loadGA();
+        };
+        const accept = document.getElementById('consent-accept');
+        const decline = document.getElementById('consent-decline');
+        if (accept && !accept.dataset.bound) {
+          accept.dataset.bound = '1';
+          accept.addEventListener('click', () => decide('granted'));
+        }
+        if (decline && !decline.dataset.bound) {
+          decline.dataset.bound = '1';
+          decline.addEventListener('click', () => decide('denied'));
+        }
+      };
+      setup();
+      document.addEventListener('astro:page-load', setup);
+    })();
+  </script>
+
+  <style>
+    /* Author `display:flex` below would otherwise override the UA [hidden]
+       rule, leaving the banner visible after a choice. This wins on specificity. */
+    .consent-banner[hidden] { display: none !important; }
+    .consent-banner {
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      right: 1rem;
+      max-width: 30rem;
+      margin-left: auto;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+      padding: 0.95rem 1.1rem;
+      background: var(--bg-elev, #fff);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      font-family: var(--sans);
+    }
+    .consent-text {
+      margin: 0;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: var(--fg-muted);
+    }
+    .consent-actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+    }
+    .consent-btn {
+      font-family: var(--sans);
+      font-size: 0.82rem;
+      padding: 0.4rem 0.95rem;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    }
+    .consent-decline {
+      background: transparent;
+      color: var(--fg-muted);
+    }
+    .consent-decline:hover { color: var(--fg); border-color: var(--fg-faint); }
+    .consent-accept {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg);
+      font-weight: 600;
+    }
+    .consent-accept:hover { filter: brightness(1.05); }
+    @media (max-width: 520px) {
+      .consent-banner { left: 0.6rem; right: 0.6rem; bottom: 0.6rem; }
+    }
+  </style> <script>
+      // Inject a fullscreen toggle button onto every .viz figure on the page.
+      (() => {
+        const ENTER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10V4h6"/><path d="M20 10V4h-6"/><path d="M4 14v6h6"/><path d="M20 14v6h-6"/></svg>';
+        const EXIT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H4v6"/><path d="M14 4h6v6"/><path d="M10 20H4v-6"/><path d="M14 20h6v-6"/></svg>';
+        const inFs = () => document.fullscreenElement || document.webkitFullscreenElement;
+        const enhance = () => {
+          document.querySelectorAll('.viz').forEach((fig) => {
+            if (fig.dataset.fsReady) return;
+            fig.dataset.fsReady = '1';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'viz-fs-btn';
+            btn.setAttribute('aria-label', 'Toggle fullscreen');
+            btn.innerHTML = ENTER_SVG + '<span>fullscreen</span>';
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              try {
+                if (inFs() === fig) {
+                  await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen?.());
+                } else if (fig.requestFullscreen) {
+                  await fig.requestFullscreen();
+                } else if (fig.webkitRequestFullscreen) {
+                  await fig.webkitRequestFullscreen();
+                }
+              } catch (_) {}
+            });
+            fig.appendChild(btn);
+          });
+          const sync = () => {
+            document.querySelectorAll('.viz-fs-btn').forEach((b) => {
+              const fig = b.parentElement;
+              const open = inFs() === fig;
+              b.innerHTML = (open ? EXIT_SVG : ENTER_SVG) + '<span>' + (open ? 'exit' : 'fullscreen') + '</span>';
+            });
+          };
+          document.addEventListener('fullscreenchange', sync);
+          document.addEventListener('webkitfullscreenchange', sync);
+        };
+        enhance();
+        document.addEventListener('astro:page-load', enhance);
+        document.addEventListener('astro:after-swap', enhance);
+      })();
+    </script> </body> </html>
