@@ -1,0 +1,121 @@
+---
+title: "Backprop Without the Memory"
+seoTitle: "Backprop Without the Memory: Reversible Training"
+description: "Training memory is a tax nobody chose: backprop must hold every activation of the forward pass hostage until the backward pass consumes it, so depth costs memory even when it costs little compute. This post spends the invertibility this series proved two posts ago: a momentum residual block can be run backward, so the backward pass can recompute the past instead of storing it. Measured on the same network, standard backprop's activation memory grows from 13 MB to 674 MB as depth goes 8 to 512; the reversible pass holds flat at 3.2 MB, pays 24% in step time, and returns the same gradient, until a one-line arithmetic of friction and float noise says it cannot."
+seoDescription: "Reversible backprop measured: activation memory flat at 3.2 MB to depth 512 vs 674 MB standard, exact gradients, and the (1/mu)^L cliff that prices the rewind."
+pubDate: 2026-07-16T12:00:00-07:00
+draft: false
+companion: backprop-without-the-memory-jax-flax-nnx
+tags: [integrators, reversibility, memory, backpropagation, resnets, jax]
+references:
+  - authors: "Gomez, A. N., Ren, M., Urtasun, R., Grosse, R. B."
+    year: 2017
+    title: "The Reversible Residual Network: Backpropagation Without Storing Activations"
+    arxiv: "1707.04585"
+  - authors: "Sander, M. E., Ablin, P., Blondel, M., Peyré, G."
+    year: 2021
+    title: "Momentum Residual Neural Networks"
+    arxiv: "2102.07870"
+  - authors: "Maclaurin, D., Duvenaud, D., Adams, R. P."
+    year: 2015
+    title: "Gradient-based Hyperparameter Optimization through Reversible Learning"
+    arxiv: "1502.03492"
+  - authors: "Chen, R. T. Q., Rubanova, Y., Bettencourt, J., Duvenaud, D."
+    year: 2018
+    title: "Neural Ordinary Differential Equations"
+    arxiv: "1806.07366"
+keywords:
+  - reversible backpropagation
+  - activation memory
+  - momentum residual network
+  - constant memory training
+  - custom vjp
+---
+import TwoLedgers from '../../components/viz/TwoLedgers.astro';
+import FrictionArrow from '../../components/viz/FrictionArrow.astro';
+import ExactRewind from '../../components/viz/ExactRewind.astro';
+import BudgetCliff from '../../components/viz/BudgetCliff.astro';
+import CiteAs from '../../components/CiteAs.astro';
+import SeriesNav from '../../components/SeriesNav.astro';
+
+<SeriesNav />
+
+*Ask what limits the depth of a network and the natural guess is compute: more layers, more arithmetic. The actual binding constraint, on real hardware, is usually something less glamorous. To compute a gradient, backpropagation must remember the forward pass, every activation of every layer of every example in the batch, held until the backward sweep arrives to consume it. Depth is a memory bill before it is a compute bill. [Two posts ago](/blog/skip-connections-are-half-of-newton) this series showed that a residual network with a velocity ledger can be run *backward*, and treated it as a curiosity with an informative failure mode. This post cashes it in. If the forward pass can be reconstructed from its own endpoint, nothing needs to be remembered, and the memory bill for depth goes to a constant. The run measures exactly that, and then measures the fine print.*
+
+## What the gradient actually holds hostage
+
+The chain rule looks memoryless on paper. It is not. To push the loss gradient backward through layer $l$, you need the Jacobian of layer $l$ evaluated *at the input that layer saw*, which means you need that input. Standard backprop gets it the obvious way: during the forward pass it banks every layer's activation, and the backward pass withdraws them in reverse order. The bank is the cost. Our network is a modest 784-wide MLP classifier; at depth 8 the compiled training step keeps 13.4 MB of activations, at depth 32 it keeps 44.8 MB, at 128 it keeps 170.7, at 512 it keeps 674.0. The line is straight and its slope is the batch: roughly 1.3 MB per layer, every layer alive simultaneously, because the very first activation is needed by the very last backward step.
+
+Nothing about the *gradient* wants this. The gradient at the end is a single small object. The hostage-taking comes from one assumption so default it is invisible: that the only way to have the past is to have stored it.
+
+There is another way to have the past. Recompute it. If layer $l+1$'s output determines layer $l$'s output, exactly, by algebra, then the backward sweep can walk the states backward as it goes, deriving each layer's input the moment it is needed and discarding it after use. The bank closes. Memory stops depending on depth at all.
+
+<TwoLedgers caption="One training step, both bookkeeping disciplines, animated. Top: standard backprop's forward sweep banks every activation (the meter climbs) and its backward sweep consumes the bank. Bottom: the reversible discipline carries one state, and its backward sweep re-derives each earlier state from the later one by inverting the block. The meters are labeled with this run's measured activation memory at depth 512: 674 MB against 3.2." />
+
+The catch is the *if*. An ordinary residual block $x_{l+1} = x_l + f(x_l)$ is not invertible in general; two inputs can land on one output and the past is genuinely gone. This is where the velocity ledger stops being a metaphor and starts being an engineering property.
+
+## The block you can run backward
+
+The momentum residual network from two posts back updates a state and a velocity:
+
+$$
+v_{l+1} = \mu\, v_l + f(x_l), \qquad x_{l+1} = x_l + v_{l+1}.
+$$
+
+Read it backward and every step undoes:
+
+$$
+x_l = x_{l+1} - v_{l+1}, \qquad v_l = \frac{v_{l+1} - f(x_l)}{\mu}.
+$$
+
+Nothing is approximate. Given the endpoint $(x_L, v_L)$, the entire trajectory is recoverable, layer by layer, using only the same $f$ the forward pass used. So the gradient can be computed with a custom backward pass: walk $(x, v)$ backward with the inverse, and at each layer, having just re-derived the input, take the ordinary local Jacobian-vector product and keep moving. The [companion](/blog/backprop-without-the-memory-jax-flax-nnx/) builds this as a `jax.custom_vjp` in Flax NNX, and the claim it must pass is severe: not similar gradients, the *same* gradient.
+
+On the run's memory instrument, XLA's own static analysis of the compiled step, the payoff is as flat as the theory says. Standard: 13.4, 44.8, 170.7, 674.0 MB at depths 8, 32, 128, 512. Reversible: 3.2 MB at depth 8, and 3.2 MB at depth 512. The runtime allocator agrees, 681 MB against 90 at depth 512. The price appears exactly where it should: the backward pass re-runs $f$ once per layer, and the measured step time goes from 83 ms to 103, about 24% slower. That is the whole trade, stated in two numbers: at depth 512, 200 times less activation memory for a quarter more time. Gomez et al. (2017) built this trade into RevNets by architectural partition; Sander et al. (2021) showed the momentum form; what this run adds is the ledger of what it costs on one network you have already met.
+
+## Friction, and why the rewind cannot be free
+
+Before trusting that inverse, look at it once more. The backward velocity update divides by $\mu$. On paper, harmless. In floating point, a division by $\mu = 0.9$ is a multiplication of everything, signal and rounding error alike, by $1.11$, once per layer. Two hundred layers of that is a factor of $10^{10}$. The forward pass shrank the velocity's history with every $\mu$; the rewind must *unshrink* it, and float32 kept only about seven digits of what there was to unshrink.
+
+This is not a numerical accident to be engineered away. It is the oldest law in the building. A pendulum without friction retraces its swing if you reverse time; a damped pendulum does not, because friction converts its motion into heat, and heat does not remember which swing it came from. Dissipation destroys information, and $\mu < 1$ *is* dissipation, the same friction that [D1](/blog/skip-connections-are-half-of-newton) identified in the ledger. Watch it in the physics where the intuition lives:
+
+<FrictionArrow caption="Two pendulums integrated live, then run backward from wherever they ended. In phase space (angle against momentum), the frictionless pendulum's reversed run retraces its forward spiral exactly. The damped pendulum's reversed run departs from its own history, because the information the rewind needs was dissipated. Friction is a one-way door, and mu < 1 is friction." />
+
+The dictionary makes a quantitative prediction, the same shape D1 measured for trajectories and now applied to gradients: reconstruction noise grows like $(1/\mu)^L$. Here is the same experiment at the scale of the panel, twelve particles through 64 momentum layers in genuine float32, every operation rounded the way a GPU rounds:
+
+<ExactRewind caption="Forward through 64 momentum-residual layers in real float32 (every operation rounded with fround), then rewound from the endpoint alone. At mu = 0.9 the reconstruction lands on every forward footprint. Switch to mu = 0.6 or 0.3 and the same algebra, still exact on paper, shears away from history: each backward step divides by mu and amplifies the rounding noise. The field f is a fixed random network; the algebra never asked it to be trained." />
+
+## The napkin that locates the cliff
+
+So the gradient computed by rewind should be exact while $(1/\mu)^L \varepsilon_{32}$ is small, and garbage once it reaches order one. That is an arithmetic you can do before running anything: with float32's $\varepsilon \approx 1.2 \times 10^{-7}$, the budget crosses 1 near $L^* = \ln(1/\varepsilon)\,/\ln(1/\mu)$, which is 151 layers at $\mu = 0.9$, 31 at $\mu = 0.6$, 13 at $\mu = 0.3$.
+
+The run measured the actual gradient agreement, cosine between the rewind-computed gradient and the stored-activation gradient, on a 3-by-3 grid of $\mu$ and $L$:
+
+| | $L = 8$ | $L = 32$ | $L = 128$ |
+| --- | --- | --- | --- |
+| $\mu = 0.9$ | 1.000000 | 0.999990 | 0.026 |
+| $\mu = 0.6$ | 1.000000 | 0.30 | 0.001 |
+| $\mu = 0.3$ | 1.000000 | 0.063 | nan |
+
+Read the middle column against the napkin. At $\mu = 0.6$ the prediction said the cliff sits at 31 layers; the measurement at 32 layers is mid-fall, cosine 0.30. At $\mu = 0.3$ the prediction said 13; by the next measured depth the gradient is already rubble. At $\mu = 0.9$ the prediction said 151, and at 128 the agreement has collapsed to 0.026, the compounding having caught up somewhat ahead of the single-step estimate, which is what an estimate that ignores accumulation across layers should do. Inside the budget the rewind is not approximately right, it is *exact to float precision*, cosine 1.000000. Outside it there is no gradient at all.
+
+<BudgetCliff caption="The nine measured gradient agreements from the run, one curve per friction, with the napkin prediction drawn as dashed verticals before looking: the depth where (1/mu)^L times float32's epsilon reaches one. The measured cliffs fall where the arithmetic said to expect them. Hover any point for its exact cosine and noise budget." />
+
+Maclaurin, Duvenaud, and Adams met exactly this wall in 2015, rewinding *training itself* to differentiate through learning, and their repair is telling: they stored the low-order bits that division was about to lose, paying a little memory to make the rewind lossless. The bits you refuse to store, you eventually pay for in noise.
+
+## Does a rewound gradient train a network?
+
+Inside the budget it must, since it is the same gradient, but the run checks anyway rather than trusting the syllogism. At depth 64, $\mu = 0.9$, budget comfortably inside float32's range, both training modes run to the same schedule: the standard net reaches 81.6% test accuracy, the reversible one 79.7%, from one seed each, with the reversible step 17% slower on the wall clock. The 1.9-point gap is a single-seed reading and we make no claim about its persistence; the structural claims, identical gradients inside the budget and constant memory at every depth, are the measured ones.
+
+And the budget points somewhere specific as it tightens. The cliff exists because $\mu < 1$; push $\mu \to 1$ and $(1/\mu)^L \to 1$, the amplification disappears at every depth. A frictionless ledger rewinds by subtraction alone. This series has already built exactly such a network: [the leapfrog classifier](/blog/a-network-that-conserves-energy) conserves its energy *because* it is frictionless, and its inverse divides by nothing. The architectures that conserve are the architectures that rewind for free, which are the architectures that train without the memory bill at any depth. Conservation, reversibility, and constant-memory training are not three features. They are one property wearing three coats.
+
+*Scope: all numbers are from `scripts/reversible_memory.py` on Kaggle (bundle `kgl_blog-revmem-v1`): a 784-16-wide momentum MLP on a 10-class problem, activation memory read from XLA's compiled-step analysis with each depth measured in a fresh process, gradient agreement measured against stored-activation backprop on identical weights and batch, and the training comparison run once per mode at depth 64. The memory constant depends on architecture width and batch, and the 24% time overhead on the cost of $f$; the flatness in depth and the $(1/\mu)^L$ budget do not.*
+
+## Where this leaves the catalog
+
+The integrator catalog this arc is walking through keeps paying in the same currency: structure in the block becomes a guarantee about the network. Euler gave depth a direction. The velocity ledger gave it crossings and a rewind. The symplectic step gave it a conserved number. This post's entry is the bill: the rewind, priced honestly in float, buys training whose memory does not know how deep the network is, and the price vanishes exactly for the frictionless, conservative blocks the catalog was already recommending. The next integrator on the shelf controls its own step size, and that one turns depth itself into a budget the input gets to spend.
+
+<CiteAs
+  slug="backprop-without-the-memory"
+  title="Backprop Without the Memory"
+  pubDate="2026-07-16"
+/>

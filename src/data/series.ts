@@ -108,6 +108,7 @@ export const SERIES: SeriesDef[] = [
       'skip-connections-are-half-of-newton',
       'transformers-with-a-velocity-ledger',
       'a-network-that-conserves-energy',
+      'backprop-without-the-memory',
     ],
   },
 ];

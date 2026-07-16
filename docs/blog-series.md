@@ -105,6 +105,7 @@ testable prediction about trained hidden states.
 | live | skip-connections-are-half-of-newton | momentum-resnet-jax-flax-nnx |
 | live | transformers-with-a-velocity-ledger | transformers-with-a-velocity-ledger-jax-flax-nnx |
 | live | a-network-that-conserves-energy | a-network-that-conserves-energy-jax-flax-nnx |
+| live | backprop-without-the-memory | backprop-without-the-memory-jax-flax-nnx |
 
 ---
 
@@ -335,6 +336,37 @@ existence-proof framing; new-derived: conservation-by-construction,
 symplectic/leapfrog block, h² shadow-Hamiltonian band, depth-as-resolution
 extrapolation, learned-energy-as-missing-row.
 
+### D4. backprop-without-the-memory  (LIVE, 2026-07-16; + companion)
+Title: "Backprop Without the Memory." Spends D1's invertibility: the momentum
+block's exact inverse lets the backward pass RECOMPUTE the trajectory instead
+of storing it (a custom_vjp whose residuals are only the endpoint).
+Experiment `scripts/reversible_memory.py` (Kaggle GPU, bundle
+`kgl_blog-revmem-v1`), three parts. E1 memory: XLA memory_analysis of the
+compiled step (each depth in a fresh process; allocator peak agrees):
+standard 13.4/44.8/170.7/674.0 MB at L=8/32/128/512 vs reversible FLAT 3.2 MB;
+price 24% step time at L=512. E2 fidelity: gradient cosine (rewind vs stored,
+identical weights/batch) = 1.000000 inside the noise budget, dying exactly
+where (1/mu)^L x eps32 ~ 1 predicts (napkin L* = ln(1/eps)/ln(1/mu): mu=.6
+predicts 31, measured 0.30 at L=32; mu=.3 predicts 13; mu=.9 predicts 151,
+collapsed by 128 as accumulation outpaces the single-step estimate). E3:
+trains at L=64/mu=.9: 81.6% vs 79.7%, one seed each, stated. Physics bridge:
+friction breaks time-reversal (damped pendulum cannot rewind, dissipation
+destroys information); mu IS D1's friction; Maclaurin et al. 2015 stored the
+lost bits. Arc payoff: conservation, reversibility, constant-memory training =
+one property, three coats; the frictionless leapfrog (D3) rewinds by
+subtraction, no cliff. Panels (fresh, revmem.js): TwoLedgers (store-vs-
+recompute mechanics animated, meters = real MB), FrictionArrow (live damped/
+undamped pendulum time-reversal), ExactRewind (12 particles through 64 layers
+in REAL float32 via Math.fround, mu select, rewind lands/shears live),
+BudgetCliff (9 measured cosines vs the pre-drawn napkin verticals, hover).
+Companion: the actual custom_vjp quoted from the script, fresh-process +
+memory_analysis measurement discipline, 3 GIFs (ledger mechanics, float32
+rewind shear at 3 mus, error-growth riding the dashed budget) + 2 PNGs (wall,
+cliff). Spends: velocity ledger + (1/mu)^L + friction-thief-of-memory (D1),
+conservation/leapfrog (D3); new-derived: recompute-vs-store bookkeeping,
+custom_vjp-by-inversion, the noise-budget napkin L*, memory_analysis as
+instrument, dissipation-destroys-information bridge.
+
 ## 4. Concept ledger (what is already spent, do not re-explain)
 
 | concept | established in |
@@ -377,6 +409,7 @@ extrapolation, learned-energy-as-missing-row.
 | depth-telemetry as an instrument (residual-stream path length + per-sub-update turning angle through depth); pre-norm Transformer residual = forward Euler so D1's dictionary transfers; nGPT as first-order-on-a-sphere | D2 |
 | conservation by construction (HNN: field = rotated gradient of a learned scalar, dH/dt = 0 identically, "a loss says please, the architecture says cannot"); the free-field drift diagnosis (errors need a direction to leak; level sets remove it) | D3 |
 | symplectic/leapfrog residual block (kick-drift-kick of a learned potential, state (q,p), h=T/L); the h² shadow-Hamiltonian band measured in a trained net; depth-as-resolution extrapolation (fixed T; the integrator not weight-tying is what survives); learned energy as the missing row (undefined vs unmeasured); marble-on-terrain dictionary table | D3 |
+| reversible backprop by block inversion (custom_vjp with endpoint-only residuals, recompute-vs-store); O(1) activation memory measured flat to depth 512; the (1/mu)^L noise-budget napkin L* = ln(1/eps)/ln(1/mu) locating gradient death; XLA memory_analysis + fresh-process peaks as the honest instruments; dissipation-destroys-information (friction breaks time-reversal); conservation = reversibility = constant-memory training, one property three coats | D4 |
 
 Reuse these only by reference (link the prior post), never by re-derivation.
 

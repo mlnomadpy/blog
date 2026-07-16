@@ -1,0 +1,126 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 460 } = Astro.props;
+---
+<figure class="viz twoledgers" data-caption={caption} data-height={height} data-height-mobile="560" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The two bookkeeping disciplines of backprop, animated as the algorithms
+// actually move. Standard: the forward sweep stores every activation (the
+// stack fills, the meter climbs), then the backward sweep consumes them.
+// Reversible: the forward sweep keeps only the endpoint; the backward sweep
+// RECOMPUTES each earlier state from the later one by inverting the block.
+// The meters are annotated with the run's real measured megabytes.
+import { defineViz } from './engine/vizkit.js';
+import { T, fmt, gate, loadingText, legend } from './engine/draw.js';
+import { load } from './revmem.js';
+
+const L = 24;               // cells drawn; meters cite the real L=512 numbers
+const PHASES = 2 * L;       // forward L, backward L
+
+defineViz('twoledgers', {
+  title: 'Two ways to pay for a gradient',
+  height: 460,
+  stepsPerFrame: 1,
+  autoplay: false,
+  controls: [
+    { type: 'play' }, { type: 'reset' }, { type: 'speed' },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    const st = api.state;
+    st.t = 0;
+    gate(api, () => load(), (a, d) => { a.state.wall = d; });
+  },
+
+  step(api) {
+    const st = api.state;
+    if (!st.ready || !st.wall) return;
+    if (st.t < PHASES) st.t++;
+    else api.pause?.();
+  },
+
+  draw(api) {
+    const { ctx, colors, size: { W, H } } = api, st = api.state;
+    if (!st.ready || !st.wall) { loadingText(api); return; }
+    const t = st.t, fwd = Math.min(t, L), bwd = Math.max(0, t - L);
+    const pad = 16, laneH = (H - 150) / 2, cellW = (W - 2 * pad - 120) / L;
+    const mem = st.wall.memory;
+    const std512 = mem.find((r) => r.L === 512 && r.mode === 'standard');
+    const rev512 = mem.find((r) => r.L === 512 && r.mode === 'reversible');
+
+    const lanes = [
+      { y: 40, name: 'standard backprop: store the past', col: '#c2553a' },
+      { y: 40 + laneH + 34, name: 'reversible backprop: recompute the past', col: '#4a7fb3' },
+    ];
+    lanes.forEach((lane, li) => {
+      T(ctx, colors, 'label');
+      ctx.fillText(lane.name, pad, lane.y - 8);
+      // layer cells
+      for (let i = 0; i < L; i++) {
+        const x = pad + i * cellW, y = lane.y, h = laneH - 58;
+        let fill = 'transparent';
+        if (li === 0) {
+          // standard: stored during forward, consumed from the end during backward
+          const stored = i < fwd && i >= 0 && !(bwd > 0 && i >= L - bwd);
+          fill = stored ? lane.col + '55' : 'transparent';
+        } else {
+          // reversible: only a moving head; transient recompute glow on backward
+          const head = t <= L ? fwd - 1 : L - 1 - bwd;
+          fill = i === head ? lane.col + 'aa' : 'transparent';
+        }
+        ctx.fillStyle = fill;
+        ctx.fillRect(x + 1, y, cellW - 2, h);
+        ctx.strokeStyle = colors.border;
+        ctx.strokeRect(x + 1, y, cellW - 2, h);
+      }
+      // sweep arrow
+      const dir = t <= L ? 1 : -1;
+      const headI = t <= L ? fwd - 1 : L - 1 - bwd;
+      if (headI >= 0 && headI < L) {
+        const hx = pad + headI * cellW + cellW / 2;
+        ctx.fillStyle = colors.ink;
+        ctx.font = '12px ui-monospace, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(dir === 1 ? 'forward' : 'backward', hx, lane.y + laneH - 46);
+        ctx.textAlign = 'left';
+      }
+      // memory meter: standard proportional to stored count, reversible flat
+      const meterX = W - 108, meterW = 88, my = lane.y, mh = laneH - 58;
+      const storedCount = li === 0
+        ? Math.max(0, fwd - Math.max(0, bwd))
+        : 1;
+      const frac = li === 0 ? storedCount / L : 1 / L;
+      ctx.strokeStyle = colors.border;
+      ctx.strokeRect(meterX, my, meterW, mh);
+      ctx.fillStyle = lane.col + '88';
+      const bh = Math.max(2, frac * mh);
+      ctx.fillRect(meterX, my + mh - bh, meterW, bh);
+      T(ctx, colors, 'small');
+      const realMB = li === 0 ? std512.temp_mb : rev512.temp_mb;
+      ctx.fillText(`at depth 512:`, meterX, my + mh + 14);
+      ctx.fillStyle = lane.col;
+      ctx.fillText(`${fmt(realMB, 1)} MB measured`, meterX, my + mh + 28);
+    });
+
+    legend(ctx, pad, H - 40, [
+      { color: '#c2553a', label: 'stored activation (waiting for the backward pass)' },
+      { color: '#4a7fb3', label: 'the only state in memory' },
+    ], colors);
+
+    api.readout('rd', t === 0
+      ? 'press play: one training step, both disciplines'
+      : t <= L
+        ? `forward, layer ${fwd}/${L}: standard has ${fwd} activations banked, reversible has 1 state`
+        : bwd < L
+          ? `backward, layer ${L - bwd}/${L}: standard pops its bank, reversible re-derives each state`
+          : `done. same gradient; the run measured ${fmt(std512.temp_mb, 0)} MB vs ${fmt(rev512.temp_mb, 1)} MB at depth 512`);
+  },
+});
+</script>
