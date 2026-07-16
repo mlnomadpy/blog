@@ -32,7 +32,7 @@ These are hard rules we have converged on. Breaking them has cost rewrites.
 - **No em dashes** anywhere in reader-facing text (prose, captions, on-canvas readouts).
 - `seoTitle` (optional) <= 60 chars for long titles; `seoDescription` <= 160 chars.
 - Posts stay `draft: true` until the user says publish.
-- **Title-pattern watch.** The negation/possessive title families are near saturation: "You Don't Have to / You Only Have to / You Don't Even Have to..." (train-the-features, you-dont-have-to-train-the-features, you-dont-have-to-solve-a-kernel-machine) and "Your Neuron/Network Is..." (your-neuron-is-a-picture, your-network-is-a-fixed-point). One more of either reads as a template. Give the next post a title from a different mold.
+- **Title-pattern watch.** Two title families are at their ceiling; do not extend either. The negation pair "You Only Have to Train the Features" / "You Don't Even Have to Train the Features" (train-the-features, you-dont-have-to-train-the-features) is a *deliberate* coupled escalation across adjacent C3/C4 posts, keep it as the pair it is but add no third. The possessive parallel "Your Neuron Is a Direction. It Should Be a Picture." / "Your Network Is a Stack of Layers. It Could Be a Fixed Point." (your-neuron-is-a-picture, your-network-is-a-fixed-point) is likewise intentional, keep it at two. Any new post takes a title from a different mold. (The C9 draft was the third negation title and broke the rule; retitled to "One Kernel, Fitted Twice" 2026-07-16.)
 
 **Publishing.** Flip `draft: false`, commit the post + its viz components + `public/` assets + `scripts/` + GIFs, push, open a PR to `master`, merge. Merging `master` auto-deploys to `gh-pages` (`.github/workflows/deploy.yml`). The site is `https://tahabouhsine.com/blog`. Sitemap: `https://tahabouhsine.com/blog/sitemap-index.xml`.
 
@@ -227,7 +227,7 @@ prototypes migrating; 5 PNG scoreboards). Spends: everything from C7 by link;
 new-derived: the LR-fairness protocol and the five-dataset viability table.
 
 ### C9. you-dont-have-to-solve-a-kernel-machine  (DRAFT, 2026-07-09; + companion)
-Title: "You Don't Have to Solve a Kernel Machine." The thesis under the whole Arc C
+Title: "One Kernel, Fitted Twice" (slug still `you-dont-have-to-solve-a-kernel-machine`). The thesis under the whole Arc C
 existence-proof frame, stated at the kernel level: the O(n³) Gram solve that emptied
 the kernel field is *plumbing*, not the deal. Take ONE Mercer kernel (the Yat/IMQ
 kernel, arXiv 2605.03262) and fit it twice, once by the exact solve (kernel ridge via
