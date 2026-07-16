@@ -5,7 +5,7 @@ conventions we write to, the story arc of the active (Yat-kernel) series, a
 ledger of which concepts are already "spent" so we stop re-explaining them, and
 the open threads for future posts.
 
-_Last updated: 2026-07-08 (six new JAX companions published; systemic GIF audit: 38 disguised-chart GIFs converted to static figures, 79 real-process GIFs remain; every live post except what-an-mlp-knows now has a live companion). `D` = draft._
+_Last updated: 2026-07-16 (added the C9 draft `you-dont-have-to-solve-a-kernel-machine` + its companion to the catalog, beat log, and concept ledger; backfilled the missing D2 ledger row). `D` = draft._
 
 ---
 
@@ -32,6 +32,7 @@ These are hard rules we have converged on. Breaking them has cost rewrites.
 - **No em dashes** anywhere in reader-facing text (prose, captions, on-canvas readouts).
 - `seoTitle` (optional) <= 60 chars for long titles; `seoDescription` <= 160 chars.
 - Posts stay `draft: true` until the user says publish.
+- **Title-pattern watch.** The negation/possessive title families are near saturation: "You Don't Have to / You Only Have to / You Don't Even Have to..." (train-the-features, you-dont-have-to-train-the-features, you-dont-have-to-solve-a-kernel-machine) and "Your Neuron/Network Is..." (your-neuron-is-a-picture, your-network-is-a-fixed-point). One more of either reads as a template. Give the next post a title from a different mold.
 
 **Publishing.** Flip `draft: false`, commit the post + its viz components + `public/` assets + `scripts/` + GIFs, push, open a PR to `master`, merge. Merging `master` auto-deploys to `gh-pages` (`.github/workflows/deploy.yml`). The site is `https://tahabouhsine.com/blog`. Sitemap: `https://tahabouhsine.com/blog/sitemap-index.xml`.
 
@@ -39,7 +40,7 @@ These are hard rules we have converged on. Breaking them has cost rewrites.
 
 ---
 
-## 2. The catalog (45 posts, five arcs)
+## 2. The catalog (46 posts, five arcs)
 
 Reader-facing series navigation lives in `src/data/series.ts` (SeriesNav on every
 post); keep that file in sync with this catalog when a post publishes.
@@ -92,6 +93,7 @@ capstone (the Yat prototype story returned to the transformer).
 | live | your-network-is-a-fixed-point | your-network-is-a-fixed-point-jax-flax-nnx |
 | live | edit-a-fixed-point | edit-a-fixed-point-jax-flax-nnx |
 | live | survival-model-on-trial | survival-model-on-trial-jax-flax-nnx |
+| **D** | you-dont-have-to-solve-a-kernel-machine | you-dont-have-to-solve-a-kernel-machine-jax-flax-nnx |
 
 ### Arc D: networks as integrators (new, opened 2026-07-04)
 The standing move: numerical analysis as an architecture catalog. Each
@@ -224,6 +226,36 @@ Companion survival-model-on-trial-jax-flax-nnx (2 GIFs: KM tertiles separating,
 prototypes migrating; 5 PNG scoreboards). Spends: everything from C7 by link;
 new-derived: the LR-fairness protocol and the five-dataset viability table.
 
+### C9. you-dont-have-to-solve-a-kernel-machine  (DRAFT, 2026-07-09; + companion)
+Title: "You Don't Have to Solve a Kernel Machine." The thesis under the whole Arc C
+existence-proof frame, stated at the kernel level: the O(n³) Gram solve that emptied
+the kernel field is *plumbing*, not the deal. Take ONE Mercer kernel (the Yat/IMQ
+kernel, arXiv 2605.03262) and fit it twice, once by the exact solve (kernel ridge via
+Cholesky, float64), once by plain gradient descent on a small bank of prototypes
+(`scripts/kernel_solve_wall.py`, Kaggle, LR-swept + best-epoch, 3 seeds). California
+Housing (4,000 districts): exact solve RMSE **0.491** (4,000 coeffs, 0.7 s) vs
+descended K=64 **0.512 ± 0.002** (640 params); prediction correlation on held-out
+districts **r = 0.95** across K=16/64/128, i.e. the same function reached two ways.
+Then descent walks through three walls the solve dies at: (1) a *measured memory wall*
+at **n = 16,000** rows (Gram outgrows 16 GB; cubic projection past it), (2) Covertype
+**511,012** rows the solve cannot enter whole (its 64k Gram = 33 GB) so it gets the
+biggest subsample that fits, **85.5%** at 16k, then goes silent, while the descended
+net minibatches (512) through the full set and its capacity ladder K=64→1,024 climbs
+to **85.9% ± 0.1**, past the solve's best, (3) the end-to-end conv trunk the solve
+*constitutionally cannot be* (a solve is a closed procedure, not a layer). Random
+features (Rahimi–Recht 2007) is the control at the bottom of the ladder: the escape
+that kept the gradient step by giving up the kernel object. Viz (fresh, live jax-js,
+`solvewall.js`): TheWall (measured cost vs cubic projection), PastTheWall (Covertype
+accuracy-vs-rows, solve's shaded dead zone), SameMachineTwice (r=0.95 agreement),
+WhatEachMachineSees (prototypes vs held rows). Companion
+you-dont-have-to-solve-a-kernel-machine-jax-flax-nnx (Cholesky solve + Flax NNX
+descended module side by side, the timing wall, 511k minibatching, the conv trunk).
+Spends: RKHS/representer/Mercer + centers-in-input-space (C0/C1), prototype-as-picture
+(C1), the "kernel machine by plain gradient descent, no solve" existence-proof frame
+that all of Arc C rides on; new-derived: the solve-is-plumbing argument, the three
+walls (memory / scale / composition), r=0.95 solve-vs-descend equivalence, random
+features as the historical escape.
+
 ### D1. skip-connections-are-half-of-newton  (LIVE, 2026-07-04; opens Arc D)
 A skip connection x + f(x) is forward Euler: depth=time, hidden state=position,
 residual branch=vector field; Euler is HALF of Newton, there is no velocity anywhere.
@@ -266,6 +298,14 @@ turning angle per sub-update) as an instrument.
 
 | concept | established in |
 | --- | --- |
+| pointwise activations wreck manifold geometry (diagonal-Jacobian modulation) | activations-are-bad-for-geometry |
+| **opposition is not difference**: max difference of unit vectors is orthogonality (cos 0), not antipodality (cos -1); antiparallel pairs collapse to a 1-D line and waste a dimension | opposite-is-not-different |
+| cross-entropy singularity asymmetry (disjoint support ~ orthogonality; KL blows up at the boundary contrastive losses aim for); the overgeneration/hallucination lopsidedness; why InfoNCE needs huge batches (negatives concentrate near cos 0) | not-all-infinities-are-equal |
+| contrastive-loss history/taxonomy (pair/triplet/InfoNCE/CLIP/SupCon/SigLIP/align+uniform/cos->0); "which losses know when to stop" | untangling-the-moons |
+| the latent codebook: collapse; **regular simplex** as optimal centered code (pairwise cos -1/(C-1)); Welch bound + equiangular tight frame when concepts outnumber dimensions; neural collapse | welch-bound-good-latent-space |
+| latent space = lossy finite-dim encoding of a label-similarity kernel; codebook = top eigenmodes, dark knowledge rides the modes below; structured codebook makes better mistakes; simplex is optimal only when classes are strangers | latent-on-the-spectrum |
+| three states of information (random/organized/structured, matter analogy); loss plateaus = reorganization before it shows in the loss | three-states-of-information |
+| separate-vs-represent tradeoff; the modality gap as a chosen readout, not a bug | modality-gap-complementary (D) |
 | direction vs prototype; neuron as a picture | C1 |
 | no-training hand-built classifier (place prototypes + one-hot) | C1, C2 |
 | Yat kernel is positive-definite / Mercer; RKHS feature map; representer theorem; centers live in input space (so pictures) | C0, C1 |
@@ -292,12 +332,16 @@ turning angle per sub-update) as an instrument.
 | readout-vs-dynamics row split in equilibrium editing; certificate as load-bearing wall; edit evaporation; silenced-vs-erased | C5.5 (draft) |
 | Cox partial likelihood + DeepSurv as a Yat vote over prototype patients; survival as a resemblance sum; Nadaraya-Watson survival curve from neighbors | C7 |
 | exact closed-form cohort deletion on dense covariates (delta h = -a_u phi_u(x)); "exact and local" vs "provably unchanged"; kernel-max OOD on tabular clinical data | C7 |
+| the O(n³) Gram solve is plumbing not the deal; solve-vs-descend equivalence of one kernel (r=0.95); the three walls a solve dies at (memory / scale / composition); random features (Rahimi-Recht) as the historical escape that kept the gradient step by dropping the kernel object | C9 |
+| depth-telemetry as an instrument (residual-stream path length + per-sub-update turning angle through depth); pre-norm Transformer residual = forward Euler so D1's dictionary transfers; nGPT as first-order-on-a-sphere | D2 |
 
 Reuse these only by reference (link the prior post), never by re-derivation.
 
 ---
 
 ## 5. Open threads / candidate next posts
+
+**Redundancy watch (2026-07-16 audit).** The ledger discipline is holding: shared concepts are mostly reused by link, not re-derived (C4 credits C3's ladder and the shared 83.2/85.7 numbers by reference; not-all-infinities uses orthogonality as an *analogy* for the KL singularity, a distinct argument). Two live items to fix rather than grow: (a) `welch-bound-good-latent-space` re-states the opposition-collapses-a-dimension / orthogonality-is-the-real-target claim that `opposite-is-not-different` owns, with no cross-link (a one-clause credit closes it; done 2026-07-16). (b) The negation/possessive title families are near saturation (see the title-pattern watch in §1). No true duplicate post exists. The root cause of Arc A re-derivation was that the concept ledger had no Arc A ownership rows; those are now added (see §4).
 
 Audited against the catalog (re-audited 2026-07-02); these are genuinely uncovered.
 
