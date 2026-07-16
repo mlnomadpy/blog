@@ -6,6 +6,8 @@ Long-form machine-learning research notes by Taha Bouhsine (Machine Learning Res
 
 ## Posts
 
+- [An Error Controller for a Trained Net, in JAX](https://tahabouhsine.com/blog/depth-on-demand-jax-flax-nnx/) (2026-07-16): Step-doubling error control on a trained JAX leapfrog net: reference-grade fidelity, per-input work, and the measured one-third power law, code included.
+- [Depth on Demand](https://tahabouhsine.com/blog/depth-on-demand/) (2026-07-16): An error-controlled adaptive stepper on a trained leapfrog net: reference-grade fidelity at a fraction of the steps, a measured tol^(-1/3) law, no retraining.
 - [Reversible Backprop as a custom_vjp in JAX](https://tahabouhsine.com/blog/backprop-without-the-memory-jax-flax-nnx/) (2026-07-16): Reversible backprop in JAX: a custom_vjp that inverts the momentum block layer by layer, measured flat at 3.2 MB to depth 512 against 674 MB standard.
 - [Backprop Without the Memory](https://tahabouhsine.com/blog/backprop-without-the-memory/) (2026-07-16): Reversible backprop measured: activation memory flat at 3.2 MB to depth 512 vs 674 MB standard, exact gradients, and the (1/mu)^L cliff that prices the rewind.
 - [Building the Energy-Conserving Net in JAX/Flax NNX](https://tahabouhsine.com/blog/a-network-that-conserves-energy-jax-flax-nnx/) (2026-07-16): HNN and leapfrog-ResNet in Flax NNX: learned scalar, symplectic gradient, kick-drift-kick blocks, depth as lax.scan, with GIFs from the real run.
