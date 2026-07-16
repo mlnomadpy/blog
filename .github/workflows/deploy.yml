@@ -32,5 +32,10 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
           publish_branch: gh-pages
-          cname: tahabouhsine.com
+          # No cname here: the blog is a PROJECT page served at
+          # www.tahabouhsine.com/blog/ (base=/blog) as a subpath of the
+          # mlnomadpy.github.io user site, which owns the custom domain.
+          # Writing a CNAME=tahabouhsine.com into this repo's gh-pages branch
+          # conflicts with that verified domain and makes GitHub disable this
+          # repo's Pages site (the whole /blog 404 outage).
           commit_message: 'deploy: ${{ github.sha }}'
