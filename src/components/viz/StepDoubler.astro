@@ -1,0 +1,129 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 450 } = Astro.props;
+---
+<figure class="viz stepdoubler" data-caption={caption} data-height={height} data-height-mobile="540" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The error controller, watched making its decisions on the real trained net.
+// Each tick: take one full step and two half steps from the same state,
+// compare (the probe), and either accept the finer result and move on, or
+// reject, halve the step, and retry. The bar shows the step size h breathing;
+// the trail shows the accepted states, spaced as the controller chose.
+import { defineViz } from './engine/vizkit.js';
+import { T, dot, fmt, axes, gate, loadingText, legend } from './engine/draw.js';
+import { load, encode, leap, renderAdaptive, T_TOTAL, L_TRAIN, DIM } from './adepth.js';
+
+defineViz('stepdoubler', {
+  title: 'The controller at work',
+  height: 450,
+  stepsPerFrame: 1,
+  autoplay: false,
+  controls: [
+    { type: 'play' }, { type: 'reset' }, { type: 'speed' },
+    { type: 'select', name: 'tol', label: 'tolerance', value: '0.03',
+      options: [{ value: '0.3', label: 'tol 0.3' }, { value: '0.03', label: 'tol 0.03' }, { value: '0.003', label: 'tol 0.003' }] },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    const st = api.state;
+    st.i = 0; st.events = null;
+    gate(api, () => load('models'), (a, d) => { a.state.m = d.spirals.model; a.state.X = d.spirals.X; });
+  },
+
+  step(api) {
+    const st = api.state;
+    if (!st.ready || !st.m) return;
+    ensureEvents(api);
+    if (st.i < st.events.length - 1) st.i++;
+    else api.pause?.();
+  },
+
+  draw(api) {
+    const { ctx, colors, size: { W, H } } = api, st = api.state;
+    if (!st.ready || !st.m) { loadingText(api); return; }
+    ensureEvents(api);
+    if (st.i === 0) st.i = Math.min(6, st.events.length - 1);
+    const pad = 16, box = { x: pad, y: 30, w: W - 2 * pad, h: H - 210 };
+    const evs = st.events.slice(0, st.i + 1);
+
+    // bounds over the whole trajectory
+    let R = 0.5;
+    st.events.forEach((e) => { R = Math.max(R, Math.abs(e.q[0]), Math.abs(e.q[1])); });
+    R *= 1.15;
+    axes(ctx, box, { xMin: -R, xMax: R, yMin: -R, yMax: R }, colors);
+    T(ctx, colors, 'label');
+    ctx.fillText('the hidden state, first two coordinates of q, accepted states only', box.x, box.y - 8);
+    const px = (q) => [box.x + ((q[0] + R) / (2 * R)) * box.w,
+                       box.y + (1 - (q[1] + R) / (2 * R)) * box.h];
+    ctx.strokeStyle = '#4a7fb366'; ctx.lineWidth = 1; ctx.beginPath();
+    evs.forEach((e, i) => {
+      const [x, y] = px(e.q);
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    });
+    ctx.stroke();
+    evs.forEach((e, i) => {
+      const [x, y] = px(e.q);
+      dot(ctx, x, y, i === evs.length - 1 ? 5 : 2.6, e.rejected ? '#c2553a' : '#4a7fb3');
+    });
+
+    // the h bar: step size breathing
+    const bx = pad, bw = W - 2 * pad, by = H - 150, bh = 26;
+    const cur = evs[evs.length - 1];
+    ctx.strokeStyle = colors.border; ctx.strokeRect(bx, by, bw, bh);
+    const hFrac = Math.min(1, cur.h / (T_TOTAL / 4));
+    ctx.fillStyle = cur.rejected ? '#c2553a88' : '#4a7fb388';
+    ctx.fillRect(bx, by, Math.max(2, hFrac * bw), bh);
+    T(ctx, colors, 'small');
+    ctx.fillText(`step size h = ${cur.h.toFixed(4)}  (training render used h = ${(T_TOTAL / L_TRAIN).toFixed(3)}, drawn as the tick)`, bx, by + bh + 16);
+    const tickX = bx + Math.min(1, (T_TOTAL / L_TRAIN) / (T_TOTAL / 4)) * bw;
+    ctx.strokeStyle = colors.ink; ctx.beginPath(); ctx.moveTo(tickX, by - 4); ctx.lineTo(tickX, by + bh + 4); ctx.stroke();
+
+    legend(ctx, pad, H - 96, [
+      { color: '#4a7fb3', label: 'accepted (the two half-steps agreed with the full step)' },
+      { color: '#c2553a', label: 'rejected (probe disagreed: halve h, retry from the same state)' },
+    ], colors);
+
+    api.readout('rd', cur.rejected
+      ? `probe error ${cur.err.toExponential(1)} > tol: refine`
+      : `t = ${fmt(cur.t, 2)} / ${T_TOTAL}: accepted at error ${cur.err ? cur.err.toExponential(1) : '0'}, ${cur.work} field evaluations so far`);
+  },
+});
+
+function ensureEvents(api) {
+  const st = api.state;
+  const tol = parseFloat(api.get('tol'));
+  if (st.events && st.tol === tol) return;
+  st.tol = tol; st.i = 0;
+  // replay the controller on one spirals input, recording every probe decision
+  const m = st.m, x = st.X[3];
+  let [q, p] = encode(m, x);
+  let t = 0, h = T_TOTAL / L_TRAIN, work = 0, guard = 0;
+  const evs = [{ q: [q[0], q[1]], h, t, work, err: 0, rejected: false }];
+  const hMin = T_TOTAL / 4096;
+  while (t < T_TOTAL - 1e-9 && guard++ < 2000) {
+    h = Math.min(h, T_TOTAL - t);
+    const [q1, p1] = leap(m, h, q, p);
+    const [qh, ph] = leap(m, h / 2, q, p);
+    const [q2, p2] = leap(m, h / 2, qh, ph);
+    work += 3;
+    let err = 0;
+    for (let i = 0; i < DIM; i++) err = Math.max(err, Math.abs(q1[i] - q2[i]), Math.abs(p1[i] - p2[i]));
+    if (err > tol && h > hMin) {
+      evs.push({ q: [q[0], q[1]], h, t, work, err, rejected: true });
+      h /= 2;
+      continue;
+    }
+    q = q2; p = p2; t += h;
+    evs.push({ q: [q[0], q[1]], h, t, work, err, rejected: false });
+    if (err < tol / 4) h = Math.min(h * 2, T_TOTAL / 4);
+  }
+  st.events = evs;
+}
+</script>

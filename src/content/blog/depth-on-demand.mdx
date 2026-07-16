@@ -1,0 +1,89 @@
+---
+title: "Depth on Demand"
+seoTitle: "Depth on Demand: Adaptive-Step Networks"
+description: "The last post made depth a resolution: layers are time steps of a learned flow, and running more of them just renders the same trajectory finer. But every camera knows not to spend equal film on empty sky. This post gives a trained network the integrator's next tool, an error controller that chooses its own step size per input, with no retraining: the same weights, rendered to tolerance. The controller reproduces the reference verdicts at a fraction of the steps, its cost follows the integrator's textbook one-third power law, and the map of where it spends is a genuine surprise: effort tracks the stiffness of the learned flow, not the difficulty of the classification."
+seoDescription: "An error-controlled adaptive stepper on a trained leapfrog net: reference-grade fidelity at a fraction of the steps, a measured tol^(-1/3) law, no retraining."
+pubDate: 2026-07-16T14:00:00-07:00
+draft: false
+companion: depth-on-demand-jax-flax-nnx
+tags: [integrators, adaptive-step, depth, computation-time, resnets, jax]
+references:
+  - authors: "Hairer, E., Nørsett, S. P., Wanner, G."
+    year: 1993
+    title: "Solving Ordinary Differential Equations I: Nonstiff Problems"
+    venue: "Springer"
+  - authors: "Graves, A."
+    year: 2016
+    title: "Adaptive Computation Time for Recurrent Neural Networks"
+    arxiv: "1603.08983"
+  - authors: "Chen, R. T. Q., Rubanova, Y., Bettencourt, J., Duvenaud, D."
+    year: 2018
+    title: "Neural Ordinary Differential Equations"
+    arxiv: "1806.07366"
+keywords:
+  - adaptive step size
+  - step doubling
+  - error control
+  - adaptive computation
+  - depth as resolution
+---
+import StepDoubler from '../../components/viz/StepDoubler.astro';
+import TolDial from '../../components/viz/TolDial.astro';
+import EffortField from '../../components/viz/EffortField.astro';
+import PersonalBudget from '../../components/viz/PersonalBudget.astro';
+import CiteAs from '../../components/CiteAs.astro';
+import SeriesNav from '../../components/SeriesNav.astro';
+
+<SeriesNav />
+
+*[The last post](/blog/a-network-that-conserves-energy) ended on a strange gift: a classifier that treats depth as resolution. Its layers are time steps of a learned flow, sixteen steps across a fixed span, and running it at sixty-four just renders the same trajectory finer. Once you see depth that way, an old inefficiency becomes visible. The sixteen steps are *uniform*. Every input, the easy ones and the awkward ones, the gentle stretches of the flow and the hairpin turns, gets the same sixteen. No numerical analyst would integrate a comet that way; they take small steps at perihelion, where the sun bends the orbit hard, and long lazy ones in the outer dark. Their tool is an error controller, and it needs nothing retrained. Can a trained network just... borrow it?*
+
+## A controller with no opinions
+
+The controller in question is the oldest one in the book, step doubling (Hairer, Nørsett, and Wanner, 1993). From the current state, take one step of size $h$. Then take two steps of size $h/2$ from the same place. If the flow is gentle there, the two answers agree and you keep the finer one, banking a cheap step; if the flow is sharp, they disagree, and the disagreement *is* an estimate of your local error, so you halve $h$ and try again. Agree comfortably for a while and $h$ doubles. The renderer speeds up and slows down like a driver reading the road.
+
+Nothing in this loop knows about classification, labels, or networks. It needs a flow to integrate and an error to watch. The [leapfrog classifier](/blog/a-network-that-conserves-energy) provides both: its hidden state $(q, p)$ moves under a learned potential, its layer is a step, and its trained weights stay exactly as they were. We are not proposing an architecture. We are re-rendering a trained network at inference, with the step budget chosen per input by the input's own trajectory.
+
+<StepDoubler caption="The controller working through one real input of the trained spirals net, live. Blue dots are accepted states; red marks a rejected probe, where the full step and the two half steps disagreed beyond tolerance, forcing a halve-and-retry. The bar below is the step size breathing as the flow gets stiff and relaxes; the tick marks the uniform step the network was trained with. Tighten the tolerance and watch the controller get more careful everywhere, but not equally everywhere." />
+
+## Same verdicts, a fraction of the steps
+
+The first question is whether the adaptive render answers the same way the network does. The run's referee is a 256-step uniform render, the flow polished far past anything training used, and the agreement is essentially total: across three datasets, three seeds, and tolerances from 0.3 to 0.003, the adaptive render matches the reference's verdicts on 99 to 100 percent of held-out inputs. At the loosest tolerance it does so in about 16 accepted steps on average; the reference spends 256 everywhere. Reference-grade answers at one sixteenth of the reference's resolution, because resolution is only needed where the flow actually bends.
+
+Accuracy tells the same story sideways: it does not move. On moons and rings, every tolerance from 0.3 to 0.003 posts the same 99.9 to 100 percent the fixed-depth net posts. The verdict of the flow converges long, long before the trajectory is polished, which is exactly the [depth-as-resolution](/blog/a-network-that-conserves-energy) lesson wearing its inference-time clothes.
+
+There is one honest wrinkle, and it is instructive. On spirals, the hardest dataset, the fully-resolved flow and the sixteen-step training render *disagree* on a few percent of inputs. The controller sides with the flow, at 99+ percent agreement with the reference, and whether that helps depends on the seed: one seed's flow beats its own training render on labels, the other two fall behind it, for a three-seed mean of 94.7 against the fixed render's 97.4. The lesson is not that adaptivity costs accuracy; it is that a network trained at sixteen steps calibrated its decisions to the sixteen-step rendering, and the flow's fully-resolved answer is a slightly different function. The controller is faithful to the equation. The equation, fully resolved, is not obligated to be faithful to labels it was fitted through a coarser lens.
+
+## The dial, and the power law hiding in it
+
+Because tolerance is a knob, precision becomes a *dial on computation* that exists at inference time, with no retraining and no architecture change. Crank it and watch what it buys:
+
+<TolDial caption="Crank the tolerance and this panel re-renders 120 held-out inputs through the real trained net at that precision, in your browser: the work histogram shifts, the accuracy readout barely moves. Below, the run's measured dial positions on log-log axes: accepted steps against tolerance, lying along the slope minus-one-third guide that second-order error control predicts. The highlighted dot is your current dial setting." />
+
+The measured cost curve is not just monotone, it is *lawful*. Accepted steps grow as $\mathrm{tol}^{-1/3}$: tighten the tolerance a hundredfold, from 0.3 to 0.003, and the mean accepted steps rise from about 16 to 68, a factor of 4.3 against the power law's predicted 4.6, a measured log-log slope of 0.32. That exponent is the leapfrog's *order* showing through. A second-order method's local error scales as $h^3$, so holding error at tol forces $h \propto \mathrm{tol}^{1/3}$, and steps are $T/h$. The [previous post](/blog/a-network-that-conserves-energy) found the $h^2$ signature of the integrator inside a trained network's energy band; here is its sibling, the $\mathrm{tol}^{-1/3}$ signature, inside the network's *compute bill*. The architecture keeps honoring the contracts of the integrator it is built from.
+
+## Where the effort actually goes
+
+The controller spends unevenly, which was the point. At any fixed tolerance the most expensive input costs three to four times the cheapest: at tol 0.003 on spirals, the range runs from 111 field evaluations to 282. Depth, at last, is a personal expenditure rather than a flat tax. So the natural next belief, the one we held when designing this experiment, is that the expensive inputs are the *hard* ones, the ones near the boundary, and that effort could double as a confidence signal.
+
+The run says no, three seeds in a row. The correlation between an input's work and its difficulty, measured as negative log margin, wobbles between $-0.2$ and $+0.3$ with no consistent sign, on every dataset. Look at the cloud yourself:
+
+<PersonalBudget caption="One dot per held-out input from the run: how decisively the net classifies it (margin, rightward is easier) against what its render cost. A real effort-difficulty link would slope this cloud downward to the right. It does not slope. The per-seed correlations printed below the cloud stay near zero on all three datasets." />
+
+And the map of *where* the flow is expensive settles what effort is actually measuring:
+
+<EffortField caption="The plane of inputs, colored by the work the controller spends to render each one at tolerance 0.03, computed live by the real net. The black stitching is the same network's decision boundary. The expensive ridges do not trace the boundary: they trace the stiff regions of the learned potential, where the state accelerates hard and the probe keeps failing. Effort is a property of the road, not of the destination." />
+
+The picture to keep is the marble on the terrain, one last time. The controller bills for the roughness of the path the marble actually rolls, the hairpins where the learned potential is steep, and a marble can cross rough country on its way to an easy, decisive rest just as it can glide gently to a contested one. This makes the effort signal a different creature from [the fixed-point network's residual halting](/blog/your-network-is-a-fixed-point), which measured distance-to-convergence and did correlate with the boundary. Two kinds of adaptive depth, two different physical quantities: one measures how far the state still has to settle, the other how violently it moves while getting there. Neither one is the margin, and this run is the measurement that says so for the second kind. Graves (2016) learned a halting signal by optimization; the integrator's controller comes free, but what it meters is the dynamics, not the decision.
+
+*Scope: every number is from `scripts/adaptive_depth.py` on Kaggle (bundle `kgl_blog-adaptive-v2`): the D3-family leapfrog classifier trained at sixteen uniform steps on three 2-D datasets, three seeds, then re-rendered by step doubling at five tolerances, with agreement judged against a 256-step uniform reference and work counted as every field evaluation including rejected probes. Accepted-step counts and the power-law fit are means over seeds; the panels run the seed-0 weights live.*
+
+## What the catalog says next
+
+Four integrators in, the pattern of this arc is stable: every structural property of the numerical method survives translation into a network, and pays somewhere unexpected. Euler gave direction, the ledger gave crossings and a rewind, the symplectic step gave a conserved number, and error control just gave inference a dial: computation per input, chosen by the input, at a cost that follows the method's order, from weights that were never told any of this would happen. The catalog is not close to empty, and the next shelf holds the attention mechanism this series has been circling from the other side. That collision is the next post.
+
+<CiteAs
+  slug="depth-on-demand"
+  title="Depth on Demand"
+  pubDate="2026-07-16"
+/>
