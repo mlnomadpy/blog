@@ -1,0 +1,154 @@
+---
+title: "A Network That Conserves Energy"
+seoTitle: "A Network That Conserves Energy: Hamiltonian Nets"
+description: "A pendulum never forgets its energy, and a trained network has no such number to forget. This post builds a residual network whose hidden state carries a conservation law by construction: the block is a symplectic step of a learned energy, so the quantity is held by the architecture, not encouraged by a loss. The learned pendulum keeps its energy to 0.6% where a plain field model leaks 36%, the classifier lands in the pack on accuracy, and the law pays where composition fails: trained at depth 16 and run at four times that, the plain net gives up 31 points on spirals while the leapfrog net holds."
+seoDescription: "Make the residual block a symplectic step of a learned energy and the network conserves it by construction: same accuracy, stable depth extrapolation."
+pubDate: 2026-07-16
+draft: false
+companion: a-network-that-conserves-energy-jax-flax-nnx
+tags: [integrators, hamiltonian, resnets, depth, conservation-laws, jax]
+references:
+  - authors: "Greydanus, S., Dzamba, M., Sprague, N."
+    year: 2019
+    title: "Hamiltonian Neural Networks"
+    arxiv: "1906.01563"
+  - authors: "Chen, R. T. Q., Rubanova, Y., Bettencourt, J., Duvenaud, D."
+    year: 2018
+    title: "Neural Ordinary Differential Equations"
+    arxiv: "1806.07366"
+  - authors: "Sander, M. E., Ablin, P., Blondel, M., Peyré, G."
+    year: 2021
+    title: "Momentum Residual Neural Networks"
+    arxiv: "2102.07870"
+  - authors: "Hairer, E., Lubich, C., Wanner, G."
+    year: 2006
+    title: "Geometric Numerical Integration: Structure-Preserving Algorithms for Ordinary Differential Equations"
+    venue: "Springer"
+keywords:
+  - hamiltonian neural network
+  - symplectic integrator
+  - leapfrog
+  - residual network
+  - conservation law
+  - depth extrapolation
+---
+import PendulumRace from '../../components/viz/PendulumRace.astro';
+import LearnedEnergyMap from '../../components/viz/LearnedEnergyMap.astro';
+import DepthLedger from '../../components/viz/DepthLedger.astro';
+import FinerTime from '../../components/viz/FinerTime.astro';
+import CiteAs from '../../components/CiteAs.astro';
+import SeriesNav from '../../components/SeriesNav.astro';
+
+<SeriesNav />
+
+*A pendulum in a vacuum swings forever, and it does not stay on course by being careful. It stays on course because one number, its energy, is not allowed to change, and every possible mistake would have to change it. Deep networks have nothing like this. A hundred layers in, nothing about a hidden state is promised; whatever the first layer meant by its vector, the hundredth is free to erase. [Two posts ago](/blog/skip-connections-are-half-of-newton) this series started reading depth as time and the residual block as a force, and the dictionary has already paid twice. This post asks for its most physical entry yet: can a network own a conservation law, the way a pendulum does, not as a regularizer that pleads but as an architecture that forbids? And if it can, what is that worth to a classifier that never asked for physics?*
+
+## The fit that should have been enough
+
+Every modeling instinct says the pendulum problem is already solved. You want to learn a dynamical system, so you collect states $(q, p)$, angle and momentum, and you train a network to predict how each state moves: $F_\theta(q, p) \approx (\dot q, \dot p)$. This is supervised learning at its most comfortable. Our plain MLP drives the field error down to a mean squared error of 4.4e-05 on held-out states. The arrows it draws are, to the eye and to three decimal places, the pendulum's arrows.
+
+So integrate it. Start a pendulum at a healthy swing, step it forward with the learned arrows, and let it run for sixty seconds of pendulum time. The trajectory it produces is not the pendulum. It is a spiral wearing a pendulum costume: each loop is slightly wrong, the loops do not close, and by the end of the rollout the model's swing carries 36% more energy than it started with, on its way to more. A model that was right to three decimal places everywhere has become confidently, compoundingly wrong.
+
+Where did the error come from, if every arrow was almost perfect? From the word *almost*, and from the fact that nothing polices the sum. Each step's error is tiny and essentially random, but random errors in a free model have a full plane to wander in, and a random walk does not stay home. The energy of the learned trajectory is a number nothing defends, so it drifts, and every drift compounds into the next loop's geometry. The real pendulum faces the same buffeting from truncation and floating point, and does not care. Which should stop you: what does the *real* system have that the learned one lacks?
+
+Not smaller errors. A missing dimension. The true pendulum's motion is chained to a level set of its energy: the state can slide *along* the set, but the physics offers no direction that leaves it. An error can only push you where movement is possible, and off the level set is not a place movement exists. The free model has no such chain. Its two outputs can point anywhere, so its errors can too.
+
+## Learning one number instead of two
+
+That diagnosis suggests a strange repair. If the disease is freedom, remove it: do not let the network draw arrows at all. Let it learn a single scalar $H_\theta(q, p)$, one number per point of phase space, and *define* the motion as the rotation of that scalar's gradient by ninety degrees:
+
+$$
+\dot q = \frac{\partial H_\theta}{\partial p}, \qquad \dot p = -\frac{\partial H_\theta}{\partial q}.
+$$
+
+This is Greydanus, Dzamba, and Sprague's Hamiltonian Neural Network (2019). Count what it gives up. A free field on 2-D phase space is two functions' worth of expressive freedom; this is one function, and not even that function's own gradient, but its gradient turned sideways. The network cannot decide where states go. It can only decide what the terrain is, and the terrain decides where states go: along its contour lines, always, because a rotated gradient is by definition perpendicular to the direction in which the scalar changes.
+
+You would expect to pay for a constraint like that in fit, and this is the first surprise the run hands us: the constrained model fits the arrows *better*, 3.1e-05 against the free model's 4.4e-05. In hindsight it is not magic. The pendulum's true field actually is the rotated gradient of a scalar, so the constraint is not a handicap, it is information: the HNN searches a smaller space that happens to contain the answer. But nothing in the fit numbers prepares you for what happens dynamically. Watch both models run, live, from the same push.
+
+<PendulumRace caption="Two networks trained on the same pendulum arrows, integrated live from the same start, using the real trained weights and the run's own integrator. Left: phase space, both trajectories drawing in real time. Right: the true pendulum energy along each rollout, the dashed line marking where it started. The plain field model, the better-looking spiral, leaks energy loop after loop. The HNN closes its orbit and its energy curve lies flat on the dashed line. Drag the white dot anywhere in phase space and both models restart from your chosen state." />
+
+Over the full rollout the free model drifts 36%; the HNN holds within 0.6%. And now the mechanism is visible rather than asserted: the HNN's trajectory is a closed loop because it is pinned to a contour of a fixed surface. It makes errors, the same truncation and float noise as anything else, but its errors are *tangent* to the level set. There is no direction in its output space that leaks. The plain model's errors were never bigger; they were merely allowed.
+
+The one-line proof is worth seeing after the picture has made it obvious. Along the learned motion,
+
+$$
+\frac{dH_\theta}{dt}
+= \frac{\partial H_\theta}{\partial q}\,\dot q + \frac{\partial H_\theta}{\partial p}\,\dot p
+= \frac{\partial H_\theta}{\partial q}\frac{\partial H_\theta}{\partial p}
+- \frac{\partial H_\theta}{\partial p}\frac{\partial H_\theta}{\partial q}
+= 0 ,
+$$
+
+identically, for every $\theta$, trained or random. Read that twice: the conservation is true *before training starts*. Gradient descent chooses which scalar the network conserves; that it conserves one was settled by the wiring. This series has met this kind of promise once before. When [a prototype network forgets a class](/blog/edit-a-network-by-hand), the forgetting is exact because deleted rows contribute nothing to a sum, an algebraic *cannot* rather than a trained *usually*. Here the same hard promise arrives from geometry instead of algebra: a loss says please, an architecture says cannot.
+
+## The terrain is the knowledge
+
+So the HNN does not store the pendulum's motion at all. It stores a surface, and the motion is a consequence. That surface is sitting in the trained weights right now, and since phase space here is honestly two-dimensional, no projection tricks are needed to look at it, we can just paint it.
+
+<LearnedEnergyMap caption="The scalar the trained HNN actually learned, painted over phase space from the real weights and banded so that each stripe is one level set. Click anywhere to drop a pendulum on a new level set, then press play: the trajectory rides its stripe like a contour line on a hiking map, and the readout tracks the learned H along the way, which does not move. Every orbit the model will ever produce is already drawn on this map as a stripe." />
+
+This is what it means for the scalar to be the model. Ask the HNN "what motions are possible?" and the answer is not a rollout, it is a topographic map: every stripe is an orbit, the closed stripes around the center are swings, and the model's entire dynamical repertoire is one picture. The plain field model has no such picture. Its knowledge is a thousand local arrows with no global object tying them together, which is exactly why nothing ties its rollout together either.
+
+A fair objection lands here: this is a pendulum, two dimensions, a physics toy. Networks that classify do not live on maps. The rest of this post is about how far that objection survives.
+
+## A classifier that swings
+
+The Arc D dictionary says the objection is weaker than it looks. If [depth is time and the residual block is a field](/blog/skip-connections-are-half-of-newton), then a classifier already *is* a dynamical system: the encoder sets an initial condition, the stack flows it, the head reads where it landed. [The velocity ledger](/blog/transformers-with-a-velocity-ledger) upgraded that flow to second order. Nothing in the dictionary says the flow cannot be Hamiltonian. So build it.
+
+Split the hidden state into two halves, position and momentum, $z = (q, p)$ with each half in $\mathbb{R}^4$, and let the only learned object in the block be a scalar potential $V_\theta(q)$ over the position half. One layer is one *leapfrog* step of size $h = T/L$, the workhorse discrete integrator of Hamiltonian mechanics:
+
+$$
+p \leftarrow p - \tfrac{h}{2}\nabla_q V_\theta(q), \qquad
+q \leftarrow q + h\,p, \qquad
+p \leftarrow p - \tfrac{h}{2}\nabla_q V_\theta(q).
+$$
+
+Kick, drift, kick: half a push from the terrain, a glide, half a push. The same shared block repeats at every layer, an encoder lifts each input onto the terrain, a linear head reads the final state, and the whole thing trains by ordinary gradient descent on cross-entropy. In the dictionary this series has been building since D1, every abstract piece has a physical name:
+
+| network object | physical object |
+| --- | --- |
+| hidden state $z=(q,p)$ | a marble's position and velocity |
+| learned potential $V_\theta(q)$ | the terrain the marble rolls on |
+| encoder output | where, and how hard, each input is thrown |
+| one layer | one tick of physics, $h = T/L$ |
+| depth $L$ | how long the marbles roll |
+| the head | reading which valley each marble ended in |
+| learned energy $E_\theta=\tfrac12\lVert p\rVert^2+V_\theta(q)$ | the number no layer may change |
+
+This is the same physical world this series has used since [the attractor fields of Arc C](/blog/edit-a-network-by-hand), landscapes, wells, things that roll, and this time the landscape is not a reading of the model, it *is* the model: training a classifier now means sculpting a terrain such that marbles thrown from different classes swing to separable places. And unlike the pendulum's phase plane, this state space is eight-dimensional, so when the panels below show you a plane of it, that plane is a window, not the room.
+
+A real metaphor earns its keep by predicting, so let it predict. First: marbles rolling on a fixed terrain conserve kick-plus-height, so the network's learned energy $E_\theta$ should hold through depth, not because a loss asks it to but because leapfrog steps are the terrain's own arithmetic. Second, and further out on the limb: for a marble, "sixteen ticks of physics" and "sixty-four finer ticks of the same total time" are the same journey. So a leapfrog classifier trained at depth 16 should survive being *run* at depth 64, where an ordinary sixteen-layer network re-run at sixty-four layers should produce nonsense. Both predictions are checkable, so the run checks both.
+
+## The scoreboard, and the trap in it
+
+What does the constraint cost? On three 2-D benchmarks against a parameter-matched plain residual net, three seeds each: moons 100.0% versus 99.9%, rings 100.0% versus 99.9%, spirals 98.8% versus 92.9%, that last with a ±5.4-point seed spread on the constrained side. Read the scoreboard cold and the conclusion writes itself: the conservation law is free on easy tasks and costs six points on the hard one. If accuracy is the only column you keep, the constraint looks like a tax, and this series does not argue with scoreboards; as everywhere in the Yat program, the claim is the existence proof, a network with a hard conservation law in its hidden state trains by plain gradient descent and lands in the pack.
+
+But the scoreboard is a trap this arc has sprung before. [D1's exactness ceiling](/blog/skip-connections-are-half-of-newton) did not show up in accuracy either, and [D2's ledger](/blog/transformers-with-a-velocity-ledger) tied on quality while rebuilding the road. The question a conservation law answers is not "how often is the argmax right?" It is: what is true of the computation *between* the encoder and the head? So look between.
+
+<DepthLedger caption="The hidden state of both trained networks through depth, stepped live from the real seed-0 weights on real test points, one layer per tick. Each dot is one input's state seen through its first (q, p) window. Below, the row only one network has: the leapfrog net's learned energy per layer, mean over the cloud, holding in a band while the clouds move. The plain panel has no curve, and not because we failed to measure it: with no scalar in the wiring, the quantity is undefined. Pick a dataset and watch its marbles roll." />
+
+The first prediction lands with a precision that is almost embarrassing. At depth 16, where each layer is a coarse $h = 0.375$ tick, the learned energy holds in a band of 0.05 to 0.19 across the datasets, conserved but visibly wobbling. Refine to depth 64, four times smaller $h$, and the band collapses to 0.003 to 0.011, a factor of sixteen to twenty-two. Sixteen is $4^2$. That is the $h^2$ error law of a second-order symplectic integrator, a fact from a numerical analysis textbook (Hairer, Lubich, and Wanner's shadow-Hamiltonian bound), showing up at the promised exponent *inside a trained classifier's hidden state*. The network was never told to exhibit textbook convergence orders. It exhibits them because the block is the textbook's step.
+
+Two boundaries of the law, measured by the same run. The state *norm* grows through depth in both networks, by similar factors; the law conserves $E_\theta$, not $\lVert z\rVert$, and anyone hoping conservation means bounded activations is hoping for the wrong theorem. And at real step sizes the conservation is the discrete, banded kind; the exactly-zero identity belongs to the continuous flow. What the plain network lacks is not a smaller band. It is the row itself: no scalar exists whose band you could report.
+
+## The journey, rendered finer
+
+The second prediction is the one with consequences you can spend. Both networks were trained at depth 16 with total time $T$ fixed, so depth is not "how much network" but "how finely the same journey is rendered". Run the trained weights at depth 64 and a marble takes the same roll in smaller ticks. If the leapfrog net really learned a terrain, its answers should barely move. If the plain net learned sixteen specific compositions, at sixty-four it is a different function wearing the same weights.
+
+<FinerTime caption="Press play: each tick re-runs both trained networks in your browser at the next depth, from 4 layers to 128, measuring held-out accuracy live and repainting each net's decision boundary at that depth. The dashed line marks the training depth. Watch the leapfrog net's boundary sharpen into place and then refuse to move as depth quadruples past training. The plain net's boundary is a different, and worse, boundary at every depth it never trained at." />
+
+At four times its training depth the plain net's spirals accuracy falls from 98.8% to 68.0%, thirty points of the scoreboard gone, and on rings it drops from 100.0% to 86.0%. The leapfrog net goes from 92.9% to 92.4% on spirals and from 99.8% to 99.8% on rings. The six-point tax the scoreboard charged now buys a network whose depth axis can be turned after training, and suddenly the trap in the scoreboard is visible: the two networks were never playing the same game. One learned a function of exactly sixteen steps. The other learned a flow, and sixteen was just the resolution it happened to be rendered at.
+
+This rhymes with something Arc C already saw: [the weight-tied fixed-point network](/blog/your-network-is-a-fixed-point) extrapolated by iterating longer, because its depth was repetition of one operator. But the rhyme sharpens the point rather than repeating it. *Both* networks here share their block across depth, the plain one too, and sharing alone did not save it. What survives the depth change is not tied weights. It is the integrator: fixed total time, steps that mean time, a block that is a physical tick rather than a free function. The extrapolation lives in the numerics, not the parameter count.
+
+## What a law is worth
+
+So what is the law worth, all told? It does not buy accuracy: two tables tie and the free net wins the third by six points at the training depth. It does not bound the state norm. What it buys is structural, and structure compounds. A named, watchable invariant where the plain net has undefined. A depth axis that means resolution, cheap to raise after training, with the failure mode of composition removed. And one more property, paid for by the same geometry, that this post has not spent: a leapfrog step, like [the velocity ledger's step](/blog/skip-connections-are-half-of-newton), is algebraically invertible. Kick, drift, kick can be undone: subtract the second kick, glide back, subtract the first. A network whose every layer can be run backwards does not need to *store* what its layers computed; the backward pass of training can reconstruct activations instead of memorizing them, and the memory bill of depth collapses. That is not a corollary, it is the next post in this arc.
+
+The shelf this block came from is long. Numerical analysis spent a century building integrators that preserve energy, volume, reversibility, time symmetry, each one debugged, each one now a candidate residual block, each one a testable claim about what a trained hidden state does. A pendulum swings for a thousand years on one conserved number. It took one afternoon of gradient descent for a classifier to learn its own number to conserve; the interesting question was never whether networks can have physics, but which physics we should hand them.
+
+---
+
+*Every number in this post is from `scripts/hamiltonian_net.py` (JAX + optax: the pendulum field fits, the RK4 rollouts, and the three-dataset, three-seed network comparison, run on Kaggle; bundle `scripts/results/kgl_blog-hamiltonian-v1/`), reshaped for the panels by `scripts/export_hamiltonian_viz.py`. The in-page panels run the real exported weights live in your browser. The runnable companion builds both networks in Flax NNX.*
+
+<CiteAs slug="a-network-that-conserves-energy" title="A Network That Conserves Energy" pubDate="2026-07-16" />
