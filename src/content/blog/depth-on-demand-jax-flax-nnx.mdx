@@ -55,14 +55,14 @@ def render_adaptive(p, x, tol, h0=T_TOTAL / L_TRAIN, h_min=T_TOTAL / 4096):
 Two bookkeeping decisions matter for honesty. `work` counts *every* leapfrog evaluation, including the probes of rejected steps, because that is what the controller actually costs; `accepted` counts only committed steps, the rendered resolution. The explainer's efficiency claims use `work`; the power law lives in `accepted`. Conflating them flatters the method by a factor of about two, so the run keeps both.
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/adepth-controller.gif" alt="A real input stepped through the trained flow by the controller: accepted states accumulate along the trajectory, a rejected probe flashes as an X, and the step-size bar below breathes, shrinking at stiff stretches and doubling on gentle ones" loading="lazy" />
+  <img src="/blog/adepth-controller.gif" alt="A real input stepped through the trained flow by the controller: accepted states accumulate along the trajectory, a rejected probe flashes as an X, and the step-size bar below breathes, shrinking at stiff stretches and doubling on gentle ones" loading="lazy" />
   <figcaption>The controller on one real spirals input, from the exported weights. Blue dots are accepted states; the X is a rejected probe forcing a halve-and-retry; the bar is the step size breathing against the dashed training step. Every decision is the run's arithmetic.</figcaption>
 </figure>
 
 The same decisions, seen as the step size breathing in time, once per tolerance:
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/adepth-h-breathing.gif" alt="Three staircase traces of step size against integration time for tolerances 0.3, 0.03, 0.003, each drawing forward in time, shrinking at the same stiff stretch of the flow and striding out on the gentle stretches" loading="lazy" />
+  <img src="/blog/adepth-h-breathing.gif" alt="Three staircase traces of step size against integration time for tolerances 0.3, 0.03, 0.003, each drawing forward in time, shrinking at the same stiff stretch of the flow and striding out on the gentle stretches" loading="lazy" />
   <figcaption>The step size along one input's render at three tolerances, drawing in integration time. All three breathe at the same places, the stiff stretches of this input's trajectory, and tightening the tolerance shrinks every step rather than adding uniform ones: 9, 15, and 36 accepted steps for the same journey. The dashed line is the uniform training step.</figcaption>
 </figure>
 
@@ -71,14 +71,14 @@ The same decisions, seen as the step size breathing in time, once per tolerance:
 Sweeping the tolerance re-renders the same inputs at five precisions. The work histogram moves; the verdicts do not:
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/adepth-tol-sweep.png" alt="Five side-by-side histograms of per-input work at tolerances 0.3 to 0.003: the distribution slides right and spreads while the accuracy in each title stays fixed" loading="lazy" />
+  <img src="/blog/adepth-tol-sweep.png" alt="Five side-by-side histograms of per-input work at tolerances 0.3 to 0.003: the distribution slides right and spreads while the accuracy in each title stays fixed" loading="lazy" />
   <figcaption>The tolerance sweep on the trained spirals net, 100 held-out inputs re-rendered at each dial setting. The bill moves; the accuracy in the titles barely does. The distribution also spreads: precision is bought input by input, not in bulk.</figcaption>
 </figure>
 
 The mean of that moving histogram is lawful. Accepted steps against tolerance on log-log axes, all three datasets, with the second-order method's slope drawn once:
 
 <figure class="jax-fig">
-  <img src="/adepth-power-law.png" alt="Log-log plot of accepted steps against tolerance for moons, rings, spirals, all three lying along a dashed slope minus one-third guide line" loading="lazy" />
+  <img src="/blog/adepth-power-law.png" alt="Log-log plot of accepted steps against tolerance for moons, rings, spirals, all three lying along a dashed slope minus one-third guide line" loading="lazy" />
   <figcaption>The measured accepted-step means across the tolerance sweep, three datasets, three seeds each. The dashed guide is the tol^(-1/3) a second-order integrator's error control predicts; the measured log-log slope is 0.32.</figcaption>
 </figure>
 
@@ -87,7 +87,7 @@ The mean of that moving histogram is lawful. Accepted steps against tolerance on
 The run's most useful negative result is the geography of effort. Rendering every point of the input plane at one tolerance and coloring by work:
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/adepth-effort-field.gif" alt="The input plane being swept row by row, each cell colored by the work the controller spent there, with the data points overlaid; the bright expensive ridges do not follow the class boundary" loading="lazy" />
+  <img src="/blog/adepth-effort-field.gif" alt="The input plane being swept row by row, each cell colored by the work the controller spent there, with the data points overlaid; the bright expensive ridges do not follow the class boundary" loading="lazy" />
   <figcaption>The effort field computed row by row by the real renderer at tol 0.03, data points overlaid. The expensive ridges follow the stiff regions of the learned potential, not the decision boundary; the correlation between work and classification margin stays near zero on all seeds.</figcaption>
 </figure>
 
