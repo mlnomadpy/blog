@@ -86,7 +86,7 @@ rev_forward.defvjp(rev_fwd, rev_bwd)
 Two details carry the memory claim. The residual tuple in `rev_fwd` holds the endpoint and the parameters, nothing indexed by depth. And the backward `lax.scan` re-derives `x_prev` before calling `f_vjp`, so the local VJP always has the input it needs without anyone having stored it. The bookkeeping through the ledger, `gv_local = gv_n + H_STEP * gx_n` and `gv_p = MU * gv_local`, is just the chain rule of the two forward lines, written by hand once.
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/revmem-ledger.gif" alt="Two lanes of layer cells animated through one training step: the standard lane banks an activation per layer and its memory meter climbs; the reversible lane carries a single moving state and its meter stays flat; meters labeled with the measured 674.0 and 3.2 MB at depth 512" loading="lazy" />
+  <img src="/blog/revmem-ledger.gif" alt="Two lanes of layer cells animated through one training step: the standard lane banks an activation per layer and its memory meter climbs; the reversible lane carries a single moving state and its meter stays flat; meters labeled with the measured 674.0 and 3.2 MB at depth 512" loading="lazy" />
   <figcaption>The two disciplines, one training step. The standard lane's bank fills during the forward sweep and drains during the backward; the reversible lane never holds more than one state. Meters carry the run's measured activation memory at depth 512.</figcaption>
 </figure>
 
@@ -109,7 +109,7 @@ The two instruments agree on the story:
 | 512 | 674.0 MB | 3.2 MB | 83.0 ms | 103.1 ms |
 
 <figure class="jax-fig">
-  <img src="/revmem-wall.png" alt="Log-log plot of activation memory against depth: the standard line climbs linearly from 13.4 to 674 MB while the reversible line is flat at 3.2 MB" loading="lazy" />
+  <img src="/blog/revmem-wall.png" alt="Log-log plot of activation memory against depth: the standard line climbs linearly from 13.4 to 674 MB while the reversible line is flat at 3.2 MB" loading="lazy" />
   <figcaption>The wall, measured by XLA's own analysis of each compiled step. Standard backprop's scratch grows linearly in depth; the reversible pass does not know how deep the network is.</figcaption>
 </figure>
 
@@ -129,21 +129,21 @@ def rewind(F, xL, vL, mu, L):
 ```
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/revmem-rewind-shear.gif" alt="Three panels, mu 0.9, 0.6, 0.3: blue forward trajectories through 64 float32 momentum layers, then orange reconstructed states rewound from the endpoint; at 0.9 the dots land on the trails, at 0.6 they deviate visibly, at 0.3 they scatter with error 1e10" loading="lazy" />
+  <img src="/blog/revmem-rewind-shear.gif" alt="Three panels, mu 0.9, 0.6, 0.3: blue forward trajectories through 64 float32 momentum layers, then orange reconstructed states rewound from the endpoint; at 0.9 the dots land on the trails, at 0.6 they deviate visibly, at 0.3 they scatter with error 1e10" loading="lazy" />
   <figcaption>The same rewind at three frictions, real float32 arithmetic. At mu = 0.9 the reconstruction lands on every footprint (error 4e-05 over 64 layers). At 0.6 it visibly shears. At 0.3 the error reaches ten billion: the algebra is exact and the arithmetic is not.</figcaption>
 </figure>
 
 And the growth is not vaguely exponential, it is the *predicted* exponential. Plotting the reconstruction error as the rewind proceeds, against the budget $\varepsilon_{32} (1/\mu)^{\ell}$ drawn dashed:
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/revmem-error-growth.gif" alt="Log-scale reconstruction error growing with each backward step for mu 0.9, 0.6, 0.3, each measured curve running parallel to its dashed predicted budget line" loading="lazy" />
+  <img src="/blog/revmem-error-growth.gif" alt="Log-scale reconstruction error growing with each backward step for mu 0.9, 0.6, 0.3, each measured curve running parallel to its dashed predicted budget line" loading="lazy" />
   <figcaption>Reconstruction error, measured at every backward step (solid) against the noise budget (dashed), one color per friction. Each curve rides its prediction's slope. The budget is not a bound, it is the mechanism.</figcaption>
 </figure>
 
 On the full network the run measures gradient agreement (cosine between the rewind gradient and the stored-activation gradient on identical weights and batch): 1.000000 everywhere the budget is small, 0.30 at $\mu = 0.6$, depth 32, where the budget crosses one, and nan at $\mu = 0.3$, depth 128, where the budget is $10^{66}$.
 
 <figure class="jax-fig">
-  <img src="/revmem-cliff.png" alt="Gradient cosine against depth for three mus with dashed verticals at each mu's predicted death depth; measured cliffs align with predictions" loading="lazy" />
+  <img src="/blog/revmem-cliff.png" alt="Gradient cosine against depth for three mus with dashed verticals at each mu's predicted death depth; measured cliffs align with predictions" loading="lazy" />
   <figcaption>Where the gradient dies, measured against the napkin prediction L* = ln(1/eps)/ln(1/mu) drawn before looking. Inside the budget the rewind gradient is exact to float precision; outside it there is nothing to rescue.</figcaption>
 </figure>
 

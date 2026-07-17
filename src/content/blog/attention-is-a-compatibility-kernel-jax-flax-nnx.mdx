@@ -58,7 +58,7 @@ Three seeds per variant, 12,000 steps, best validation loss on held-out Shakespe
 | yat kernel | 1.5131 ± 0.0071 | 2.183 |
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/yatattn-curves.gif" alt="Validation loss curves for all six runs drawing through 12000 training steps, softmax in red and yat in blue, braiding together and settling 1.4 percent apart" loading="lazy" />
+  <img src="/blog/yatattn-curves.gif" alt="Validation loss curves for all six runs drawing through 12000 training steps, softmax in red and yat in blue, braiding together and settling 1.4 percent apart" loading="lazy" />
   <figcaption>All six runs' validation losses drawing through training, from the run's eval checkpoints. The families braid; the gap at the end is 1.4 percent. No LR sweep favors either side: both use the schedule that the softmax baseline was tuned with, which if anything spots the incumbent a head start.</figcaption>
 </figure>
 
@@ -89,24 +89,24 @@ AUROC 0.509, 0.501, 0.508 across seeds. Null, reported as such.
 The telemetry run snapshots both models' full attention tensors on one fixed validation window at four checkpoints. Two honest ways to look at them: through depth, and through training.
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/yatattn-depth-grid.png" alt="Trained attention maps for all six layers, both models side by side, causal structure changing character with depth" loading="lazy" />
+  <img src="/blog/yatattn-depth-grid.png" alt="Trained attention maps for all six layers, both models side by side, causal structure changing character with depth" loading="lazy" />
   <figcaption>The trained routing through depth, layer 1 to 6, both models on the same Shakespeare window, all heads averaged. Both develop the standard anatomy, local bands early, sparser long-range columns late; six layers are six facts, so this is a grid. The kernel model's maps are the ones computed without an exponential anywhere, and its bands are visibly fatter, the diffuseness the explainer measures as an entropy gap.</figcaption>
 </figure>
 
 Watching a single head read is where the diffuseness difference stops being a statistic. One query position advancing through the window, its full attention row at every position:
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/yatattn-reading.gif" alt="Two attention-row traces advancing across the sequence as the query position moves, the softmax row spiking hard onto single keys while the yat row spreads its mass over several" loading="lazy" />
+  <img src="/blog/yatattn-reading.gif" alt="Two attention-row traces advancing across the sequence as the query position moves, the softmax row spiking hard onto single keys while the yat row spreads its mass over several" loading="lazy" />
   <figcaption>Layer 4, one head, the attention row of each query position as the models read the window left to right, from the trained checkpoints. The softmax row (top) repeatedly spikes onto a single key; the kernel row (bottom) spreads over several. An exponential is a soft argmax; a ratio of polynomials is a genuine weighted average.</figcaption>
 </figure>
 
 <figure class="jax-fig">
-  <img src="/yatattn-checkpoints.png" alt="A grid of attention maps, four training checkpoints by two models, one layer and head, showing near-uniform haze at step 0 sharpening to structured routing at step 12000" loading="lazy" />
+  <img src="/blog/yatattn-checkpoints.png" alt="A grid of attention maps, four training checkpoints by two models, one layer and head, showing near-uniform haze at step 0 sharpening to structured routing at step 12000" loading="lazy" />
   <figcaption>One layer and head at the four telemetry checkpoints, both models: from causal haze to structure. Four snapshots are four facts, so this is a grid, not an animation.</figcaption>
 </figure>
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/yatattn-score-orbit.gif" alt="The two score landscapes over the key plane while the query orbits: the bilinear ramp rotates rigidly while the yat kernel's bright peak travels with the query" loading="lazy" />
+  <img src="/blog/yatattn-score-orbit.gif" alt="The two score landscapes over the key plane while the query orbits: the bilinear ramp rotates rigidly while the yat kernel's bright peak travels with the query" loading="lazy" />
   <figcaption>The two compatibility functions computed live from their formulas while the query orbits the plane: the bilinear ramp only rotates, scoring direction; the kernel's peak travels with the query, scoring direction and place at once. This is the geometry the explainer's draggable panel lets you feel; here it is as one continuous sweep.</figcaption>
 </figure>
 
