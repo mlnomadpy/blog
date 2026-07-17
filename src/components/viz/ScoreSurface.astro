@@ -61,7 +61,7 @@ defineViz('scoresurface', {
     const pad = 16, half = (W - 3 * pad) / 2, boxH = H - 150;
     const boxes = [
       { x: pad, y: 34, w: half, h: boxH, name: 'bilinear: q . k', fn: scoreBilinear },
-      { x: 2 * pad + half, y: 34, w: half, h: boxH, name: 'Yat kernel: (q . k)^2 / (dist^2 + 1)', fn: scoreYat },
+      { x: 2 * pad + half, y: 34, w: half, h: boxH, name: 'Yat kernel: (q . k + b)^2 / (dist^2 + eps)', fn: scoreYat },
     ];
     st.boxes = boxes;
     boxes.forEach((b, bi) => {
@@ -98,10 +98,10 @@ defineViz('scoresurface', {
       if (bi === 0) st.px = [qx, qy];
     });
     T(ctx, colors, 'small');
-    ctx.fillText('brighter = higher score for a key at that position; the white dot is the query q, drag it', pad, H - 66);
+    ctx.fillText('brighter = higher score for a key at that position; the white dot is the query q, drag it; b and eps drawn at their init log 2 (learned per head in the model)', pad, H - 66);
     ctx.fillText('bilinear rewards direction and cannot see distance; the kernel rewards direction AND nearness at once', pad, H - 46);
     const bl = scoreBilinear(st.q, st.q), yt = scoreYat(st.q, st.q);
-    api.readout('rd', `at k = q: bilinear ${fmt(bl, 2)} (and still growing past it), kernel ${fmt(yt, 2)} (its own peak, ||q||^4 over eps)`);
+    api.readout('rd', `at k = q: bilinear ${fmt(bl, 2)} (and still growing past it), kernel ${fmt(yt, 2)} (its own peak, (||q||^2 + b)^2 over eps)`);
   },
 });
 </script>
