@@ -59,7 +59,7 @@ Three seeds per variant, 12,000 steps, best validation loss on held-out Shakespe
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/yatattn-curves.gif" alt="Validation loss curves for all six runs drawing through 12000 training steps, softmax in red and yat in blue, braiding together and settling 1.4 percent apart" loading="lazy" />
-  <figcaption>All six runs' validation losses drawing through training, from the run's eval checkpoints. The families braid; the gap at the end is 1.4 percent. No LR sweep favors either side: both use the schedule that the softmax baseline was tuned with, which if anything spots the incumbent a head start.</figcaption>
+  <figcaption>All six runs' validation losses drawing through training, from the run's eval checkpoints. The families braid; the gap at the end is 1.4 percent. The learning rate was subsequently audited with a full per-variant sweep (see the table below): softmax's optimum is exactly this schedule, and the kernel's quality barely moves with the rate, so the gap survives the fairness check.</figcaption>
 </figure>
 
 ## The telemetry that killed a claim
@@ -83,6 +83,19 @@ auroc = (pos.sum() - len(pos) * (len(pos) - 1) / 2) / (len(pos) * (c == 0).sum()
 ```
 
 AUROC 0.509, 0.501, 0.508 across seeds. Null, reported as such.
+
+## The learning-rate audit
+
+The Yat training recipe says kernel attention wants roughly three times the softmax learning rate, and the original contest ran both variants at softmax's 3e-4. The audit sweep (bundle `kgl_blog-yatattn-lrsweep`, one seed per cell, full 12,000 steps each):
+
+| LR | softmax | yat |
+| --- | --- | --- |
+| 3e-4 | **1.4838** | 1.5166 |
+| 1e-3 | 1.5066 | 1.5098 |
+| 3e-3 | 1.5040 | **1.5007** |
+| 1e-2 | 2.5849 | 1.5092 |
+
+Three seeds re-run at the kernel's best rate (bundle `kgl_blog-yatattn-fair`) give 1.5163 ± 0.0023, within run-to-run noise of the published 1.5131 ± 0.0071, so the quality table stands. The column shapes are the finding: softmax needs its rate found (and dies at 1e-2), while the kernel's entire column sits in a 1 percent band. Per-variant LR overrides and the sweep mode are in `scripts/yat_attention.py` (`SWEEP_LRS`, `LR_YAT`, `LR_SOFTMAX` env knobs).
 
 ## The routing, watched
 

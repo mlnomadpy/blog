@@ -61,7 +61,7 @@ SMK = dict(D=64, LAYERS=2, HEADS=2, T=64, FF=128, BATCH=16, STEPS=60,
            LR=3e-4, DROP=0.0, EVAL_EVERY=30, VAL_BATCHES=2)
 CFG = SMK if SMOKE else FULL
 SEEDS = (0,) if (SMOKE or os.environ.get("TELEMETRY", "0") == "1") else (0, 1, 2)
-VARIANTS = tuple(os.environ.get("VARIANTS", "softmax,yat").split(","))
+VARIANTS = ("softmax", "yat")
 EPS = 1.0
 
 TINY_URL = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
