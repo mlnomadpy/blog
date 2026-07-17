@@ -436,7 +436,14 @@ x both variants; softmax's optimum IS 3e-4 (fair), yat's single-seed optimum 3e-
 (1.5007) but 3 seeds there = 1.5163+-0.0023, within run noise (~0.01) of the
 published 1.5131, so the table stands; the real finding is the robustness
 asymmetry (softmax diverges at 1e-2 to 2.58, yat's whole column sits in a 1%
-band; they tie at every LR except softmax's optimum), now in the post. Panels (fresh, yatattn.js):
+band; they tie at every LR except softmax's optimum), now in the post.
+CANONICAL-KERNEL ARM (2026-07-17, bundle kgl_blog-yatattn-b-v1, user question
+"did you use +b?"): the shipped kernel was the bias-free special case; adding
+per-head learned softplus (b, eps) init log 2 (the recipe's canonical form, +48
+params) gives 1.5089+-0.0020, best kernel entry, gap to softmax 1.1%; edge over
+bias-free is within run noise (stated); clearest effect: learned eps tames
+score_max 443,508 -> 61,221. Learned b/eps trajectories NOT exported (gap if a
+future post wants the drift story). Panels (fresh, yatattn.js):
 ScoreSurface (drag the query, both score landscapes live), GaugeAndMass (the
 shift gauge freezing softmax bars vs the live mass readout), QualityTieBxC
 (six real curves + nulls), HeadsAtWork (real checkpointed maps, scrub

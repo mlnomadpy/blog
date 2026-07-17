@@ -95,7 +95,18 @@ The Yat training recipe says kernel attention wants roughly three times the soft
 | 3e-3 | 1.5040 | **1.5007** |
 | 1e-2 | 2.5849 | 1.5092 |
 
-Three seeds re-run at the kernel's best rate (bundle `kgl_blog-yatattn-fair`) give 1.5163 ± 0.0023, within run-to-run noise of the published 1.5131 ± 0.0071, so the quality table stands. The column shapes are the finding: softmax needs its rate found (and dies at 1e-2), while the kernel's entire column sits in a 1 percent band. Per-variant LR overrides and the sweep mode are in `scripts/yat_attention.py` (`SWEEP_LRS`, `LR_YAT`, `LR_SOFTMAX` env knobs).
+Three seeds re-run at the kernel's best rate (bundle `kgl_blog-yatattn-fair`) give 1.5163 ± 0.0023, within run-to-run noise of the published 1.5131 ± 0.0071, so the quality table stands.
+
+One more arm closes the gap to the canonical kernel, which carries a learned bias inside the square. Per-head `b` and `eps` through softplus, initialized at log 2:
+
+```python
+if variant == "yat_b":
+    b = jax.nn.softplus(s.b_raw.value)[None, :, None, None]
+    eps = jax.nn.softplus(s.eps_raw.value)[None, :, None, None]
+    kappa = ((dots + b) ** 2) / (jnp.maximum(d2, 0.0) + eps)
+```
+
+Three seeds at 3e-3 (bundle `kgl_blog-yatattn-b-v1`): 1.5089 ± 0.0020, the kernel's best entry, at the cost of 48 extra parameters on 2.7 million. Its edge over the bias-free kernel sits at the boundary of run noise; the unambiguous effect is on the score scale, whose maximum falls from 443,508 to 61,221 as the learned denominator grows. The column shapes are the finding: softmax needs its rate found (and dies at 1e-2), while the kernel's entire column sits in a 1 percent band. Per-variant LR overrides and the sweep mode are in `scripts/yat_attention.py` (`SWEEP_LRS`, `LR_YAT`, `LR_SOFTMAX` env knobs).
 
 ## The routing, watched
 
