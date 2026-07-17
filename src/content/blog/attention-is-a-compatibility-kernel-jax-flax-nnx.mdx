@@ -38,24 +38,35 @@ else:
     d2 = (jnp.sum(q * q, -1, keepdims=True)
           + jnp.sum(k * k, -1, keepdims=True).swapaxes(-1, -2)
           - 2 * dots)
-    kappa = (dots * dots) / (jnp.maximum(d2, 0.0) + EPS)     # >= 0, Mercer
+    b = jax.nn.softplus(s.b_raw.value)[None, :, None, None]    # per head
+    eps = jax.nn.softplus(s.eps_raw.value)[None, :, None, None]
+    kappa = ((dots + b) ** 2) / (jnp.maximum(d2, 0.0) + eps)   # >= 0, Mercer
     kappa = jnp.where(mask, kappa, 0.0)
-    mass = kappa.sum(-1, keepdims=True)                       # (B,h,T,1)
+    mass = kappa.sum(-1, keepdims=True)                        # (B,h,T,1)
     w = kappa / (mass + 1e-9)
+```
+
+The kernel scalars are stored raw and passed through a softplus, so admissibility ($b, \varepsilon > 0$) is structural rather than clipped, one pair per head, initialized at zero so the effective values start at $\log 2$:
+
+```python
+if variant == "yat_b":
+    s.b_raw = nnx.Param(jnp.zeros((heads,)))
+    s.eps_raw = nnx.Param(jnp.zeros((heads,)))
 ```
 
 Read the kernel branch against the softmax branch and notice what is missing. There is no exponential, so there is no max-subtraction trick and no shift gauge. The causal mask is `0.0`, not `-inf`, because zero kernel mass *is* exclusion. And `mass`, the row sum that softmax divides away inside its own definition, is a first-class tensor here, kept for telemetry. The pairwise distance is assembled from the same `dots` the score already needed, so the kernel branch costs one extra elementwise pass over the attention matrix, not an extra matmul.
 
-Everything around this branch is deliberately boring: the same `nnx.MultiHead`-style projections, the same pre-norm GPT skeleton, the same AdamW, the same batches in the same order. Both models count 2,719,169 parameters, exactly, because the branch touches no parameter shapes.
+Everything around this branch is deliberately boring: the same projections, the same pre-norm GPT skeleton, the same AdamW, the same batches in the same order. Softmax counts 2,719,169 parameters and the kernel 2,719,217; the difference is exactly the forty-eight learned scalars.
 
 ## The contest
 
-Three seeds per variant, 12,000 steps, best validation loss on held-out Shakespeare:
+Three seeds per variant, 12,000 steps, each at its swept learning rate (3e-4 softmax, 3e-3 kernel), best validation loss on held-out Shakespeare:
 
 | | best-val (nats/char) | bits/char |
 | --- | --- | --- |
 | softmax | 1.4923 ± 0.0060 | 2.153 |
-| yat kernel | 1.5131 ± 0.0071 | 2.183 |
+| yat kernel (learned per-head b, eps) | 1.5089 ± 0.0020 | 2.177 |
+| ablation: b = 0, eps = 1 frozen | 1.5131 ± 0.0071 | 2.183 |
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/yatattn-curves.gif" alt="Validation loss curves for all six runs drawing through 12000 training steps, softmax in red and yat in blue, braiding together and settling 1.4 percent apart" loading="lazy" />
@@ -97,16 +108,9 @@ The Yat training recipe says kernel attention wants roughly three times the soft
 
 Three seeds re-run at the kernel's best rate (bundle `kgl_blog-yatattn-fair`) give 1.5163 ± 0.0023, within run-to-run noise of the published 1.5131 ± 0.0071, so the quality table stands.
 
-One more arm closes the gap to the canonical kernel, which carries a learned bias inside the square. Per-head `b` and `eps` through softplus, initialized at log 2:
+The `b = 0` ablation row is not just a smaller kernel, it is a different mathematical object: the explainer walks through why the universality theorem needs the bias. Empirically the ablation costs a run-noise-sized amount of quality and, more decisively, un-tames the score scale: 443,508 maximum trained score against the full kernel's 61,221.
 
-```python
-if variant == "yat_b":
-    b = jax.nn.softplus(s.b_raw.value)[None, :, None, None]
-    eps = jax.nn.softplus(s.eps_raw.value)[None, :, None, None]
-    kappa = ((dots + b) ** 2) / (jnp.maximum(d2, 0.0) + eps)
-```
-
-Three seeds at 3e-3 (bundle `kgl_blog-yatattn-b-v1`): 1.5089 ± 0.0020, the kernel's best entry, at the cost of 48 extra parameters on 2.7 million. Its edge over the bias-free kernel sits at the boundary of run noise; the unambiguous effect is on the score scale, whose maximum falls from 443,508 to 61,221 as the learned denominator grows. The column shapes are the finding: softmax needs its rate found (and dies at 1e-2), while the kernel's entire column sits in a 1 percent band. Per-variant LR overrides and the sweep mode are in `scripts/yat_attention.py` (`SWEEP_LRS`, `LR_YAT`, `LR_SOFTMAX` env knobs).
+The learned scalars themselves are exported by the telemetry run (bundle `kgl_blog-yatattn-b-telem`), and they tell a per-head specialization story: `b` wanders from its log 2 init across [0.22, 3.40], and `eps` splits, most heads driving it toward zero (sharp, local kernels) while two late-layer heads grow it to 6.4 and 12.7 (smooth, near-global ones). The entropy statistics on the trained maps barely move against the ablation (mean 0.73 vs softmax's 0.48), so the diffuseness mechanism the explainer describes is a property of the polynomial ratio, not of the frozen scalars. The column shapes are the finding: softmax needs its rate found (and dies at 1e-2), while the kernel's entire column sits in a 1 percent band. Per-variant LR overrides and the sweep mode are in `scripts/yat_attention.py` (`SWEEP_LRS`, `LR_YAT`, `LR_SOFTMAX` env knobs).
 
 ## The routing, watched
 

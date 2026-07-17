@@ -73,10 +73,10 @@ defineViz('qualitytiebxc', {
     const sm = st.runs.summary.softmax, yt = st.runs.summary.yat;
     legend(ctx, pad, H - 96, [
       { color: '#c2553a', label: `softmax attention: best-val ${fmt(sm.best_val_mean, 4)} +- ${fmt(sm.best_val_std, 4)}` },
-      { color: '#4a7fb3', label: `yat-kernel attention (no softmax anywhere): ${fmt(yt.best_val_mean, 4)} +- ${fmt(yt.best_val_std, 4)}` },
+      { color: '#4a7fb3', label: `Yat-kernel attention, learned per-head b and eps, no softmax: ${fmt(yt.best_val_mean, 4)} +- ${fmt(yt.best_val_std, 4)}` },
     ], colors);
     T(ctx, colors, 'small');
-    ctx.fillText('both models: 2,719,169 parameters exactly; same data order, schedule, dropout, and evaluation', pad, H - 44);
+    ctx.fillText('softmax 2,719,169 parameters, kernel 2,719,217 (the 48 learned per-head b and eps); same data, dropout, evaluation, each at its swept learning rate', pad, H - 44);
     const mass = st.runs.mass;
     const aur = mass.map((m) => fmt(m.mass_auroc, 3)).join(', ');
     ctx.fillText(`the mass channel's naive test, AUROC of row mass predicting next-token correctness: ${aur} (null, three seeds)`, pad, H - 24);

@@ -10,7 +10,10 @@ export function load(name) {
   return cache[name];
 }
 
-export const EPS = 1.0;
+// the kernel's learned scalars, drawn at their initialization softplus(0) = log 2;
+// in the trained model both are learned per head
+export const B = Math.log(2);
+export const EPS = Math.log(2);
 
 export function dotp(a, b) {
   return a[0] * b[0] + a[1] * b[1];
@@ -22,7 +25,7 @@ export function scoreBilinear(q, k, dh = 2) {
 }
 
 export function scoreYat(q, k) {
-  const d = dotp(q, k);
+  const d = dotp(q, k) + B;
   const dx = q[0] - k[0], dy = q[1] - k[1];
   return (d * d) / (dx * dx + dy * dy + EPS);
 }

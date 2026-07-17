@@ -437,13 +437,21 @@ x both variants; softmax's optimum IS 3e-4 (fair), yat's single-seed optimum 3e-
 published 1.5131, so the table stands; the real finding is the robustness
 asymmetry (softmax diverges at 1e-2 to 2.58, yat's whole column sits in a 1%
 band; they tie at every LR except softmax's optimum), now in the post.
-CANONICAL-KERNEL ARM (2026-07-17, bundle kgl_blog-yatattn-b-v1, user question
-"did you use +b?"): the shipped kernel was the bias-free special case; adding
-per-head learned softplus (b, eps) init log 2 (the recipe's canonical form, +48
-params) gives 1.5089+-0.0020, best kernel entry, gap to softmax 1.1%; edge over
-bias-free is within run noise (stated); clearest effect: learned eps tames
-score_max 443,508 -> 61,221. Learned b/eps trajectories NOT exported (gap if a
-future post wants the drift story). Panels (fresh, yatattn.js):
+CANONICAL-KERNEL PROMOTION (2026-07-17, user: b=0 loses universality per the
+paper, b/eps must be learned per head): the post now DEFINES the kernel as
+(q.k+b)^2/(d^2+eps), b/eps>0 learned per head via softplus init log 2 (+48
+params, stated); universality paragraph added (numerator expands to quadratic+
+linear+constant in alignment; b>0 buys the paper's density theorem, b=0 loses
+it). Headline contest: softmax@3e-4 1.4923+-0.0060 vs kernel@3e-3
+1.5089+-0.0020, gap 1.1%; the b=0/eps=1 run demoted to ablation (1.5131,
+score_max 443,508 vs 61,221). Telemetry re-measured on the canonical kernel
+(bundle kgl_blog-yatattn-b-telem, also exports learned scalars): entropy story
+survives (0.73 vs softmax 0.48, sharp 0.2% vs 22%); DRIFT STORY now measured:
+b wanders [0.22, 3.40] from log 2, eps SPLITS per head (most -> ~0, sharp local
+routers; two late heads -> 6.4/12.7, near-global averagers): "each head chooses
+what kind of statistician to be". The earlier "eps grows to tame the peak"
+mechanism claim was WRONG (most eps shrank) and was removed; only measured
+facts remain. Panels (fresh, yatattn.js):
 ScoreSurface (drag the query, both score landscapes live), GaugeAndMass (the
 shift gauge freezing softmax bars vs the live mass readout), QualityTieBxC
 (six real curves + nulls), HeadsAtWork (real checkpointed maps, scrub
