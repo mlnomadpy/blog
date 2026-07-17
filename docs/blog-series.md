@@ -34,6 +34,14 @@ These are hard rules we have converged on. Breaking them has cost rewrites.
 - Posts stay `draft: true` until the user says publish.
 - **Title-pattern watch.** Two title families are at their ceiling; do not extend either. The negation pair "You Only Have to Train the Features" / "You Don't Even Have to Train the Features" (train-the-features, you-dont-have-to-train-the-features) is a *deliberate* coupled escalation across adjacent C3/C4 posts, keep it as the pair it is but add no third. The possessive parallel "Your Neuron Is a Direction. It Should Be a Picture." / "Your Network Is a Stack of Layers. It Could Be a Fixed Point." (your-neuron-is-a-picture, your-network-is-a-fixed-point) is likewise intentional, keep it at two. Any new post takes a title from a different mold. (The C9 draft was the third negation title and broke the rule; retitled to "One Kernel, Fitted Twice" 2026-07-16.)
 
+**LR fairness in any head-to-head.** Whenever a post compares a Yat/kernel model
+against a baseline, each side gets a per-variant LR sweep + best-epoch selection
+(the survival-trial protocol). Yat variants typically want ~3-10x the softmax LR
+(see the yat-attention-training skill); reusing the baseline's LR under-trains the
+kernel side. The yat-attention post shipped without this and was audited after the
+fact (bundles kgl_blog-yatattn-lrsweep + -fair): the table survived, but only
+because the kernel's quality happens to be LR-flat. Do the sweep BEFORE publishing.
+
 **Publishing.** Flip `draft: false`, commit the post + its viz components + `public/` assets + `scripts/` + GIFs, push, open a PR to `master`, merge. Merging `master` auto-deploys to `gh-pages` (`.github/workflows/deploy.yml`). The site is `https://tahabouhsine.com/blog`. Sitemap: `https://tahabouhsine.com/blog/sitemap-index.xml`.
 
 **Pairing/ordering.** Explainer gets a date-only `pubDate` (sorts at 00:00); its companion gets the same date with a `Txx:00` time so it sorts just after.
@@ -422,7 +430,13 @@ AUROC 0.509/0.501/0.508. Map reading (measured): yat routing is systematically
 MORE DIFFUSE (normalized entropy 0.74 vs 0.48; sharp rows 0% vs 22%) because
 exp is a soft-argmax (log-scale ratios) while polynomial ratios cannot
 concentrate; plausible source of the 1.4%; sharpening dial named ((q.k)^(2m)).
-SLAY (arXiv 2602.04915) = the linear-time payoff. Panels (fresh, yatattn.js):
+SLAY (arXiv 2602.04915) = the linear-time payoff. LR-FAIRNESS AUDIT (2026-07-17,
+bundles kgl_blog-yatattn-lrsweep + kgl_blog-yatattn-fair): sweep over 3e-4..1e-2
+x both variants; softmax's optimum IS 3e-4 (fair), yat's single-seed optimum 3e-3
+(1.5007) but 3 seeds there = 1.5163+-0.0023, within run noise (~0.01) of the
+published 1.5131, so the table stands; the real finding is the robustness
+asymmetry (softmax diverges at 1e-2 to 2.58, yat's whole column sits in a 1%
+band; they tie at every LR except softmax's optimum), now in the post. Panels (fresh, yatattn.js):
 ScoreSurface (drag the query, both score landscapes live), GaugeAndMass (the
 shift gauge freezing softmax bars vs the live mass readout), QualityTieBxC
 (six real curves + nulls), HeadsAtWork (real checkpointed maps, scrub
