@@ -112,6 +112,33 @@ The `b = 0` ablation row is not just a smaller kernel, it is a different mathema
 
 The learned scalars themselves are exported by the telemetry run (bundle `kgl_blog-yatattn-b-telem`), and they tell a per-head specialization story: `b` wanders from its log 2 init across [0.22, 3.40], and `eps` splits, most heads driving it toward zero (sharp, local kernels) while two late-layer heads grow it to 6.4 and 12.7 (smooth, near-global ones). The entropy statistics on the trained maps barely move against the ablation (mean 0.73 vs softmax's 0.48), so the diffuseness mechanism the explainer describes is a property of the polynomial ratio, not of the frozen scalars. The column shapes are the finding: softmax needs its rate found (and dies at 1e-2), while the kernel's entire column sits in a 1 percent band. Per-variant LR overrides and the sweep mode are in `scripts/yat_attention.py` (`SWEEP_LRS`, `LR_YAT`, `LR_SOFTMAX` env knobs).
 
+## Dropping Q and K
+
+The explainer's last experiment removes the projections entirely; the code change is a construction-time skip and a strict mask:
+
+```python
+if s.variant.startswith("goat"):
+    # no Q, no K: the kernel compares raw residual-stream head slices.
+    # Self-mask is STRICT (j < i): with q = k the diagonal is the row
+    # maximum and would collapse the layer to pointwise re-scaling.
+    q = k = split(x)
+    v = split(s.wv(x)) if s.variant == "goat_v" else q
+    mask = jnp.tril(jnp.ones((T, T), dtype=bool), k=-1)
+```
+
+The learning-rate sweep for these tiers was bracketed at both ends (3e-4 up to 1e-1, extending until each curve turned):
+
+| LR | no Q/K (keep V) | no Q/K/V |
+| --- | --- | --- |
+| 3e-4 | 1.5316 | 1.5347 |
+| 1e-3 | 1.5370 | 1.5568 |
+| 3e-3 | 1.5288 | 1.5445 |
+| 1e-2 | 1.5284 | **1.5265** |
+| 3e-2 | **1.5238** | 1.5772 |
+| 1e-1 | 1.6206 | |
+
+Both low-end cells were measured rather than inferred, and both beat their 1e-3 neighbors, a non-monotone pocket a trend extrapolation would have missed. Three seeds at each bracketed optimum give the contest rows in the explainer: 1.5293 ± 0.0041 with V, 1.5343 ± 0.0075 without, at 2,274,545 and 2,052,209 parameters against the full models' 2,719,217. Bundles: `kgl_blog-goat-lrsweep` (+extensions), `kgl_blog-goat-v-v1`, `kgl_blog-goat-nov-v1`.
+
 ## The routing, watched
 
 The telemetry run snapshots both models' full attention tensors on one fixed validation window at four checkpoints. Two honest ways to look at them: through depth, and through training.
