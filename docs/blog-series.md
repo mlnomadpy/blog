@@ -451,7 +451,19 @@ b wanders [0.22, 3.40] from log 2, eps SPLITS per head (most -> ~0, sharp local
 routers; two late heads -> 6.4/12.7, near-global averagers): "each head chooses
 what kind of statistician to be". The earlier "eps grows to tame the peak"
 mechanism claim was WRONG (most eps shrank) and was removed; only measured
-facts remain. Panels (fresh, yatattn.js):
+facts remain. QK-ECTOMY (2026-07-17/18, user: "the kernel is not bilinear, we
+can omit QK"): GOAT tiers added as a section of the SAME post (user chose one
+post over a series). goat_v (no Q/K, keep V; strict self-mask j<i REQUIRED,
+diagonal is the kernel row-max) and goat_nov (no Q/K/V; W_O + 2 scalars/head
+only, zero attention cache). Bracketed-at-both-ends LR sweeps (3e-4..1e-1;
+user forced measuring the low cells, which beat 1e-3, a non-monotone pocket
+inference would have missed): optima goat_v@3e-2, goat_nov@1e-2; LR-optimum
+progression softmax 3e-4 -> kernel 3e-3 -> nov 1e-2 -> v 3e-2 (100x spread).
+3 seeds: goat_v 1.5293+-0.0041 (2,274,545 params, -16%), goat_nov
+1.5343+-0.0075 (2,052,209, -25%); V barely earns its keep once Q/K gone.
+Telemetry (kgl_blog-goat-telem): on raw slices eps GROWS (mean 13.8, vs ->0
+on projections) and b spans [0, 10.2]; entropy stays diffuse 0.72. Bundles:
+kgl_blog-goat-{lrsweep,lrsweep2,lrsweep-low,lrsweep-hi,v-v1,nov-v1,telem}. Panels (fresh, yatattn.js):
 ScoreSurface (drag the query, both score landscapes live), GaugeAndMass (the
 shift gauge freezing softmax bars vs the live mass readout), QualityTieBxC
 (six real curves + nulls), HeadsAtWork (real checkpointed maps, scrub
