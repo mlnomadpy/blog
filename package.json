@@ -8,6 +8,7 @@
     "start": "astro dev",
     "build": "astro build && node scripts/postbuild.mjs",
     "preview": "astro preview",
+    "posters": "SHOW_DRAFTS=true astro build && node scripts/postbuild.mjs && node scripts/gen-posters.mjs",
     "deploy": "npm run build && gh-pages -d dist -b gh-pages -t -m \"deploy: $(git rev-parse --short HEAD)\"",
     "astro": "astro"
   },

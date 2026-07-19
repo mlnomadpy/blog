@@ -443,6 +443,16 @@ article .viz {
   touch-action: pan-y;
 }
 
+/* One-time "press play" nudge on a bespoke viz's Play button while its still
+   preview waits (vizkit viz use their own .vk-ready). The box-shadow pulse works
+   over any button styling; the class is removed for good on the first play. */
+.viz-play-ready { animation: viz-ready-pulse 1.6s ease-out 3; }
+@keyframes viz-ready-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
+  70%, 100% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 0%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) { .viz-play-ready { animation: none; } }
+
 /* Fullscreen toggle button, injected via global script onto every .viz. */
 .viz-fs-btn {
   position: absolute;

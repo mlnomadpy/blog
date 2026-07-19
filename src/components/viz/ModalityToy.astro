@@ -200,11 +200,11 @@ const id = `mt-${Math.random().toString(36).slice(2, 9)}`;
       let mc = 0; for (let q = 0; q < NDISP; q++) mc += (A.z[q][0]*B.z[q][0] + A.z[q][1]*B.z[q][1])/NDISP;
       rsEl.textContent = `classify ${(classAcc(A.z)*100).toFixed(0)}% · recover-t R² ${recoverT(A.z).toFixed(2)} · step ${step}`; };
 
-    const tick = () => { if (!st.playing) return; const lr = parseFloat(lrInp.value);
+    const tick = () => { if (!st.playing) return; if (!cs.isConnected) { stop(); return; } const lr = parseFloat(lrInp.value);
       for (let s = 0, K = +document.getElementById(id + '-spd').value; s < K; s++) trainStep(lr); refresh(); drawS();
       if (step >= MAXSTEP) stop(); else st.raf = requestAnimationFrame(tick); };
     const stop = () => { st.playing = false; playBtn.textContent = '▶ train'; cancelAnimationFrame(st.raf); };
-    const play = () => { if (step >= MAXSTEP) doReset(); st.playing = true; playBtn.textContent = '❚❚ pause'; st.raf = requestAnimationFrame(tick); };
+    const play = () => { playBtn.classList.remove('viz-play-ready'); if (step >= MAXSTEP) doReset(); st.playing = true; playBtn.textContent = '❚❚ pause'; st.raf = requestAnimationFrame(tick); };
     const doReset = () => { stop(); reset(); refresh(); drawS(); };
 
     playBtn.addEventListener('click', () => (st.playing ? stop() : play()));
@@ -223,10 +223,11 @@ const id = `mt-${Math.random().toString(36).slice(2, 9)}`;
     const themeObs = new MutationObserver(() => { colors = readColors(); drawR(); drawS(); });
     themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     const ro = new ResizeObserver(() => { fit(); drawR(); drawS(); }); ro.observe(cr); ro.observe(cs);
-    let kicked = false;
-    const io = new IntersectionObserver((e) => { if (e[0].isIntersecting) { fit(); drawR(); drawS();
-      if (!kicked) { kicked = true; play(); } } else stop(); }, { rootMargin: '0px' });
+    // No autoplay: the still first frame waits for Play (the button pulses once, below).
+    const io = new IntersectionObserver((e) => { if (e[0].isIntersecting) { fit(); drawR(); drawS(); } else stop(); }, { rootMargin: '0px' });
     io.observe(cs);
+    (window.__vizReg || (window.__vizReg = new Set())).add({ n: cs, c: () => { cancelAnimationFrame(st.raf); themeObs.disconnect(); ro.disconnect(); io.disconnect(); } });
+    playBtn.classList.add('viz-play-ready');
   };
 
   setup();

@@ -174,10 +174,10 @@ const id = `cn-${Math.random().toString(36).slice(2, 9)}`;
       readout.textContent = `step ${step}  ·  gap ${(gapAng*180/Math.PI).toFixed(0)}°  ·  cone width A ${(conA.hw*180/Math.PI).toFixed(0)}°  B ${(conB.hw*180/Math.PI).toFixed(0)}°`;
     };
 
-    const tick = () => { if (!st.playing) return; for (let s = 0, K = +document.getElementById(id + '-spd').value; s < K; s++) trainStep(0.01); refresh(); draw();
+    const tick = () => { if (!st.playing) return; if (!c.isConnected) { stop(); return; } for (let s = 0, K = +document.getElementById(id + '-spd').value; s < K; s++) trainStep(0.01); refresh(); draw();
       if (step >= MAXSTEP) stop(); else st.raf = requestAnimationFrame(tick); };
     const stop = () => { st.playing = false; playBtn.textContent = '▶ train'; cancelAnimationFrame(st.raf); };
-    const play = () => { if (step >= MAXSTEP) doReset(); st.playing = true; playBtn.textContent = '❚❚ pause'; st.raf = requestAnimationFrame(tick); };
+    const play = () => { playBtn.classList.remove('viz-play-ready'); if (step >= MAXSTEP) doReset(); st.playing = true; playBtn.textContent = '❚❚ pause'; st.raf = requestAnimationFrame(tick); };
     const doReset = () => { stop(); reset(); refresh(); draw(); };
 
     playBtn.addEventListener('click', () => (st.playing ? stop() : play()));
@@ -190,9 +190,11 @@ const id = `cn-${Math.random().toString(36).slice(2, 9)}`;
     const themeObs = new MutationObserver(() => { colors = readColors(); draw(); });
     themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     const ro = new ResizeObserver(() => { fit(); draw(); }); ro.observe(c);
-    let kicked = false;
-    const io = new IntersectionObserver((e) => { if (e[0].isIntersecting) { fit(); draw(); if (!kicked) { kicked = true; play(); } } else stop(); }, { rootMargin: '0px' });
+    // No autoplay: the still first frame waits for Play (the button pulses once, below).
+    const io = new IntersectionObserver((e) => { if (e[0].isIntersecting) { fit(); draw(); } else stop(); }, { rootMargin: '0px' });
     io.observe(c);
+    (window.__vizReg || (window.__vizReg = new Set())).add({ n: c, c: () => { cancelAnimationFrame(st.raf); themeObs.disconnect(); ro.disconnect(); io.disconnect(); } });
+    playBtn.classList.add('viz-play-ready');
   };
   setup();
   document.addEventListener('astro:page-load', setup);

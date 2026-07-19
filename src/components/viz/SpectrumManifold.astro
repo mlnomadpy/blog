@@ -5,7 +5,7 @@ interface Props {
 }
 const { caption, height = 420 } = Astro.props;
 ---
-<figure class="viz spectrummanifold" data-caption={caption} data-height={height} tabindex="0">
+<figure class="viz spectrummanifold" data-poster="spectrummanifold" data-caption={caption} data-height={height} tabindex="0">
   <div class="viz-cell"></div>
 </figure>
 
@@ -84,7 +84,7 @@ function recompute(api) {
 
 defineViz('spectrummanifold', {
   title: 'What shape does a label kernel want to be?',
-  height: 420, stepsPerFrame: 0.5, autoplay: true,
+  height: 420, stepsPerFrame: 0.5,
   controls: [
     { type: 'select', name: 'mode', label: 'label kernel', value: 'spectrum',
       options: [{ value: 'independent', label: 'independent (strangers)' }, { value: 'taxonomy', label: 'taxonomy (groups)' }, { value: 'spectrum', label: 'spectrum (graded)' }] },

@@ -279,6 +279,7 @@ const cells = [
       if (visible && !was) { fit(); draw(); }
     }, { rootMargin: '120px' });
     io.observe(canvases[0]);
+    (window.__vizReg || (window.__vizReg = new Set())).add({ n: canvases[0], c: () => { themeObs.disconnect(); ro.disconnect(); io.disconnect(); } });
   };
 
   setup();

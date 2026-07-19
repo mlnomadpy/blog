@@ -36,6 +36,7 @@ const id = `clab-${Math.random().toString(36).slice(2, 9)}`;
 <script>
 import * as ng from './engine/nanograd.js';
 import { makeData, DATASETS } from './engine/datasets.js';
+import { onDetach, readyPulse, clearReadyPulse } from './engine/lifecycle.js';
 
 const PAL = ['#b3661b', '#4a7fb3', '#3a8f5e', '#9a4f9c'];
 const LOSSES = [
@@ -133,9 +134,9 @@ function initLab(root) {
     iterEl.textContent = 'iter ' + iter;
   };
 
-  const tick = () => { if (!playing) return; acc += speed; while (acc >= 1) { trainOnce(); acc -= 1; } draw(); raf = requestAnimationFrame(tick); };
+  const tick = () => { if (!playing) return; if (!canvas.isConnected) { stop(); return; } acc += speed; while (acc >= 1) { trainOnce(); acc -= 1; } draw(); raf = requestAnimationFrame(tick); };
   const stop = () => { playing = false; q('[data-act="play"]').textContent = '▶ Play'; cancelAnimationFrame(raf); };
-  const play = () => { playing = true; q('[data-act="play"]').textContent = '❚❚ Pause'; raf = requestAnimationFrame(tick); };
+  const play = () => { clearReadyPulse(q('[data-act="play"]')); playing = true; q('[data-act="play"]').textContent = '❚❚ Pause'; raf = requestAnimationFrame(tick); };
 
   q('[data-act="play"]').addEventListener('click', () => playing ? stop() : play());
   q('[data-act="step"]').addEventListener('click', () => { stop(); trainOnce(); draw(); });
@@ -144,11 +145,15 @@ function initLab(root) {
     root.querySelectorAll('[data-spd]').forEach(x => x.classList.remove('active')); b.classList.add('active'); }));
   [dataSel, nSel, seedInp].forEach(el => el.addEventListener('change', () => { stop(); rebuild(); draw(); }));
 
-  new MutationObserver(() => { colors = readColors(); draw(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-  new ResizeObserver(() => draw()).observe(canvas);
-  let kicked = false;
-  new IntersectionObserver((e) => { if (e[0].isIntersecting) { draw(); if (!kicked) { kicked = true; play(); } } else stop(); }, { rootMargin: '0px' }).observe(canvas);
+  const themeObs = new MutationObserver(() => { colors = readColors(); draw(); });
+  themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  const ro = new ResizeObserver(() => draw()); ro.observe(canvas);
+  // No autoplay: the still first frame waits for Play (the button pulses once, below).
+  const io = new IntersectionObserver((e) => { if (e[0].isIntersecting) draw(); else stop(); }, { rootMargin: '0px' });
+  io.observe(canvas);
+  onDetach(canvas, () => { cancelAnimationFrame(raf); themeObs.disconnect(); ro.disconnect(); io.disconnect(); });
   rebuild(); draw();
+  readyPulse(q('[data-act="play"]'));
 }
 
 const boot = () => document.querySelectorAll('.clab').forEach(initLab);

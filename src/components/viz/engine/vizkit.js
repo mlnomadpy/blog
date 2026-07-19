@@ -51,6 +51,9 @@ const CSS = `
 .viz:fullscreen,.viz:-webkit-full-screen{background:var(--bg);padding:18px;overflow:auto;}
 .viz:fullscreen .vk-cell,.viz:-webkit-full-screen .vk-cell{max-width:min(1280px,100%);margin:0 auto;}
 .viz:fullscreen .vk-cell canvas,.viz:-webkit-full-screen .vk-cell canvas{min-height:min(74vh,760px);}
+.vk-play.vk-ready{animation:vk-ready-pulse 1.6s ease-out 3;}
+@keyframes vk-ready-pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 55%,transparent);}70%,100%{box-shadow:0 0 0 6px color-mix(in srgb,var(--accent) 0%,transparent);}}
+@media (prefers-reduced-motion:reduce){.vk-play.vk-ready{animation:none;}}
 @media (max-width:680px){.vk-range{grid-template-columns:1fr minmax(96px,1.4fr) minmax(34px,auto);width:100%;}.vk-readout{width:100%;margin-left:0;}.vk-tools{margin-left:auto;}}
 `;
 function injectCSS() { if (document.getElementById('vizkit-css')) return; const s = document.createElement('style'); s.id = 'vizkit-css'; s.textContent = CSS; document.head.appendChild(s); }
@@ -126,6 +129,16 @@ function mountOne(root, specOrFactory) {
   let playing = false, raf = 0, iter = 0, acc = 0, colors = readColors();
   let didSetup = false, renderRaf = 0; // setup is deferred to first viewport entry; paints coalesce into one rAF
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Poster mode: a heavy viz can ship a pre-rendered PNG (data-poster) that is
+  // shown, with ZERO compute, until the reader opts in (Play, or first interaction
+  // for a pure-interactive viz). `?vizposter=1` / window.__VIZ_NO_POSTER forces the
+  // live path so the generator can screenshot the real frame. everPlayed gates the
+  // one-time "press play" pulse on the button.
+  let everPlayed = false;
+  const posterName = (root.dataset.poster || '').trim();
+  const noPosterFlag = (() => { try { return new URLSearchParams(location.search).has('vizposter') || !!window.__VIZ_NO_POSTER; } catch { return false; } })();
+  let usePoster = !!posterName && !noPosterFlag; // "still until intent": defer setup entirely
+  let posterImg = null, posterReady = false, posterFailed = false;
 
   const api = {
     get: (n) => vals[n], set: (n, v) => { vals[n] = v; }, state: {}, iter: 0,
@@ -186,11 +199,14 @@ function mountOne(root, specOrFactory) {
     api.setControl(tl.name, tl.int ? Math.round(tl.pos) : tl.pos);
   };
   const loop = (ts) => { if (!playing) return;
+    if (!canvas.isConnected) { stop(); return; } // a view-transition swap detached us mid-play
     if (timeline && !spec.step) { advanceTimeline(ts); if (!playing) return; renderNow(); raf = requestAnimationFrame(loop); return; }
     acc += (spec.stepsPerFrame || 1) * speedMul;
     while (acc >= 1) { spec.step(api); iter++; acc -= 1; if (spec.maxStep && iter >= spec.maxStep) { acc = 0; break; } }
     renderNow(); if (spec.maxStep && iter >= spec.maxStep) { stop(); return; } raf = requestAnimationFrame(loop); };
   const play = () => { if (!hasLoop) return;
+    ensureSetup();                                  // a poster viz has deferred setup until now
+    everPlayed = true; if (playBtn) playBtn.classList.remove('vk-ready');
     if (timeline && !spec.step) { if (timeline.pos >= timeline.max && timeline.loop !== 'pingpong') timeline.pos = timeline.min; timeline.dir = 1; }
     else if (spec.maxStep && iter >= spec.maxStep) doReset();
     lastTs = 0; playing = true; if (playBtn) playBtn.textContent = '❚❚ Pause'; raf = requestAnimationFrame(loop); };
@@ -268,10 +284,66 @@ function mountOne(root, specOrFactory) {
     bar.appendChild(help);
   }
 
+  // ── poster (pre-rendered still) ──
+  // A one-time nudge: pulse the Play button while the still preview waits, cleared
+  // for good on the first play (see play()).
+  const markReady = () => { if (playBtn && hasLoop && !everPlayed) playBtn.classList.add('vk-ready'); };
+  const posterSrc = () => {
+    const base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+    const dark = document.documentElement.dataset.theme === 'dark';
+    return `${base}/viz-posters/${posterName}${dark ? '-dark' : ''}.png`;
+  };
+  // paint the poster to fill the canvas (cover-fit, no distortion); owns its own fit()
+  // so the resize/theme paths can call it directly.
+  const paintPoster = () => {
+    if (!posterReady || !posterImg) return;
+    fit();
+    ctx.clearRect(0, 0, api.size.W, api.size.H);
+    const iw = posterImg.naturalWidth, ih = posterImg.naturalHeight;
+    if (!iw || !ih) return;
+    const s = Math.max(api.size.W / iw, api.size.H / ih);
+    const w = iw * s, h = ih * s;
+    ctx.drawImage(posterImg, (api.size.W - w) / 2, (api.size.H - h) / 2, w, h);
+    markReady();
+  };
+  // theme-correct fallback when the poster image is missing or still loading; keeps
+  // setup deferred so a heavy panel never computes on scroll, just shows a hint.
+  const drawPlaceholder = () => {
+    fit();
+    ctx.clearRect(0, 0, api.size.W, api.size.H);
+    ctx.fillStyle = colors.muted || '#888';
+    ctx.font = '13px ui-monospace, monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(hasLoop ? '▶  press play' : 'click to load', api.size.W / 2, api.size.H / 2);
+    markReady();
+  };
+  const loadPoster = () => {
+    posterReady = false; posterFailed = false;
+    const img = new Image(); posterImg = img;
+    img.onload = () => { if (img !== posterImg) return; posterReady = true; if (!didSetup) paintPoster(); };
+    img.onerror = () => { if (img !== posterImg) return; posterFailed = true; if (!didSetup) drawPlaceholder(); }; // stay deferred
+    img.src = posterSrc();
+  };
+  // repaint the current still (image if loaded, else placeholder); does not re-fetch.
+  const paintStill = () => { if (posterReady && posterImg) paintPoster(); else drawPlaceholder(); };
+  // paint the still on viewport entry, kicking off the (lazy, theme-specific) load once.
+  const showStill = () => { if (posterReady) paintPoster(); else if (posterFailed) drawPlaceholder(); else { drawPlaceholder(); loadPoster(); } };
+  const showingPoster = () => usePoster && !didSetup;
+
   // setup() is deferred to first viewport entry (see the IntersectionObserver
   // below), so nothing computes at page load; a page of panels stays responsive
-  // and each panel does its work only as it scrolls near.
-  const ensureSetup = () => { if (didSetup) return; fit(); doSetup(); didSetup = true; renderNow(); };
+  // and each panel does its work only as it scrolls near. A poster viz defers even
+  // this until Play / first interaction.
+  const ensureSetup = () => { if (didSetup) return; fit(); doSetup(); didSetup = true; renderNow(); markReady(); };
+
+  // A poster viz wakes on intent: a loop viz on Play (see play()); a pure-interactive
+  // one on the first pointer or focus so its controls compute live.
+  if (usePoster) {
+    const wake = () => { if (!didSetup) ensureSetup(); };
+    canvas.addEventListener('pointerdown', wake);
+    bar.addEventListener('pointerdown', wake);
+    root.addEventListener('focusin', wake);
+  }
 
   // keyboard shortcuts on the focusable figure root: space=play/pause, s=step, r=reset
   root.addEventListener('keydown', (e) => {
@@ -283,24 +355,26 @@ function mountOne(root, specOrFactory) {
   // Observers hold closures over this panel; disconnect them once its canvas
   // leaves the DOM (Astro view transitions swap nodes) so they do not pile up.
   const observers = [];
-  const alive = () => { if (canvas.isConnected) return true; observers.forEach((o) => o.disconnect()); document.removeEventListener('fullscreenchange', onFullscreen); document.removeEventListener('webkitfullscreenchange', onFullscreen); return false; };
+  const alive = () => { if (canvas.isConnected) return true; stop(); observers.forEach((o) => o.disconnect()); document.removeEventListener('fullscreenchange', onFullscreen); document.removeEventListener('webkitfullscreenchange', onFullscreen); return false; };
 
-  const themeObs = new MutationObserver(() => { if (!alive()) return; colors = readColors(); render(); });
+  const themeObs = new MutationObserver(() => { if (!alive()) return; colors = readColors(); if (showingPoster()) loadPoster(); else render(); });
   themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-  const resizeObs = new ResizeObserver(() => { if (!alive()) return; fit(); render(); });
+  const resizeObs = new ResizeObserver(() => { if (!alive()) return; if (showingPoster()) paintStill(); else { fit(); render(); } });
   resizeObs.observe(canvas);
   let kicked = false;
-  const onFullscreen = () => { colors = readColors(); fit(); renderNow(); };
+  const onFullscreen = () => { colors = readColors(); if (showingPoster()) paintStill(); else { fit(); renderNow(); } };
   document.addEventListener('fullscreenchange', onFullscreen);
   document.addEventListener('webkitfullscreenchange', onFullscreen);
-  // Preload margin: setup fires when the panel is within ~400px of the viewport,
-  // so its first paint is ready by the time it scrolls in, without doing the work
-  // for every panel up front.
+  // Preload margin: the still preview is ready by the time the panel scrolls in,
+  // without doing the work for every panel up front. Nothing auto-plays: a loop viz
+  // paints its first frame (or poster) and waits for Play, unless it explicitly opts
+  // in with autoplay:true.
   const io = new IntersectionObserver((e) => {
     if (!alive()) return;
     if (e[0].isIntersecting) {
-      if (!didSetup) ensureSetup(); else { fit(); renderNow(); }
-      if (spec.step && spec.autoplay !== false && !reduceMotion && !kicked) { kicked = true; play(); }
+      if (showingPoster()) showStill();
+      else if (!didSetup) ensureSetup(); else { fit(); renderNow(); }
+      if (spec.step && spec.autoplay === true && !reduceMotion && !kicked) { kicked = true; play(); }
     } else stop();
   }, { rootMargin: '400px 0px' });
   io.observe(canvas);
