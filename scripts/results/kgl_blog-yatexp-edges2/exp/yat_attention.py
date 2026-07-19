@@ -65,8 +65,7 @@ SWEEP_LRS = [float(x) for x in os.environ.get("SWEEP_LRS", "").split(",") if x]
 SMK = dict(D=64, LAYERS=2, HEADS=2, T=64, FF=128, BATCH=16, STEPS=60,
            LR=3e-4, DROP=0.0, EVAL_EVERY=30, VAL_BATCHES=2)
 CFG = SMK if SMOKE else FULL
-NORMSWAP = os.environ.get("NORMSWAP", "0") == "1"
-SEEDS = (0,) if (SMOKE or NORMSWAP or os.environ.get("TELEMETRY", "0") == "1") else (0, 1, 2)
+SEEDS = (0,) if (SMOKE or os.environ.get("TELEMETRY", "0") == "1") else (0, 1, 2)
 VARIANTS = tuple(os.environ.get("VARIANTS", "softmax,yat").split(","))
 EPS = 1.0
 
@@ -288,34 +287,6 @@ def run_variant(variant, seed, lr=None):
         out["mass_mean_wrong"] = float(m[c == 0].mean())
         print(f"  [{variant} s{seed}] mass AUROC {auroc:.3f} "
               f"(mean mass correct {m[c==1].mean():.2f} vs wrong {m[c==0].mean():.2f})")
-    if NORMSWAP and variant != "softmax":
-        # the user's crossover test: same trained weights, the OTHER normalizer.
-        # Both normalizers consume the same kappa scores, so the swap is well
-        # defined; it measures whether the learned scores are the real object
-        # or co-adapted to the normalizer they trained under.
-        def eval_final(m):
-            vls = [float(val_loss(m, *get_batch("val", CFG["BATCH"], 77000 + i)))
-                   for i in range(CFG["VAL_BATCHES"])]
-            return float(np.mean(vls))
-        native_final = eval_final(model)
-        other = variant[:-4] if variant.endswith("_exp") else variant + "_exp"
-        for bl in model.blocks:
-            bl.attn.variant = other
-
-        @nnx.jit
-        def val_loss_sw(m, x, y):
-            lg = m(x)
-            return optax.softmax_cross_entropy_with_integer_labels(lg, y).mean()
-
-        vls = [float(val_loss_sw(model, *get_batch("val", CFG["BATCH"], 77000 + i)))
-               for i in range(CFG["VAL_BATCHES"])]
-        swapped_final = float(np.mean(vls))
-        for bl in model.blocks:
-            bl.attn.variant = variant
-        out["normswap"] = dict(native_final=native_final,
-                               swapped_final=swapped_final, tested_as=other)
-        print(f"  [{variant} s{seed}] normswap: native {native_final:.4f} "
-              f"-> as {other} {swapped_final:.4f}")
     if variant.replace("_exp", "") in ("yat_b", "goat_v", "goat_nov"):
         # the learned kernel scalars, per layer x head (the drift story)
         out["b_learned"] = [np.asarray(jax.nn.softplus(bl.attn.b_raw.value)).tolist()
