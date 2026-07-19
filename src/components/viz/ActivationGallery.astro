@@ -164,6 +164,10 @@ const cells = [
         }
       }, { rootMargin: '120px' });
       io.observe(c);
+      // On a view-transition swap this cell's canvas detaches; drop its per-cell
+      // observers and remove it from the shared refs list (which the page-level
+      // themeObs redraws) so stale detached cells do not accumulate.
+      (window.__vizReg || (window.__vizReg = new Set())).add({ n: c, c: () => { ro.disconnect(); io.disconnect(); const i = refs.indexOf(ref); if (i >= 0) refs.splice(i, 1); } });
     });
   };
 

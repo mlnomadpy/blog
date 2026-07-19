@@ -397,11 +397,13 @@ const stages = [
       playing = p;
       const btn = wrap.querySelector('[data-act="play"]');
       if (btn) btn.textContent = playing ? '❚❚ pause' : '▶ play';
+      if (btn && playing) btn.classList.remove('viz-play-ready');
       if (playing) { lastTs = 0; requestAnimationFrame(tick); }
     };
 
     const tick = (ts) => {
       if (!playing) return;
+      if (!c.isConnected) { playing = false; return; } // detached by a view-transition swap
       if (!lastTs) lastTs = ts;
       const dt = ts - lastTs;
       lastTs = ts;
@@ -462,9 +464,8 @@ const stages = [
     }
 
     // Pause when tab is hidden, don't waste battery.
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden && playing) setPlaying(false);
-    });
+    const onVis = () => { if (document.hidden && playing) setPlaying(false); };
+    document.addEventListener('visibilitychange', onVis);
 
     if (zoomGroup) {
       zoomGroup.querySelectorAll('button[data-zoom]').forEach((b) => b.addEventListener('click', () => {
@@ -511,8 +512,11 @@ const stages = [
       const was = visible;
       visible = entries[0].isIntersecting;
       if (visible && !was) { fit(); draw(); }
+      else if (!visible && was && playing) setPlaying(false); // pause when scrolled away
     }, { rootMargin: '120px' });
     io.observe(c);
+    (window.__vizReg || (window.__vizReg = new Set())).add({ n: c, c: () => { playing = false; themeObs.disconnect(); ro.disconnect(); io.disconnect(); document.removeEventListener('visibilitychange', onVis); } });
+    wrap.querySelector('[data-act="play"]')?.classList.add('viz-play-ready');
   };
 
   setup();

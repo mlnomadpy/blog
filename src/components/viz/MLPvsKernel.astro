@@ -309,6 +309,7 @@ const id = `mvk-${Math.random().toString(36).slice(2, 9)}`;
       if (visible && !was) { fit(); draw(); }
     }, { rootMargin: '120px' });
     io.observe(cR);
+    (window.__vizReg || (window.__vizReg = new Set())).add({ n: cR, c: () => { themeObs.disconnect(); ro.disconnect(); io.disconnect(); } });
   };
 
   setup();

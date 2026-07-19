@@ -474,6 +474,23 @@ cheap-attention, calibration's shift-invariance, prototype geometry, Mercer
 memory; new-derived: no-softmax normalization, the mass channel, the
 diffuseness mechanism, boundedness-vs-training distinction.
 
+### BxC addendum: the exponential's second job (2026-07-18, user asked to add exp-of-kernel + scalar viz + normalizer swap)
+Section "The exponential's second job" added to the post. Findings: (1) exp-of-kernel
+(softmax(kappa) not kappa/sum) HELPS: yat_b_exp 1.4968+-0.0054 TIES softmax (1.4923),
+goat_nov_exp 1.5158 beats its L1 twin (1.5343); goat_v_exp worse+unstable (1.5559+-0.043).
+So the exponential had TWO jobs: positivity (kernel replaces) + SHARPENING (L1 can't, exp-on-
+kernel can); char-LM wants near-one-hot copy heads. Bundles kgl_blog-yatexp-{lr-a,lr-b,edges,
+edges2,b-seeds,gv-seeds,gn-seeds}, LR-bracketed both ends (exp arms inherit softmax's LR
+fragility: yat_b_exp diverges at 3e-3, optimum 3e-4 -> the normalizer sets LR appetite, not
+the score). (2) SCALAR LANDSCAPE (yatattn-scalars.png, all 5 variants, per L x head): L1-trained
+heads drive eps->0 (sharpen INSIDE kernel), exp-trained heads leave eps~log2 (sharpen at the
+normalizer). (3) NORMALIZER SWAP (kgl_blog-swap-*, NORMSWAP=1, load weights + flip variant at
+eval): SYMMETRIC COLLAPSE both directions (L1->softmax 1.75->3.18; softmax->L1 1.50->3.23), to
+untrained loss. No free lunch: scores are married to their normalizer. TWO GOAT reverse-swap
+cells never launched (network flakes at push, GPU cap) - the yat_b crossing both directions is
+the complete story; GOAT would only confirm. OPEN if wanted: gve/gne swap cells; the (q.k)^2m
+higher-power sharpening dial.
+
 ## 4. Concept ledger (what is already spent, do not re-explain)
 
 | concept | established in |

@@ -279,6 +279,7 @@ const id = `vvp-${Math.random().toString(36).slice(2, 9)}`;
       if (visible && !was) { fit(); draw(); }
     }, { rootMargin: '120px' });
     io.observe(cV);
+    (window.__vizReg || (window.__vizReg = new Set())).add({ n: cV, c: () => { themeObs.disconnect(); ro.disconnect(); io.disconnect(); } });
   };
 
   setup();

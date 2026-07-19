@@ -112,6 +112,22 @@ The `b = 0` ablation row is not just a smaller kernel, it is a different mathema
 
 The learned scalars themselves are exported by the telemetry run (bundle `kgl_blog-yatattn-b-telem`), and they tell a per-head specialization story: `b` wanders from its log 2 init across [0.22, 3.40], and `eps` splits, most heads driving it toward zero (sharp, local kernels) while two late-layer heads grow it to 6.4 and 12.7 (smooth, near-global ones). The entropy statistics on the trained maps barely move against the ablation (mean 0.73 vs softmax's 0.48), so the diffuseness mechanism the explainer describes is a property of the polynomial ratio, not of the frozen scalars. The column shapes are the finding: softmax needs its rate found (and dies at 1e-2), while the kernel's entire column sits in a 1 percent band. Per-variant LR overrides and the sweep mode are in `scripts/yat_attention.py` (`SWEEP_LRS`, `LR_YAT`, `LR_SOFTMAX` env knobs).
 
+## The normalizer as a swappable part
+
+Both normalizers consume the same nonnegative `kappa`, so the choice is one branch:
+
+```python
+if s.variant.endswith("_exp"):
+    w = jax.nn.softmax(jnp.where(mask, kappa, -jnp.inf), axis=-1)   # sharpener
+    w = jnp.where(mask.any(-1)[None, None, :, None], w, 0.0)        # keyless rows -> 0
+else:
+    w = kappa / (mass + 1e-9)                                       # Nadaraya-Watson
+```
+
+Trained under `softmax(kappa)` instead of the ℓ1 sum, the kernel recovers softmax-grade quality on the full-QK tier (1.4968 ± 0.0054, three seeds, vs the ℓ1 kernel's 1.5089 and standard softmax's 1.4923) and on the no-V tier (1.5158 vs 1.5343); on the keep-V tier it is worse and high-variance (1.5559 ± 0.043). The explainer reads the mechanism off the learned scalars.
+
+The crossover test loads trained weights and evaluates under the *other* normalizer by flipping `bl.attn.variant` at eval time (`NORMSWAP=1`). The result is symmetric collapse: ℓ1-trained forced to softmax goes 1.75 → 3.18, softmax-trained forced to ℓ1 goes 1.50 → 3.23, both to untrained-network loss. The scores are calibrated to their normalizer and are not interchangeable after training. Bundles `kgl_blog-yatexp-*` (quality) and `kgl_blog-swap-*` (crossover).
+
 ## Dropping Q and K
 
 The explainer's last experiment removes the projections entirely; the code change is a construction-time skip and a strict mask:

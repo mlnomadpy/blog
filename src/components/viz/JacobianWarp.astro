@@ -452,6 +452,7 @@ const kinds = [
       if (visible && !wasVisible) { fit(); draw(); }
     }, { rootMargin: '120px' });
     io.observe(cIn);
+    (window.__vizReg || (window.__vizReg = new Set())).add({ n: cIn, c: () => { themeObs.disconnect(); ro.disconnect(); io.disconnect(); } });
   };
 
   setup();

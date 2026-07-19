@@ -40,7 +40,7 @@ const drawGram = (ctx, box, A, colors, gamma = 0.85) => {
 };
 
 defineViz('gramreconstruction', {
-  height: 300, stepsPerFrame: 1.2, maxStep: 240, autoplay: true,
+  height: 300, stepsPerFrame: 1.2, maxStep: 240,
   controls: [
     { type: 'play' }, { type: 'step' }, { type: 'reset' }, { type: 'speed' },
     { type: 'range', name: 'sigma', label: 'bandwidth σ', min: 0.5, max: 2, step: 0.1, value: 1, reset: true, fmt: (v) => v.toFixed(1) },

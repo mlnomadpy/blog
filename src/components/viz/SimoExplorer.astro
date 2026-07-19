@@ -44,6 +44,7 @@ const id = `simoexp-${Math.random().toString(36).slice(2, 9)}`;
 <script>
 import * as ng from './engine/nanograd.js';
 import { makeData, DATASETS } from './engine/datasets.js';
+import { onDetach, readyPulse, clearReadyPulse } from './engine/lifecycle.js';
 
 const D = 12, Hd = 16, DE = 2, EPS = 1.0;
 const PRESETS = [
@@ -143,9 +144,9 @@ function initExp(root) {
   };
   const draw = () => { drawScatter(); drawPlots(); iterEl.textContent = `iter ${iter} · ⵟ-acc ${(accH.length ? accH[accH.length - 1] * 100 : 0).toFixed(0)}%`; bVal.textContent = (+bInp.value).toFixed(2); };
 
-  const tick = () => { if (!playing) return; acc2 += speed; while (acc2 >= 1) { trainOnce(); acc2 -= 1; } draw(); if (iter >= 600) stop(); else raf = requestAnimationFrame(tick); };
+  const tick = () => { if (!playing) return; if (!cS.isConnected) { stop(); return; } acc2 += speed; while (acc2 >= 1) { trainOnce(); acc2 -= 1; } draw(); if (iter >= 600) stop(); else raf = requestAnimationFrame(tick); };
   const stop = () => { playing = false; q('[data-act="play"]').textContent = '▶ Play'; cancelAnimationFrame(raf); };
-  const play = () => { if (iter >= 600) { rebuild(); } playing = true; q('[data-act="play"]').textContent = '❚❚ Pause'; raf = requestAnimationFrame(tick); };
+  const play = () => { clearReadyPulse(q('[data-act="play"]')); if (iter >= 600) { rebuild(); } playing = true; q('[data-act="play"]').textContent = '❚❚ Pause'; raf = requestAnimationFrame(tick); };
 
   q('[data-act="play"]').addEventListener('click', () => playing ? stop() : play());
   q('[data-act="step"]').addEventListener('click', () => { stop(); trainOnce(); draw(); });
@@ -156,12 +157,16 @@ function initExp(root) {
   dataSel.addEventListener('change', () => { stop(); rebuild(); annotate(); draw(); });
   presetSel.addEventListener('change', () => { const p = PRESETS[+presetSel.value]; bInp.value = p.b; dataSel.value = p.data; stop(); rebuild(); annotate(); draw(); });
 
-  new MutationObserver(() => { colors = readColors(); draw(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-  new ResizeObserver(() => draw()).observe(cS);
-  let kicked = false;
-  new IntersectionObserver((e) => { if (e[0].isIntersecting) { draw(); if (!kicked) { kicked = true; play(); } } else stop(); }, { rootMargin: '0px' }).observe(cS);
+  const themeObs = new MutationObserver(() => { colors = readColors(); draw(); });
+  themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  const ro = new ResizeObserver(() => draw()); ro.observe(cS);
+  // No autoplay: the still first frame waits for Play (the button pulses once, below).
+  const io = new IntersectionObserver((e) => { if (e[0].isIntersecting) draw(); else stop(); }, { rootMargin: '0px' });
+  io.observe(cS);
+  onDetach(cS, () => { cancelAnimationFrame(raf); themeObs.disconnect(); ro.disconnect(); io.disconnect(); });
   // init from default preset
   const p0 = PRESETS[1]; bInp.value = p0.b; dataSel.value = p0.data; rebuild(); annotate(); draw();
+  readyPulse(q('[data-act="play"]'));
 }
 const boot = () => document.querySelectorAll('.simoexp').forEach(initExp);
 boot(); document.addEventListener('astro:page-load', boot); document.addEventListener('astro:after-swap', boot);
