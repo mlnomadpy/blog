@@ -1,0 +1,1 @@
+function d(e,a){if(typeof window>"u")return()=>{};const n=window.__vizReg||(window.__vizReg=new Set),i={n:e,c:a};return n.add(i),()=>n.delete(i)}function o(e){e&&e.classList.add("viz-play-ready")}function s(e){e&&e.classList.remove("viz-play-ready")}export{s as c,d as o,o as r};

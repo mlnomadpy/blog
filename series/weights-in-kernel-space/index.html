@@ -58,7 +58,7 @@
       document.documentElement.setAttribute('data-theme', stored);
     }
   })();
-</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.DstInXr_.css">
+</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.DDq-TDm1.css">
 <link rel="stylesheet" href="/blog/_astro/_id_.BXkluuEW.css"></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/archive">archive</a><a href="/blog/map">map</a><a href="/blog/writeups">writeups</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>
   (() => {
     const apply = (theme) => {
@@ -269,5 +269,19 @@ I use Google Analytics to see which posts get read. It sets cookies only
         enhance();
         document.addEventListener('astro:page-load', enhance);
         document.addEventListener('astro:after-swap', enhance);
+      })();
+
+      // Teardown registry for the bespoke (non-vizkit) viz. Those hand-rolled their
+      // own observers / rAF loops and never cleaned up, so on an Astro view-transition
+      // swap the detached canvas kept firing forever. Each such viz pushes a {n:node,
+      // c:cleanup} entry here; we sweep on every swap and dispose whatever detached.
+      // vizkit-based viz self-clean via their own alive() guard and are not listed.
+      (() => {
+        const R = window.__vizReg || (window.__vizReg = new Set());
+        if (window.__vizSweepHooked) return;
+        window.__vizSweepHooked = true;
+        const sweep = () => { R.forEach((e) => { if (!e.n || !e.n.isConnected) { R.delete(e); try { e.c(); } catch (_) {} } }); };
+        document.addEventListener('astro:after-swap', sweep);
+        document.addEventListener('astro:page-load', sweep);
       })();
     </script> </body> </html> 

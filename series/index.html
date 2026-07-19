@@ -60,7 +60,7 @@
   })();
 </script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><style>.series-card[data-astro-cid-co4f75l2]{border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-elev);padding:1.1rem 1.25rem 1rem;transition:border-color var(--transition-fast)}.series-card[data-astro-cid-co4f75l2]:hover{border-color:var(--border-strong)}.card-title[data-astro-cid-co4f75l2]{margin:0;font-size:1.18rem;line-height:1.35}.card-title[data-astro-cid-co4f75l2] a[data-astro-cid-co4f75l2]{font-family:var(--serif);color:var(--fg);text-decoration:none;transition:color var(--transition-fast)}.card-title[data-astro-cid-co4f75l2] a[data-astro-cid-co4f75l2]:hover{color:var(--accent)}.card-count[data-astro-cid-co4f75l2]{margin:.3rem 0 0;font-family:var(--mono);font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-faint)}.card-count[data-astro-cid-co4f75l2] .ongoing[data-astro-cid-co4f75l2]{color:var(--accent)}.card-desc[data-astro-cid-co4f75l2]{margin:.6rem 0 .85rem;font-size:.92rem;line-height:1.6;color:var(--fg-muted)}.card-entries[data-astro-cid-co4f75l2]{list-style:none;padding:0;margin:0}.card-entries[data-astro-cid-co4f75l2] li[data-astro-cid-co4f75l2]{display:flex;align-items:baseline;gap:.55rem;padding:.3rem 0}.entry-pill[data-astro-cid-co4f75l2]{flex:none;font-family:var(--mono);font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);border:1px solid var(--accent);border-radius:4px;padding:.07rem .4rem;white-space:nowrap}.entry-title[data-astro-cid-co4f75l2]{font-family:var(--serif);font-size:.95rem;line-height:1.4;color:var(--fg);text-decoration:none;transition:color var(--transition-fast)}.entry-title[data-astro-cid-co4f75l2]:hover{color:var(--accent)}.card-all[data-astro-cid-co4f75l2]{display:inline-block;margin-top:.7rem;font-family:var(--mono);font-size:.74rem;color:var(--fg-muted);text-decoration:none;transition:color var(--transition-fast)}.card-all[data-astro-cid-co4f75l2]:hover{color:var(--accent)}
 </style>
-<link rel="stylesheet" href="/blog/_astro/_slug_.DstInXr_.css">
+<link rel="stylesheet" href="/blog/_astro/_slug_.DDq-TDm1.css">
 <style>.series-lead[data-astro-cid-4ntybcpi]{margin:.85rem 0 .5rem;font-size:.96rem;line-height:1.6;color:var(--fg-muted);max-width:56ch}.series-stack[data-astro-cid-4ntybcpi]{margin-top:1.5rem;display:grid;gap:1rem}
 </style></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/archive">archive</a><a href="/blog/map">map</a><a href="/blog/writeups">writeups</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>
   (() => {
@@ -239,5 +239,19 @@ I use Google Analytics to see which posts get read. It sets cookies only
         enhance();
         document.addEventListener('astro:page-load', enhance);
         document.addEventListener('astro:after-swap', enhance);
+      })();
+
+      // Teardown registry for the bespoke (non-vizkit) viz. Those hand-rolled their
+      // own observers / rAF loops and never cleaned up, so on an Astro view-transition
+      // swap the detached canvas kept firing forever. Each such viz pushes a {n:node,
+      // c:cleanup} entry here; we sweep on every swap and dispose whatever detached.
+      // vizkit-based viz self-clean via their own alive() guard and are not listed.
+      (() => {
+        const R = window.__vizReg || (window.__vizReg = new Set());
+        if (window.__vizSweepHooked) return;
+        window.__vizSweepHooked = true;
+        const sweep = () => { R.forEach((e) => { if (!e.n || !e.n.isConnected) { R.delete(e); try { e.c(); } catch (_) {} } }); };
+        document.addEventListener('astro:after-swap', sweep);
+        document.addEventListener('astro:page-load', sweep);
       })();
     </script> </body> </html> 
