@@ -526,7 +526,13 @@ ScaleTheQuery (real q/k of sharpest/most-diffuse heads, live winner recompute vs
 t, softmax strip provably dark). Spends by link: NW smoother, BxC kernel/mass/
 entropy/shift-gauge, qk-projections, prototype wells; new-derived: territory
 partition, cone-vs-pocket boundaries, scale gauge, hull disenfranchisement,
-occupancy census, far-field unsigned cones. Companion
+occupancy census, far-field unsigned cones. REBALANCED 2026-07-20 (user: the
+post is about the GEOMETRY, not the experiments): the two experimental
+sections collapsed into one "coda" (scale test + census + hull LP, panels
+kept, aligned/nearest table cut), intro/description now promise the map not
+the contest, and the geometry gained the output-side beat (row = barycentric
+coordinates, outputs confined to the value hull, territory map = output map).
+Companion
 the-geometry-of-attention-jax-flax-nnx (2026-07-19, D): the GEOMETRY=1 export +
 f16 reconstruction check (max err 4e-4), scale-test/census/hull-LP code quoted,
 5 GIFs + 1 PNG from render_attention_geometry_gifs.py (territory morph, hull
