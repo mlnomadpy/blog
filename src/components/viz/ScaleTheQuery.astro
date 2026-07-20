@@ -1,0 +1,175 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 470 } = Astro.props;
+---
+<figure class="viz scalethequery" data-caption={caption} data-height={height} data-height-mobile="620" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The scaling theorem run on the real trained models. Take the actual q/k
+// vectors of one head on the Shakespeare window, scale every query q -> t q,
+// and recompute each row's winner from the raw law. Softmax: not one winner
+// moves at any t, the rows only sharpen. The kernel: winners hand off, because
+// for it the query's length is a place, not a temperature.
+import { defineViz } from './engine/vizkit.js';
+import { T, fmt, axes, gate, loadingText, legend } from './engine/draw.js';
+import { load } from './geomattn.js';
+
+// log-spaced t grid; the slider walks these indices
+const TS = Array.from({ length: 25 }, (_, i) => +Math.exp(Math.log(0.25) + (i / 24) * (Math.log(4) - Math.log(0.25))).toFixed(3));
+const T1 = TS.reduce((bi, v, i) => (Math.abs(v - 1) < Math.abs(TS[bi] - 1) ? i : bi), 0);
+
+function headCompute(head, model, strict) {
+  // winners per row per t, entropy per t, from the raw score laws
+  const { q, k, b, eps } = head;
+  const Tn = q.length, dh = q[0].length;
+  const first = strict ? 2 : 1;
+  const dots = [], qq = [], kk = [];
+  for (let i = 0; i < Tn; i++) {
+    qq.push(q[i].reduce((s, v) => s + v * v, 0));
+    kk.push(k[i].reduce((s, v) => s + v * v, 0));
+    const row = new Float64Array(Tn);
+    for (let j = 0; j < Tn; j++) {
+      let d = 0;
+      for (let a = 0; a < dh; a++) d += q[i][a] * k[j][a];
+      row[j] = d;
+    }
+    dots.push(row);
+  }
+  const winners = [], entropy = [];
+  for (const t of TS) {
+    const win = new Int16Array(Tn).fill(-1);
+    let hsum = 0, hcount = 0;
+    for (let i = first; i < Tn; i++) {
+      const ub = strict ? i : i + 1;
+      const s = new Float64Array(ub);
+      if (model === 'softmax') {
+        for (let j = 0; j < ub; j++) s[j] = (t * dots[i][j]) / Math.sqrt(dh);
+      } else {
+        for (let j = 0; j < ub; j++) {
+          const d2 = Math.max(0, t * t * qq[i] + kk[j] - 2 * t * dots[i][j]);
+          const n = t * dots[i][j] + b;
+          s[j] = (n * n) / (d2 + eps);
+        }
+      }
+      let bi = 0;
+      for (let j = 1; j < ub; j++) if (s[j] > s[bi]) bi = j;
+      win[i] = bi;
+      // row entropy under the model's own normalizer
+      let w;
+      if (model === 'softmax') {
+        const m = Math.max(...s);
+        w = Array.from(s, (v) => Math.exp(v - m));
+      } else {
+        w = Array.from(s);
+      }
+      const Z = w.reduce((a, v) => a + v, 0) || 1;
+      let hh = 0;
+      for (const v of w) { const p = v / Z; if (p > 1e-12) hh -= p * Math.log(p); }
+      if (ub > 1) { hsum += hh / Math.log(ub); hcount++; }
+    }
+    winners.push(win);
+    entropy.push(hsum / Math.max(1, hcount));
+  }
+  const changed = TS.map((_, ti) => {
+    let c = 0, n = 0;
+    for (let i = first; i < Tn; i++) { n++; if (winners[ti][i] !== winners[T1][i]) c++; }
+    return c / Math.max(1, n);
+  });
+  return { winners, entropy, changed, first, Tn };
+}
+
+defineViz('scalethequery', {
+  title: 'Scale the real queries: does anyone change hands?',
+  height: 470,
+  controls: [
+    { type: 'select', name: 'hd', label: 'head', reset: false, value: '0', options: [{ value: '0', label: 'sharpest head' }, { value: '1', label: 'most diffuse head' }] },
+    { type: 'range', name: 'ti', label: 'scale t', min: 0, max: 24, step: 1, value: 18, int: true, fmt: (v) => fmt(TS[Math.round(v)], 2) + 'x', play: { period: 9000, loop: 'pingpong' } },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    gate(api, () => load('scaletest'), (a, data) => {
+      a.state.data = data;
+      a.state.comp = {};
+      for (const m of ['softmax', 'yat_b']) {
+        a.state.comp[m] = data.models[m].heads.map((hd) => headCompute(hd, m, data.models[m].strict));
+      }
+    });
+  },
+
+  draw(api) {
+    const { ctx, colors, size: { W, H } } = api, st = api.state;
+    if (!st.ready) { loadingText(api, 'loading the trained q/k vectors…'); return; }
+    const hi = +api.get('hd'), ti = Math.round(api.get('ti'));
+    const t = TS[ti];
+    const pad = 14, top = 30;
+    const models = [
+      { id: 'softmax', label: 'softmax', color: '#c2553a' },
+      { id: 'yat_b', label: 'yat kernel', color: '#4a7fb3' },
+    ];
+
+    // ── the hand-off strips: one column per query, orange if its winner moved ──
+    const stripH = 34;
+    models.forEach((m, mi) => {
+      const cp = st.comp[m.id][hi];
+      const y0 = top + mi * (stripH + 34);
+      const box = { x: pad, y: y0, w: W - 2 * pad, h: stripH };
+      ctx.fillStyle = colors.cellBg;
+      ctx.fillRect(box.x, box.y, box.w, box.h);
+      let moved = 0, n = 0;
+      const cw = box.w / cp.Tn;
+      for (let i = cp.first; i < cp.Tn; i++) {
+        n++;
+        const ch = cp.winners[ti][i] !== cp.winners[T1][i];
+        if (ch) moved++;
+        ctx.fillStyle = ch ? m.color : colors.border;
+        ctx.globalAlpha = ch ? 0.95 : 0.5;
+        ctx.fillRect(box.x + i * cw, box.y + 3, Math.max(1, cw - 1), box.h - 6);
+      }
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = colors.border; ctx.lineWidth = 1;
+      ctx.strokeRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1);
+      T(ctx, colors, 'label');
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      ctx.fillText(`${m.label}: ${moved} of ${n} queries changed hands at t = ${fmt(t, 2)}   (row entropy ${fmt(cp.entropy[ti], 2)}, at t = 1: ${fmt(cp.entropy[T1], 2)})`, box.x, box.y - 6);
+    });
+
+    // ── the curves: fraction changed vs t, both laws ──
+    const cy = top + 2 * (stripH + 34) + 8;
+    const cbox = { x: pad + 34, y: cy, w: W - 2 * pad - 44, h: H - cy - 46 };
+    const sx = (x) => cbox.x + ((Math.log(x) - Math.log(TS[0])) / (Math.log(TS[TS.length - 1]) - Math.log(TS[0]))) * cbox.w;
+    const sy = (y) => cbox.y + cbox.h - y * cbox.h;
+    ctx.strokeStyle = colors.border; ctx.lineWidth = 1;
+    ctx.strokeRect(cbox.x + 0.5, cbox.y + 0.5, cbox.w - 1, cbox.h - 1);
+    T(ctx, colors, 'small');
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (const tv of [0.25, 0.5, 1, 2, 4]) ctx.fillText(fmt(tv, 2) + 'x', sx(tv), cbox.y + cbox.h + 4);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (const yv of [0, 0.25, 0.5]) ctx.fillText(fmt(100 * yv, 0) + '%', cbox.x - 4, sy(yv / 0.55));
+    for (const m of models) {
+      const cp = st.comp[m.id][hi];
+      ctx.strokeStyle = m.color; ctx.lineWidth = 2;
+      ctx.beginPath();
+      TS.forEach((tv, i) => {
+        const x = sx(tv), y = sy(Math.min(1, cp.changed[i] / 0.55));
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    }
+    ctx.strokeStyle = colors.faint; ctx.setLineDash([3, 4]);
+    ctx.beginPath(); ctx.moveTo(sx(t), cbox.y); ctx.lineTo(sx(t), cbox.y + cbox.h); ctx.stroke();
+    ctx.setLineDash([]);
+    legend(ctx, cbox.x + 8, cbox.y + 12, models.map((m) => ({ color: m.color, label: m.label + ': queries that changed hands vs t' })), colors);
+    T(ctx, colors, 'small');
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('winners recomputed live from the trained q/k of this head at every t; t = 1 is the model as trained', pad, H - 12);
+    const cS = st.comp.softmax[hi].changed[ti], cY = st.comp.yat_b[hi].changed[ti];
+    api.readout('rd', `t = ${fmt(t, 2)}: softmax ${fmt(100 * cS, 1)}% changed, kernel ${fmt(100 * cY, 1)}%`);
+  },
+});
+</script>
