@@ -5,7 +5,7 @@ conventions we write to, the story arc of the active (Yat-kernel) series, a
 ledger of which concepts are already "spent" so we stop re-explaining them, and
 the open threads for future posts.
 
-_Last updated: 2026-07-16 (added the C9 draft `you-dont-have-to-solve-a-kernel-machine` + its companion to the catalog, beat log, and concept ledger; backfilled the missing D2 ledger row). `D` = draft._
+_Last updated: 2026-07-19 (added the draft `the-geometry-of-attention`, the attention-territory post, to the catalog, beat log, and concept ledger). `D` = draft._
 
 ---
 
@@ -75,6 +75,7 @@ post); keep that file in sync with this catalog when a post publishes.
 | live | cheap-attention-is-linear-attention | linear-attention-jax-flax-nnx |
 | live | why-attention-needs-qk-projections | qk-projections-jax-flax-nnx |
 | live | attention-is-a-compatibility-kernel | attention-is-a-compatibility-kernel-jax-flax-nnx |
+| **D** | the-geometry-of-attention | the-geometry-of-attention-jax-flax-nnx |
 
 ### Arc B.5: weights in kernel space (the RKHS-foundations interlude)
 Sits between Arcs B and C: what a weight is once everything is a kernel.
@@ -491,6 +492,48 @@ cells never launched (network flakes at push, GPU cap) - the yat_b crossing both
 the complete story; GOAT would only confirm. OPEN if wanted: gve/gne swap cells; the (q.k)^2m
 higher-power sharpening dial.
 
+### B-geometry. the-geometry-of-attention  (DRAFT, 2026-07-19)
+Title: "The Geometry of Attention Is a Choice of Kernel" (slug the-geometry-of-attention; retitled from "The Kernel Is the Choice of Gravity", user wants attention/geometry/kernel in the title). The
+partition view of attention: a head is a function over ALL of query space, and the
+top-1 weight carves that space into per-key territories whose SHAPE is fixed by the
+score law, not by training. Derivations (exact, in-post): softmax/bilinear owner
+boundaries are hyperplanes through the origin -> territories are convex cones
+("wedges of sky"); q -> tq never changes the softmax winner (t = inverse
+temperature, the scale gauge next to the BxC shift gauge); a key strictly inside
+the others' convex hull NEVER wins any query (convexity one-liner, converse by
+separating hyperplane); the Yat kernel closes curved pockets around keys
+(weighted-Voronoi family, Aurenhammer 1987), owns-its-own-ground bound
+kappa(k,k)=(||k||^2+b)^2/eps, and its far field -> (u.k)^2 (unsigned cones, but
+the sign rides the 1/t term: antipodal symmetry only wins past radius ~20-100 on
+the toy, stated). Experiment: reran yat_attention.py with GEOMETRY=1 (exports
+trained q/k per head on the fixed window; bundles kgl_blog-attngeom-qk softmax@3e-4
++ yat_b@3e-3, kgl_blog-attngeom-goat goat_v@3e-2, seed 0; analysis
+export_attention_geometry_viz.py, assets public/the-geometry-of-attention/).
+Measured: scale test softmax changes 0 of 15,240 winners (theorem to the digit)
+vs kernel 12.1%/15.1%/23.3% at t=0.5/2/4 (goat 16.7/24.2); census occupancy
+softmax 27->72 distinct winners vs kernel 31->54 (per-head 7..120), the INVERSION
+(sharper rows entropy 0.49 yet MORE distinct winners than the diffuse 0.72 kernel,
+whose maps grow horizontal annexation runs); hull LP: 0 of 3,072 keys interior in
+48-d (both models), so disenfranchisement is statistical not absolute in high-d;
+winner-kind table: softmax winner = aligned 99.9% (definition), kernel splits
+55.9% aligned / 51.8% nearest, both ~51% nearest vs ~3% chance (a fact about the
+learned embedding). Five fresh panels (geomattn.js, live 2-D law math + real
+exported data): GravityMap (draggable bodies, side-by-side territory maps, zoom),
+RayRide (query rides a ray; softmax sharpens, kernel hands off, mass readout),
+InteriorPlanet (hull theorem staged, 0.0% readout inside hull), TerritoryCensus
+(real ownership scatter per layer/head, scrub 4 training checkpoints),
+ScaleTheQuery (real q/k of sharpest/most-diffuse heads, live winner recompute vs
+t, softmax strip provably dark). Spends by link: NW smoother, BxC kernel/mass/
+entropy/shift-gauge, qk-projections, prototype wells; new-derived: territory
+partition, cone-vs-pocket boundaries, scale gauge, hull disenfranchisement,
+occupancy census, far-field unsigned cones. Companion
+the-geometry-of-attention-jax-flax-nnx (2026-07-19, D): the GEOMETRY=1 export +
+f16 reconstruction check (max err 4e-4), scale-test/census/hull-LP code quoted,
+5 GIFs + 1 PNG from render_attention_geometry_gifs.py (territory morph, hull
+crossing with the exact-0.0% counter, ray ride, real-q/k scale sweep with the
+0-vs-25% curves, far-field zoom with the live antipodal-agreement counter;
+census checkpoints = a PNG grid, four snapshots are four facts).
+
 ## 4. Concept ledger (what is already spent, do not re-explain)
 
 | concept | established in |
@@ -536,6 +579,7 @@ higher-power sharpening dial.
 | reversible backprop by block inversion (custom_vjp with endpoint-only residuals, recompute-vs-store); O(1) activation memory measured flat to depth 512; the (1/mu)^L noise-budget napkin L* = ln(1/eps)/ln(1/mu) locating gradient death; XLA memory_analysis + fresh-process peaks as the honest instruments; dissipation-destroys-information (friction breaks time-reversal); conservation = reversibility = constant-memory training, one property three coats | D4 |
 | error-controlled inference rendering (step doubling on a trained flow, no retraining); depth as a per-input expenditure with a tolerance dial; the tol^(-1/3) cost law (integrator order in the compute bill); effort measures flow stiffness, NOT classification difficulty (measured negative, contrast with C5's convergence-based halting); train-resolution calibration (the fully-resolved flow is a slightly different function than the training render) | D5 |
 | no-softmax attention (kappa/sum kappa as literal Nadaraya-Watson); the row-mass channel (softmax's shift gauge deletes level, the kernel keeps it); boundedness-for-bounded-inputs is not boundedness-under-training (kappa(q,q)=||q||^4/eps); exp-as-soft-argmax vs polynomial ratios (measured diffuseness gap, entropy 0.74 vs 0.48); kernelize BETWEEN the roles (directionality lives in f_Q != f_K) | BxC |
+| attention as a partition of query space (per-key territories); softmax territories = convex cones through the origin, kernel territories = closed pockets (weighted Voronoi); the QUERY-SCALE gauge (q -> tq preserves softmax ranking, t = inverse temperature; measured 0 of 15,240 winner changes) vs length-as-address under the kernel (12-23% re-elections); hull disenfranchisement (interior key never wins under bilinear scores; every key owns its ground under the kernel via (||k||^2+b)^2/eps); occupancy census + the sharp-rows/many-winners vs diffuse-rows/few-winners inversion; kernel far field -> (u.k)^2 unsigned cones with 1/t sign correction | the-geometry-of-attention (D) |
 
 Reuse these only by reference (link the prior post), never by re-derivation.
 

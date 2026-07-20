@@ -1,0 +1,182 @@
+---
+title: "The Geometry of Attention Is a Choice of Kernel"
+seoTitle: "The Geometry of Attention: Kernel as Gravity"
+description: "An attention head is only ever evaluated at the tokens of the sequence, but its formula accepts any query vector at all. So between the tokens there is a whole continuous space, and the head silently carves it into territories: for every possible query, some key takes the top weight. This post draws that map for the two attention laws this series has trained head to head. The dot-product law slices space into infinite wedges of sky that all meet at the origin, a gravity that reads only bearings; the Yat kernel carves bounded neighborhoods around the keys, a gravity that reads places. One theorem per map, one toy per theorem, and then the real trained transformers are asked whether they obey. They do, one of them to the digit."
+seoDescription: "Attention weights carve query space into territories. Softmax carves cones of direction; a Mercer kernel carves neighborhoods. Derived, then measured."
+pubDate: 2026-07-19
+draft: false
+companion: the-geometry-of-attention-jax-flax-nnx
+tags: [attention, kernels, geometry, transformers, yat, jax]
+references:
+  - authors: "Vaswani, A., et al."
+    year: 2017
+    title: "Attention Is All You Need"
+    arxiv: "1706.03762"
+  - authors: "Tsai, Y.-H. H., et al."
+    year: 2019
+    title: "Transformer Dissection: An Unified Understanding for Transformer's Attention via the Lens of Kernel"
+    venue: "EMNLP-IJCNLP 2019"
+    url: "https://aclanthology.org/D19-1443/"
+  - authors: "Aurenhammer, F."
+    year: 1987
+    title: "Power Diagrams: Properties, Algorithms and Applications"
+    venue: "SIAM Journal on Computing 16(1), 78-96"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+keywords:
+  - attention geometry
+  - attention territories
+  - weighted voronoi
+  - softmax cones
+  - kernel attention
+  - query space partition
+---
+import GravityMap from '../../components/viz/GravityMap.astro';
+import RayRide from '../../components/viz/RayRide.astro';
+import InteriorPlanet from '../../components/viz/InteriorPlanet.astro';
+import TerritoryCensus from '../../components/viz/TerritoryCensus.astro';
+import ScaleTheQuery from '../../components/viz/ScaleTheQuery.astro';
+import CiteAs from '../../components/CiteAs.astro';
+import SeriesNav from '../../components/SeriesNav.astro';
+
+<SeriesNav />
+
+*This series has read attention as [a kernel smoother](/blog/attention-is-a-kernel), and it has [built the smoother for real](/blog/attention-is-a-compatibility-kernel), a transformer whose scores come from a genuine Mercer kernel with no softmax anywhere. Both posts asked how the mechanisms train. This one asks a different kind of question, the kind you ask about a country rather than an engine: what map does each mechanism draw?*
+
+Every attention head you have ever inspected was inspected at the tokens: a row of weights over the 128 positions of some window, a heatmap, maybe a name like "induction head" if the pattern is clean. But look at what the formula actually accepts. A head scores a query vector against the keys, and the query slot takes *any* vector in the space, not just the 128 the sequence happened to produce. The trained head defines a function over an entire continuous landscape, and the sequence only ever samples it at a handful of points. Which means there is a whole geography in there nobody draws: between the sampled queries stretches empty space, and everywhere in that space the head has already decided, silently, which key would take the top weight.
+
+So draw it. Color every possible query by the key that wins it. Where do the borders run? Are the territories big or small, bounded or infinite? Does every key even get one?
+
+The answers turn out not to depend on training, on the dataset, or on the head. They depend on exactly one design decision, the score function, and the two score functions this series has trained [head to head](/blog/attention-is-a-compatibility-kernel) draw maps so different they belong to different genres. This post derives both maps, plays with both in the plane, and then asks the real trained transformers whether they obey the derivations. One of them obeys to the digit.
+
+## A sequence is a solar system
+
+Drawing that map runs straight into the standing obstacle of this whole blog: the space it lives in is the query space of one head, 48 dimensions in the models this series trains, and you cannot picture 48 dimensions. The rescue is the same physical picture the network posts have leaned on [since the prototype days](/blog/edit-a-network-by-hand): things that pull.
+
+The keys become bodies sitting in space. A query becomes a test particle dropped somewhere among them. Each body pulls on the particle with a strength given by the score function, and attention's normalization does exactly what a physicist would do with several simultaneous pulls: it computes each body's *share* of the total. The row of attention weights is not a list of 128 unrelated numbers; it is one measurement of a field, taken at the particle's position, reported as fractions that sum to one. The output of the head is then the value vectors averaged by those fractions, which is why [the first attention post](/blog/attention-is-a-kernel) could call attention a kernel smoother with a straight face.
+
+| attention object | physical object |
+| --- | --- |
+| key $k_j$ | a body sitting in the space |
+| query $q$ | a test particle |
+| score $s(q, k_j)$ | the pull body $j$ exerts on the particle |
+| normalized weight $\alpha_j$ | body $j$'s share of the total pull |
+| the attention row | the particle's sky: every body's share at once |
+| top-1 key $\arg\max_j \alpha_j$ | the body that owns the particle |
+
+The table has one deliberately loaded row. "The body that owns the particle" is a definition of *territory*: the set of queries a given key wins. Carve the whole space by ownership and you get the map this post is about. And the shape of that map is decided entirely by the force law, which is to say, by the score:
+
+$$
+s_{\text{dot}}(q, k) = \frac{q \cdot k}{\sqrt{d}}
+\qquad\text{vs.}\qquad
+\kappa(q, k) = \frac{(q \cdot k + b)^2}{\lVert q - k \rVert^2 + \varepsilon}.
+$$
+
+The left law is the transformer's original: a bilinear form, wrapped in an exponential and normalized, which is the whole softmax. The right law is [the Yat kernel](/blog/attention-is-a-compatibility-kernel), a genuine Mercer kernel whose scores arrive nonnegative and need no exponential; its denominator is the same softened inverse-square that [made prototype neurons into wells](/blog/edit-a-network-by-hand), now sitting inside attention.
+
+And before any algebra, the physics already predicts the two genres of map. Fix a body $k$ and look at its pull as a function of where the particle stands. Under the kernel, the pull peaks at the body and dies off with distance: the body is a *well*, and a well should own the neighborhood around itself. Under the dot product, the pull is linear in $q$: a tilted plane, rising forever in the direction of $k$, indifferent to how far away you stand. The body is not a well at all; it is an infinite *slope*. And a slope does not own a neighborhood. It owns a direction: whoever's plane tilts steepest along your bearing wins, whether you stand a step from the origin or a mile. Wells should carve land. Slopes should carve sky.
+
+## The map under each law
+
+A prediction that clean deserves to be embarrassed in public, so here it is on trial: six bodies you can drag, and every pixel of the plane a possible query, colored by the key that takes the top weight there, shaded darker the more of the row the winner holds.
+
+<GravityMap caption="Six keys as bodies in the plane, and the territory map of both attention laws, recomputed live from the two score formulas as you drag. Left: the dot-product law with its softmax. Right: the Yat kernel with its ratio normalization. The + is the origin. Drag any body and watch the left map re-aim wedges while the right map re-carves neighborhoods; zoom out and the right map's borders straighten back into wedges away from the bodies. This plane is a two-dimensional stand-in for the head's real 48-dimensional query space; the structure, not the dimension, is the point." />
+
+The left map is all wedges, and every border between two wedges passes through the origin. That is not an accident of the six positions; it is a two-line theorem. The border between key $j$'s territory and key $l$'s is where their scores tie:
+
+$$
+q \cdot k_j = q \cdot k_l
+\iff
+q \cdot (k_j - k_l) = 0,
+$$
+
+a hyperplane through the origin, whatever the keys are. Each territory is an intersection of half-spaces through the origin, which is a convex cone: an infinite wedge of sky anchored at zero. Move a key and the wedges swing, but they can only ever swing; no border can bulge, close, or surround anything, because a hyperplane through the origin has no curvature to offer. The softmax on top changes none of this. Exponentials are monotone, so the winner under $e^{s}$ is the winner under $s$; softmax decides *how much* of the row the winner takes, never *who* wins.
+
+The right map is the other genre. The kernel's tie surface, $\kappa(q, k_j) = \kappa(q, k_l)$, is a genuinely curved quartic, and near the bodies it does what curvature allows: it closes. Each body sits inside a bounded pocket of queries it owns outright, the map cartography calls a weighted Voronoi cell (Aurenhammer 1987), and dragging a body relocates its pocket like moving a planet relocates its gravitational capture zone.
+
+Zoom out, though, and the kernel's map plays a trick worth the slider. Far from all the bodies, along a direction $u$, the kernel behaves like
+
+$$
+\kappa(t u, k) = \frac{(t\, u \cdot k + b)^2}{t^2 - 2t\, u \cdot k + \lVert k \rVert^2 + \varepsilon}
+\;\xrightarrow{\;t \to \infty\;}\;
+(u \cdot k)^2,
+$$
+
+so at infinity the kernel's sky is carved into cones too, by $(u \cdot k_j)^2$. Both laws agree that infinity belongs to directions. But look at the square: in the limit, the kernel's far field cannot tell $u$ from $-u$, a body from its antipode. The dot product's sky is signed; the kernel's sky, eventually, is not. Eventually is doing real work in that sentence: the sign survives in the next term of the expansion, $2\,(u \cdot k)\,((u \cdot k)^2 + b)/t$, which dies off only as $1/t$, so on the six bodies above the antipodal symmetry does not win a majority of directions until roughly radius twenty and does not saturate until near one hundred, far past the panel's slider. What the slider does show is the structural point: away from the bodies the borders straighten and radiate, wedges again. Everything the two laws truly disagree about, they disagree about *near the bodies*, which is where every actual query of every actual sequence lives.
+
+## Length is a temperature, or an address
+
+The wedge theorem has a corollary that sounds too strong to be true, so it deserves its own toy. Take any query and scale it: $q \to t\,q$, with $t > 0$. Every dot-product logit scales by the same $t$, so the ranking of the keys is untouched, for every $t$, on every ray, forever. Under the dot-product law, the *length* of a query cannot change who wins. What it changes is the softmax's appetite: $\mathrm{softmax}(t \cdot s)$ at large $t$ piles the row onto the winner. Length is an inverse temperature. A long query is not somewhere else; it is the same place, said louder.
+
+[The kernel-attention post](/blog/attention-is-a-compatibility-kernel) found softmax's other gauge: adding a constant to every logit changes nothing, so the *level* of the scores is deleted information. Scaling is the gauge softmax keeps but spends on confidence. The kernel spends it on position:
+
+<RayRide caption="One query riding a ray out of the origin, against five fixed bodies, both weight rows recomputed live from the two formulas at every position. Press play, or drag on the plane to re-aim the ray. The softmax row keeps one winner the whole way out and simply sharpens onto it: length is temperature. The kernel row hands the query from body to body as it passes them, and its raw mass swells near a body and dies in the void between them: length is an address." />
+
+Under the kernel, $t$ moves the particle. It passes body after body, and each handoff is visible as the row's peak jumping; between bodies the total kernel mass, the row sum that [survives as a channel softmax cannot represent](/blog/attention-is-a-compatibility-kernel), sags toward nothing. The same slider means "how sure" on one side of the panel and "where" on the other. That is the entire difference between the two attention laws, compressed into one degree of freedom.
+
+## The disenfranchised body
+
+A query's length was one freedom the two laws read differently. The arrangement of the keys themselves is the other, and it hides the theorem with teeth. Five bodies in a ring, a sixth in the middle, strictly inside the convex hull of the others: physics with wells says the middle body still owns its crater, because stand close enough to a well and it out-pulls everything, however the neighbors are arranged. What does physics with slopes say?
+
+The middle key, sitting inside the hull, *is* a convex combination of the ring: $k_6 = \sum_l \lambda_l k_l$ with $\lambda_l \ge 0$, $\sum \lambda_l = 1$. So for *every* query $q$,
+
+$$
+q \cdot k_6 = \sum_l \lambda_l \,(q \cdot k_l) \;\le\; \max_l \; q \cdot k_l,
+$$
+
+with equality only on ties. The middle body's pull is an average of the others' pulls, and an average never strictly beats its own maximum. Under the dot-product law, a key inside the others' hull **wins nothing, anywhere, for any query the network could ever compute**. Its territory is not small; it is empty. And the converse holds too: outside the hull, a separating hyperplane hands it a whole infinite wedge. Ownership under softmax attention is a property of the hull, decided at the moment the keys are laid down.
+
+<InteriorPlanet caption="The theorem, staged. Five gray bodies and one orange body that starts inside their convex hull (dashed). Each panel shows only the orange body's territory, computed live from that panel's law. Under the dot-product law the readout stays at zero percent while the body is inside the hull: not one query in the plane picks it first. Drag it across the dashed border and an infinite wedge snaps into existence. The kernel panel never zeroes: the orange body keeps the ground it stands on wherever you put it." />
+
+The kernel's answer is the well's answer, and it comes with its own guarantee. At its own location the kernel's pull is $\kappa(k, k) = (\lVert k \rVert^2 + b)^2 / \varepsilon$: as the softening $\varepsilon$ shrinks, that peak grows without bound while every rival's pull at that spot stays finite. With softening below the spacing of the keys, every body owns at least the ground it stands on, hull or no hull. And $\varepsilon$ is not a fixed constant in the trained models; [each head learns its own](/blog/attention-is-a-compatibility-kernel), which means each head learns how fiercely bodies defend their home ground.
+
+The theorem has one boundary worth drawing before it goes to work: softmax weights are never zero, so an interior key still receives *shares* and still feeds the average. Disenfranchisement is about winning, the top of the row, not about mattering at all. But the top of the row is precisely what sharp heads route by, and it is the statistic we can now go and count.
+
+## Ask the trained transformers
+
+Everything so far is theorems and toys: exact, and suspiciously clean. The real models have 48 dimensions per head, [learned projections](/blog/why-attention-needs-qk-projections), layer norm upstream, and no obligation to make their geometry legible. So we retrained the two character-level Shakespeare GPTs from [the kernel-attention post](/blog/attention-is-a-compatibility-kernel), identical except for the score slot, each at its own swept learning rate, this time exporting the geometry: the trained query and key vectors of every head on a fixed validation window, alongside the attention maps at four checkpoints through training (`scripts/yat_attention.py` with geometry telemetry, bundles `kgl_blog-attngeom-qk` and `kgl_blog-attngeom-goat`).
+
+The first question is the census: on the real window, who actually wins?
+
+<TerritoryCensus caption="The ownership map of both trained models on the same Shakespeare window, from the run's checkpointed attention maps. Each dot is one query position (x) and the key position that takes its top weight (y); the dashed diagonal is the causal frontier. Pick a layer and head, then scrub training: at step 0 ownership is noise, and structure gets carved as the heads learn. Dots hugging the diagonal are local fiefs; long horizontal runs are one key annexing a stretch of queries; orange marks keys holding eight or more." />
+
+Training carves territory in both models, and the census can watch it happen. At step 0 an average softmax head crowns 27 distinct winners across the window's 128 queries; by the end it crowns 72. The kernel model climbs from 31 to 54. The spread across heads is enormous in both: the most concentrated kernel head ends with 7 winners, seven keys owning everything, while the most democratic softmax head ends with 120.
+
+But hold those two averages next to each other, because they invert the expectation the entropy numbers set up. On this window the softmax model's rows are much sharper, mean normalized entropy 0.49 against the kernel's 0.72, reproducing [the published telemetry](/blog/attention-is-a-compatibility-kernel) on a fresh run. Sharper rows, so fewer winners, surely? The opposite: the softmax model spreads its crowns over 72 keys, the kernel over 54. Sharp elections, many different winners; diffuse elections, the same few winners again and again. The panel shows the shape of the difference directly: the kernel's map keeps growing horizontal runs, one key annexing a whole stretch of queries, where the softmax map scatters its crowns along the diagonal. Concentration of the row and concentration of the map are different quantities, and on this window the two laws sit on opposite sides of both.
+
+The hull theorem also gets its high-dimensional day in court: in 48 dimensions, a cloud of 128 generic points is essentially all hull, and the trained models agree exactly. A linear program per key, testing whether it sits inside the convex hull of its 127 siblings, finds zero interior keys in all 24 heads of the softmax model, 0 of 3,072, and zero in the kernel model too. So disenfranchisement in the trained transformer is not the absolute kind the plane shows; every key could win *somewhere* in the vastness of query space. The operative statistic is the census above: how many keys win a query that actually occurs. Geometry proposes; the data disposes.
+
+And what kind of key wins? The exported vectors let us ask each winner whether it is the *most aligned* key of its row (the largest $q \cdot k$), the *nearest* key (the smallest $\lVert q - k \rVert$), or neither.
+
+| the row's winner is also... | softmax | yat kernel |
+| --- | --- | --- |
+| the most aligned key | 99.9% | 55.9% |
+| the nearest key | 51.2% | 51.8% |
+
+The softmax column's top row is a definition wearing a percentage: under the dot-product law the winner *is* the alignment argmax, and the residue below 100 is float16 rounding in the export. The kernel column is the measurement: its crown goes to the most aligned key barely more often than to the nearest one, because its formula multiplies the two channels and the winner is whoever offers the best product, a compromise neither channel dictates. The rows agreeing near 51 percent on *nearest* in both models is a third fact, and it belongs to the learned geometry rather than to either law: in these trained embeddings, the key a query points along is also the key it stands next to about half the time. A random pairing over each row's causal window would put that number near three percent.
+
+## Scale the real queries
+
+The wedge corollary made the strongest claim in this post: under the dot-product law, no scaling of any query can ever change a winner. That is a claim about the real trained model, so it should be checked on the real trained model, not on a toy.
+
+<ScaleTheQuery caption="The scaling test on the real trained q/k vectors of one head per model, recomputed live at every slider position. Each strip column is one query of the window; it lights up if the row's winner at scale t differs from the winner at t = 1. The softmax strip never lights, at any t, exactly as the two-line theorem demands. The kernel strip lights progressively as queries are pushed past new bodies. The curves below sweep t across a sixteen-fold range; pick the sharpest or the most diffuse head of each model." />
+
+The result is the cleanest number this series has ever printed. Across all six layers, all four heads, all 127 scorable queries, at every scale from a half to four, the trained softmax model changes *zero* winners: 0 of 15,240 comparisons, exactly as the two-line algebra demanded before the model existed. Theorems about the score function do not care that 12,000 steps of gradient descent happened in between.
+
+The kernel model, same test, same window: shrink every query to half length and 12.1 percent of rows change winners; double them, 15.1 percent; quadruple them, 23.3 percent. The [projection-free tier](/blog/attention-is-a-compatibility-kernel), whose queries are raw residual-stream slices with no learned projection at all, moves comparably, 16.7 percent at doubling and 24.2 at quadrupling. Under the kernel, a query's length is load-bearing geometry: rescale the whole space and a sixth of the routing re-elects. Under softmax the same rescaling is provably, and now measurably, a no-op on the winners and a pure turn of the temperature knob.
+
+*Scope: every number in this post comes from one seed-0 run per variant of `scripts/yat_attention.py` on Kaggle with geometry telemetry (bundles `kgl_blog-attngeom-qk` for softmax at 3e-4 and the kernel at 3e-3, and `kgl_blog-attngeom-goat` for the projection-free tier at 3e-2, the per-variant rates swept in the kernel-attention post), measured on one fixed 128-character validation window; the analysis is `scripts/export_attention_geometry_viz.py`, a local replay of the exported vectors and maps. Quality and entropy comparisons of these same architectures, with seeds, live in the kernel-attention post and are not re-litigated here. The theorems are exact in any dimension; the census statistics are one window of one seed at one scale.*
+
+## The choice of gravity
+
+Two attention mechanisms, trained on the same text, holding [within about a percent of each other in quality](/blog/attention-is-a-compatibility-kernel), and underneath: two different physical universes. One carves query space into signed wedges of sky that all meet at the origin, cannot let magnitude mean position, and holds elections a key inside the hull can never win. The other carves bounded neighborhoods around bodies that always own their ground, reads a query's length as an address, and only agrees with the first law about what happens at infinity, up to a sign it cannot see.
+
+None of that was trained. All of it was chosen, silently, the moment the score function was written down. That is what it means to say the kernel is the choice of gravity: before a single gradient step, the force law has already decided what kind of map the model is allowed to draw, and training only gets to place the bodies on it.
+
+<CiteAs
+  slug="the-geometry-of-attention"
+  title="The Geometry of Attention Is a Choice of Kernel"
+  pubDate="2026-07-19"
+/>

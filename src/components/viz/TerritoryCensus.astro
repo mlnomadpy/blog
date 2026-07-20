@@ -1,0 +1,98 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 480 } = Astro.props;
+---
+<figure class="viz territorycensus" data-caption={caption} data-height={height} data-height-mobile="620" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The territory census of the two trained transformers, from the run's own
+// checkpointed attention maps on one Shakespeare window. Each dot is a query
+// position and the key that wins it (the row's top weight). Scrub training
+// and watch the map get carved: diagonal ridges are local fiefs, horizontal
+// runs are one key annexing a stretch of queries.
+import { defineViz } from './engine/vizkit.js';
+import { T, dot, fmt, axes, gate, loadingText, legend } from './engine/draw.js';
+import { load } from './geomattn.js';
+
+const MODELS = [
+  { id: 'softmax', label: 'softmax attention' },
+  { id: 'yat_b', label: 'yat kernel attention' },
+];
+
+defineViz('territorycensus', {
+  title: 'Every query and the key that owns it, through training',
+  height: 480,
+  controls: [
+    { type: 'select', name: 'layer', label: 'layer', reset: false, value: '3', options: [0, 1, 2, 3, 4, 5].map((l) => ({ value: String(l), label: `layer ${l + 1}` })) },
+    { type: 'select', name: 'head', label: 'head', reset: false, value: '0', options: [0, 1, 2, 3].map((h) => ({ value: String(h), label: `head ${h + 1}` })) },
+    { type: 'range', name: 'stepi', label: 'training', min: 0, max: 3, step: 1, value: 3, int: true, play: { period: 5200, loop: false }, fmt: (v) => ['step 0', 'step 1200', 'step 6000', 'step 12000'][Math.round(v)] },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    gate(api, () => load('census'), (a, data) => { a.state.data = data; });
+  },
+
+  draw(api) {
+    const { ctx, colors, size: { W, H } } = api, st = api.state;
+    if (!st.ready) { loadingText(api, 'loading the trained maps…'); return; }
+    const data = st.data;
+    const l = +api.get('layer'), h = +api.get('head'), si = Math.round(api.get('stepi'));
+    const pad = 14, axisW = 26, gapX = 20 + axisW, top = 30, footer = 58;
+    const half = (W - 2 * pad - gapX - axisW) / 2;
+    const side = Math.min(half, H - top - footer);
+
+    MODELS.forEach((m, mi) => {
+      const md = data.models[m.id];
+      const own = md.owners[si][l][h];              // T ints, -1 = no keys
+      const Tn = own.length;
+      const box = { x: pad + axisW + mi * (half + gapX) + (half - side) / 2, y: top, w: side, h: side };
+      ctx.fillStyle = colors.cellBg;
+      ctx.fillRect(box.x, box.y, box.w, box.h);
+      axes(ctx, box, { xMin: 0, xMax: Tn, yMin: 0, yMax: Tn, xTicks: [0, 64, 128], yTicks: [0, 64, 128], fmtX: (v) => String(v), fmtY: (v) => String(v) }, colors);
+      // the causal wedge: owners live at or below the diagonal
+      ctx.strokeStyle = colors.faint; ctx.setLineDash([3, 4]); ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(box.x, box.y + box.h);
+      ctx.lineTo(box.x + box.w, box.y);
+      ctx.stroke(); ctx.setLineDash([]);
+      const holdings = {};
+      for (let i = 0; i < Tn; i++) {
+        const o = own[i];
+        if (o < 0) continue;
+        holdings[o] = (holdings[o] || 0) + 1;
+      }
+      for (let i = 0; i < Tn; i++) {
+        const o = own[i];
+        if (o < 0) continue;
+        const x = box.x + (i / (Tn - 1)) * box.w;
+        const y = box.y + box.h - (o / (Tn - 1)) * box.h;
+        const big = holdings[o] >= 8;
+        dot(ctx, x, y, big ? 2.6 : 1.8, big ? colors.accent : colors.muted);
+      }
+      const occ = data.models[m.id].occupancy[si][l][h];
+      const topOwner = Object.entries(holdings).sort((a, b) => b[1] - a[1])[0];
+      T(ctx, colors, 'label');
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      ctx.fillText(m.label, box.x, box.y - 8);
+      T(ctx, colors, 'small');
+      const chr = topOwner ? JSON.stringify(md.chars[+topOwner[0]]) : '';
+      ctx.fillText(`distinct owners: ${Math.round(occ * Tn)} of ${Tn}`, box.x, box.y + box.h + 26);
+      if (topOwner) ctx.fillText(`largest holding: key ${topOwner[0]} (${chr}) owns ${topOwner[1]} queries`, box.x, box.y + box.h + 40);
+    });
+
+    T(ctx, colors, 'small');
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('x: query position in the window, y: the key position that takes its top weight; dots on the diagonal ridge are local fiefs,', pad, H - 28);
+    ctx.fillText('horizontal runs are one key owning a whole stretch; orange = keys holding 8 or more queries', pad, H - 13);
+    const occS = data.models.softmax.occupancy[si][l][h];
+    const occY = data.models.yat_b.occupancy[si][l][h];
+    api.readout('rd', `layer ${l + 1} head ${h + 1}: occupancy softmax ${fmt(100 * occS, 0)}%, kernel ${fmt(100 * occY, 0)}%`);
+  },
+});
+</script>

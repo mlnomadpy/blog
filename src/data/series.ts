@@ -57,6 +57,7 @@ export const SERIES: SeriesDef[] = [
       'cheap-attention-is-linear-attention',
       'why-attention-needs-qk-projections',
       'attention-is-a-compatibility-kernel',
+      'the-geometry-of-attention',
     ],
   },
   {

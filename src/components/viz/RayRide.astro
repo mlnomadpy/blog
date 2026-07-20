@@ -1,0 +1,126 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 460 } = Astro.props;
+---
+<figure class="viz rayride" data-caption={caption} data-height={height} data-height-mobile="620" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Ride a query out along one ray and watch what each law does with the
+// magnitude. Softmax keeps the same winner forever and only sharpens: length
+// is a temperature. The kernel hands the query from body to body as it
+// passes them, and its total mass swells near a body and dies in the void:
+// length is a position.
+import { defineViz } from './engine/vizkit.js';
+import { T, dot, cross, fmt, axes, PALETTE } from './engine/draw.js';
+import { drag } from './engine/pointer.js';
+import { rows, normEntropy } from './geomattn.js';
+
+const KEYS = [
+  [0.55, 0.7], [1.5, 1.4], [2.6, 1.9],
+  [-1.2, 0.9], [0.8, -1.4],
+];
+const R = 3.4;
+
+defineViz('rayride', {
+  title: 'One ray, two readings of "farther out"',
+  height: 460,
+  controls: [
+    { type: 'range', name: 't', label: 'query length t', min: 0.05, max: 3.3, step: 0.01, value: 0.5, fmt: (v) => fmt(v, 2), play: { period: 9000, loop: 'pingpong' } },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    const st = api.state;
+    st.dir = Math.atan2(0.75, 1.0);
+    drag(api.canvas, {
+      cursor: 'grab',
+      onStart(p) { st.dragging = !!st.plane && p.x >= st.plane.x && p.x <= st.plane.x + st.plane.w && p.y >= st.plane.y && p.y <= st.plane.y + st.plane.h; },
+      onMove(p) {
+        if (!st.dragging || !st.plane) return;
+        const b = st.plane;
+        const wx = -R + (2 * R * (p.x - b.x)) / b.w;
+        const wy = R - (2 * R * (p.y - b.y)) / b.h;
+        if (Math.hypot(wx, wy) > 0.05) { st.dir = Math.atan2(wy, wx); api.render(); }
+      },
+      onEnd() { st.dragging = false; },
+    });
+  },
+
+  draw(api) {
+    const { ctx, colors, size: { W, H } } = api, st = api.state;
+    const t = api.get('t');
+    const u = [Math.cos(st.dir), Math.sin(st.dir)];
+    const q = [t * u[0], t * u[1]];
+    const rw = rows(q, KEYS);
+
+    const pad = 14, top = 28, footer = 40;
+    const side = Math.min(W * 0.52, H - top - footer);
+    const plane = { x: pad, y: top, w: side, h: side };
+    st.plane = plane;
+
+    // ── the plane: bodies, the ray, the query riding it ──
+    ctx.fillStyle = colors.cellBg;
+    ctx.fillRect(plane.x, plane.y, plane.w, plane.h);
+    axes(ctx, plane, { xMin: -R, xMax: R, yMin: -R, yMax: R }, colors);
+    const toPx = (p) => [
+      plane.x + ((p[0] + R) / (2 * R)) * plane.w,
+      plane.y + (1 - (p[1] + R) / (2 * R)) * plane.h,
+    ];
+    const o = toPx([0, 0]);
+    cross(ctx, o[0], o[1], 5, colors.fg);
+    // the ray
+    const far = toPx([u[0] * R * 2, u[1] * R * 2]);
+    ctx.strokeStyle = colors.faint; ctx.setLineDash([4, 4]); ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(o[0], o[1]); ctx.lineTo(far[0], far[1]); ctx.stroke();
+    ctx.setLineDash([]);
+    KEYS.forEach((k, i) => {
+      const [x, y] = toPx(k);
+      dot(ctx, x, y, 6.5, PALETTE[i % PALETTE.length]);
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.arc(x, y, 6.5, 0, 2 * Math.PI); ctx.stroke();
+    });
+    const qp = toPx(q);
+    ctx.strokeStyle = colors.fg;
+    dot(ctx, qp[0], qp[1], 6, '#fff');
+    ctx.beginPath(); ctx.arc(qp[0], qp[1], 6, 0, 2 * Math.PI); ctx.stroke();
+    T(ctx, colors, 'label');
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('drag anywhere on the plane to re-aim the ray', plane.x, plane.y - 8);
+
+    // ── the two weight rows ──
+    const bx = plane.x + plane.w + 18, bw = W - bx - pad;
+    const rowH = (H - top - footer - 26) / 2;
+    const bars = (y0, w, label, winner, extra) => {
+      const box = { x: bx, y: y0, w: bw, h: rowH - 26 };
+      T(ctx, colors, 'label');
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      ctx.fillText(label, bx, y0 - 6);
+      ctx.strokeStyle = colors.border; ctx.lineWidth = 1;
+      ctx.strokeRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1);
+      const n = w.length, bwid = box.w / n;
+      for (let i = 0; i < n; i++) {
+        const h = Math.max(1, w[i] * (box.h - 6));
+        ctx.globalAlpha = i === winner ? 1 : 0.55;
+        ctx.fillStyle = PALETTE[i % PALETTE.length];
+        ctx.fillRect(box.x + i * bwid + 3, box.y + box.h - h - 2, bwid - 6, h);
+        ctx.globalAlpha = 1;
+      }
+      T(ctx, colors, 'small');
+      ctx.fillText(extra, bx, box.y + box.h + 14);
+    };
+    bars(top + 20, rw.wSoft, 'softmax row', rw.winSoft,
+      `winner: body ${rw.winSoft + 1}, fixed on this ray; entropy ${fmt(normEntropy(rw.wSoft), 2)}`);
+    bars(top + 20 + rowH + 6, rw.wKer, 'kernel row', rw.winKer,
+      `winner: body ${rw.winKer + 1}, hands off; mass ${fmt(rw.mass, 2)}`);
+
+    T(ctx, colors, 'small');
+    ctx.fillText('same query, same bodies, both rows recomputed live from the two formulas at every t', pad, H - 14);
+    api.readout('rd', `t = ${fmt(t, 2)}: softmax winner ${rw.winSoft + 1}, kernel winner ${rw.winKer + 1}, kernel mass ${fmt(rw.mass, 2)}`);
+  },
+});
+</script>
