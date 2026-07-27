@@ -104,7 +104,13 @@ const generatedOgPath =
 const ogImageRaw = image ?? generatedOgPath ?? `${BASE}/${SITE_OG_IMAGE}`;
 const ogImage = new URL(ogImageRaw, Astro.site).toString();
 const ogImageAlt = image ? title : `${title} — ${SITE_TITLE}`;
-const ogImageType = ogImageRaw.endsWith('.png') ? 'image/png' : (ogImageRaw.endsWith('.svg') ? 'image/svg+xml' : undefined);
+const ogImageType = ogImageRaw.endsWith('.png')
+  ? 'image/png'
+  : /\.jpe?g$/.test(ogImageRaw)
+    ? 'image/jpeg'
+    : ogImageRaw.endsWith('.svg')
+      ? 'image/svg+xml'
+      : undefined;
 
 // ─── Keywords ──────────────────────────────────────────────────────────
 const seoKeywords = Array.from(new Set([...(keywords ?? []), ...tags]));
