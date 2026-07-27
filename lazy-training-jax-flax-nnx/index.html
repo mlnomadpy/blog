@@ -1,0 +1,570 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="generator" content="Astro v5.18.1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#fbfaf6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)"><title>Frozen Random Yat Features in JAX/Flax NNX</title><meta name="description" content="Freeze a Yat layer in Flax NNX and train only the readout: DiffState filters, per-arm LR bracketing, movement telemetry, and the run's prototype trajectories."><meta name="keywords" content="frozen features flax nnx, train only readout jax, random features implementation, nnx difffstate filter, kernels, random-features, lazy-training, yat, jax, flax, nnx, implementation"><meta name="author" content="Taha Bouhsine"><link rel="canonical" href="https://tahabouhsine.com/blog/lazy-training-jax-flax-nnx/"><link rel="icon" href="/blog/favicon.svg" type="image/svg+xml"><link rel="alternate" type="application/rss+xml" title="Records of the !mmortal Data Scientist" href="/blog/rss.xml"><link rel="sitemap" href="/blog/sitemap-index.xml"><link rel="me" href="https://github.com/mlnomadpy"><link rel="me" href="https://x.com/mlnomadpy"><link rel="me" href="https://www.linkedin.com/in/tahabsn/"><link rel="me" href="https://scholar.google.com/citations?user=IsBjb3EAAAAJ"><link rel="me" href="https://g.dev/tahabsn"><link rel="author" href="https://github.com/mlnomadpy"><meta property="og:type" content="article"><meta property="og:site_name" content="Records of the !mmortal Data Scientist"><meta property="og:title" content="Frozen Random Yat Features in JAX/Flax NNX"><meta property="og:description" content="Freeze a Yat layer in Flax NNX and train only the readout: DiffState filters, per-arm LR bracketing, movement telemetry, and the run's prototype trajectories."><meta property="og:url" content="https://tahabouhsine.com/blog/lazy-training-jax-flax-nnx/"><meta property="og:locale" content="en_US"><meta property="og:image" content="https://tahabouhsine.com/blog/og/lazy-training-jax-flax-nnx.png"><meta property="og:image:alt" content="Lazy Training a Yat Network in JAX/Flax NNX — Records of the !mmortal Data Scientist"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:type" content="image/png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@mlnomadpy"><meta name="twitter:creator" content="@mlnomadpy"><meta name="twitter:title" content="Frozen Random Yat Features in JAX/Flax NNX"><meta name="twitter:description" content="Freeze a Yat layer in Flax NNX and train only the readout: DiffState filters, per-arm LR bracketing, movement telemetry, and the run's prototype trajectories."><meta name="twitter:image" content="https://tahabouhsine.com/blog/og/lazy-training-jax-flax-nnx.png"><meta name="twitter:image:alt" content="Lazy Training a Yat Network in JAX/Flax NNX — Records of the !mmortal Data Scientist"><meta property="article:published_time" content="2026-07-26T23:00:00.000Z"><meta property="article:author" content="Taha Bouhsine"><meta property="article:section" content="Kernels"><meta property="article:tag" content="kernels"><meta property="article:tag" content="random-features"><meta property="article:tag" content="lazy-training"><meta property="article:tag" content="yat"><meta property="article:tag" content="jax"><meta property="article:tag" content="flax"><meta property="article:tag" content="nnx"><meta property="article:tag" content="implementation"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","@id":"https://tahabouhsine.com/blog/lazy-training-jax-flax-nnx/#article","headline":"Lazy Training a Yat Network in JAX/Flax NNX","name":"Lazy Training a Yat Network in JAX/Flax NNX","description":"Freeze a Yat layer in Flax NNX and train only the readout: DiffState filters, per-arm LR bracketing, movement telemetry, and the run's prototype trajectories.","image":["https://tahabouhsine.com/blog/og/lazy-training-jax-flax-nnx.png"],"datePublished":"2026-07-26T23:00:00.000Z","dateModified":"2026-07-26T23:00:00.000Z","author":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#author","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","jobTitle":"Machine Learning Researcher","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"publisher":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#publisher","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"mainEntityOfPage":{"@type":"WebPage","@id":"https://tahabouhsine.com/blog/lazy-training-jax-flax-nnx/"},"keywords":"frozen features flax nnx, train only readout jax, random features implementation, nnx difffstate filter, kernels, random-features, lazy-training, yat, jax, flax, nnx, implementation","url":"https://tahabouhsine.com/blog/lazy-training-jax-flax-nnx/","inLanguage":"en-US","wordCount":1318,"timeRequired":"PT7M","articleSection":"Kernels","isPartOf":{"@type":"Blog","@id":"https://tahabouhsine.com/blog/","name":"Records of the !mmortal Data Scientist","url":"https://tahabouhsine.com/blog/"}}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Blog","item":"https://tahabouhsine.com/blog/"},{"@type":"ListItem","position":2,"name":"Kernels","item":"https://tahabouhsine.com/blog/tag/kernels/"},{"@type":"ListItem","position":3,"name":"Lazy Training a Yat Network in JAX/Flax NNX","item":"https://tahabouhsine.com/blog/lazy-training-jax-flax-nnx/"}]}</script><script>
+    (function () {
+      if (window.__gaSetup) return;
+      window.__gaSetup = true;
+      var GA_ID = 'G-373438VHJB';
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ dataLayer.push(arguments); }
+      window.gtag = window.gtag || gtag;
+      window.__gaEventQueue = window.__gaEventQueue || [];
+      window.__trackGA = function (eventName, params) {
+        if (!eventName) return;
+        var item = { name: eventName, params: params || {} };
+        if (window.__gaLoaded) {
+          gtag('event', item.name, item.params);
+        } else {
+          window.__gaEventQueue.push(item);
+        }
+      };
+
+      // Track whether the first astro:page-load has fired, so a mid-session
+      // Accept can still record the current page.
+      window.__gaFirstLoadDone = window.__gaFirstLoadDone || false;
+      document.addEventListener('astro:page-load', function () { window.__gaFirstLoadDone = true; });
+
+      window.__loadGA = function () {
+        if (window.__gaLoaded) return;
+        window.__gaLoaded = true;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+        document.head.appendChild(s);
+        gtag('js', new Date());
+        gtag('config', GA_ID, { send_page_view: false });
+        (window.__gaEventQueue || []).splice(0).forEach(function (item) {
+          gtag('event', item.name, item.params);
+        });
+        function sendPV() {
+          gtag('event', 'page_view', {
+            page_title: document.title,
+            page_location: location.href,
+            page_path: location.pathname + location.search,
+          });
+        }
+        document.addEventListener('astro:page-load', sendPV);
+        // If the initial page-load already happened (accept mid-session),
+        // record this page now; otherwise the listener catches the first one.
+        if (window.__gaFirstLoadDone) sendPV();
+      };
+
+      try {
+        if (localStorage.getItem('analytics-consent') === 'granted') window.__loadGA();
+      } catch (e) {}
+    })();
+  </script><script>
+  (() => {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'light' || stored === 'dark') {
+      document.documentElement.setAttribute('data-theme', stored);
+    }
+  })();
+</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.DDq-TDm1.css">
+<link rel="stylesheet" href="/blog/_astro/_slug_.1UYF8z3a.css">
+<style>.series-nav[data-astro-cid-w7ld43o3]{margin:0 0 1.1rem;border:1px solid var(--border);border-radius:8px;background:var(--bg-sunken);overflow:hidden}summary[data-astro-cid-w7ld43o3]{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.55rem .9rem;cursor:pointer;list-style:none;user-select:none;transition:background var(--transition-fast)}summary[data-astro-cid-w7ld43o3]::-webkit-details-marker{display:none}summary[data-astro-cid-w7ld43o3]:hover{background:color-mix(in srgb,var(--accent) 6%,var(--bg-sunken))}.sn-strip[data-astro-cid-w7ld43o3]{display:flex;align-items:baseline;gap:.5rem;min-width:0;font-family:var(--mono);font-size:.68rem;letter-spacing:.11em;text-transform:uppercase}.sn-part[data-astro-cid-w7ld43o3]{color:var(--accent);white-space:nowrap}.sn-sep[data-astro-cid-w7ld43o3]{color:var(--fg-faint)}.sn-series[data-astro-cid-w7ld43o3]{color:var(--fg-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sn-chevron[data-astro-cid-w7ld43o3]{flex:none;display:inline-flex;color:var(--fg-faint);transition:transform var(--transition-fast),color var(--transition-fast)}summary[data-astro-cid-w7ld43o3]:hover .sn-chevron[data-astro-cid-w7ld43o3]{color:var(--accent)}.series-nav[data-astro-cid-w7ld43o3][open] .sn-chevron[data-astro-cid-w7ld43o3]{transform:rotate(180deg)}.sn-list[data-astro-cid-w7ld43o3]{list-style:none;margin:0;padding:.25rem .9rem .55rem;border-top:1px dashed var(--border)}.sn-list[data-astro-cid-w7ld43o3] li[data-astro-cid-w7ld43o3]{margin:0}.sn-item[data-astro-cid-w7ld43o3]{display:flex;align-items:baseline;gap:.6rem;padding:.32rem 0;text-decoration:none;color:inherit}.sn-num[data-astro-cid-w7ld43o3]{flex:none;width:1.1rem;font-family:var(--mono);font-size:.72rem;color:var(--fg-faint);text-align:right;font-variant-numeric:tabular-nums}.sn-title[data-astro-cid-w7ld43o3]{font-family:var(--serif);font-size:.93rem;line-height:1.4;color:var(--fg-muted);transition:color var(--transition-fast)}a[data-astro-cid-w7ld43o3].sn-item:hover .sn-title[data-astro-cid-w7ld43o3],li[data-astro-cid-w7ld43o3].current .sn-num[data-astro-cid-w7ld43o3]{color:var(--accent)}li[data-astro-cid-w7ld43o3].current .sn-title[data-astro-cid-w7ld43o3]{color:var(--fg);font-weight:600}.sn-note[data-astro-cid-w7ld43o3]{flex:none;font-family:var(--mono);font-size:.6rem;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 55%,transparent);border-radius:4px;padding:.06rem .38rem;white-space:nowrap;align-self:center}@media(max-width:600px){.sn-series[data-astro-cid-w7ld43o3]{white-space:normal}.sn-strip[data-astro-cid-w7ld43o3]{flex-wrap:wrap;row-gap:.15rem}.sn-note[data-astro-cid-w7ld43o3]{display:none}li[data-astro-cid-w7ld43o3].current .sn-note[data-astro-cid-w7ld43o3]{display:inline-block}}
+</style><style>.cite-as[data-astro-cid-p234urri]{margin:3.5rem 0 0;padding-top:1.5rem;border-top:1px solid var(--border)}.cite-as[data-astro-cid-p234urri] h2[data-astro-cid-p234urri]{font-family:var(--mono);font-size:.82rem;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-faint);font-weight:500;margin:0 0 .75rem}.cite-as[data-astro-cid-p234urri] h3[data-astro-cid-p234urri]{font-family:var(--mono);font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-faint);font-weight:500;margin:1.5rem 0 .6rem}.cite-line[data-astro-cid-p234urri]{font-family:var(--serif);font-size:.98rem;line-height:1.55;color:var(--fg-muted);margin:0 0 .5rem}.cite-line[data-astro-cid-p234urri] em[data-astro-cid-p234urri]{color:var(--fg)}.cite-bib[data-astro-cid-p234urri]{margin:.4rem 0 0;position:relative}.cite-bib[data-astro-cid-p234urri] summary[data-astro-cid-p234urri]{cursor:pointer;font-family:var(--mono);font-size:.78rem;color:var(--fg-muted);padding:.25rem 0;user-select:none}.cite-bib[data-astro-cid-p234urri] summary[data-astro-cid-p234urri]:hover{color:var(--accent)}.cite-bib[data-astro-cid-p234urri] pre[data-astro-cid-p234urri]{margin:.4rem 0 0;padding:.85rem 1rem;background:var(--bg-elev);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;font-size:.82rem;line-height:1.55}.cite-bib[data-astro-cid-p234urri] pre[data-astro-cid-p234urri] code[data-astro-cid-p234urri]{background:transparent;border:0;padding:0}.cite-copy[data-astro-cid-p234urri]{position:absolute;top:2.1rem;right:.55rem;background:var(--bg);border:1px solid var(--border);color:var(--fg-muted);font-family:var(--mono);font-size:.72rem;padding:.25rem .55rem;border-radius:var(--radius-sm);cursor:pointer;transition:color var(--transition-fast),border-color var(--transition-fast)}.cite-copy[data-astro-cid-p234urri]:hover,.cite-copy[data-astro-cid-p234urri].copied{color:var(--accent);border-color:var(--accent)}
+</style></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/archive">archive</a><a href="/blog/map">map</a><a href="/blog/writeups">writeups</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>
+  (() => {
+    const apply = (theme) => {
+      document.documentElement.setAttribute('data-theme', theme);
+      const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+      if (meta) meta.setAttribute('content', theme === 'dark' ? '#0e1116' : '#fbfaf6');
+      // Sync giscus iframe if present
+      const giscus = document.querySelector('iframe.giscus-frame');
+      if (giscus && giscus.contentWindow) {
+        giscus.contentWindow.postMessage(
+          { giscus: { setConfig: { theme: theme === 'dark' ? 'dark' : 'light' } } },
+          'https://giscus.app'
+        );
+      }
+    };
+
+    const init = () => {
+      const btns = document.querySelectorAll('[data-theme-toggle]');
+      btns.forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', () => {
+          const current = document.documentElement.getAttribute('data-theme')
+            || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          const next = current === 'dark' ? 'light' : 'dark';
+          localStorage.setItem('theme', next);
+          apply(next);
+        });
+      });
+    };
+
+    init();
+    document.addEventListener('astro:after-swap', init);
+    document.addEventListener('astro:page-load', init);
+  })();
+</script> </nav> </div> </header> <main id="main">  <div class="reading-progress" data-reading-progress aria-hidden="true"></div> <script>
+  (() => {
+    const init = () => {
+      const bar = document.querySelector('[data-reading-progress]');
+      if (!bar) return;
+      const update = () => {
+        const h = document.documentElement;
+        const scrolled = h.scrollTop;
+        const max = h.scrollHeight - h.clientHeight;
+        const pct = max > 0 ? Math.min(100, (scrolled / max) * 100) : 0;
+        bar.style.width = pct + '%';
+      };
+      // Coalesce scroll events into one paint per frame so fast/touch
+      // scrolling stays smooth.
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => { update(); ticking = false; });
+      };
+      update();
+      window.removeEventListener('scroll', window.__rp_onScroll || (() => {}));
+      window.removeEventListener('resize', window.__rp_onScroll || (() => {}));
+      window.__rp_onScroll = onScroll;
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+    };
+    init();
+    document.addEventListener('astro:page-load', init);
+    document.addEventListener('astro:after-swap', init);
+  })();
+</script> <article data-blog-post data-pagefind-body data-pagefind-meta="date:2026-07-26"> <header class="post-header">  <h1 data-pagefind-meta="title">Lazy Training a Yat Network in JAX/Flax NNX</h1> <p class="meta"> <time datetime="2026-07-26T23:00:00.000Z">July 26, 2026</time>   · 7 min read </p> <p style="margin-top:0.65rem" data-pagefind-meta="tags:kernels,random-features,lazy-training,yat,jax,flax,nnx,implementation"> <a class="tag" href="/blog/tag/kernels/">#kernels</a><a class="tag" href="/blog/tag/random-features/">#random-features</a><a class="tag" href="/blog/tag/lazy-training/">#lazy-training</a><a class="tag" href="/blog/tag/yat/">#yat</a><a class="tag" href="/blog/tag/jax/">#jax</a><a class="tag" href="/blog/tag/flax/">#flax</a><a class="tag" href="/blog/tag/nnx/">#nnx</a><a class="tag" href="/blog/tag/implementation/">#implementation</a> </p> </header> <details class="series-nav" data-astro-cid-w7ld43o3><summary data-astro-cid-w7ld43o3><span class="sn-strip" data-astro-cid-w7ld43o3><span class="sn-part" data-astro-cid-w7ld43o3>Part 13 of 13</span><span class="sn-sep" aria-hidden="true" data-astro-cid-w7ld43o3>·</span><span class="sn-series" data-astro-cid-w7ld43o3>The Prototype Network</span></span><span class="sn-chevron" aria-hidden="true" data-astro-cid-w7ld43o3><svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" data-astro-cid-w7ld43o3><path d="M2.5 4.5 6 8l3.5-3.5" data-astro-cid-w7ld43o3></path></svg></span></summary><ol class="sn-list" data-astro-cid-w7ld43o3><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/what-a-finite-kernel-buys-an-mlp/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>1</span><span class="sn-title" data-astro-cid-w7ld43o3>What a Finite Kernel Buys an MLP</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/your-neuron-is-a-picture/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>2</span><span class="sn-title" data-astro-cid-w7ld43o3>Your Neuron Is a Direction. It Should Be a Picture.</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/edit-a-network-by-hand/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>3</span><span class="sn-title" data-astro-cid-w7ld43o3>Your Network Is a List of Pictures. You Can Edit It.</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/train-the-features/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>4</span><span class="sn-title" data-astro-cid-w7ld43o3>You Only Have to Train the Features</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/you-dont-have-to-train-the-features/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>5</span><span class="sn-title" data-astro-cid-w7ld43o3>You Don&#39;t Even Have to Train the Features</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/depth-by-construction/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>6</span><span class="sn-title" data-astro-cid-w7ld43o3>How Far Down Can You Build?</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/calibration-of-a-bounded-net/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>7</span><span class="sn-title" data-astro-cid-w7ld43o3>When 80% Should Mean 80%</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/a-risk-model-that-names-its-reasons/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>8</span><span class="sn-title" data-astro-cid-w7ld43o3>A Risk Model That Names Its Reasons</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/survival-model-on-trial/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>9</span><span class="sn-title" data-astro-cid-w7ld43o3>The White-Box Survival Model on Trial</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/your-network-is-a-fixed-point/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>10</span><span class="sn-title" data-astro-cid-w7ld43o3>Your Network Is a Stack of Layers. It Could Be a Fixed Point.</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/edit-a-fixed-point/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>11</span><span class="sn-title" data-astro-cid-w7ld43o3>Edit One Operator, Edit Every Depth</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/you-dont-have-to-solve-a-kernel-machine/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>12</span><span class="sn-title" data-astro-cid-w7ld43o3>One Kernel, Fitted Twice</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/lazy-training/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>13</span><span class="sn-title" data-astro-cid-w7ld43o3>How Many Random Neurons Buy a Trained One?</span><span class="sn-note" data-astro-cid-w7ld43o3>this post's explainer</span></a></li></ol></details> <a class="companion-callout companion" href="/blog/lazy-training/" data-astro-cid-x4o4rwnl><span class="cc-icon" aria-hidden="true" data-astro-cid-x4o4rwnl>📖</span><span class="cc-body" data-astro-cid-x4o4rwnl><span class="cc-eyebrow" data-astro-cid-x4o4rwnl>Explainer companion</span><span class="cc-title" data-astro-cid-x4o4rwnl>How Many Random Neurons Buy a Trained One?</span><span class="cc-lead" data-astro-cid-x4o4rwnl>Want the full intuition first? This is the runnable companion to the explainer.</span></span><span class="cc-cta" data-astro-cid-x4o4rwnl>Read the explainer<span aria-hidden="true" data-astro-cid-x4o4rwnl>→</span></span></a>  
+<p><em>The <a href="/blog/lazy-training/">explainer</a> freezes a bank of random Yat units and asks how many frozen neurons buy a trained one. This is the implementation side: the layer, the freeze, the fairness protocol, and the telemetry, all from <code>scripts/yat_lazy.py</code>, the script the Kaggle bundles ran (<code>kgl_blog-yatlazy-v1</code> and its audits); figures are rendered from the bundles by <code>scripts/render_lazy_gifs.py</code>.</em></p>
+<h2 id="the-layer-and-how-to-freeze-only-part-of-a-model">The layer, and how to freeze only part of a model<a class="heading-anchor-link" aria-label="Link to heading" href="#the-layer-and-how-to-freeze-only-part-of-a-model"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The hidden layer is the series’ standard Yat bank: prototypes as parameters, the kernel as the nonlinearity, both scalars stored raw behind a softplus so admissibility is structural:</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">class</span><span style="color:#6F42C1;--shiki-dark:#F69D50"> YatLayer</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(</span><span style="color:#6F42C1;--shiki-dark:#6CB6FF">nnx</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.</span><span style="color:#6F42C1;--shiki-dark:#6CB6FF">Module</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> __init__</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(s, d_in, m, </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, rngs, init</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#032F62;--shiki-dark:#96D0FF">&quot;lecun&quot;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        if</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> init </span><span style="color:#D73A49;--shiki-dark:#F47067">==</span><span style="color:#032F62;--shiki-dark:#96D0FF"> &quot;lecun&quot;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">:</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">            W0 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.initializers.lecun_normal()(rngs.params(), (m, d_in))</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        else</span><span style="color:#24292E;--shiki-dark:#ADBAC7">:  </span><span style="color:#6A737D;--shiki-dark:#768390"># data-seeded: m random training images as prototypes</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">            idx </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jax.random.choice(rngs.params(), </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">len</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(Xtr), (m,), </span><span style="color:#E36209;--shiki-dark:#F69D50">replace</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">False</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">            W0 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.asarray(Xtr)[idx]</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        s.W </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Param(W0)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        s.log_b </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Param(jnp.full((), jnp.log(jnp.expm1(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0.5</span><span style="color:#24292E;--shiki-dark:#ADBAC7">))))</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        s.log_eps </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Param(jnp.full((), jnp.log(jnp.expm1(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0.5</span><span style="color:#24292E;--shiki-dark:#ADBAC7">))))</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> __call__</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(s, x):</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        b </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jax.nn.softplus(s.log_b.value)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        eps </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jax.nn.softplus(s.log_eps.value)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        dot </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> x </span><span style="color:#D73A49;--shiki-dark:#F47067">@</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> s.W.value.T</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">        d2 </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (jnp.sum(x </span><span style="color:#D73A49;--shiki-dark:#F47067">*</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> x, </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">keepdims</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">True</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">              +</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> jnp.sum(s.W.value </span><span style="color:#D73A49;--shiki-dark:#F47067">**</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#D73A49;--shiki-dark:#F47067"> *</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> dot)</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (dot </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> b) </span><span style="color:#D73A49;--shiki-dark:#F47067">**</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 2</span><span style="color:#D73A49;--shiki-dark:#F47067"> /</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (jnp.maximum(d2, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0.0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">+</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> eps)</span></span></code></pre>
+<p>Freezing is not a <code>stop_gradient</code> scattered through the forward pass; in NNX it is a <em>filter</em>. The frozen arms declare that only the head’s parameters are trainable, hand that filter to the optimizer and to <code>value_and_grad</code>, and the bank never sees an update:</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">trainable </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> (nnx.All(nnx.Param, nnx.PathContains(</span><span style="color:#032F62;--shiki-dark:#96D0FF">&quot;head&quot;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">))</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">             if</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> frozen </span><span style="color:#D73A49;--shiki-dark:#F47067">else</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Param)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">opt </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.Optimizer(model, optax.adamw(lr, </span><span style="color:#E36209;--shiki-dark:#F69D50">weight_decay</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1e-4</span><span style="color:#24292E;--shiki-dark:#ADBAC7">), </span><span style="color:#E36209;--shiki-dark:#F69D50">wrt</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">trainable)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">loss, grads </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> nnx.value_and_grad(</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    loss_fn, </span><span style="color:#E36209;--shiki-dark:#F69D50">argnums</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">nnx.DiffState(</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, trainable))(model)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">opt.update(model, grads)</span></span></code></pre>
+<p>Everything else, data order, batches, epochs, evaluation, is shared across all seven arms; the only differences are the init (<code>lecun</code> or data-seeded), the nonlinearity (Yat, Gaussian, or ReLU), and that one filter.</p>
+<h2 id="one-neuron-one-sample-watched">One neuron, one sample, watched<a class="heading-anchor-link" aria-label="Link to heading" href="#one-neuron-one-sample-watched"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The explainer’s central reading is that a frozen random bank is a Monte Carlo estimate of a kernel, one neuron per sample. Here is the estimate concentrating, on thirty real images from three classes: at one neuron the Gram matrix is noise, and the class blocks condense out of it as neurons accumulate:</p>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/lazy-gram.gif" alt="A thirty-by-thirty Gram matrix heatmap crystallizing from noise into a clear three-block class structure as the counter of random neurons climbs from one to two thousand" loading="lazy"/><figcaption>The normalized Gram matrix of 30 Fashion-MNIST images (ten T-shirts, ten trousers, ten sneakers) under a growing bank of frozen random Yat units, recomputed at every frame from the real features. One neuron gives a random similarity; two thousand give the random-feature kernel’s verdict, same-class blocks bright, cross-class blocks dark. Nothing trains anywhere in this figure; the structure is entirely the initializer’s kernel, emerging at the Monte Carlo rate.</figcaption></figure>
+<h2 id="the-readout-does-the-work">The readout does the work<a class="heading-anchor-link" aria-label="Link to heading" href="#the-readout-does-the-work"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>With features frozen, training is a convex fit, and it looks like one. Two banks, 64 and 512 units, each with a linear readout trained by Adam inside the render script on 10,000 real images:</p>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/lazy-race.gif" alt="Two accuracy curves rising through SGD steps, the 512-unit bank clearly above the 64-unit bank, while a grid of twelve test garments flips from orange to green borders as the larger readout learns" loading="lazy"/><figcaption>Two readouts training for real on frozen banks, accuracy through SGD steps; the thumbnails show the 512-unit readout’s live verdicts on twelve test garments. Both climb fast (the problem is convex), both plateau (the wall is the bank, not the optimizer), and the bigger bank’s wall is higher. This is the companion’s small-scale rendition of the explainer’s in-page panel; the full-scale numbers come from the Kaggle grid below.</figcaption></figure>
+<h2 id="the-ladder-the-law-and-the-rates-that-found-them">The ladder, the law, and the rates that found them<a class="heading-anchor-link" aria-label="Link to heading" href="#the-ladder-the-law-and-the-rates-that-found-them"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The full grid is ten widths by seven arms by three seeds, and its fairness protocol is worth quoting because the arms wanted <em>wildly</em> different learning rates. Each arm brackets its own rate at m = 256 before running its width grid:</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">GRIDS</span><span style="color:#D73A49;--shiki-dark:#F47067"> =</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> {</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">True</span><span style="color:#24292E;--shiki-dark:#ADBAC7">: [</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">3e-3</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1e-2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">3e-2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">], </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">False</span><span style="color:#24292E;--shiki-dark:#ADBAC7">: [</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">3e-2</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1e-1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">3e-1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1.0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">]}</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">for</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> lr </span><span style="color:#D73A49;--shiki-dark:#F47067">in</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> GRIDS</span><span style="color:#24292E;--shiki-dark:#ADBAC7">[arm </span><span style="color:#D73A49;--shiki-dark:#F47067">in</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> TRAINED_ARMS</span><span style="color:#24292E;--shiki-dark:#ADBAC7">]:</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    cells.append(run(arm, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">256</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">0</span><span style="color:#24292E;--shiki-dark:#ADBAC7">, </span><span style="color:#E36209;--shiki-dark:#F69D50">lr</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7">lr))</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">chosen[arm] </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> max</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(cells, </span><span style="color:#E36209;--shiki-dark:#F69D50">key</span><span style="color:#D73A49;--shiki-dark:#F47067">=lambda</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> r: r[</span><span style="color:#032F62;--shiki-dark:#96D0FF">&quot;best_acc&quot;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">])[</span><span style="color:#032F62;--shiki-dark:#96D0FF">&quot;lr&quot;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">]</span></span></code></pre>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>arm</th><th>bracketed rate</th><th>best of the sweep</th></tr></thead><tbody><tr><td>yat, frozen random</td><td>1.0</td><td>85.3 at m = 512</td></tr><tr><td>yat, frozen data-seeded</td><td>0.3</td><td>83.0 at m = 4096</td></tr><tr><td>relu, frozen random</td><td>0.03</td><td>86.9 at m = 8192</td></tr><tr><td>gaussian, frozen data-seeded</td><td>0.03</td><td>75.2 at m = 1024</td></tr><tr><td>yat, trained</td><td>0.01</td><td>88.9 at m = 2048</td></tr></tbody></table>
+<p>The convex readouts tolerate rates ten to a hundred times hotter than the full network, and the frozen Yat bank’s tiny feature scale demands the hottest of all. The scoreboard and the post’s headline law, as static figures:</p>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/lazy-ladder.png" alt="Accuracy against width for five arms with seed error bars, three dotted reference rungs, and the trained arm's dashed curve above all frozen curves at every width" loading="lazy"/><figcaption>The width ladder: ten widths are ten facts, so this is a chart, not an animation. The trained arm’s dashed curve enters at 86.3 with sixteen units, above every frozen point in the sweep.</figcaption></figure>
+<figure class="jax-fig"><img src="/blog/lazy-movement.png" alt="A log-log plot of relative prototype movement against width, a straight line following a square-root law next to a dotted reference" loading="lazy"/><figcaption>The anti-lazy law on log axes: relative prototype travel against width, next to a pure square-root reference. The measured slope is 0.49 with R-squared 0.998.</figcaption></figure>
+<p>The movement statistic itself is three lines of telemetry, kept per unit so the median and the maximum can disagree (they barely do):</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">Wf </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.asarray(model.feat.W.value)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">out[</span><span style="color:#032F62;--shiki-dark:#96D0FF">&quot;w_move_rel&quot;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">] </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> float</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(np.linalg.norm(Wf </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> W0) </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.linalg.norm(W0))</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">mv </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.linalg.norm(Wf </span><span style="color:#D73A49;--shiki-dark:#F47067">-</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> W0, </span><span style="color:#E36209;--shiki-dark:#F69D50">axis</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">) </span><span style="color:#D73A49;--shiki-dark:#F47067">/</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> np.linalg.norm(W0, </span><span style="color:#E36209;--shiki-dark:#F69D50">axis</span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF">1</span><span style="color:#24292E;--shiki-dark:#ADBAC7">)</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">out[</span><span style="color:#032F62;--shiki-dark:#96D0FF">&quot;w_move_median&quot;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">], out[</span><span style="color:#032F62;--shiki-dark:#96D0FF">&quot;w_move_max&quot;</span><span style="color:#24292E;--shiki-dark:#ADBAC7">] </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> float</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(np.median(mv)), </span><span style="color:#005CC5;--shiki-dark:#6CB6FF">float</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(mv.max())</span></span></code></pre>
+<h2 id="watch-the-prototypes-travel">Watch the prototypes travel<a class="heading-anchor-link" aria-label="Link to heading" href="#watch-the-prototypes-travel"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The trajectory bundle (<code>kgl_blog-yatlazy-traj</code>) retrains three arms at m = 64 with a snapshot of the first sixteen prototypes at every epoch, so the anti-lazy law can be watched instead of summarized:</p>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/lazy-protos.gif" alt="Two rows of eight prototype images evolving across training epochs: the random-init row drifts from static toward ghostly garment textures while the data-init row's garments roughen but survive" loading="lazy"/><figcaption>The run’s actual prototype snapshots, epoch by epoch, same training, two initializations. The random-init row travels almost five times its initialization norm and drifts toward ghostly, garment-textured objects without ever becoming the readable pictures data-seeding gives for free; the data-init row roughens and keeps its garments. Movement and legibility are different quantities, which is the gallery form of the explainer’s point that legibility is decided at initialization.</figcaption></figure>
+<figure class="jax-fig jax-fig-wide"><img src="/blog/lazy-travel.gif" alt="Two panels drawing through training epochs: median prototype travel climbing steeply for the random-init yat arm while the two data-seeded arms stay near one, and the corresponding accuracy curves with the random-init arm on top" loading="lazy"/><figcaption>Median prototype travel and held-out accuracy through the trajectory run’s 24 epochs, drawn in training time. The random-init Yat arm keeps traveling all run and finishes on top (88.7); the data-seeded Yat and Gaussian arms barely move (about 1x and 0.8x) and finish below it (87.1, 84.5). The arm that travels furthest wins, and the Gaussian, which the classical literature expects to be the stiffest, moves least and gains least.</figcaption></figure>
+<p><em>Every number is from <code>scripts/yat_lazy.py</code> on Kaggle: the main grid <code>kgl_blog-yatlazy-v1</code> (seven arms, widths 16 to 8,192, three seeds, per-arm bracketed rates), the budget audits <code>kgl_blog-yatlazy-bigm</code> and <code>-bigm2</code>, the rate audits <code>-lrsweep</code> and <code>-lrsweep2</code>, and the trajectory bundle <code>-traj</code> (m = 64, 24 epochs, per-epoch snapshots). The Gram and readout-race figures are computed by <code>scripts/render_lazy_gifs.py</code> from raw Fashion-MNIST with the run’s exact layer math; the analysis and the redundancy measurement live in <code>scripts/export_yat_lazy_viz.py</code>.</em></p>
+<section class="cite-as" aria-labelledby="cite-lazy-training-jax-flax-nnx" data-astro-cid-p234urri> <h2 id="cite-lazy-training-jax-flax-nnx" data-astro-cid-p234urri>Cite as</h2> <p class="cite-line" data-astro-cid-p234urri>
+Bouhsine, T. (<time datetime="2026-07-26T00:00:00.000Z" data-astro-cid-p234urri>2026, July 26</time>).
+<em data-astro-cid-p234urri>Lazy Training a Yat Network in JAX/Flax NNX</em>. Records of the !mmortal Data Scientist.
+<a href="https://tahabouhsine.com/blog/lazy-training-jax-flax-nnx/" data-astro-cid-p234urri>https://tahabouhsine.com/blog/lazy-training-jax-flax-nnx/</a> </p> <details class="cite-bib" data-astro-cid-p234urri> <summary data-astro-cid-p234urri>BibTeX</summary> <pre data-astro-cid-p234urri><code class="bibtex" data-astro-cid-p234urri>@misc{bouhsine2026lazytrainingjaxflaxnnx,
+  author       = {Bouhsine, Taha},
+  title        = {Lazy Training a Yat Network in JAX/Flax NNX},
+  year         = {2026},
+  month        = {jul},
+  howpublished = {\url{https://tahabouhsine.com/blog/lazy-training-jax-flax-nnx/}},
+  note         = {Blog post, Records of the !mmortal Data Scientist}
+}</code></pre> <button type="button" class="cite-copy" data-copy="@misc{bouhsine2026lazytrainingjaxflaxnnx,
+  author       = {Bouhsine, Taha},
+  title        = {Lazy Training a Yat Network in JAX/Flax NNX},
+  year         = {2026},
+  month        = {jul},
+  howpublished = {\url{https://tahabouhsine.com/blog/lazy-training-jax-flax-nnx/}},
+  note         = {Blog post, Records of the !mmortal Data Scientist}
+}" aria-label="Copy BibTeX" data-astro-cid-p234urri>copy</button> </details>  </section>  <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('.cite-copy').forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(btn.dataset.copy || '');
+            const original = btn.textContent;
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = original;
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>  <section class="references" aria-labelledby="references-heading" data-astro-cid-rn7nvbl4><h2 id="references-heading" data-astro-cid-rn7nvbl4>References</h2><ol data-astro-cid-rn7nvbl4><li id="ref-1" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Rahimi, A., Recht, B.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2007)</span>. <span class="ref-title" data-astro-cid-rn7nvbl4>Random Features for Large-Scale Kernel Machines</span>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>NeurIPS 2007</span>.</li><li id="ref-2" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Chizat, L., Oyallon, E., Bach, F.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2019)</span>. <a class="ref-title" href="https://arxiv.org/abs/1812.07956" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>On Lazy Training in Differentiable Programming</a>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>NeurIPS 2019</span>.<a class="ref-ext" href="https://arxiv.org/abs/1812.07956" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:1812.07956</a></li></ol></section> </article> <script>(function(){const payload = {"post_title":"Lazy Training a Yat Network in JAX/Flax NNX","post_slug":"lazy-training-jax-flax-nnx","post_path":"/blog/lazy-training-jax-flax-nnx/","post_tags":"kernels,random-features,lazy-training,yat,jax,flax,nnx,implementation","word_count":1318,"reading_time_minutes":7,"is_draft":false};
+
+  (() => {
+    const thresholds = [25, 50, 75, 90, 100];
+    const state = { viewed: false, sent: new Set() };
+
+    const track = (name, params = {}) => {
+      if (typeof window.__trackGA === 'function') {
+        window.__trackGA(name, {
+          ...payload,
+          ...params,
+          non_interaction: name === 'blog_post_view',
+        });
+      }
+    };
+
+    const init = () => {
+      const article = document.querySelector('[data-blog-post]');
+      if (!article) return;
+
+      if (!state.viewed) {
+        state.viewed = true;
+        track('blog_post_view');
+      }
+
+      const progress = () => {
+        const rect = article.getBoundingClientRect();
+        const articleTop = window.scrollY + rect.top;
+        const articleHeight = Math.max(1, article.offsetHeight);
+        const viewportBottom = window.scrollY + window.innerHeight;
+        return Math.max(0, Math.min(100, ((viewportBottom - articleTop) / articleHeight) * 100));
+      };
+
+      const update = () => {
+        const pct = progress();
+        thresholds.forEach((threshold) => {
+          if (pct >= threshold && !state.sent.has(threshold)) {
+            state.sent.add(threshold);
+            track('blog_post_read_depth', { read_percent: threshold });
+            if (threshold === 90) {
+              track('blog_post_read', { read_percent: threshold });
+            }
+          }
+        });
+      };
+
+      if (window.__postAnalyticsCleanup) window.__postAnalyticsCleanup();
+
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => {
+          update();
+          ticking = false;
+        });
+      };
+
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+      window.__postAnalyticsCleanup = () => {
+        window.removeEventListener('scroll', onScroll);
+        window.removeEventListener('resize', onScroll);
+      };
+      update();
+    };
+
+    init();
+    document.addEventListener('astro:page-load', init, { once: true });
+  })();
+})();</script> <aside class="related" aria-labelledby="related-heading" data-astro-cid-dpgbfi7r><h2 id="related-heading" data-astro-cid-dpgbfi7r>Related posts</h2><ul data-astro-cid-dpgbfi7r><li data-astro-cid-dpgbfi7r><a href="/blog/attention-is-a-compatibility-kernel-jax-flax-nnx/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>Softmax-Free Attention in JAX/Flax NNX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion to the compatibility-kernel post: the attention module where one branch computes softmax and the other computes the Yat kernel with no exponential anywhere, the parameter-matched training harness, the telemetry that measured our bounded-scores belief dead, and the checkpointed attention maps. Every number is from the real Kaggle runs.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-07-17T00:00:00.000Z" data-astro-cid-dpgbfi7r>Jul 17, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/survival-model-on-trial-jax-flax-nnx/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>Running the Survival Trial, in JAX/Flax NNX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion to the survival-model trial: the Yat DeepSurv trunk in Flax NNX, the Cox partial-likelihood loss, an LR-fair per-model training loop with best-epoch selection, the concordance / integrated-Brier / time-dependent-AUC evaluation, and the classical baselines wired through sksurv and lifelines. Every figure is a real number from a real run across five datasets, with the prototypes and the risk stratification captured as they form over training.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-07-09T17:00:00.000Z" data-astro-cid-dpgbfi7r>Jul 9, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/you-dont-have-to-solve-a-kernel-machine-jax-flax-nnx/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>Solving It and Descending It, in JAX/Flax NNX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion to the solve-vs-descend post: the Yat kernel and its Gram matrix, the exact kernel ridge solve via Cholesky, the same kernel as a Flax NNX module trained by AdamW with LR sweeps and best-epoch selection, the measured timing wall, minibatching through 511k rows, and the conv trunk the solve can never train. Every number is from the real Kaggle runs.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-07-09T17:00:00.000Z" data-astro-cid-dpgbfi7r>Jul 9, 2026</time></span></a></li></ul></aside> <nav class="post-nav" aria-label="Adjacent posts"><a href="/blog/lazy-training/" class="prev" rel="prev"><div class="label">← Explainer</div><div class="title">How Many Random Neurons Buy a Trained One?</div></a><span></span></nav> <script data-astro-rerun>(function(){const postSlug = "lazy-training-jax-flax-nnx";
+const lastRead = {"slug":"lazy-training-jax-flax-nnx","title":"Lazy Training a Yat Network in JAX/Flax NNX","series":"The Prototype Network","part":13,"total":13};
+
+    try {
+      const raw = JSON.parse(localStorage.getItem('read-posts') || '[]');
+      const read = (Array.isArray(raw) ? raw : []).filter((s) => s !== postSlug);
+      read.push(postSlug);
+      while (read.length > 200) read.shift();
+      localStorage.setItem('read-posts', JSON.stringify(read));
+      if (lastRead) localStorage.setItem('last-read', JSON.stringify(lastRead));
+    } catch {}
+  })();</script> <section aria-label="Comments" id="giscus-mount" style="margin-top:3rem" data-giscus="{&#34;repo&#34;:&#34;mlnomadpy/blog&#34;,&#34;repoId&#34;:&#34;MDEwOlJlcG9zaXRvcnk0MDQ4MzY2NDU=&#34;,&#34;category&#34;:&#34;Announcements&#34;,&#34;categoryId&#34;:&#34;DIC_kwDOGCFRJc4C9EiR&#34;,&#34;mapping&#34;:&#34;pathname&#34;,&#34;reactionsEnabled&#34;:&#34;1&#34;,&#34;emitMetadata&#34;:&#34;0&#34;,&#34;inputPosition&#34;:&#34;top&#34;,&#34;theme&#34;:&#34;preferred_color_scheme&#34;,&#34;lang&#34;:&#34;en&#34;}"></section><script>
+    (() => {
+      const load = () => {
+        const mount = document.getElementById('giscus-mount');
+        if (!mount || mount.dataset.loaded === '1') return;
+        const cfg = JSON.parse(mount.dataset.giscus);
+        const theme = document.documentElement.getAttribute('data-theme')
+          || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        const s = document.createElement('script');
+        s.src = 'https://giscus.app/client.js';
+        s.async = true;
+        s.crossOrigin = 'anonymous';
+        const attrs = {
+          'data-repo': cfg.repo,
+          'data-repo-id': cfg.repoId,
+          'data-category': cfg.category,
+          'data-category-id': cfg.categoryId,
+          'data-mapping': cfg.mapping,
+          'data-strict': '0',
+          'data-reactions-enabled': cfg.reactionsEnabled,
+          'data-emit-metadata': cfg.emitMetadata,
+          'data-input-position': cfg.inputPosition,
+          'data-theme': theme,
+          'data-lang': cfg.lang,
+          'data-loading': 'lazy',
+        };
+        for (const k in attrs) s.setAttribute(k, attrs[k]);
+        mount.appendChild(s);
+        mount.dataset.loaded = '1';
+      };
+      load();
+      document.addEventListener('astro:page-load', load);
+      document.addEventListener('astro:after-swap', load);
+    })();
+  </script> <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('pre').forEach((pre) => {
+        if (pre.dataset.copyEnhanced) return;
+        pre.dataset.copyEnhanced = '1';
+        const btn = document.createElement('button');
+        btn.className = 'code-copy';
+        btn.type = 'button';
+        btn.textContent = 'copy';
+        btn.setAttribute('aria-label', 'Copy code');
+        btn.addEventListener('click', async () => {
+          const code = pre.querySelector('code');
+          const text = (code ? code.innerText : pre.innerText) || '';
+          try {
+            await navigator.clipboard.writeText(text);
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = 'copy';
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+        pre.appendChild(btn);
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>  </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span class="site-footer__links"> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> <a class="site-footer__support" href="https://buymeacoffee.com/mlnomadpy" target="_blank" rel="noopener noreferrer" aria-label="Support this blog on Buy Me a Coffee">
+buy me a coffee
+</a> </span> </footer> <div id="consent-banner" class="consent-banner" role="dialog" aria-live="polite" aria-label="Analytics consent" hidden><p class="consent-text">
+I use Google Analytics to see which posts get read. It sets cookies only
+      if you accept. No ads, no selling data.
+</p><div class="consent-actions"><button type="button" id="consent-decline" class="consent-btn consent-decline">Decline</button><button type="button" id="consent-accept" class="consent-btn consent-accept">Accept</button></div></div>
+
+  <script>
+    (() => {
+      const KEY = 'analytics-consent';
+      const setup = () => {
+        const banner = document.getElementById('consent-banner');
+        if (!banner) return;
+        let choice = null;
+        try { choice = localStorage.getItem(KEY); } catch (e) {}
+        // Already decided → keep hidden.
+        if (choice === 'granted' || choice === 'denied') { banner.hidden = true; return; }
+        banner.hidden = false;
+
+        const decide = (value) => {
+          try { localStorage.setItem(KEY, value); } catch (e) {}
+          banner.hidden = true;
+          if (value === 'granted' && typeof window.__loadGA === 'function') window.__loadGA();
+        };
+        const accept = document.getElementById('consent-accept');
+        const decline = document.getElementById('consent-decline');
+        if (accept && !accept.dataset.bound) {
+          accept.dataset.bound = '1';
+          accept.addEventListener('click', () => decide('granted'));
+        }
+        if (decline && !decline.dataset.bound) {
+          decline.dataset.bound = '1';
+          decline.addEventListener('click', () => decide('denied'));
+        }
+      };
+      setup();
+      document.addEventListener('astro:page-load', setup);
+    })();
+  </script>
+
+  <style>
+    /* Author `display:flex` below would otherwise override the UA [hidden]
+       rule, leaving the banner visible after a choice. This wins on specificity. */
+    .consent-banner[hidden] { display: none !important; }
+    .consent-banner {
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      right: 1rem;
+      max-width: 30rem;
+      margin-left: auto;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+      padding: 0.95rem 1.1rem;
+      background: var(--bg-elev, #fff);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      font-family: var(--sans);
+    }
+    .consent-text {
+      margin: 0;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: var(--fg-muted);
+    }
+    .consent-actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+    }
+    .consent-btn {
+      font-family: var(--sans);
+      font-size: 0.82rem;
+      padding: 0.4rem 0.95rem;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    }
+    .consent-decline {
+      background: transparent;
+      color: var(--fg-muted);
+    }
+    .consent-decline:hover { color: var(--fg); border-color: var(--fg-faint); }
+    .consent-accept {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg);
+      font-weight: 600;
+    }
+    .consent-accept:hover { filter: brightness(1.05); }
+    @media (max-width: 520px) {
+      .consent-banner { left: 0.6rem; right: 0.6rem; bottom: 0.6rem; }
+    }
+  </style> <script>
+      // Inject a fullscreen toggle button onto every .viz figure on the page.
+      (() => {
+        const ENTER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10V4h6"/><path d="M20 10V4h-6"/><path d="M4 14v6h6"/><path d="M20 14v6h-6"/></svg>';
+        const EXIT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H4v6"/><path d="M14 4h6v6"/><path d="M10 20H4v-6"/><path d="M14 20h6v-6"/></svg>';
+        const inFs = () => document.fullscreenElement || document.webkitFullscreenElement;
+        const enhance = () => {
+          document.querySelectorAll('.viz').forEach((fig) => {
+            if (fig.dataset.fsReady) return;
+            fig.dataset.fsReady = '1';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'viz-fs-btn';
+            btn.setAttribute('aria-label', 'Toggle fullscreen');
+            btn.innerHTML = ENTER_SVG + '<span>fullscreen</span>';
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              try {
+                if (inFs() === fig) {
+                  await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen?.());
+                } else if (fig.requestFullscreen) {
+                  await fig.requestFullscreen();
+                } else if (fig.webkitRequestFullscreen) {
+                  await fig.webkitRequestFullscreen();
+                }
+              } catch (_) {}
+            });
+            fig.appendChild(btn);
+          });
+          const sync = () => {
+            document.querySelectorAll('.viz-fs-btn').forEach((b) => {
+              const fig = b.parentElement;
+              const open = inFs() === fig;
+              b.innerHTML = (open ? EXIT_SVG : ENTER_SVG) + '<span>' + (open ? 'exit' : 'fullscreen') + '</span>';
+            });
+          };
+          document.addEventListener('fullscreenchange', sync);
+          document.addEventListener('webkitfullscreenchange', sync);
+        };
+        enhance();
+        document.addEventListener('astro:page-load', enhance);
+        document.addEventListener('astro:after-swap', enhance);
+      })();
+
+      // Teardown registry for the bespoke (non-vizkit) viz. Those hand-rolled their
+      // own observers / rAF loops and never cleaned up, so on an Astro view-transition
+      // swap the detached canvas kept firing forever. Each such viz pushes a {n:node,
+      // c:cleanup} entry here; we sweep on every swap and dispose whatever detached.
+      // vizkit-based viz self-clean via their own alive() guard and are not listed.
+      (() => {
+        const R = window.__vizReg || (window.__vizReg = new Set());
+        if (window.__vizSweepHooked) return;
+        window.__vizSweepHooked = true;
+        const sweep = () => { R.forEach((e) => { if (!e.n || !e.n.isConnected) { R.delete(e); try { e.c(); } catch (_) {} } }); };
+        document.addEventListener('astro:after-swap', sweep);
+        document.addEventListener('astro:page-load', sweep);
+      })();
+    </script> </body> </html>
