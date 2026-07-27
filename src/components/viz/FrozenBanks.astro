@@ -1,0 +1,119 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 460 } = Astro.props;
+---
+<figure class="viz frozenbanks" data-caption={caption} data-height={height} data-height-mobile="600" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The two frozen banks, seen as pictures. Left: random prototypes, pure
+// noise, which the readout nonetheless learns to read. Right: data-seeded
+// prototypes, real garments (the Nystrom move). Click any prototype and its
+// strongest-responding test images are computed live with the real kernel.
+import { defineViz } from './engine/vizkit.js';
+import { T, fmt, gate, loadingText } from './engine/draw.js';
+import { load, drawGlyph, B0, EPS0 } from './lazytrain.js';
+
+const D = 196;
+
+defineViz('frozenbanks', {
+  title: 'Two frozen banks: noise you can read, pictures you can also read',
+  height: 460,
+  controls: [{ type: 'readout', name: 'rd' }],
+
+  setup(api) {
+    const st = api.state;
+    st.sel = null;
+    gate(api, () => Promise.all([load('protos'), load('fmnist14')]), (a, [protos, data]) => {
+      a.state.protos = protos;
+      a.state.data = data;
+      const nte = data.yte.length;
+      a.state.Xte = new Float32Array(nte * D);
+      data.Xte.forEach((img, i) => img.forEach((v, x) => { a.state.Xte[i * D + x] = v / 255; }));
+    });
+    api.canvas.addEventListener('pointerdown', (e) => {
+      if (!st.ready) return;
+      const r = api.canvas.getBoundingClientRect();
+      const p = { x: e.clientX - r.left, y: e.clientY - r.top };
+      const hit = (st.cells || []).find((c) => p.x >= c.x && p.x <= c.x + c.s && p.y >= c.y && p.y <= c.y + c.s);
+      if (!hit) return;
+      st.sel = hit;
+      // the unit's real responses over the test subset, undoing the export's
+      // 0..1 normalization with the bank's stored range
+      const [lo, hi] = st.protos[hit.bank + '_range'];
+      const proto = Float32Array.from(hit.img, (v) => lo + v * (hi - lo));
+      const nte = st.data.yte.length;
+      const resp = [];
+      for (let i = 0; i < nte; i++) {
+        let dot = 0, ww = 0, xx = 0;
+        for (let a2 = 0; a2 < D; a2++) {
+          const xv = st.Xte[i * D + a2], wv = proto[a2];
+          dot += wv * xv; ww += wv * wv; xx += xv * xv;
+        }
+        const n = dot + B0;
+        resp.push([(n * n) / (Math.max(0, xx + ww - 2 * dot) + EPS0), i]);
+      }
+      resp.sort((a, b) => b[0] - a[0]);
+      st.top = resp.slice(0, 6);
+      api.render();
+    });
+  },
+
+  draw(api) {
+    const { ctx, colors, size: { W, H } } = api, st = api.state;
+    if (!st.ready) { loadingText(api, 'loading the banks…'); return; }
+    const pad = 14, top = 30;
+    const banks = [
+      { id: 'yat_frozen', label: 'random bank: noise, frozen' },
+      { id: 'yat_data', label: 'data-seeded bank: garments, frozen' },
+    ];
+    const cols = 6, rows = 4;
+    const half = (W - 3 * pad) / 2;
+    const s = Math.max(10, Math.min((half - (cols - 1) * 4) / cols, (H - top - 170) / rows - 4));
+    st.cells = [];
+    banks.forEach((b, bi) => {
+      const x0 = pad + bi * (half + pad);
+      T(ctx, colors, 'label');
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      ctx.fillText(b.label, x0, top - 6);
+      const imgs = st.protos[b.id] || [];
+      for (let i = 0; i < Math.min(imgs.length, cols * rows); i++) {
+        const gx = x0 + (i % cols) * (s + 4), gy = top + Math.floor(i / cols) * (s + 4);
+        const flat = Array.isArray(imgs[i][0]) ? imgs[i].flat() : imgs[i];
+        drawGlyph(ctx, flat, 14, gx, gy, s, s, b.id === 'yat_data');
+        const selected = st.sel && st.sel.bank === b.id && st.sel.idx === i;
+        ctx.strokeStyle = selected ? colors.accent : colors.border;
+        ctx.lineWidth = selected ? 2 : 1;
+        ctx.strokeRect(gx + 0.5, gy + 0.5, s - 1, s - 1);
+        ctx.lineWidth = 1;
+        st.cells.push({ x: gx, y: gy, s, bank: b.id, idx: i, img: flat });
+      }
+    });
+
+    const ry = top + rows * (s + 4) + 26;
+    T(ctx, colors, 'label');
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(st.sel ? 'this unit’s strongest test images, kernel computed live:' : 'click any prototype to see which test images it responds to most', pad, ry - 6);
+    if (st.sel && st.top) {
+      st.top.forEach(([v, i], k) => {
+        const gx = pad + k * (s + 10);
+        drawGlyph(ctx, st.data.Xte[i], 14, gx, ry, s, s, true);
+        ctx.strokeStyle = colors.border;
+        ctx.strokeRect(gx + 0.5, ry + 0.5, s - 1, s - 1);
+        T(ctx, colors, 'small');
+        ctx.fillText(st.data.classes[st.data.yte[i]], gx, ry + s + 12);
+      });
+      const nclasses = new Set(st.top.map(([, i]) => st.data.yte[i])).size;
+      api.readout('rd', `top responses span ${nclasses} class${nclasses > 1 ? 'es' : ''} of clothing`);
+    } else {
+      api.readout('rd', 'both banks are the run’s actual m = 256 prototypes');
+    }
+    T(ctx, colors, 'small');
+    ctx.fillText('the run’s actual prototypes (first 24 of 256), rendered at the panel’s 14x14 resolution; no unit here was ever trained', pad, H - 14);
+  },
+});
+</script>

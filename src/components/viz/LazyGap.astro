@@ -1,0 +1,89 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 440 } = Astro.props;
+---
+<figure class="viz lazygap" data-caption={caption} data-height={height} data-height-mobile="560" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Movement against value, from the run. Left: how far the trained prototypes
+// actually traveled (relative to their initialization) as width grows. Right:
+// what all that travel bought, the trained-minus-frozen accuracy gap at the
+// same widths. The two curves run in opposite directions.
+import { defineViz } from './engine/vizkit.js';
+import { T, fmt, axes, gate, loadingText, legend } from './engine/draw.js';
+import { load } from './lazytrain.js';
+
+defineViz('lazygap', {
+  title: 'The features move more and more, for less and less',
+  height: 440,
+  controls: [{ type: 'readout', name: 'rd' }],
+
+  setup(api) {
+    gate(api, () => load('curves'), (a, data) => { a.state.data = data; });
+  },
+
+  draw(api) {
+    const { ctx, colors, size: { W, H } } = api, st = api.state;
+    if (!st.ready) { loadingText(api, 'loading the run…'); return; }
+    const d = st.data, widths = d.widths;
+    const move = d.arms.yat_trained?.move || [];
+    const gap = d.gaps.yat_trained_minus_frozen || [];
+    const pad = 14, top = 30, gapX = 46;
+    const half = (W - 2 * pad - gapX) / 2;
+    const boxL = { x: pad + 34, y: top, w: half - 34, h: H - top - 84 };
+    const boxR = { x: pad + half + gapX + 20, y: top, w: half - 30, h: H - top - 84 };
+    const lx = (box, m) => box.x + (Math.log(m / widths[0]) / Math.log(widths[widths.length - 1] / widths[0])) * box.w;
+
+    // left: movement, log-log
+    const mMax = Math.max(...move.filter((v) => v != null)) * 1.3;
+    const lyL = (v) => boxL.y + boxL.h - (Math.log(Math.max(v, 0.5) / 0.5) / Math.log(mMax / 0.5)) * boxL.h;
+    ctx.strokeStyle = colors.border;
+    ctx.strokeRect(boxL.x + 0.5, boxL.y + 0.5, boxL.w - 1, boxL.h - 1);
+    T(ctx, colors, 'small');
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (const v of [1, 3, 10, 30]) if (v < mMax) ctx.fillText(v + 'x', boxL.x - 3, lyL(v));
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (const m of [16, 128, 1024, 8192]) ctx.fillText(String(m), lx(boxL, m), boxL.y + boxL.h + 4);
+    ctx.strokeStyle = '#c2553a'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    widths.forEach((m, i) => { if (move[i] != null) { const x = lx(boxL, m), y = lyL(move[i]); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); } });
+    ctx.stroke(); ctx.lineWidth = 1;
+    T(ctx, colors, 'label');
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('how far the prototypes traveled, ||W_end - W_0|| / ||W_0||', boxL.x, boxL.y - 8);
+
+    // right: the gap
+    const gMax = Math.max(...gap.filter((v) => v != null)) * 1.15;
+    const lyR = (v) => boxR.y + boxR.h - (v / gMax) * boxR.h;
+    ctx.strokeStyle = colors.border;
+    ctx.strokeRect(boxR.x + 0.5, boxR.y + 0.5, boxR.w - 1, boxR.h - 1);
+    T(ctx, colors, 'small');
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (const v of [0, 10, 20]) if (v < gMax) ctx.fillText(v + 'pt', boxR.x - 3, lyR(v));
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (const m of [16, 128, 1024, 8192]) ctx.fillText(String(m), lx(boxR, m), boxR.y + boxR.h + 4);
+    ctx.strokeStyle = '#4a7fb3'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    widths.forEach((m, i) => { if (gap[i] != null) { const x = lx(boxR, m), y = lyR(gap[i]); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); } });
+    ctx.stroke(); ctx.lineWidth = 1;
+    widths.forEach((m, i) => {
+      if (gap[i] == null) return;
+      ctx.fillStyle = '#4a7fb3';
+      ctx.beginPath(); ctx.arc(lx(boxR, m), lyR(gap[i]), 2.4, 0, 2 * Math.PI); ctx.fill();
+    });
+    T(ctx, colors, 'label');
+    ctx.fillText('what the travel bought: trained minus frozen, points', boxR.x, boxR.y - 8);
+
+    T(ctx, colors, 'small');
+    ctx.fillText('same runs, same widths (x: m, log scale); left is log-scaled; both arms at their own bracketed learning rates, 3 seeds', pad, H - 44);
+    ctx.fillText('movement grows without pause; the value of moving shrinks toward a few points and then the frozen side gives some back', pad, H - 28);
+    const i512 = widths.indexOf(512);
+    api.readout('rd', `at m = 512: prototypes traveled ${fmt(move[i512], 1)}x their init norm, for ${fmt(gap[i512], 1)} points of accuracy`);
+  },
+});
+</script>

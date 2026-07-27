@@ -1,0 +1,166 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 480 } = Astro.props;
+---
+<figure class="viz lazylive" data-caption={caption} data-height={height} data-height-mobile="640" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Lazy training, live. A bank of m Yat units is frozen at random
+// initialization (the prototypes are noise and stay noise); only the linear
+// readout trains, right here, on a real Fashion-MNIST subset. Watch the
+// test predictions flip green while the features never change, then raise
+// m and watch what more frozen randomness buys.
+import { defineViz } from './engine/vizkit.js';
+import { T, fmt, axes, gate, loadingText } from './engine/draw.js';
+import { load, randomBank, yatFeatures, makeHead, drawGlyph } from './lazytrain.js';
+
+const D = 196, K = 10, BATCH = 128;
+
+defineViz('lazylive', {
+  title: 'Frozen random features, a readout learning live',
+  height: 480,
+  stepsPerFrame: 2,
+  controls: [
+    { type: 'play' },
+    { type: 'reset' },
+    { type: 'select', name: 'm', label: 'frozen units m', value: '64', options: ['16', '32', '64', '128', '256', '512'].map((v) => ({ value: v, label: v })) },
+    { type: 'button', name: 'reseed', label: 'New random bank' },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    const st = api.state;
+    st.seed = (st.seed || 0) + 1;
+    st.stepCount = 0;
+    st.lossHist = [];
+    st.accHist = [];
+    st.building = false;
+    gate(api, () => load('fmnist14'), (a, data) => {
+      a.state.data = data;
+      buildBank(a);
+    });
+  },
+
+  onAction(name, api) {
+    if (name === 'reseed') {
+      api.state.seed += 17;
+      rebuild(api);
+    }
+  },
+
+  step(api) {
+    const st = api.state;
+    if (!st.F) return;
+    const n = st.data.ytr.length;
+    const idx = [];
+    for (let i = 0; i < BATCH; i++) idx.push((Math.random() * n) | 0);
+    const loss = st.head.step(st.F, st.data.ytr, idx);
+    st.stepCount++;
+    if (st.stepCount % 4 === 0) {
+      st.lossHist.push(loss);
+      st.accHist.push(testAcc(st));
+      if (st.lossHist.length > 240) { st.lossHist.shift(); st.accHist.shift(); }
+    }
+  },
+
+  draw(api) {
+    const { ctx, colors, size: { W, H } } = api, st = api.state;
+    if (!st.ready) { loadingText(api, 'loading the subset…'); return; }
+    if (st.building || !st.F) { loadingText(api, `computing ${api.get('m')} frozen Yat features…`); return; }
+    const pad = 14, top = 28;
+
+    // ── left: a strip of frozen prototypes (they never change) ──
+    const gw = Math.min(46, (W * 0.30 - pad) / 4 - 6);
+    T(ctx, colors, 'label');
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('the frozen bank (first 8 of ' + st.m + ', pure noise)', pad, top - 6);
+    for (let i = 0; i < 8; i++) {
+      const gx = pad + (i % 4) * (gw + 6), gy = top + Math.floor(i / 4) * (gw + 6);
+      drawGlyph(ctx, st.W.slice(i * D, (i + 1) * D), 14, gx, gy, gw, gw);
+      ctx.strokeStyle = colors.border; ctx.strokeRect(gx + 0.5, gy + 0.5, gw - 1, gw - 1);
+    }
+
+    // ── test thumbnails flipping green ──
+    const ty0 = top + 2 * (gw + 6) + 24;
+    ctx.fillText('live test predictions (border = current verdict)', pad, ty0 - 6);
+    const tw = gw;
+    let ok16 = 0;
+    for (let i = 0; i < 16; i++) {
+      const gx = pad + (i % 4) * (tw + 6), gy = ty0 + Math.floor(i / 4) * (tw + 6);
+      const img = st.data.Xte[i];
+      drawGlyph(ctx, img, 14, gx, gy, tw, tw, true);
+      const pred = st.head.predict(st.Fte, i);
+      const good = pred === st.data.yte[i];
+      if (good) ok16++;
+      ctx.strokeStyle = good ? '#3a8f5e' : '#c2553a';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(gx + 1, gy + 1, tw - 2, tw - 2);
+      ctx.lineWidth = 1;
+    }
+
+    // ── right: accuracy curve through training ──
+    const cx = W * 0.36, cw = W - cx - pad;
+    const cbox = { x: cx + 30, y: top + 8, w: cw - 40, h: H - top - 84 };
+    const { sx, sy } = axes(ctx, cbox, { xMin: 0, xMax: 240, yMin: 0, yMax: 100, yTicks: [0, 25, 50, 75, 100], fmtY: (v) => v + '%' }, colors);
+    // reference: 10% chance line
+    ctx.strokeStyle = colors.faint; ctx.setLineDash([3, 4]);
+    ctx.beginPath(); ctx.moveTo(cbox.x, sy(10)); ctx.lineTo(cbox.x + cbox.w, sy(10)); ctx.stroke();
+    ctx.setLineDash([]);
+    if (st.accHist.length > 1) {
+      ctx.strokeStyle = colors.accent; ctx.lineWidth = 2;
+      ctx.beginPath();
+      st.accHist.forEach((a, i) => {
+        const x = sx(i), y = sy(a);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    }
+    T(ctx, colors, 'label');
+    ctx.fillText('held-out accuracy while ONLY the readout trains', cbox.x, cbox.y - 8);
+    const acc = st.accHist.length ? st.accHist[st.accHist.length - 1] : 0;
+    T(ctx, colors, 'small');
+    ctx.fillText('every feature is frozen; only the linear readout learns', cbox.x, cbox.y + cbox.h + 18);
+    ctx.fillText('raise m: more samples of the same kernel, a higher ceiling', cbox.x, cbox.y + cbox.h + 33);
+    api.readout('rd', `m = ${st.m}: step ${st.stepCount}, held-out acc ${fmt(acc, 1)}%`);
+  },
+});
+
+function rebuild(api) {
+  const st = api.state;
+  st.stepCount = 0; st.lossHist = []; st.accHist = [];
+  st.F = null;
+  buildBank(api);
+}
+
+function buildBank(api) {
+  const st = api.state;
+  if (!st.data) return;
+  st.m = +api.get('m');
+  st.building = true;
+  api.render();
+  setTimeout(() => {
+    const n = st.data.ytr.length, nte = st.data.yte.length;
+    const Xtr = new Float32Array(n * D), Xte = new Float32Array(nte * D);
+    st.data.Xtr.forEach((img, i) => img.forEach((v, a) => { Xtr[i * D + a] = v / 255; }));
+    st.data.Xte.forEach((img, i) => img.forEach((v, a) => { Xte[i * D + a] = v / 255; }));
+    st.W = randomBank(st.m, D, 1234 + st.seed);
+    st.F = yatFeatures(Xtr, n, D, st.W, st.m);
+    st.Fte = yatFeatures(Xte, nte, D, st.W, st.m);
+    st.head = makeHead(st.m, K, 0.02);
+    st.building = false;
+    api.render();
+  }, 30);
+}
+
+function testAcc(st) {
+  const nte = st.data.yte.length;
+  let ok = 0;
+  for (let i = 0; i < nte; i++) if (st.head.predict(st.Fte, i) === st.data.yte[i]) ok++;
+  return (100 * ok) / nte;
+}
+</script>

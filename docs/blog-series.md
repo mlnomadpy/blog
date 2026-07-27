@@ -104,6 +104,7 @@ capstone (the Yat prototype story returned to the transformer).
 | live | edit-a-fixed-point | edit-a-fixed-point-jax-flax-nnx |
 | live | survival-model-on-trial | survival-model-on-trial-jax-flax-nnx |
 | **D** | you-dont-have-to-solve-a-kernel-machine | you-dont-have-to-solve-a-kernel-machine-jax-flax-nnx |
+| **D** | lazy-training | lazy-training-jax-flax-nnx |
 
 ### Arc D: networks as integrators (new, opened 2026-07-04)
 The standing move: numerical analysis as an architecture catalog. Each
@@ -268,6 +269,61 @@ Spends: RKHS/representer/Mercer + centers-in-input-space (C0/C1), prototype-as-p
 that all of Arc C rides on; new-derived: the solve-is-plumbing argument, the three
 walls (memory / scale / composition), r=0.95 solve-vs-descend equivalence, random
 features as the historical escape.
+
+### C10. lazy-training  (DRAFT, 2026-07-26)
+Title: "How Many Random Neurons Buy a Trained One?" (slug lazy-training). Freeze
+a bank of Yat units at random init (prototypes AND softplus scalars), train only
+the linear readout, sweep m = 16..8192 on Fashion-MNIST raw pixels
+(`scripts/yat_lazy.py`, bundle `kgl_blog-yatlazy-v1`, 3 seeds, per-arm in-run
+LR bracketing; audits `-lrsweep`, `-lrsweep2`, `-bigm`, `-bigm2`). Frame from the
+kernel book (Large-Scale Kernel Machines + Deep Learning from a Kernel Point of
+View chapters): a frozen random layer is a Monte Carlo estimate of a kernel, one
+neuron one sample. Measured: the frozen-random ladder crosses the raw-pixel-solve
+rung (79) at m=128, the hand-built rung (83.3) at 256, peaks 85.3 at 512-1024,
+then stalls (re-bracketed rate + 3x budget recovers 2048 to 85.4, 8192 stays
+84.5); err(m) = 12.4 + c m^-0.71 on the climb (R^2 1.000; relu control
+12.9 + c m^-0.71); the knee sits near sqrt(n) ~ 245 (observed coincidence with
+the random-feature guarantees, scoped). HEADLINE: 16 trained neurons (86.3) beat
+every frozen bank at every width/budget (trained plateau 88.8 from m=256).
+SURPRISES: (a) data-seeded (Nystrom) bank LOSES to random (79.3 vs 84.1 at 256)
+and the redundancy measurement INVERTED: random bank = eff rank 4.9/256 (mean
+|corr| 0.42) vs data bank 230/256 (0.01): five directions beat two hundred
+thirty (open thread: name the channels); (b) ANTI-LAZY movement law: relative
+prototype travel grows ~ m^0.49 (R^2 0.998), 2x at 16 to 43x at 8192, while the
+trained-minus-frozen gap falls 24.4 -> 3.5 pts (512-1024) then re-opens to 7.1
+as frozen stalls: "moves more and more, for less and less" (standard param at
+bracketed LR refuses the Chizat-Bach lazy regime); (c) Gaussian RBF arms:
+centers DO move at the median-heuristic bandwidth (0.9-1.7 rel), the book's
+immobility folklore does not bite here, but frozen plateaus at 75, trained at
+84.4, gap ~9.5 pts never closes. Scalars drift b 0.5->2.2, eps 0.5->0.13
+(echoes the attention scalars). Five fresh panels: McKernel (add neurons one at
+a time, running kernel average + sd/sqrt(m) funnel, live), LazyLive (REAL
+in-browser lazy training: frozen random bank + hand-rolled adam readout on a
+2k/800 14x14 FMNIST subset, public/lazy-training/fmnist14.json), WidthLadder
+(curves vs the series' rungs), FrozenBanks (run's actual m=256 prototypes,
+click for live top-responses), LazyGap (movement vs value). Shared module
+lazytrain.js; assets public/lazy-training/{curves,rate,protos,fmnist14}.json
+via export_yat_lazy_viz.py (also computes the redundancy + movement fits).
+Spends by link: train-the-features (random backbone), you-dont-have-to-train/
+solve posts (rungs + random-features-as-escape), your-neuron-is-a-picture
+(random stays noise), readout-as-convex-combination (convex head),
+regularization-is-a-price-list (d_eff), attention scalars drift. New-derived:
+one-neuron-one-sample Monte Carlo reading, the width ladder + floors, the
+anti-lazy movement law, the redundancy inversion, the RBF parallel-gap ceiling.
+AUDIT 2026-07-26 (post-draft): dedup'd a double-embedded LazyLive panel, fixed
+two rung misattributions (79 = raw-pixel constructed head from train-the-
+features, not the solve post; 85.3 is within half a point of the trained
+backbone's TRAINED head 85.7, not its constructed head 83.2), landed the
+title's answer in body prose (16 trained units 86.3 > best frozen 85.4).
+Companion lazy-training-jax-flax-nnx (2026-07-26, D): YatLayer + the NNX
+freeze filter (nnx.All(Param, PathContains("head")) + DiffState) quoted,
+per-arm LR bracketing + movement telemetry code, LR/best-of-sweep table,
+4 GIFs from render_lazy_gifs.py (lazy-gram crystallizing Gram, lazy-race
+two readouts training for real, lazy-protos per-epoch prototype snapshots
+from the TRAJ bundle kgl_blog-yatlazy-traj: random-init drifts to ghostly
+garment texture without becoming pictures, lazy-travel movement + accuracy
+through epochs) + 2 PNGs (ladder scoreboard, anti-lazy law). TRAJ=1 mode
+added to yat_lazy.py (per-epoch W snapshots).
 
 ### D1. skip-connections-are-half-of-newton  (LIVE, 2026-07-04; opens Arc D)
 A skip connection x + f(x) is forward Euler: depth=time, hidden state=position,
@@ -586,6 +642,8 @@ census checkpoints = a PNG grid, four snapshots are four facts).
 | error-controlled inference rendering (step doubling on a trained flow, no retraining); depth as a per-input expenditure with a tolerance dial; the tol^(-1/3) cost law (integrator order in the compute bill); effort measures flow stiffness, NOT classification difficulty (measured negative, contrast with C5's convergence-based halting); train-resolution calibration (the fully-resolved flow is a slightly different function than the training render) | D5 |
 | no-softmax attention (kappa/sum kappa as literal Nadaraya-Watson); the row-mass channel (softmax's shift gauge deletes level, the kernel keeps it); boundedness-for-bounded-inputs is not boundedness-under-training (kappa(q,q)=||q||^4/eps); exp-as-soft-argmax vs polynomial ratios (measured diffuseness gap, entropy 0.74 vs 0.48); kernelize BETWEEN the roles (directionality lives in f_Q != f_K) | BxC |
 | attention as a partition of query space (per-key territories); softmax territories = convex cones through the origin, kernel territories = closed pockets (weighted Voronoi); the QUERY-SCALE gauge (q -> tq preserves softmax ranking, t = inverse temperature; measured 0 of 15,240 winner changes) vs length-as-address under the kernel (12-23% re-elections); hull disenfranchisement (interior key never wins under bilinear scores; every key owns its ground under the kernel via (||k||^2+b)^2/eps); occupancy census + the sharp-rows/many-winners vs diffuse-rows/few-winners inversion; kernel far field -> (u.k)^2 unsigned cones with 1/t sign correction | the-geometry-of-attention (D) |
+
+| frozen random bank = Monte Carlo kernel estimate (one neuron, one sample, 1/sqrt(m)); the width ladder with a power-law climb to a kernel floor; the anti-lazy movement law (travel ~ sqrt(m) while the trained-minus-frozen gap shrinks); the redundancy inversion (random bank: 5 effective directions beat the data bank's 230); Gaussian-RBF parallel-gap ceiling | C10 (draft) |
 
 Reuse these only by reference (link the prior post), never by re-derivation.
 
