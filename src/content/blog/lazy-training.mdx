@@ -1,0 +1,141 @@
+---
+title: "How Many Random Neurons Buy a Trained One?"
+seoTitle: "Lazy Training: Frozen Random Yat Features"
+description: "Freeze a bank of Yat units at random initialization, noise prototypes that will never move, and train nothing but the linear readout on top. This should not work, and the reason it does is one of the oldest facts in the kernel literature wearing a new activation: a frozen random layer is a Monte Carlo estimate of a kernel, one neuron per sample, converging at the square-root rate. This post watches the readout learn on frozen noise live in the page, counts how many frozen units buy each rung of the accuracy ladder this series has built by other means, measures the Monte Carlo exponent in the curve, and then lets the features go to see exactly what training them is worth, including the one kernel whose centers famously refuse to move."
+seoDescription: "Freeze random Yat features, train only the readout: a Monte Carlo kernel machine. How many frozen neurons match a trained network, measured on Fashion-MNIST."
+pubDate: 2026-07-26
+draft: false
+companion: lazy-training-jax-flax-nnx
+tags: [kernels, random-features, lazy-training, yat, mlp, jax]
+references:
+  - authors: "Neal, R. M."
+    year: 1996
+    title: "Bayesian Learning for Neural Networks"
+    venue: "Springer Lecture Notes in Statistics 118"
+  - authors: "Rahimi, A., Recht, B."
+    year: 2007
+    title: "Random Features for Large-Scale Kernel Machines"
+    venue: "NeurIPS 2007"
+  - authors: "Broomhead, D. S., Lowe, D."
+    year: 1988
+    title: "Multivariable Functional Interpolation and Adaptive Networks"
+    venue: "Complex Systems 2, 321-355"
+  - authors: "Williams, C. K. I., Seeger, M."
+    year: 2001
+    title: "Using the Nystrom Method to Speed Up Kernel Machines"
+    venue: "NeurIPS 2001"
+  - authors: "Chizat, L., Oyallon, E., Bach, F."
+    year: 2019
+    title: "On Lazy Training in Differentiable Programming"
+    venue: "NeurIPS 2019"
+    arxiv: "1812.07956"
+  - authors: "Jacot, A., Gabriel, F., Hongler, C."
+    year: 2018
+    title: "Neural Tangent Kernel: Convergence and Generalization in Neural Networks"
+    venue: "NeurIPS 2018"
+    arxiv: "1806.07572"
+  - authors: "Rudi, A., Rosasco, L."
+    year: 2017
+    title: "Generalization Properties of Learning with Random Features"
+    venue: "NeurIPS 2017"
+    arxiv: "1602.04474"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+keywords:
+  - lazy training
+  - random features
+  - frozen features
+  - extreme learning
+  - yat kernel
+  - nystrom method
+---
+import McKernel from '../../components/viz/McKernel.astro';
+import LazyLive from '../../components/viz/LazyLive.astro';
+import WidthLadder from '../../components/viz/WidthLadder.astro';
+import LazyGap from '../../components/viz/LazyGap.astro';
+import FrozenBanks from '../../components/viz/FrozenBanks.astro';
+import CiteAs from '../../components/CiteAs.astro';
+import SeriesNav from '../../components/SeriesNav.astro';
+
+<SeriesNav />
+
+*Every network this series has built earned its keep by moving its prototypes: [training pulled them onto the data](/blog/your-neuron-is-a-picture), [editing moved them by hand](/blog/edit-a-network-by-hand), [construction placed them deliberately](/blog/you-dont-have-to-train-the-features). This post forbids all of it. The prototypes are frozen at random initialization, noise they will remain, and only the linear readout is allowed to learn. The question is how much network is left, and the answer has a number in it.*
+
+Everything this series believes points one way: the features are the valuable part. [The features were the only thing you had to train](/blog/train-the-features); when we did without training we [built them by hand](/blog/you-dont-have-to-train-the-features), carefully, out of oriented edges, because features are where the knowledge lives. So here is a network that treats its features with open contempt. Draw a bank of Yat prototypes from the initializer, look at them (noise), freeze them forever, and let a linear map learn to read whatever those frozen dice happen to measure. Every instinct says this network is broken before it starts.
+
+It reaches 85 percent on Fashion-MNIST. That is above the raw-pixel prototype head this series constructed with care, above the hand-built feature stack we spent two posts engineering, within half a point of a trained convolutional network's own head. A pile of frozen noise, read well, matches nearly everything construction achieved here. And then the second surprise, the one the title asks about: sixteen *trained* Yat neurons beat that entire pile, at every width we could afford to freeze. This post is about both surprises at once, because they are the same fact seen from two sides, and the kernel literature has known its name for decades.
+
+## One neuron, one sample
+
+Why should a readout be able to classify from features that are pure noise? A frozen Yat unit computes $\phi_w(x) = (w \cdot x + b)^2 / (\lVert x - w \rVert^2 + \varepsilon)$ against a prototype $w$ that no gradient will ever improve. One such number tells you almost nothing about $x$. But the readout never sees one such number; it sees $m$ of them, and the right way to see the bank is not as $m$ bad detectors. It is as one estimator.
+
+The estimator only becomes visible when two inputs meet. Their feature vectors multiply into $\frac{1}{m} \sum_{u} \phi_{w_u}(x)\, \phi_{w_u}(y)$, and each term of that sum depends on one random prototype: each *neuron* contributes exactly one draw of the random variable $\phi_w(x)\phi_w(y)$, so the sum is an $m$-sample Monte Carlo estimate of its expectation over the initialization distribution,
+
+$$
+K_{\mathrm{RF}}(x, y) \;=\; \mathbb{E}_{w}\!\left[\phi_w(x)\,\phi_w(y)\right].
+$$
+
+That expectation is a fixed, deterministic kernel: a similarity function on images that was decided by the *distribution* of the initialization, before any particular dice were rolled. A frozen random layer is not a broken network. It is a kernel machine whose Gram entries are estimated by dice, one neuron per sample, and the estimate concentrates at the only rate Monte Carlo knows, $O(1/\sqrt{m})$. This is the observation Neal made for infinite random networks in 1996 and Rahimi and Recht turned into an algorithm in 2007, the same move [the kernel-machine post](/blog/you-dont-have-to-solve-a-kernel-machine) met as the historical escape from the Gram solve, now pointed the other way: not approximating a kernel we already had, but discovering which kernel a random Yat bank secretly is.
+
+<McKernel caption="The random-feature kernel between two real Fashion-MNIST images, estimated live. Press play: each new neuron is one fresh random prototype, and the running average of phi(x) phi(y) is an m-sample Monte Carlo estimate of the kernel's expectation. The same-class pair and the different-class pair converge to different values, which is the whole reason a readout can classify with these features; the shaded funnel shrinking like one over the square root of m is the price of estimating a kernel by dice roll." />
+
+
+## Watch the readout do all the work
+
+But an estimated kernel is only worth something if a classifier can stand on it, and here the frozen bank has a structural gift waiting. With the features fixed, the network's entire remaining freedom is the linear readout, and cross-entropy in a linear model is a *convex* problem: one basin, no initialization luck, plain gradient descent guaranteed to find the bottom, [the same collapse-to-convexity that made the readout a solvable object](/blog/readout-as-convex-combination) when this series first took a readout apart. Everything difficult about deep learning has been quarantined inside a bank of frozen dice.
+
+So watch exactly that happen. Nothing below is precomputed: the bank is rolled in your browser, the features are computed in your browser, and the readout is trained in your browser, on real Fashion-MNIST images.
+
+<LazyLive caption="Lazy training, live in the page. The bank on the left is m frozen Yat units whose prototypes are random noise and never change; the only thing training, right now, in your browser, is the linear readout, by plain gradient descent on a real Fashion-MNIST subset. The test thumbnails flip green as the readout learns to read the frozen features. Raise m and reseed: a bigger bank is a better Monte Carlo estimate of the same kernel, and the readout's ceiling climbs." />
+
+The pattern the dial teaches is the post's whole plot. At any fixed $m$ the readout climbs, plateaus, and stops: it has extracted everything the frozen features expose, and the wall it hits is not a training failure but an estimation error, the $O(1/\sqrt{m})$ noise still sitting in the kernel. Raise $m$ and the wall moves. Which turns the vague question this post opened with into a precise one: how fast does the wall move, and where does it stop?
+
+## The width ladder
+
+So we paid for the full sweep: Fashion-MNIST at full 784-pixel resolution, widths from 16 to 8,192, three seeds each, every arm at its own bracketed learning rate (`scripts/yat_lazy.py`, bundle `kgl_blog-yatlazy-v1`). Three frozen banks climb the ladder: random Yat prototypes, data-seeded Yat prototypes (random training images promoted to centers, the move the kernel literature calls Nystrom), and random frozen ReLU features as the classical control. Above them, one dashed line: the same Yat network with nothing frozen.
+
+<WidthLadder caption="The width ladder from the run: held-out accuracy against the number of hidden units, mean of three seeds per point, each arm at its own bracketed learning rate. The dashed horizontal rungs are the reference points this series built by other means: the raw-pixel constructed head at 79, the hand-built feature stack at 83.3, the trained backbone's constructed head at 85.7. The frozen random Yat bank crosses the first rung at 128 units and the second at 256; the trained twin, in dashed red, is above every frozen curve at every width, starting from sixteen units." />
+
+Read the frozen random curve against the series' own history. At 128 units it passes the 79 percent [a Yat head built straight on raw pixels](/blog/train-the-features) earns. At 256 it passes the 83.3 percent that took [a hand-built bank of oriented-edge detectors](/blog/you-dont-have-to-train-the-features) to reach. By 512 it sits at 85.3, within half a point of the trained backbone's own head at 85.7. None of those units means anything. The bank was never shown the data, never touched by a gradient, and if you render its prototypes as images they are the same static [a randomly initialized prototype network was ridiculed for](/blog/your-neuron-is-a-picture) at the start of this program.
+
+The climb also has a shape, and the shape is a law. Fit excess error against width on the climbing region and you get $\mathrm{err}(m) \approx 12.4 + c\, m^{-0.71}$ with $R^2$ of 1.000 to three decimals; the frozen ReLU control fits $12.9 + c\, m^{-0.71}$ the same way. Two different frozen kernels, one exponent. The Monte Carlo guarantee only promises the estimate improves like $m^{-1/2}$; the measured decay is faster, which a guarantee permits, but the structure is exactly the one the theory names: a power-law climb toward a *floor*. And both floors sit at about 12.4 to 12.9 percent error, two to three points short of where the trained twin lives. That floor is the random-feature kernel itself, the best any readout can ever do on this bank's geometry, and no number of additional dice reaches past it.
+
+The ladder also has two wrinkles. Past 1,024 units the frozen Yat bank stops climbing and slips back a little; re-bracketing its learning rate at the top widths and tripling the training budget (bundles `kgl_blog-yatlazy-bigm`, `-bigm2`) recovers 2,048 to the peak (85.4) but leaves 4,096 and 8,192 gently below it (84.9, 84.5), so within this protocol the stall is real, and the widest bank we froze is not the best one. And the knee of the whole curve, the width where climbing turns to crawling, sits between 256 and 512 units, which is where random-feature theory says it should: the classical results promise the full kernel machine's statistical rate at about $\sqrt{n}$ features, and $\sqrt{60{,}000} \approx 245$.
+
+Now put the dashed line back in the picture, because it settles the title's question with unkind speed. The trained twin enters the plot at *sixteen* units already at 86.3 percent, a full point above the best frozen bank of any width at any budget, and plateaus at 88.8 by 256. Sixteen moved prototypes outrank eight thousand frozen ones; the sweep never found the exchange rate because, within our budget, there is none. Every frozen curve climbs toward a ceiling that the trained network clears before its second doubling.
+
+But the strangest row in the run is the green curve, and it breaks the intuition this experiment was designed around.
+
+<FrozenBanks caption="The two frozen banks of the run at 256 units, rendered as images: random prototypes on the left, pure noise, and data-seeded prototypes on the right, actual training garments, both frozen. Click any unit to compute, live, which test images it responds to most strongly under the real kernel. The gallery is the paradox of this section made visible: the legible bank is the one that loses." />
+
+Seeding the prototypes on real images is the respectable move. It is [how this series made neurons legible](/blog/your-neuron-is-a-picture), it is the Nystrom construction with its own chapter of theory, and each unit becomes a genuine local detector. It loses anyway: 79.3 against the random bank's 84.1 at 256 units, behind at every width until the random bank's late stall. And the measurement that was supposed to explain the loss inverted instead. We computed each bank's feature correlation structure expecting the data bank to be the redundant one; it is the opposite. The random bank's 256 units are so correlated (mean absolute correlation 0.42) that they span about *five* effective feature directions; the data bank's units are nearly independent (0.01) and span about 230. Five directions beat two hundred thirty by five points. Whatever the random Yat bank's few shared channels measure, they are worth more per direction than a whole population of true local detectors. Naming those channels is this post's open thread.
+
+## Let the features go
+
+The frozen curves flatten into their floor; the dashed line above them does not care. Now unfreeze, and ask the question the freeze was designed to isolate: what exactly does training the features buy, and how does the price move with width?
+
+At sixteen units the answer is enormous: 24.4 points, a broken model against a working one. Widen the frozen bank and the gap collapses, to 10.2 points at 64 units, 4.7 at 256, 3.5 at 512, where it bottoms out; past the stall it drifts back up because the frozen side gives ground, not because the trained side gains any. This shrinking gap is the central experience of the lazy-training literature, and the theory built around it says why it happens: make the model big enough and a network can fit its data while each weight barely moves, staying inside its own linearization, a kernel machine in denial. In the infinite-width limit that kernel has a name, the neural tangent kernel, and training the features buys exactly nothing.
+
+So the natural expectation is that our network, as it widens, moves its features less and less. Measure it:
+
+<LazyGap caption="Movement against value, same runs, same widths. Left: how far the trained prototypes traveled by the end, as a multiple of their initialization norm, on log axes: a clean power law that grows like the square root of width, 2x at sixteen units, 43x at eight thousand. Right: the accuracy those journeys bought over the frozen twin: 24 points, then 10, then 3.5, then the frozen side slips and hands a few back. The network moves more and more, for less and less." />
+
+The expectation is exactly wrong, and the failure is a clean law of its own. Relative feature movement *grows* with width, $\lVert W_{\text{end}} - W_0 \rVert / \lVert W_0 \rVert \propto m^{0.49}$ with $R^2$ 0.998, from double the initialization norm at sixteen units to forty-three times at 8,192, and the median unit travels essentially as far as the average says. There is no contradiction with the theory, because the theory's laziness is a promise about a specific regime, scaled outputs, tuned-down step sizes, the linearization deliberately preserved, and this network, trained the way this whole series trains things (standard parameterization, its own bracketed learning rate), simply refuses to enter that regime. Lecun-normal prototypes are born with norm about one in a dataset whose images have norm nine and a half; to become [the prototypes this series knows how to read](/blog/your-neuron-is-a-picture), they must travel, and they do, further the more of them there are, while the learned kernel scalars drift the same way the [attention heads' scalars drifted](/blog/attention-is-a-compatibility-kernel), the bias up from 0.5 to 2.2, the softening down from 0.5 to 0.13. The punchline of the panel is the two curves side by side: movement up like $\sqrt{m}$, value down toward three points. The network is not lazy. It is working harder and harder for a wage that width drives toward the kernel's floor.
+
+The classical Gaussian bank plays the same experiment in a darker key. The kernel textbooks' warning about radial-basis networks is that their hidden units make poor gradient citizens, which is why the classical recipe trained centers by clustering and only solved for the readout. Our Gaussian arm, centers on real images, bandwidth at the median heuristic, does move when trained (relative movement 0.9 to 1.7, comparable to the data-seeded Yat arm's 1.2 to 1.4), so at this bandwidth the immobility folklore does not bite. What bites is the ceiling: frozen, the Gaussian bank plateaus at 75 percent no matter how many centers it gets; trained, it tops out at 84.4; its trained-minus-frozen gap holds near nine points at every width, never closing. The Yat arms converge toward their kernel's floor; the Gaussian arms run in parallel, a constant apology apart, and never do.
+
+*Scope: every number is from `scripts/yat_lazy.py` on Kaggle (main bundle `kgl_blog-yatlazy-v1`: seven arms, widths 16 to 8,192, three seeds, twelve epochs, each arm at the learning rate bracketed by its own in-run sweep; rate audits `kgl_blog-yatlazy-lrsweep`, `-lrsweep2`; the large-width budget checks `kgl_blog-yatlazy-bigm`, `-bigm2` at a re-bracketed rate and triple budget), analyzed by `scripts/export_yat_lazy_viz.py`, which also computes the correlation measurement and the movement fit. One dataset, one scale, one initialization family per arm; the power-law exponents and the stall are statements about this protocol, not theorems. The square-root-of-n remark is an observed coincidence with the classical random-feature guarantees, whose formal conditions (ridge regression, minimax rates) this setup does not check. The in-page panels train on a 2,000-image subset at 14x14 and report their own live numbers, which are not the run's.*
+
+## A kernel is a readout away
+
+The lazy network is this series' whole argument run in reverse. Forward, the argument was: put a kernel where the activation was and the network becomes legible, editable, constructable. Backward, it says: refuse to train the kernel's centers at all and there is still a working machine underneath, because a frozen random bank is not a network that failed to learn, it is a kernel that never needed to. One neuron, one Monte Carlo sample; the readout, a convex afterthought, does the rest. Everything training the features adds, the whole three-to-twenty-four points this run priced, is the difference between the kernel your initializer happens to define and the kernel your data deserves.
+
+Which is why the sixteen trained neurons win. They are not sixteen lucky dice; they are sixteen centers that traveled, at the cost of a nonconvex search, to the places where Fashion-MNIST actually lives, [pictures again](/blog/your-neuron-is-a-picture), each worth more than five hundred frozen ones. Training features is expensive, unprincipled, and the one thing in this whole stack a kernel cannot fake. That is what it is for.
+
+<CiteAs
+  slug="lazy-training"
+  title="How Many Random Neurons Buy a Trained One?"
+  pubDate="2026-07-26"
+/>

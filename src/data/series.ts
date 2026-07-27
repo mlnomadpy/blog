@@ -96,6 +96,7 @@ export const SERIES: SeriesDef[] = [
       'your-network-is-a-fixed-point',
       'edit-a-fixed-point',
       'you-dont-have-to-solve-a-kernel-machine',
+      'lazy-training',
     ],
   },
   {
