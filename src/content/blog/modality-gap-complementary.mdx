@@ -239,11 +239,9 @@ One honest complication before we make the cones literal. In real CLIP the gap
 has a second author: the same Liang et al. paper measures a gap already present
 **at initialization**, before a single gradient step, because two independently
 initialized encoders are born into different cones. Part of the real gap is
-inherited, not learned
-([the cross-entropy asymmetry post](/blog/not-all-infinities-are-equal/) weighs
-that init-born component against the loss-side readings of the gap). The toy
-here starts both towers from the same initialization *precisely to subtract that
-part out*: whatever gap you watch open is the loss's contribution alone. Real
+inherited, not learned. The toy here starts both towers from the same
+initialization *precisely to subtract that part out*: whatever gap you watch
+open is the loss's contribution alone. Real
 CLIP's gap is both at once, an offset the encoders were born with and an offset
 the objective, as you just saw, is perfectly happy to widen.
 
