@@ -48,7 +48,7 @@ because the kernel's quality happens to be LR-flat. Do the sweep BEFORE publishi
 
 ---
 
-## 2. The catalog (46 posts, five arcs)
+## 2. The catalog (45 posts, five arcs)
 
 Reader-facing series navigation lives in `src/data/series.ts` (SeriesNav on every
 post); keep that file in sync with this catalog when a post publishes.
@@ -58,7 +58,6 @@ post); keep that file in sync with this catalog when a post publishes.
 | --- | --- | --- |
 | live | activations-are-bad-for-geometry | -- |
 | live | opposite-is-not-different | -- |
-| live | not-all-infinities-are-equal | -- |
 | live | untangling-the-moons | organizing-randomness-jax |
 | live | welch-bound-good-latent-space | welch-bound-jax-analysis |
 | live | latent-on-the-spectrum | latent-on-the-spectrum-jax |
@@ -602,7 +601,6 @@ census checkpoints = a PNG grid, four snapshots are four facts).
 | --- | --- |
 | pointwise activations wreck manifold geometry (diagonal-Jacobian modulation) | activations-are-bad-for-geometry |
 | **opposition is not difference**: max difference of unit vectors is orthogonality (cos 0), not antipodality (cos -1); antiparallel pairs collapse to a 1-D line and waste a dimension | opposite-is-not-different |
-| cross-entropy singularity asymmetry (disjoint support ~ orthogonality; KL blows up at the boundary contrastive losses aim for); the overgeneration/hallucination lopsidedness; why InfoNCE needs huge batches (negatives concentrate near cos 0) | not-all-infinities-are-equal |
 | contrastive-loss history/taxonomy (pair/triplet/InfoNCE/CLIP/SupCon/SigLIP/align+uniform/cos->0); "which losses know when to stop" | untangling-the-moons |
 | the latent codebook: collapse; **regular simplex** as optimal centered code (pairwise cos -1/(C-1)); Welch bound + equiangular tight frame when concepts outnumber dimensions; neural collapse | welch-bound-good-latent-space |
 | latent space = lossy finite-dim encoding of a label-similarity kernel; codebook = top eigenmodes, dark knowledge rides the modes below; structured codebook makes better mistakes; simplex is optimal only when classes are strangers | latent-on-the-spectrum |

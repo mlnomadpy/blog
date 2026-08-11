@@ -34,7 +34,6 @@ export const SERIES: SeriesDef[] = [
     slugs: [
       'activations-are-bad-for-geometry',
       'opposite-is-not-different',
-      'not-all-infinities-are-equal',
       'untangling-the-moons',
       'welch-bound-good-latent-space',
       'latent-on-the-spectrum',

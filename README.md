@@ -19,15 +19,6 @@ attention legible follow for free: pairwise scores, normalised contributions,
 named geometry, prototype units. Ships with animated stage-by-stage diagrams of
 the transformer / attention / MLP blocks and a kernel playground.
 
-### [Not All Infinities Are Equal](https://tahabouhsine.com/blog/not-all-infinities-are-equal/)
-
-Cross-entropy has a singularity at $p \to 0$, not at $p \to 1$. That asymmetry
-is not a quirk of the loss surface — it's the reason language models
-hallucinate, the reason CLIP-style contrastive training needs enormous batches,
-and the reason the modality gap is geometrically inevitable. The post separates
-what's a theorem from what's a hypothesis, and visualises the growth rates,
-asymmetry, and vector-vs-probability gradients side by side.
-
 ### [Opposite Is Not Different](https://tahabouhsine.com/blog/opposite-is-not-different/)
 
 The cosine-similarity scale has *three* landmarks, not two. Maximum difference
@@ -59,7 +50,6 @@ On AI education in Morocco and the cost of staying behind.
 A few posts have longer write-ups as PDFs in [`papers/`](./papers):
 
 - *Painting Arithmetic with Kernel MLPs* — the experiment behind *What an MLP Knows*
-- *Not All Infinities Are Equal* — the cross-entropy asymmetry result
 - *Opposite Is Not Different* — the three-landmark argument
 - *Activations Are Bad for Geometry* — the Jacobian-modulation theorem
 

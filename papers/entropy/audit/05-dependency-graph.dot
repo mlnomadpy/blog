@@ -1,0 +1,26 @@
+digraph EntropyPaper {
+  rankdir=TB;
+  "ASM-001" -> "DEF-001";
+  "ASM-002" -> "DEF-001";
+  "ASM-003" -> "DEF-001";
+  "DEF-001" -> "DEF-003";
+  "DEF-001" -> "THM-001";
+  "DEF-003" -> "THM-001";
+  "DEF-003" -> "DEF-004";
+  "ASM-005" -> "THM-002";
+  "DEF-001" -> "THM-002";
+  "DEF-003" -> "THM-002";
+  "DEF-004" -> "THM-002";
+  "DEF-001" -> "PROP-001";
+  "DEF-001" -> "DEF-002";
+  "THM-001" -> "THM-003";
+  "DEF-002" -> "THM-003";
+  "DEF-002" -> "PROP-002";
+  "THM-001" -> "REM-001" [style=dashed,label="invalid transfer"];
+  "PROP-001" -> "REM-002" [style=dashed,label="invalid global inference"];
+  "REM-002" -> "REM-003";
+  "ASM-009" -> "REM-004";
+  "REM-001" -> "Synthesis";
+  "REM-003" -> "Synthesis";
+  "REM-004" -> "Synthesis";
+}
