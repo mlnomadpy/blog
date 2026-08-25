@@ -23,7 +23,7 @@ const REF = 2.6, THRESH = 1.3;   // in-distribution peak weight averages ~2.1
 const show = (c) => (c === '\n' ? '⏎' : c === ' ' ? ' ' : c);
 
 defineViz('abstain', {
-  title: 'When the memory is out of its depth, it goes dark',
+  title: 'Test peak memory response as a shift score',
   height: 330,
   controls: [
     { type: 'text', name: 'prompt', label: 'prompt', value: 'To be, or not to be, that is the question', width: 300, maxLength: 120 },
@@ -69,7 +69,7 @@ defineViz('abstain', {
     const lit = mean >= THRESH;
     const by = H - pad - 16;
     T(ctx, colors, 'value', { weight: 'b', color: lit ? '#7bbf5a' : '#4a7fb3', align: 'left', baseline: 'middle' });
-    ctx.fillText(lit ? 'the memory recognizes this' : 'the memory is out of its depth', pad, by);
+    ctx.fillText(lit ? 'higher peak response' : 'lower peak response', pad, by);
     api.readout('rd', `mean peak weight ${mean.toFixed(2)} (in-distribution ≈ 2.1) · bright = a slot fires · dark = the block writes ~nothing`);
   },
 });

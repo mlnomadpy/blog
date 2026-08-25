@@ -3,7 +3,7 @@ import { getCollection, render } from 'astro:content';
 import readingTime from 'reading-time';
 import PostLayout from '../layouts/PostLayout.astro';
 import { postFilter, buildPairs, pairFor } from '../utils/posts';
-import { seriesForSlug } from '../data/series';
+import { SERIES, seriesForSlug } from '../data/series';
 
 export async function getStaticPaths() {
   const posts = (await getCollection('blog', postFilter))
@@ -73,8 +73,8 @@ export async function getStaticPaths() {
     // Prev/next follows the series reading order when there is one; the
     // chronological chain is only a fallback for standalone posts (and
     // one-part series, where reading order does not disambiguate anything).
-    // A series deliberately dead-ends at its last part instead of jumping
-    // into an unrelated arc.
+    // At an arc boundary we hand the reader across to the neighbouring arc
+    // rather than dead-ending, so the whole series reads end to end.
     // sorted desc → i+1 is older (previous in time), i-1 is newer (next in time)
     let next = i > 0 ? { slug: posts[i - 1].id, title: posts[i - 1].data.title } : undefined;
     let prev = i < posts.length - 1 ? { slug: posts[i + 1].id, title: posts[i + 1].data.title } : undefined;
@@ -82,12 +82,25 @@ export async function getStaticPaths() {
       const k = series.part - 1; // anchor's index in the visible reading order
       const nav = (item: (typeof series.items)[number] | undefined, label: string) =>
         item ? { slug: item.slug, title: item.title, label } : undefined;
+      // Neighbouring arcs, skipping any that are entirely unpublished.
+      const arcIdx = SERIES.findIndex((s) => s.title === series.title);
+      const edgeOf = (dir: -1 | 1, end: 'first' | 'last') => {
+        for (let j = arcIdx + dir; j >= 0 && j < SERIES.length; j += dir) {
+          const vis = SERIES[j].slugs.filter((s) => bySlug.has(s));
+          if (!vis.length) continue;
+          const slug = end === 'first' ? vis[0] : vis[vis.length - 1];
+          const p = bySlug.get(slug)!;
+          return { slug: p.id, title: p.data.title, label: end === 'first'
+            ? `${SERIES[j].short} →` : `← ${SERIES[j].short}` };
+        }
+        return undefined;
+      };
       if (pr?.role === 'companion') {
         prev = nav(series.items[k], '← Explainer');
-        next = nav(series.items[k + 1], `Part ${k + 2} →`);
+        next = nav(series.items[k + 1], `Part ${k + 2} →`) ?? edgeOf(1, 'first');
       } else {
-        prev = nav(series.items[k - 1], `← Part ${k}`);
-        next = nav(series.items[k + 1], `Part ${k + 2} →`);
+        prev = nav(series.items[k - 1], `← Part ${k}`) ?? edgeOf(-1, 'last');
+        next = nav(series.items[k + 1], `Part ${k + 2} →`) ?? edgeOf(1, 'first');
       }
     }
 

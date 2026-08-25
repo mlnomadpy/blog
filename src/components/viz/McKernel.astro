@@ -17,7 +17,7 @@ const { caption, height = 440 } = Astro.props;
 // and a different-class pair at once.
 import { defineViz } from './engine/vizkit.js';
 import { T, fmt, axes, gate, loadingText, legend } from './engine/draw.js';
-import { load, randomBank, yatRow, drawGlyph } from './lazytrain.js';
+import { load, randomBank, yatRow, bankNorms, drawGlyph } from './lazytrain.js';
 
 const D = 196, MMAX = 4096;
 
@@ -52,9 +52,11 @@ defineViz('mckernel', {
       for (const p of s.pairs) { s.imgs[p.i] = toF(data.Xtr[p.i]); s.imgs[p.j] = toF(data.Xtr[p.j]); }
       // the reference: a big-bank estimate of each kernel value
       const Wref = randomBank(MMAX, D, 999);
+      const wnRef = bankNorms(Wref, MMAX, D);
+      const buf = new Float32Array(MMAX), buf2 = new Float32Array(MMAX);
       for (const p of s.pairs) {
-        const fi = yatRow(s.imgs[p.i], Wref, MMAX, D);
-        const fj = yatRow(s.imgs[p.j], Wref, MMAX, D);
+        const fi = yatRow(s.imgs[p.i], Wref, MMAX, D, buf, wnRef);
+        const fj = yatRow(s.imgs[p.j], Wref, MMAX, D, buf2, wnRef);
         let acc = 0;
         for (let u = 0; u < MMAX; u++) acc += fi[u] * fj[u];
         p.ref = acc / MMAX;
@@ -86,8 +88,8 @@ defineViz('mckernel', {
     const gw = 44;
     st.pairs.forEach((p, pi) => {
       const y0 = top + pi * (gw + 44);
-      drawGlyph(ctx, st.data.Xtr[p.i], 14, pad, y0, gw, gw, true);
-      drawGlyph(ctx, st.data.Xtr[p.j], 14, pad + gw + 8, y0, gw, gw, true);
+      drawGlyph(ctx, st.data.Xtr[p.i], 14, pad, y0, gw, gw, true, 'mk' + p.i);
+      drawGlyph(ctx, st.data.Xtr[p.j], 14, pad + gw + 8, y0, gw, gw, true, 'mk' + p.j);
       ctx.strokeStyle = p.color; ctx.lineWidth = 2;
       ctx.strokeRect(pad + 0.5, y0 + 0.5, gw - 1, gw - 1);
       ctx.strokeRect(pad + gw + 8.5, y0 + 0.5, gw - 1, gw - 1);

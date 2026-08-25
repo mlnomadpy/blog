@@ -1,0 +1,127 @@
+---
+title: "How to Interrogate a Kernel Network"
+seoTitle: "A Protocol for Auditing a Yat Kernel Network"
+description: "A network whose hidden units are kernel prototypes is supposed to be legible. Legible claims are cheap unless someone can check them, so this post builds the checking: five instruments that put a trained Yat network under oath, each one asking a question that only this kernel makes askable. The first instrument finds that the softening constant in the formula sits ten thousand times below the distances it is supposed to soften, so the trained network never uses it at all: a term can be load-bearing in the theory and idle in the artifact, and only an audit tells you which."
+seoDescription: "Five instruments for auditing a trained Yat network: concepts, channel ledger, the epsilon dial, the universality term, and the write path. All measured."
+pubDate: 2026-07-29
+draft: false
+tags: [kernels, interpretability, yat, protocol, mercer, audit]
+references:
+  - authors: "Mercer, J."
+    year: 1909
+    title: "Functions of Positive and Negative Type, and their Connection with the Theory of Integral Equations"
+    venue: "Philosophical Transactions of the Royal Society A 209, 415-446"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+keywords:
+  - kernel network audit
+  - yat kernel interpretability
+  - concept extraction
+  - model interrogation protocol
+---
+import VestigialEps from '../../components/viz/VestigialEps.astro';
+import ConceptBasis from '../../components/viz/ConceptBasis.astro';
+import ChannelLedger from '../../components/viz/ChannelLedger.astro';
+import SupportMap from '../../components/viz/SupportMap.astro';
+import CiteAs from '../../components/CiteAs.astro';
+import SeriesNav from '../../components/SeriesNav.astro';
+
+<SeriesNav />
+
+*A Yat network is supposed to be readable. Its units are prototypes you can print, its kernel has a spectrum you can rank, its parameters have meanings that survive training. Reading a network is one thing; cross-examining it is another. This post builds the cross-examination, five instruments, and the first one finds a term in the formula that the trained network never uses.*
+
+Here is the unit:
+
+$$
+\phi_w(x) \;=\; \frac{(w \cdot x + b)^2}{\lVert x - w\rVert^2 + \varepsilon}.
+$$
+
+Now a question nobody has thought to ask about it: **is every part of that formula doing anything?**
+
+For the network trained in [the microscope post](/blog/mercer-microscope), its learned $\varepsilon$ is 0.029. The median squared prototype distance is 299.7, a ratio of $9.7\times10^{-5}$; the closest observed approach is 26.8, a ratio of $1.1\times10^{-3}$. Multiplying $\varepsilon$ by ten thousand changes the measured accuracy from 88.15 to 88.18 percent. Within this finite evaluation, the softening floor has no detectable accuracy effect until it approaches the observed distance scale. It remains essential to the globally defined kernel because it removes the singularity at $x=w$.
+
+A term can be necessary for the mathematical object and inactive over the sample the model visits. Reading prototypes and plotting spectra will not separate those roles. An audit asks what changes under a controlled intervention. Five instruments do that here. Empirical eigendecomposition itself is available to any feature map; Yat contributes the named alignment/proximity factors, input-space centers, and dials those instruments can intervene on directly.
+
+## What makes this network interrogable
+
+Three affordances, and it is worth being precise about them, because they are what the instruments are built from.
+
+The unit is a **product of two named channels**: an alignment factor $(w\cdot x + b)^2$ that asks about direction, and a proximity factor $1/(\lVert x-w\rVert^2+\varepsilon)$ that asks about place. A Gaussian unit has only place; a linear or polynomial unit has only direction. Having both, separably, means you can freeze one and re-measure. Second, the centers live in input space, so **anything in feature space renders back as a picture**, [the fact this series started from](/blog/what-a-finite-kernel-buys-an-mlp/). Third, $b$ and $\varepsilon$ are **dials with kernel meaning that survive training**: you can turn them on a finished model and watch what moves.
+
+All five run on a single trained network, 256 prototypes on Fashion-MNIST at 88.15 percent, in one sitting.
+
+## Y1: ask what it knows
+
+[The microscope](/blog/mercer-microscope) closed on a question its own instrument could not settle. Decomposing the kernel ranks directions by **variance**, which measures the network's *capacity*: what it is able to distinguish, and how loudly. Decomposing the logits ranks them by **output gain**: what it actually decides with. The two orderings disagree, and an audit has to commit to one.
+
+It should commit to the second, because that is where the logits live. With $f(x)=A^\top\Phi(x)+\beta$ and $A$ of shape $256\times10$, the logit vector has at most ten covariance directions. Classification is unchanged by a shared shift of all logits, so at most nine contrasts affect the verdict. The instrument decomposes $S=A^\top C A$ and reports both the full logit reconstruction and the decision-relevant rank.
+
+<ConceptBasis caption="The network rebuilt from its top k concepts, recomputed live on this page from the model's own logit coordinates. Red is the concept basis, blue the variance basis the microscope used. Slide k: nine concepts do what sixty-four variance modes do, and at ten the rebuild is not an approximation of the network, it is the network." />
+
+Ten logit-covariance axes reproduce the logits, while nine already recover 86.6 percent because the remaining direction contributes little or only a shared shift to the decisions. The variance basis needs sixty-four axes to reach 87.2 percent. That ratio says the readout is not aligned with the representation's loudest variance directions. Calling each output axis a concept remains an interpretive choice, tested below by stability and class contrasts rather than guaranteed by the eigendecomposition.
+
+## Y2: ask which half of the kernel it used
+
+Now a question you cannot ask of any other kernel in use. Each unit is a product, so freeze one factor at its per-unit average over the data, leave the other live, and re-score the concept. If the concept survives with alignment alone, it is a statement about *direction*. If it survives with proximity alone, it is about *place*.
+
+<ChannelLedger caption="Each concept scored three ways on the same 800 test images: with both halves of the kernel live, with only alignment live, and with only proximity live. The scatter plots the single-channel score against the real one and the R-squared is computed here from those numbers; a cloud lying on the dashed line means that half alone reproduces the concept. Step through the concepts and watch the balance tip." />
+
+A single number here would be worthless, because the split has to be read against what a *random* concept direction would score. Run that control and it turns out the alignment channel dominates almost everything: a random direction in logit space scores 92 percent alignment, so "this concept is 96 percent alignment" is not a finding, it is the background. What counts is the excess over that background, measured across three seeds:
+
+| concept | contrast | place share | excess over chance | verdict |
+| --- | --- | --- | --- | --- |
+| 1 | Boot vs Trouser | 30% ± 10 | **+22 pts** | place-driven |
+| 2 | Bag vs Trouser | 13% ± 8 | +4 | chance |
+| 3 | Boot vs Sandal | 17% ± 6 | +9 | chance |
+| 4 | Bag vs Sandal | 13% ± 6 | +5 | chance |
+| 5 | Sandal vs Sneaker | 13% ± 7 | +4 | chance |
+
+Exactly one concept is distinguishable from a random direction, and it is the dominant one: the network's largest contrast is genuinely built out of *place*, and everything below it is doing what any direction through this feature space does. The tempting reading of the raw numbers, a smooth gradient from place-driven coarse concepts to direction-driven fine ones, does not survive its own control.
+
+The instrument also refuses to certify the reading. A second, independent decomposition (shuffling one channel across samples rather than freezing it at its mean) puts the alignment share even higher, and the two methods disagree by 15 points on average, so the audit marks the whole ledger **provisional** rather than reporting the number that flatters the story. A single-method claim about a product of two correlated factors is not yet a measurement.
+
+## Y3: ask whether the theory's regime is the model's regime
+
+Which brings back the opening embarrassment, now as an instrument rather than an anecdote. $\varepsilon$ is a length, so it only means something *relative to the distances in the problem*, and that ratio is the audit.
+
+<VestigialEps caption="The learned epsilon against the squared test-to-prototype distances: about 9.7e-5 of the median and 1.1e-3 of the minimum in this run. Raise it with the dial: the measured finite-sample accuracy stays unchanged until epsilon approaches the observed distance scale. This does not remove epsilon's global role in avoiding singularities." />
+
+The median-distance ratio is $9.7\times10^{-5}$. Raising $\varepsilon$ by a factor of ten thousand has no detectable accuracy cost in this evaluation; the model gives up a point only around three times the median squared distance and falls to 58 percent around thirty times. Over the observed sample, the denominator therefore behaves like an inverse square to the measured tolerance. Globally, $\varepsilon$ still controls the value at a center and prevents a singularity.
+
+That is worth stating carefully, because it is not a claim that $\varepsilon$ is useless. It is what makes the kernel admissible, it bounds $\phi_w(w) = (\lVert w\rVert^2+b)^2/\varepsilon$, and [in attention it was measured moving decisively](/blog/attention-is-a-compatibility-kernel). The finding is that *this* model, on *this* data, never visits the regime where any of that matters, because no input ever gets close enough to a prototype to feel the floor. An audit that cannot tell you when a safeguard is idle is not an audit.
+
+## Y4: ask what the theorem's term is worth in points
+
+The same dial trick applies to $b$, and here the theory makes a sharp prediction. Expanding the numerator gives $(w\cdot x)^2 + 2b\,(w\cdot x) + b^2$: a quadratic term, a *linear* term, and a constant. At $b = 0$ only the even term survives and the kernel's universality is lost, which is why [the attention post promoted $b$ to a learned parameter](/blog/attention-is-a-compatibility-kernel). Does that abstraction have a price in accuracy?
+
+It does. Zeroing $b$ on the trained model costs **3.6 points** (88.15 to 84.52), and the learned value is close to optimal in both directions (a quarter of it gives 86.70, four times gives 75.45, sixteen times collapses to 28.57). The term that buys the theorem is worth three and a half points of Fashion-MNIST, measured on a model that was never told the theorem exists.
+
+## Y5: ask where you would write
+
+The last instrument is the one that connects reading to changing. Each concept's input side, $v_j = A e_j$, is a weighting over prototypes, so it says exactly which units carry it.
+
+<SupportMap caption="Every prototype (rows) against every concept (columns), brightness being that prototype's contribution. Click a concept to see its heaviest prototypes as pictures and how many are needed to account for 90 percent of it. The bank does not divide into committees: each concept is spread across most of the 256 units." />
+
+The support sizes come out between 144 and 173 of 256 prototypes. That number is the quantitative answer to [the concept surgery that failed](/blog/spectral-surgery): deleting a concept's four heaviest prototype rows changes essentially nothing, and deleting its top sixty-four damages the model diffusely rather than removing the concept. There is no small committee to fire. The series' exact row edit still [removes a class perfectly](/blog/edit-a-network-by-hand), because a class *is* a set of rows, but a concept is not, and now we can say by how much.
+
+## What makes this a protocol rather than a tour
+
+Two rules, and a list of what the instruments failed to do.
+
+The rules are hygiene. **Never name a direction the data cannot resolve**: bootstrapping the measure gives agreement of 0.990 to 1.000 for the eight concepts named above, so they are stable objects, unlike the deep tail of any spectrum. And **always state the measure**, because a kernel is intrinsic while its spectral coordinates are not.
+
+Three of the five instruments came back short. The $\varepsilon$ dial could not corroborate the channel ledger, precisely because $\varepsilon$ is vestigial here: the proximity channel Y2 measures is the $1/d^2$ variation, not the floor, so the ledger stands on one method alone and should be read that way until a second one agrees. The write path was tested and did not work. And the concept extraction, though exact, is exact partly by construction: a ten-way readout can only have ten concepts, so Y1's real content is not the number but the mismatch between it and the sixty-four the variance basis demanded.
+
+*Scope: one trained model (seed 0 of bundle `kgl_blog-mercer-v1`, 256 prototypes, 88.15 percent on the Fashion-MNIST test set); concepts are defined on the training measure and every accuracy is measured on the test set. The channel split freezes one factor of a product at its mean, which is one defensible decomposition among several. Every interactive panel here works from an 800-image subset, which puts its readouts a fraction of a point off the full-set figures quoted in the prose.*
+
+## The instrument list
+
+A network earns the word legible through questions that have checkable answers, so here is the list this kernel makes askable: what concepts does it use, which half of the kernel carries each one, is the softening doing anything, what is the universality term worth, and where in the bank would you have to write. The trained network answered all five, and one of the answers was that a term sitting in the middle of the formula is, in this model, decoration.
+
+<CiteAs
+  slug="yat-protocol"
+  title="How to Interrogate a Kernel Network"
+  pubDate="2026-07-29"
+/>

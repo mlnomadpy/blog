@@ -32,14 +32,14 @@ keywords:
 ---
 import CiteAs from '../../components/CiteAs.astro';
 
-*The [explainer](/blog/readout-as-convex-combination/) reframed the MLP readout $W_\text{out}\,a(x)=\sum_u a_u(x)\,r_u$ as a mixture over output prototypes, whose geometry (convex, conic, affine, or linear) is set by two constraints on the coefficients: are they nonnegative, and do they sum to one? This is the implementation companion: pull the prototypes out of an NNX `Linear`, measure which regime each activation lands in, and build a kernel readout that is convex by construction, with the correctness checks that the explainer's claims rest on written as `assert`s.*
+*The property that makes a readout a mixture is pointwise nonnegativity. The property everyone reaches for instead is positive-definiteness. They are independent, and a short Gram check below prints the table that separates them. Around that table sits the rest of the [explainer](/blog/readout-as-convex-combination/)'s geometry as running code: the output prototypes pulled out of an NNX `Linear`, the four coefficient regimes measured on real activations, and a kernel readout that is convex before anyone trains it.*
 
 *Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/the-readout-as-a-convex-combination-jax): the same code, block by block, with the math written out and every figure reproduced from a real run.*
 
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/convex-readout-field.gif" alt="Animated kernel readout: a query roams the input space while the readout traces the interior of the output prototype hull" loading="eager" width="1100" height="560" />
-  <figcaption>The kernel readout, computed in JAX. As the query $x$ roams the input space (left), its normalized Gaussian similarities to the input prototypes become convex coefficients that mix the output prototypes (right). The readout $y=\sum_u a_u r_u$ traces the interior of the output hull and never leaves it, because $\sum_u a_u = 1$ with every $a_u \ge 0$ by construction, not by a check after the fact.</figcaption>
+  <figcaption>The kernel readout, running. As the query $x$ roams the input space (left), its normalized Gaussian similarities to the input prototypes become convex coefficients that mix the output prototypes (right). The readout $y=\sum_u a_u r_u$ traces the interior of the output hull and never leaves it, because $\sum_u a_u = 1$ with every $a_u \ge 0$ by construction, not by a check after the fact.</figcaption>
 </figure>
 
 Everything here is plain JAX and [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html). The dimensions are tiny so the geometry is legible.
@@ -110,7 +110,7 @@ Only `softmax` gives a probability vector over hidden units, so only it makes th
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/convex-readout-regimes.gif" alt="Four small panels showing the same hidden scores read out through softmax, relu, gelu, and identity, landing in convex, conic, and linear regimes" loading="lazy" width="1100" height="470" />
-  <figcaption>The four nonlinearities on the same scores, animated in JAX. Softmax is the only one that yields a probability vector (convex, $y$ inside the hull, $\Sigma a = 1$); relu stays nonnegative but unnormalized (conic); gelu and the identity put negative mass into the coefficients (linear/signed, blue bars), and $y$ can leave the hull. The activation, not the prototypes, decides the regime.</figcaption>
+  <figcaption>One oscillating score vector, read out four ways. Softmax is the only one that yields a probability vector (convex, $y$ inside the hull, $\Sigma a = 1$); relu stays nonnegative but unnormalized (conic); gelu and the identity put negative mass into the coefficients (linear/signed, blue bars), and $y$ can leave the hull. The activation, not the prototypes, decides the regime.</figcaption>
 </figure>
 
 ## Convex by construction: a kernel readout
@@ -167,7 +167,7 @@ print("all", len(xs), "readouts verified inside the prototype hull")
 
 ### Nonnegative is not the same as positive definite
 
-It is worth proving to yourself that the property doing the work is nonnegativity, not PSD-ness, because they are independent. The linear kernel is positive definite but takes negative values; the Gaussian and the Yat kernel are both nonnegative *and* positive definite.
+Here is the table promised at the top. The linear kernel is positive definite and takes negative values; the Gaussian and the Yat kernel are nonnegative *and* positive definite. Neither property implies the other, and only one of them keeps the readout a mixture.
 
 ```python
 def gram(kfn, pts):
@@ -212,7 +212,7 @@ The direction `pi @ r` always lands in the hull; the gate scales how loudly that
 
 ## Contribution mass is not identifiable
 
-One caveat the explainer makes and the code makes vivid: with more hidden units than residual dimensions, the prototypes are an overcomplete dictionary, so the same output $y$ has many convex decompositions. "Unit $u$ contributed 30%" is a fact about the mechanism $a(x)$, not about $y$.
+An overcomplete dictionary has a precise consequence: with more hidden units than residual dimensions, the same output $y$ may admit many convex decompositions. “Unit $u$ contributed 30%” is a fact about the mechanism $a(x)$ that produced this output, not a unique fact recoverable from $y$ alone.
 
 ```python
 # A fixed point y inside the hull of 4 prototypes in 2-D, two EXACT convex decompositions.
@@ -262,19 +262,11 @@ def train_step(model, optimizer, batch):
 
 The detector bank stops being an arbitrary feature extractor and becomes a similarity to named input prototypes; the readout stops being a hopeful interpretation and becomes the actual mechanism.
 
-## Rendering the GIFs
+## How the animations are computed
 
-The animations are generated with Python, JAX, and matplotlib: the computation in JAX, the drawing in matplotlib:
+Every frame above is real arithmetic, computed in JAX and drawn with matplotlib. The hull animation moves a query along a path through the input space, computes the normalized Gaussian weights and the readout each frame, and keeps a trail of $y$. The regimes animation evaluates the four nonlinearities on one oscillating score vector and places each readout against the prototype hull. The non-identifiability animation morphs the coefficient vector through the family of valid convex decompositions and verifies, frame by frame, that the output never moves. They are visual audits, not benchmarks: the point is to watch convexity hold (or break) as the inputs move.
 
-```bash
-python scripts/render_convex_readout_gif.py          # the kernel readout tracing the hull
-python scripts/render_convex_readout_regimes_gif.py  # the four activation regimes
-python scripts/render_convex_readout_nonid_gif.py    # one y, many decompositions
-```
-
-The first renderer moves a query along a path through the input space, computes the normalized Gaussian weights and the readout each frame, and keeps a trail of $y$; the second evaluates the four nonlinearities on one oscillating score vector and places each readout against the prototype hull; the third morphs the coefficient vector through the family of valid convex decompositions and verifies, frame by frame, that the output never moves. They are visual audits, not benchmarks: the point is to watch convexity hold (or break) as the inputs move.
-
-## What this leaves out
+## Boundary of the result
 
 A real MLP block has a much wider hidden layer, a residual connection around it, and (in modern stacks) a gated activation like SwiGLU that pushes the coefficients further into the signed regime. The kernel readout here is a teaching variant, not a drop-in replacement; making it competitive means many more prototypes, a sharper kernel, and attention to the normalizer's stability far from the prototype set. But the object is the same one the explainer named: a readout is a weighted sum over output prototypes, and the only question is what the weights are allowed to be.
 

@@ -22,7 +22,7 @@ import SeriesNav from '../../components/SeriesNav.astro';
 
 <SeriesNav />
 
-*The [explainer](/blog/depth-on-demand/) hands a trained leapfrog classifier to a numerical analyst's error controller and lets the controller choose depth per input. This is the implementation: the fixed-depth training (nothing new there), the step-doubling renderer, the accounting that keeps the claims honest, and the figures from the run. Everything below is `scripts/adaptive_depth.py`, the script the Kaggle run executed (bundle `kgl_blog-adaptive-v2`); code blocks are quoted from it.*
+*The controller here has no parameters and never sees a gradient. It takes one step, takes two half-steps, compares them, and either commits or halves and retries. Everything the [explainer](/blog/depth-on-demand/) claims about depth becoming a dial after training follows from that comparison, run on a network trained once at fixed depth and never touched again. What is below is the renderer, the accounting that keeps rejected probes on the books, and the figures, all quoted from the Kaggle run (bundle `kgl_blog-adaptive-v2`).*
 
 ## Train fixed, render free
 
@@ -52,11 +52,11 @@ def render_adaptive(p, x, tol, h0=T_TOTAL / L_TRAIN, h_min=T_TOTAL / 4096):
     return lg, work, accepted
 ```
 
-Two bookkeeping decisions matter for honesty. `work` counts *every* leapfrog evaluation, including the probes of rejected steps, because that is what the controller actually costs; `accepted` counts only committed steps, the rendered resolution. The explainer's efficiency claims use `work`; the power law lives in `accepted`. Conflating them flatters the method by a factor of about two, so the run keeps both.
+Two counters, deliberately kept apart. `work` counts *every* leapfrog evaluation, including the probes of steps that were rejected, because that is what the controller actually costs; `accepted` counts only committed steps, the rendered resolution. The explainer's efficiency claims use `work`; the power law lives in `accepted`. Conflating them flatters the method by a factor of about two, so the run keeps both.
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/adepth-controller.gif" alt="A real input stepped through the trained flow by the controller: accepted states accumulate along the trajectory, a rejected probe flashes as an X, and the step-size bar below breathes, shrinking at stiff stretches and doubling on gentle ones" loading="lazy" />
-  <figcaption>The controller on one real spirals input, from the exported weights. Blue dots are accepted states; the X is a rejected probe forcing a halve-and-retry; the bar is the step size breathing against the dashed training step. Every decision is the run's arithmetic.</figcaption>
+  <figcaption>The controller on one real spirals input, from the exported weights. Blue dots are accepted states; the X is a rejected probe forcing a halve-and-retry; the bar is the step size breathing against the dashed training step. Nothing here is scheduled; each halving is the error estimate at that moment coming back too large.</figcaption>
 </figure>
 
 The same decisions, seen as the step size breathing in time, once per tolerance:
@@ -93,7 +93,7 @@ The run's most useful negative result is the geography of effort. Rendering ever
 
 The explainer draws the moral; the implementation note is just that this field costs nothing to explore, because the controller is inference-only: no gradient, no retraining, one while-loop per pixel.
 
-*Every number above is from `scripts/adaptive_depth.py` run on Kaggle (bundle `kgl_blog-adaptive-v2`); the figures are rendered from the bundle's exported seed-0 weights by `scripts/render_adaptive_gifs.py`, replaying the identical controller arithmetic.*
+*Every number above is from one run on Kaggle (bundle `kgl_blog-adaptive-v2`); the figures are rendered from the bundle's exported seed-0 weights, replaying the identical controller arithmetic.*
 
 <CiteAs
   slug="depth-on-demand-jax-flax-nnx"

@@ -69,6 +69,14 @@ const blogPosts = posts.slice(0, 10).map((p) => ({
       browser. The posts run in series that build on each other; see
       <a href={`${base}/map/`}>the map</a> for how they connect.
     </p>
+    <p class="intro-start">
+      <strong>New here?</strong> Two doors, either one works cold:
+      <a href={`${base}/what-a-finite-kernel-buys-an-mlp/`}>What a Finite Kernel Buys an MLP</a>
+      turns a neuron into something you can look at, and
+      <a href={`${base}/attention-is-a-kernel/`}>Attention Is Explainable Because It Is a Kernel</a>
+      explains why half a transformer is readable and the other half is not.
+      Everything else grows out of those two.
+    </p>
   </section>
 
   <div class="continue" data-continue data-base={base} hidden>
@@ -77,6 +85,14 @@ const blogPosts = posts.slice(0, 10).map((p) => ({
       <span class="continue-title" data-continue-title></span>
     </a>
   </div>
+
+  <section class="home-section">
+    <h2 class="section-eyebrow">Series, in reading order</h2>
+    <p class="section-note">Each series is a narrative: start at part 1.</p>
+    <div class="series-stack">
+      {arcs.map(({ def, parts }) => <SeriesCard def={def} parts={parts} />)}
+    </div>
+  </section>
 
   <section class="home-section">
     <h2 class="section-eyebrow">Latest</h2>
@@ -89,15 +105,7 @@ const blogPosts = posts.slice(0, 10).map((p) => ({
         />
       ))}
     </ul>
-    <a class="section-more" href={`${base}/archive/`}>Full archive by date →</a>
-  </section>
-
-  <section class="home-section">
-    <h2 class="section-eyebrow">Series, in reading order</h2>
-    <p class="section-note">Each series is a narrative: start at part 1.</p>
-    <div class="series-stack">
-      {arcs.map(({ def, parts }) => <SeriesCard def={def} parts={parts} />)}
-    </div>
+    <a class="section-more" href={`${base}/archive/`}>Every post by date →</a>
   </section>
 
   {standalone.length > 0 && (
@@ -123,6 +131,21 @@ const blogPosts = posts.slice(0, 10).map((p) => ({
   }
   .intro-blurb strong { color: var(--fg); font-weight: 600; }
   .intro-blurb a { color: var(--accent); }
+
+  /* The one place a stranger is handed a specific first post to read. */
+  .intro-start {
+    margin: 0.6rem 0 0.25rem;
+    padding: 0.7rem 0.9rem;
+    border-left: 3px solid var(--accent);
+    background: var(--bg-sunken);
+    border-radius: 0 6px 6px 0;
+    font-size: 0.94rem;
+    line-height: 1.6;
+    color: var(--fg-muted);
+    max-width: 56ch;
+  }
+  .intro-start strong { color: var(--fg); font-weight: 600; }
+  .intro-start a { color: var(--accent); }
 
   .continue { margin-top: 1.25rem; }
   .continue a {

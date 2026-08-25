@@ -32,7 +32,7 @@ keywords:
 ---
 import CiteAs from '../../components/CiteAs.astro';
 
-*The [explainer](/blog/where-does-a-weight-live/) argued that a standard weight is a direction in a space apart from the data, and that a reproducing kernel Hilbert space repairs that by giving the weight an address among the data: the optimal weight is a combination of the data's own kernel bumps. This is the implementation. A kernel in a few lines of JAX, the Gram matrix, one linear solve for the coefficients, and the weight comes out as $\sum_i \alpha_i\, k(x_i, \cdot)$. Then two demonstrations of why the shared space matters. Every number is from a real run; the script is `scripts/render_weight_lives_gifs.py`.*
+*There is no feature map anywhere in this file. The [explainer](/blog/where-does-a-weight-live/) argued that a standard weight is a direction in a space apart from the data, and that a reproducing kernel Hilbert space repairs that by giving the weight an address among the data; what the code shows is how cheaply that is bought. A kernel in three lines of JAX, the Gram matrix, one linear solve for the coefficients, and the weight comes out as $\sum_i \alpha_i\, k(x_i, \cdot)$. Then two demonstrations of why the shared space is worth the trouble, both of them measured here rather than quoted from the explainer.*
 
 *Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/where-does-a-weight-live-jax-flax-nnx): the same code, block by block, with the math written out and every figure reproduced from a real run.*
 
@@ -63,11 +63,11 @@ def kernel_ridge(X, y, lam=0.4):                       # the representer coeffic
     return jnp.linalg.solve(G + lam * jnp.eye(len(X)), y)
 ```
 
-The vector `alpha` that comes back *is* the weight, expressed in the only basis the RKHS gives you for free: the data points themselves. Each $\alpha_i$ is the charge on point $x_i$. To evaluate the weight anywhere you weigh the kernels by $\alpha$, which is `gram(grid, X) @ alpha`. Watch it assemble: the heaviest coefficients first, each adding its own bump, the decision boundary forming out of the data.
+The vector `alpha` gives the kernel-ridge solution in the spanning family of training-point sections. If the Gram matrix is singular, coefficients need not be unique even when the fitted function is. Each $\alpha_i$ acts like a charge on $x_i$; evaluation is `gram(grid, X) @ alpha`.
 
 <figure class="jax-fig">
   <img src="/blog/weight-lives-representer.gif" alt="A two-moons dataset where the kernel-ridge decision surface builds up term by term as data points are added, the boundary forming, reaching 99 percent" loading="lazy" width="600" height="560" />
-  <figcaption>The weight assembling from the data. Each frame adds one more term $\alpha_i\, k(x_i, \cdot)$ of the real kernel-ridge solution, heaviest first; the field is their running sum and the black line is where it crosses zero. The weight is never anything but a combination of the points, and the full sum reads the two moons at 99%. Rendered by <code>scripts/render_weight_lives_gifs.py</code>.</figcaption>
+  <figcaption>The weight assembling from the data. Each frame adds one more term $\alpha_i\, k(x_i, \cdot)$ of the real kernel-ridge solution, heaviest first; the field is their running sum and the black line is where it crosses zero. The weight is never anything but a combination of the points, and the full sum reads the two moons at 99%.</figcaption>
 </figure>
 
 ## Why the shared space is worth it
@@ -89,8 +89,8 @@ print(f"line: {100*lin.score(X, y):.0f}%   kernel: {100*(k_pred == ys).mean():.0
 ```
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/blog/weight-lives-rings.png" alt="Two panels on nested rings: the best linear weight reaches 50 percent while the placed kernel weight reaches 100 percent with a circular boundary" loading="lazy" width="946" height="517" />
-  <figcaption>The same rings, two weights. On the left the best linear weight, a direction, lands at 50%: no angle separates classes that are nested rather than side by side. On the right the kernel weight, a combination placed among the data, closes a boundary around the inner ring and reaches 100%. The accuracies, 50% and 100%, are the real measurements from the run above. Rendered by <code>scripts/render_weight_lives_gifs.py</code>.</figcaption>
+  <img src="/blog/weight-lives-rings-build.gif" alt="Two panels on nested rings: the best linear weight reaches 50 percent while the placed kernel weight reaches 100 percent with a circular boundary" loading="lazy" width="946" height="517" />
+  <figcaption>The same rings, two weights. On the left the best linear weight, a direction, lands at 50%: no angle separates classes that are nested rather than side by side. On the right the kernel weight, a combination placed among the data, closes a boundary around the inner ring and reaches 100%. Both panels are drawn from the fit printed above them, and the coloured field is the score each machine assigns, not a sketch of one. The staged reveal introduces the nested data, the failed linear boundary, and the fitted kernel boundary.</figcaption>
 </figure>
 
 ## How the placed weight reads a point
@@ -106,7 +106,7 @@ print(f"f(q) = {fq:+.2f}  ->  {'orange' if fq >= 0 else 'blue'} class")
 
 <figure class="jax-fig">
   <img src="/blog/weight-lives-vote.gif" alt="A query point moving through two moons; at each position it links to its most-similar data points and the signed kernel-weighted sum decides its class" loading="lazy" width="624" height="592" />
-  <figcaption>Every prediction is a similarity-weighted vote. The query (the star) is read by its kernel similarity $k(x_i, q)$ to each data point; the links show the points that vote loudest, their width set by that similarity and their color by the sign of their contribution $\alpha_i\, k(x_i, q)$. The signed sum $f(q)$ decides the class. No coordinates are built and nothing is lifted; the weight is read purely through the kernel, exactly the code above. Rendered by <code>scripts/render_weight_lives_gifs.py</code>.</figcaption>
+  <figcaption>Every prediction is a similarity-weighted vote. The query (the star) is read by its kernel similarity $k(x_i, q)$ to each data point; the links show the points that vote loudest, their width set by that similarity and their color by the sign of their contribution $\alpha_i\, k(x_i, q)$. The signed sum $f(q)$ decides the class. Watch which links thicken as the star crosses between the moons: the electorate turns over completely, and no coordinate is ever built to make that happen.</figcaption>
 </figure>
 
 The weight never left the data. It is a list of coefficients on the points you already have, solved in one shot, read by similarity. That is the whole of what it means to have a reproducing kernel Hilbert space: the weight and the data finally share a space, and the weight is just the data, recombined.

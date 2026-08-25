@@ -22,7 +22,7 @@ import SeriesNav from '../../components/SeriesNav.astro';
 
 <SeriesNav />
 
-*The [explainer](/blog/attention-is-a-compatibility-kernel/) swaps attention's exp(q·k) for the Yat kernel and reports what a parameter-matched contest measures. This is the implementation: one attention module with two score branches, the training harness that holds everything else fixed, and the telemetry. Everything below is `scripts/yat_attention.py`, the script both Kaggle runs executed (quality bundle `kgl_blog-yatattn-v1`, telemetry bundle `kgl_blog-yatattn-telem`); code blocks are quoted from it.*
+*One `if` statement is all that separates the two models here. On one side of it: a dot product, a mask of `-inf`, a softmax. On the other: a ratio of polynomials, a mask of `0.0`, and a division by a row sum that stays a tensor instead of disappearing into a definition. Projections, heads, optimizer, batch order are all held fixed so the branch is the only thing under measurement. The [explainer](/blog/attention-is-a-compatibility-kernel/) reports the verdict; below is the code that produced it, quoted from both Kaggle runs (quality bundle `kgl_blog-yatattn-v1`, telemetry bundle `kgl_blog-yatattn-telem`), including the telemetry that killed one of our claims.*
 
 ## One module, two compatibility functions
 
@@ -70,7 +70,7 @@ Three seeds per variant, 12,000 steps, each at its swept learning rate (3e-4 sof
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/yatattn-curves.gif" alt="Validation loss curves for all six runs drawing through 12000 training steps, softmax in red and yat in blue, braiding together and settling 1.4 percent apart" loading="lazy" />
-  <figcaption>All six runs' validation losses drawing through training, from the run's eval checkpoints. The families braid; the gap at the end is 1.4 percent. The learning rate was subsequently audited with a full per-variant sweep (see the table below): softmax's optimum is exactly this schedule, and the kernel's quality barely moves with the rate, so the gap survives the fairness check.</figcaption>
+  <figcaption>All six runs' validation losses drawing through training, from the run's eval checkpoints. The families braid; the gap at the end is 1.4 percent. The learning rate was subsequently audited with a full per-variant sweep (see the table below): softmax's optimum turns out to be this schedule, and the kernel's quality barely moves with the rate, so the gap survives the fairness check.</figcaption>
 </figure>
 
 ## The telemetry that killed a claim
@@ -82,7 +82,7 @@ The run logs the maximum attention score each model produces on held-out batches
 | softmax logits | 15 to 18 | 34.5 |
 | yat kernel | 17,000 to 68,000 | 443,508 |
 
-The kernel's scores are five orders of magnitude *larger*, because $\kappa(q,q) = \lVert q \rVert^4 / \varepsilon$ and training grows the projection norms. The lesson the explainer draws is the honest one: boundedness-for-bounded-inputs is not boundedness-under-training, and what actually matters is that a ratio of polynomials digests $4 \times 10^5$ without a max trick, while $e^{34.5}$ does not exist in float32 at all.
+The kernel's scores are five orders of magnitude *larger*, because $\kappa(q,q) = \lVert q \rVert^4 / \varepsilon$ and training grows the projection norms. Boundedness-for-bounded-inputs turns out not to survive contact with training, and the property that does the work is a different one: a ratio of polynomials digests $4 \times 10^5$ without a max trick, while $e^{34.5}$ does not exist in float32 at all.
 
 The mass channel's naive test is measured with a rank statistic, mass against next-token correctness:
 
@@ -110,7 +110,7 @@ Three seeds re-run at the kernel's best rate (bundle `kgl_blog-yatattn-fair`) gi
 
 The `b = 0` ablation row is not just a smaller kernel, it is a different mathematical object: the explainer walks through why the universality theorem needs the bias. Empirically the ablation costs a run-noise-sized amount of quality and, more decisively, un-tames the score scale: 443,508 maximum trained score against the full kernel's 61,221.
 
-The learned scalars themselves are exported by the telemetry run (bundle `kgl_blog-yatattn-b-telem`), and they tell a per-head specialization story: `b` wanders from its log 2 init across [0.22, 3.40], and `eps` splits, most heads driving it toward zero (sharp, local kernels) while two late-layer heads grow it to 6.4 and 12.7 (smooth, near-global ones). The entropy statistics on the trained maps barely move against the ablation (mean 0.73 vs softmax's 0.48), so the diffuseness mechanism the explainer describes is a property of the polynomial ratio, not of the frozen scalars. The column shapes are the finding: softmax needs its rate found (and dies at 1e-2), while the kernel's entire column sits in a 1 percent band. Per-variant LR overrides and the sweep mode are in `scripts/yat_attention.py` (`SWEEP_LRS`, `LR_YAT`, `LR_SOFTMAX` env knobs).
+The learned scalars themselves are exported by the telemetry run (bundle `kgl_blog-yatattn-b-telem`), and they tell a per-head specialization story: `b` wanders from its log 2 init across [0.22, 3.40], and `eps` splits, most heads driving it toward zero (sharp, local kernels) while two late-layer heads grow it to 6.4 and 12.7 (smooth, near-global ones). The entropy statistics on the trained maps barely move against the ablation (mean 0.73 vs softmax's 0.48), so the diffuseness mechanism the explainer describes is a property of the polynomial ratio, not of the frozen scalars. Read the sweep table by column rather than by cell: softmax needs its rate found and dies at 1e-2, while the kernel's entire column sits inside a 1 percent band. Per-variant LR overrides and the sweep mode are set by the `SWEEP_LRS`, `LR_YAT`, and `LR_SOFTMAX` env knobs.
 
 ## The normalizer as a swappable part
 
@@ -173,7 +173,7 @@ Watching a single head read is where the diffuseness difference stops being a st
 
 <figure class="jax-fig">
   <img src="/blog/yatattn-checkpoints.png" alt="A grid of attention maps, four training checkpoints by two models, one layer and head, showing near-uniform haze at step 0 sharpening to structured routing at step 12000" loading="lazy" />
-  <figcaption>One layer and head at the four telemetry checkpoints, both models: from causal haze to structure. Four snapshots are four facts, so this is a grid, not an animation.</figcaption>
+  <figcaption>One layer and head at the four telemetry checkpoints, both models, reading down each column from causal haze at step 0 to structured routing at step 12,000.</figcaption>
 </figure>
 
 <figure class="jax-fig jax-fig-wide">
@@ -181,7 +181,7 @@ Watching a single head read is where the diffuseness difference stops being a st
   <figcaption>The two compatibility functions computed live from their formulas while the query orbits the plane: the bilinear ramp only rotates, scoring direction; the kernel's peak travels with the query, scoring direction and place at once. This is the geometry the explainer's draggable panel lets you feel; here it is as one continuous sweep.</figcaption>
 </figure>
 
-*Every number above is from `scripts/yat_attention.py` on Kaggle (bundles `kgl_blog-yatattn-v1` and `kgl_blog-yatattn-telem`); figures are rendered from the bundles by `scripts/render_yatattn_gifs.py`. The linear-time road, positive random features for exactly this kernel, is SLAY (arXiv 2602.04915).*
+*Every number above is from real runs on Kaggle (bundles `kgl_blog-yatattn-v1` and `kgl_blog-yatattn-telem`); figures are rendered from those bundles. The linear-time road, positive random features for exactly this kernel, is SLAY (arXiv 2602.04915).*
 
 <CiteAs
   slug="attention-is-a-compatibility-kernel-jax-flax-nnx"

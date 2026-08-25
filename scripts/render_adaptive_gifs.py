@@ -225,19 +225,12 @@ def png_power_law():
     print(f"  adepth-power-law.png: {os.path.getsize(out)//1024} KB")
 
 
-if __name__ == "__main__":
-    print("rendering adaptive-depth figures from the real bundle:")
-    gif_controller()
-    png_tol_sweep()
-    gif_effort_field()
-    png_power_law()
-
-
 def check_stiffness():
     """The mechanism check quoted in the explainer: correlate per-input work
     with the mean force magnitude ||grad V|| along the accepted path, the
     first-order proxy for the flow's local stiffness. Replays the bundle's
     exported weights with the identical controller arithmetic."""
+    out = {}
     for ds in ("moons", "rings", "spirals"):
         m, X, y = get_model(ds)
         works, stiffs = [], []
@@ -259,5 +252,22 @@ def check_stiffness():
                 gs += np.linalg.norm(gradV(m, q)); gn += 1
                 if err < 0.03 / 4: h = min(h * 2, T_TOTAL / 4)
             works.append(work); stiffs.append(gs / max(1, gn))
-        r = np.corrcoef(works, stiffs)[0, 1]
+        r = float(np.corrcoef(works, stiffs)[0, 1])
         print(f"  {ds}: r(work, mean force along path) = {r:+.3f}")
+        out[ds] = round(r, 3)
+    return out
+
+
+if __name__ == "__main__":
+    print("rendering adaptive-depth figures from the real bundle:")
+    gif_controller()
+    png_tol_sweep()
+    gif_effort_field()
+    png_power_law()
+    # The explainer quotes these, so persist them instead of leaving them on stdout.
+    stiff = check_stiffness()
+    path = os.path.join(PUB, "depth-on-demand", "stiffness.json")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    json.dump({"note": "seed 0 only; r(per-input work, mean ||grad V|| along the accepted path)",
+               "r": stiff}, open(path, "w"), indent=1)
+    print(f"  wrote {os.path.relpath(path, HERE)}")

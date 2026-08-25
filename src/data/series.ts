@@ -31,9 +31,9 @@ export const SERIES: SeriesDef[] = [
     description:
       'Where do representations live, and what makes a latent space good? ' +
       'Contrastive learning, the geometry of embedding spaces, and why the usual activation functions work against it.',
+    status: 'ongoing',
     slugs: [
       'activations-are-bad-for-geometry',
-      'opposite-is-not-different',
       'untangling-the-moons',
       'welch-bound-good-latent-space',
       'latent-on-the-spectrum',
@@ -52,7 +52,7 @@ export const SERIES: SeriesDef[] = [
       'why that makes it explainable, and what happens when you make the kernel cheap.',
     slugs: [
       'attention-is-a-kernel',
-      'what-an-mlp-knows',
+      'what-a-finite-kernel-buys-an-mlp',
       'cheap-attention-is-linear-attention',
       'why-attention-needs-qk-projections',
       'attention-is-a-compatibility-kernel',
@@ -71,7 +71,6 @@ export const SERIES: SeriesDef[] = [
       'where-does-a-weight-live',
       'what-can-a-weight-be',
       'mlp-block-is-a-representer-theorem',
-      'regularization-is-a-price-list',
     ],
   },
   {
@@ -83,19 +82,32 @@ export const SERIES: SeriesDef[] = [
       'a list of prototypes you can read, edit by hand, and finally collapse into a single fixed-point operator.',
     status: 'ongoing',
     slugs: [
-      'what-a-finite-kernel-buys-an-mlp',
-      'your-neuron-is-a-picture',
       'edit-a-network-by-hand',
       'train-the-features',
-      'you-dont-have-to-train-the-features',
       'depth-by-construction',
       'calibration-of-a-bounded-net',
-      'a-risk-model-that-names-its-reasons',
       'survival-model-on-trial',
       'your-network-is-a-fixed-point',
       'edit-a-fixed-point',
       'you-dont-have-to-solve-a-kernel-machine',
       'lazy-training',
+    ],
+  },
+  {
+    id: 'kernel-as-instrument',
+    title: 'The Kernel as an Instrument',
+    short: 'Kernel Instruments',
+    description:
+      'A trained network carries its own kernel, and a kernel can be measured. ' +
+      'Decompose it, cut modes out of it, count the concepts it will admit to having, ' +
+      'and find out which parts of the design were doing the work all along.',
+    status: 'ongoing',
+    slugs: [
+      'mercer-microscope',
+      'spectral-surgery',
+      'yat-protocol',
+      'patch-parts',
+      'patches-in-conversation',
     ],
   },
   {

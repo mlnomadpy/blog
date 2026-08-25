@@ -38,14 +38,14 @@ keywords:
 ---
 import CiteAs from '../../components/CiteAs.astro';
 
-*The [explainer](/blog/why-attention-needs-qk-projections/) argued that $Q$ and $K$ projections turn a dot product into a learned, low-rank, role-aware bilinear form $s_{ij}=x_i^\top W_Q W_K^\top x_j$. This is the implementation companion: the Flax NNX attention module, the bilinear form pulled back out of it, its symmetric/antisymmetric split, a toy induction head, RoPE, and the two facts about the factorization you can check with a single `assert`: the rank budget and the gauge freedom.*
+*The bilinear form this post is about is never stored anywhere. The [explainer](/blog/why-attention-needs-qk-projections/) argued that $Q$ and $K$ projections turn a dot product into a learned, low-rank, role-aware relation $s_{ij}=x_i^\top W_Q W_K^\top x_j$, and the awkward thing about checking that in code is that no array in an attention module holds $B$. You have to reconstruct it from the two factors, and then almost everything the explainer claimed becomes a one-line `assert`: the split into a metric and a directedness, the rank ceiling, the gauge freedom that makes the factors meaningless on their own. Along the way: a hand-wired induction head, RoPE, and the same head trained from scratch to see whether gradient descent finds the relation by itself.*
 
 *Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/why-attention-needs-qk-projections-jax): the same code, block by block, with the math written out and every figure reproduced from a real run.*
 
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/qk-bilinear-decomp.gif" alt="Animated decomposition of a bilinear score matrix into a symmetric metric part and an antisymmetric directed part, with the diagonal held fixed" loading="eager" width="1100" height="540" />
-  <figcaption>The whole post in one loop, computed in JAX. A head's score is $s_{ij}=x_i^\top B\,x_j$ with $B = S + A$: a symmetric metric $S$ plus an antisymmetric directed part $A$. Dial $\alpha$ and the total score matrix slides from symmetric to visibly asymmetric, while the boxed diagonal (the self-scores) never moves, because $x^\top B x = x^\top S x$. Directionality is the off-diagonal part, and it is exactly what separate $Q$ and $K$ buy.</figcaption>
+  <figcaption>The whole post in one loop. A head's score is $s_{ij}=x_i^\top B\,x_j$ with $B = S + A$: a symmetric metric $S$ plus an antisymmetric directed part $A$. Dial $\alpha$ and the total score matrix slides from symmetric to visibly asymmetric, while the boxed diagonal, the self-scores, never moves at all, because $x^\top B x = x^\top S x$. Watch where the change happens and you have located what separate $Q$ and $K$ buy: everything off the diagonal.</figcaption>
 </figure>
 
 The whole post is plain JAX and [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html). Nothing here needs a GPU; the shapes are tiny on purpose, because the point is to *see* the bilinear form, not to benchmark it.
@@ -136,7 +136,7 @@ quad_S = jnp.einsum("id,de,ie->i", xs, S, xs)   # x_i^T S x_i
 print(jnp.allclose(quad_B, quad_S, atol=1e-5))  # True
 ```
 
-The `allclose` is the whole point of the symmetric/antisymmetric section in the explainer: $x^\top B x = x^\top S x$, because $A$ vanishes on the diagonal. A head's directedness is invisible if you only score tokens against themselves; it lives entirely off-diagonal.
+That `allclose` is the symmetric/antisymmetric section of the explainer reduced to one boolean: $x^\top B x = x^\top S x$, because $A$ vanishes on the diagonal. A head's directedness is invisible if you only score tokens against themselves; it lives entirely off-diagonal.
 
 A shared projection (one matrix for both sides) can only produce $W W^\top$, which is symmetric *and* positive semidefinite. Separate $Q$ and $K$ buy two things at once: the antisymmetric $A$, and a symmetric part $S$ that is free to be **indefinite**. You can check the indefiniteness directly:
 
@@ -170,10 +170,10 @@ print(vocab[int(pred[-1].argmax())])   # -> "c": after the latest "b", predict "
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/qk-induction.png" alt="Induction head: the causal attention matrix, with the latest query row highlighted, attends to the token after an earlier copy of the current token" loading="lazy" width="1100" height="520" />
-  <figcaption>The same computation in JAX, with the latest query row highlighted. Each query reads its own token's identity; each key reads its position's predecessor. So the query attends to positions one step after an earlier copy of itself and copies what came next: the latest <code>b</code> predicts <code>c</code>. The bright stripe is a directed relation no symmetric score could produce.</figcaption>
+  <figcaption>The block above, drawn, with the latest query row highlighted. Each query reads its own token's identity; each key reads its position's predecessor. So the query attends to positions one step after an earlier copy of itself and copies what came next: the latest <code>b</code> predicts <code>c</code>. The bright stripe is a directed relation no symmetric score could produce.</figcaption>
 </figure>
 
-In a real model `q` and `k` are not one-hot embeddings but the outputs of `W_Q` and `W_K`; the induction circuit is just a particular $B$ that pairs *current-token* query features against *previous-token* key features. The asymmetry ("ask for my identity, answer with my predecessor") is exactly what a non-symmetric $B$ allows and a shared projection forbids.
+In a real model `q` and `k` are not one-hot embeddings but the outputs of `W_Q` and `W_K`; the induction circuit is just a particular $B$ that pairs *current-token* query features against *previous-token* key features. The asymmetry ("ask for my identity, answer with my predecessor") is what a non-symmetric $B$ allows and a shared projection forbids.
 
 ## Position lives inside the bilinear form: RoPE
 
@@ -214,7 +214,7 @@ Position is not added to the residual stream here; it is a rotation applied *ins
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/qk-rope-diagonal.gif" alt="Animated score matrix organizing into constant diagonals as the RoPE rotation strength sweeps from zero to one, with one diagonal highlighted and its values plotted as a flat line" loading="lazy" width="1100" height="470" />
-  <figcaption>The <code>rope</code> function above, swept. One fixed content pair (q, k) is rotated by s·position as the strength s goes from 0 to 1: at s = 0 the matrix is a single constant (no position, every pair scores q·k), and as s rises the scores organize into constant diagonals. The highlighted diagonal Δ = 8 stays a flat line the whole way, its real max − min spread printed at 0.0000 every frame, because the score depends on the two positions only through i − j. Rendered by <code>scripts/render_qk_rope_gif.py</code>.</figcaption>
+  <figcaption>The <code>rope</code> function above, swept. One fixed content pair (q, k) is rotated by s·position as the strength s goes from 0 to 1: at s = 0 the matrix is a single constant (no position, every pair scores q·k), and as s rises the scores organize into constant diagonals. The highlighted diagonal Δ = 8 stays a flat line the whole way, its real max − min spread printed at 0.0000 every frame, because the score depends on the two positions only through i − j.</figcaption>
 </figure>
 
 ## Two facts about the factorization
@@ -246,7 +246,7 @@ So an individual query coordinate has no canonical meaning; what is identified i
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/qk-gauge-freedom.gif" alt="Animated gauge freedom: the two factor heatmaps churn as M(t) loops through invertible matrices while the product B and the attention pattern stay frozen, with the max difference from B(0) printed at machine zero" loading="lazy" width="1100" height="480" />
-  <figcaption>The gauge freedom, animated. M(t) loops through invertible matrices while the factor heatmaps W_Q M(t) and W_K M(t)⁻ᵀ churn; the product B and the attention pattern it produces never move, and the real max |B(t) − B(0)|, printed every frame, stays at machine zero (about 10⁻¹⁶) around the whole loop. The factors are a coordinate choice; the relation is the observable. Rendered by <code>scripts/render_qk_extra_gifs.py</code>.</figcaption>
+  <figcaption>The gauge freedom, animated. M(t) loops through invertible matrices while the factor heatmaps W_Q M(t) and W_K M(t)⁻ᵀ churn; the product B and the attention pattern it produces never move, and the real max |B(t) − B(0)|, printed every frame, stays at machine zero (about 10⁻¹⁶) around the whole loop. The factors are a coordinate choice; the relation is the observable.</figcaption>
 </figure>
 
 ## Train the induction head for real
@@ -338,18 +338,11 @@ cur->prev diagonal mean +11.4   off-diagonal mean -1.6
 
 The current-token-query against previous-token-key block carries three times the norm of any other block, and inside it the diagonal is strongly positive while everything else is mildly repelled: gradient descent rediscovered "ask for my identity, answer with your predecessor." Nothing about the training loop knows that $W_Q$ and $W_K$ form a bilinear relation; the gradient just flows through the scaled dot product. The structure is in the *parameterization*, and the parameterization is the head's relational vocabulary.
 
-## Rendering the GIFs
+## How the animations are computed
 
-Both animations are generated with Python, JAX, and matplotlib: the computation in JAX, the drawing in matplotlib:
+Both are generated with Python, JAX, and matplotlib: the computation in JAX, the drawing in matplotlib. The bilinear animation forms the score matrices $x^\top S x$, $\alpha\,x^\top A x$, and $x^\top B x$ on a small token cloud and animates $\alpha$, sweeping the split $B = S + A$; the induction animation runs the one-hot induction attention and steps the query pointer across positions. Neither is a benchmark. They are there so you can see two shapes: that the directedness lives off the diagonal, and that the induction stripe sits one step below the matched positions rather than on them.
 
-```bash
-python scripts/render_qk_bilinear_gif.py    # B = S + A, the symmetric/antisymmetric split
-python scripts/render_qk_induction_gif.py   # the induction head, swept across query positions
-```
-
-The first renderer forms the score matrices $x^\top S x$, $\alpha\,x^\top A x$, and $x^\top B x$ on a small token cloud and animates $\alpha$; the second runs the one-hot induction attention and steps the query pointer. Neither is a benchmark; they are visual audits of the shapes, so you can see that the directedness lives off-diagonal and that the induction stripe is exactly one step below the matched positions.
-
-## What this leaves out
+## Boundary of the result
 
 A production attention layer would add dropout, KV caching for decoding, head-wise mixed precision, and a fused attention kernel (so the $N\times N$ scores never leave fast memory). It would also usually apply RoPE per-head inside `__call__` rather than as the standalone function above. None of that changes the object this post is about: a learned, low-rank, role-asymmetric bilinear form, factored into a query role and a key role, then normalized into a distribution over values.
 

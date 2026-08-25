@@ -22,7 +22,7 @@ import SeriesNav from '../../components/SeriesNav.astro';
 
 <SeriesNav />
 
-*The [explainer](/blog/the-geometry-of-attention/) derives the territory maps of the two attention laws and then checks the theorems on trained transformers. This is the measurement side: the telemetry that exports a trained head's real query and key vectors, the offline replays that recompute winners under rescaled queries, the hull linear program, and the census. The models and training harness are `scripts/yat_attention.py`, [the same script the kernel-attention contest ran](/blog/attention-is-a-compatibility-kernel-jax-flax-nnx); the analysis is `scripts/export_attention_geometry_viz.py`; figures are rendered from the bundles by `scripts/render_attention_geometry_gifs.py`. Bundles: `kgl_blog-attngeom-qk` and `kgl_blog-attngeom-goat`.*
+*The [explainer](/blog/the-geometry-of-attention/)'s theorems are claims about any trained head, which meant the only way to test them was to open one and read out the vectors it actually compared. So this is the measurement side: the telemetry that exports a trained head's real query and key vectors, the offline replays that recompute winners under rescaled queries, the hull linear program, and the census. The models and training harness are [the same ones the kernel-attention contest ran](/blog/attention-is-a-compatibility-kernel-jax-flax-nnx), and the figures are rendered from the run bundles `kgl_blog-attngeom-qk` and `kgl_blog-attngeom-goat`.*
 
 ## Exporting the geometry
 
@@ -153,7 +153,7 @@ The last animation is the explainer's limit made visible, with its counter compu
   <figcaption>Zooming out, both maps recomputed per frame. The softmax map is the same picture at every radius, which is the scale theorem wearing its other hat. The kernel's pockets dissolve into wedges, and the counter shows the sign leaving: near the bodies antipodal directions have different owners, far away they agree, crossing 90 percent around radius 45 on these six bodies.</figcaption>
 </figure>
 
-*Every number is from seed-0 runs of `scripts/yat_attention.py` on Kaggle with `TELEMETRY=1 GEOMETRY=1` (bundles `kgl_blog-attngeom-qk`, `kgl_blog-attngeom-goat`), analyzed locally by `scripts/export_attention_geometry_viz.py`; the toy animations compute the two laws' formulas directly, with the explainer's panel scalars. Quality numbers for these architectures, with seeds, live in [the kernel-attention companion](/blog/attention-is-a-compatibility-kernel-jax-flax-nnx).*
+*Every number is from seed-0 runs on Kaggle with `TELEMETRY=1 GEOMETRY=1` (bundles `kgl_blog-attngeom-qk`, `kgl_blog-attngeom-goat`), analyzed locally; the toy animations compute the two laws' formulas directly, with the explainer's panel scalars. Quality numbers for these architectures, with seeds, live in [the kernel-attention companion](/blog/attention-is-a-compatibility-kernel-jax-flax-nnx).*
 
 <CiteAs
   slug="the-geometry-of-attention-jax-flax-nnx"

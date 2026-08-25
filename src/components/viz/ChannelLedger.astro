@@ -1,0 +1,105 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 470 } = Astro.props;
+---
+<figure class="viz channelledger" data-caption={caption} data-height={height} data-height-mobile="620" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Which half of the kernel carries this concept? The Yat unit is a product of
+// an alignment factor and a proximity factor, so each can be frozen at its
+// data mean and the concept re-scored. The scatter is the concept's real
+// score against each single-channel version, on 800 test images; the R-squared
+// is computed here, live, from those numbers.
+import { defineViz } from './engine/vizkit.js';
+import { T, fmt, gate, loadingText } from './engine/draw.js';
+import { load, r2, signedGlyph as sg } from './yatprotocol.js';
+
+defineViz('channelledger', {
+  title: 'Alignment or proximity: which half is this concept made of?',
+  height: 470,
+  controls: [
+    { type: 'select', name: 'j', label: 'concept', reset: false, value: '0',
+      options: Array.from({ length: 8 }, (_, i) => ({ value: String(i), label: `concept ${i + 1}` })) },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    gate(api, () => load('ledger'), (a, data) => { a.state.data = data; });
+  },
+
+  draw(api) {
+    const { ctx, colors, size: { W, H } } = api, st = api.state;
+    if (!st.ready) { loadingText(api, 'loading the ledger…'); return; }
+    const d = st.data, j = +api.get('j');
+    const c = d.concepts[j];
+    const ra = r2(c.both, c.align), rp = r2(c.both, c.place);
+    const tot = ra + rp + 1e-12;
+    const NULL_PLACE = 0.08;                 // a random logit direction, measured
+    const excess = rp / tot - NULL_PLACE;
+    const pad = 14, top = 32;
+
+    // ── the concept itself, rendered as a signed picture ──
+    const pw = 104, colW = 168;
+    sg(ctx, c.pic, 14, pad, top, pw, pw, 'cp' + j);
+    ctx.strokeStyle = colors.border;
+    ctx.strokeRect(pad + 0.5, top + 0.5, pw - 1, pw - 1);
+    T(ctx, colors, 'label');
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(`concept ${j + 1}`, pad, top - 8);
+    T(ctx, colors, 'small');
+    ctx.fillText(`${c.contrast[0]} vs ${c.contrast[1]}`, pad, top + pw + 15);
+    ctx.fillText('the concept as a signed', pad, top + pw + 32);
+    ctx.fillText('sum of prototypes', pad, top + pw + 45);
+    ctx.fillText(`gain ${fmt(c.gain, 0)} · ${fmt(100 * c.smooth, 0)}% smooth`, pad, top + pw + 62);
+
+    // ── the two scatters ──
+    const x0 = pad + colW + 10;
+    const bw = (W - x0 - pad - 14) / 2;
+    const bh = Math.min(bw, H - top - 96);
+    const panels = [
+      { key: 'align', label: 'alignment only', color: '#c2553a', r: ra },
+      { key: 'place', label: 'proximity only', color: '#4a7fb3', r: rp },
+    ];
+    panels.forEach((p, pi) => {
+      const box = { x: x0 + pi * (bw + 14), y: top, w: bw, h: bh };
+      ctx.fillStyle = colors.cellBg;
+      ctx.fillRect(box.x, box.y, box.w, box.h);
+      ctx.strokeStyle = colors.border;
+      ctx.strokeRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1);
+      const R = 3.2;
+      const sx = (v) => box.x + ((Math.max(-R, Math.min(R, v)) + R) / (2 * R)) * box.w;
+      const sy = (v) => box.y + box.h - ((Math.max(-R, Math.min(R, v)) + R) / (2 * R)) * box.h;
+      // the identity line: a concept fully carried by this channel lands on it
+      ctx.strokeStyle = colors.faint; ctx.setLineDash([3, 4]);
+      ctx.beginPath(); ctx.moveTo(sx(-R), sy(-R)); ctx.lineTo(sx(R), sy(R)); ctx.stroke();
+      ctx.setLineDash([]);
+      const other = c[p.key];
+      for (let i = 0; i < c.both.length; i += 1) {
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = 0.28;
+        ctx.beginPath(); ctx.arc(sx(c.both[i]), sy(other[i]), 1.7, 0, 6.283); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      T(ctx, colors, 'label');
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      ctx.fillText(p.label, box.x, box.y - 8);
+      T(ctx, colors, 'small');
+      ctx.fillText(`R² = ${fmt(p.r, 2)}  (${fmt(100 * p.r / tot, 0)}% of the split`
+        + (p.key === 'place' ? `, chance is ${fmt(100 * NULL_PLACE, 0)}%)` : ')'), box.x, box.y + box.h + 16);
+      ctx.fillText('x: the concept’s real score', box.x, box.y + box.h + 30);
+    });
+
+    T(ctx, colors, 'small');
+    ctx.textAlign = 'left';
+    ctx.fillText('each dot is one test image; the vertical axis freezes one half of the kernel at its average and keeps the other live', pad, H - 28);
+    ctx.fillText('a cloud on the dashed line means that half alone reproduces the concept; the number that counts is the place share'
+      + ' against the 8% a random direction scores', pad, H - 13);
+    api.readout('rd', `concept ${j + 1}: ${fmt(100 * rp / tot, 0)}% place, ${excess > 0.12 ? `${fmt(100 * excess, 0)} points above chance` : 'indistinguishable from chance'}`);
+  },
+});
+</script>

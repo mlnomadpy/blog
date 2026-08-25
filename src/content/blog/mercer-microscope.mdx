@@ -1,0 +1,142 @@
+---
+title: "The Trained Network, Under Mercer's Microscope"
+seoTitle: "The Empirical Spectrum of a Trained Yat Network"
+description: "Every hidden representation induces an empirical kernel. Decompose it into ranked modes, audit their stability and semantic evidence, then repeat the measurement on grayscale CIFAR-100 where one hundred classes leave room for a genuine concept-count test."
+seoDescription: "Eigendecompose a trained Yat network's kernel: watch training align the spectrum with the labels, read the modes as concepts, rebuild the net from k of them."
+pubDate: 2026-07-27
+updatedDate: 2026-08-25
+draft: false
+tags: [kernels, mercer, spectra, interpretability, yat, mlp, jax]
+references:
+  - authors: "Mercer, J."
+    year: 1909
+    title: "Functions of Positive and Negative Type, and their Connection with the Theory of Integral Equations"
+    venue: "Philosophical Transactions of the Royal Society A 209, 415-446"
+  - authors: "Cucker, F., Smale, S."
+    year: 2002
+    title: "On the Mathematical Foundations of Learning"
+    venue: "Bulletin of the AMS 39(1), 1-49"
+  - authors: "Caponnetto, A., De Vito, E."
+    year: 2007
+    title: "Optimal Rates for the Regularized Least-Squares Algorithm"
+    venue: "Foundations of Computational Mathematics 7, 331-368"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+keywords:
+  - mercer decomposition neural network
+  - spectral interpretability
+  - kernel eigenfunctions
+  - trained network spectrum
+  - yat network explanation
+---
+import SpectrumScrub from '../../components/viz/SpectrumScrub.astro';
+import ModeGallery from '../../components/viz/ModeGallery.astro';
+import ClassModeMap from '../../components/viz/ClassModeMap.astro';
+import TruncationDial from '../../components/viz/TruncationDial.astro';
+import HundredRebuild from '../../components/viz/HundredRebuild.astro';
+import TaxonomyLens from '../../components/viz/TaxonomyLens.astro';
+import CodebookSqueeze from '../../components/viz/CodebookSqueeze.astro';
+import EpsFollows from '../../components/viz/EpsFollows.astro';
+import SupportVsNull from '../../components/viz/SupportVsNull.astro';
+import CiteAs from '../../components/CiteAs.astro';
+import SeriesNav from '../../components/SeriesNav.astro';
+
+<SeriesNav />
+
+*Mercer's theorem is normally consulted before a network exists, the way a builder consults a code book: [it says which functions a kernel can express cheaply](/blog/what-can-a-weight-be), in advance. Point it at the finished building instead. Take a trained Yat network, 256 prototypes on Fashion-MNIST, and ask Mercer to explain what training made.*
+
+How do you ask a trained network what it learned? The usual answers all involve picking it apart one unit at a time: stare at neurons, probe activations, hope the pieces mean something individually. That road runs further than usual here, because [a Yat unit is a prototype you can render as a picture](/blog/what-a-finite-kernel-buys-an-mlp/). But even so the units are the *parts list*, not the design. Two hundred fifty-six prototypes with a readout is still two hundred fifty-six separate stories, and the network does not think in single prototypes any more than a chord is a note.
+
+There is a second way to ask. Any hidden representation $h(x)$ induces the PSD kernel $K_h(x,y)=h(x)^\top h(y)$, whether $h$ came from Yat, ReLU, or a hand-built feature map. On a finite dataset, centering that feature cloud and taking its SVD gives ranked orthogonal modes. Yat's extra gift is that the coordinates can be traced back to input-space prototypes and to named alignment and proximity channels. This post computes the empirical decomposition at every epoch and reads what that particular model made.
+
+## The network's own kernel
+
+The object under the microscope is not the kernel of a single unit but the kernel of the whole trained bank. A Yat layer with prototypes $w_1, \dots, w_m$ maps an image to its feature vector $\Phi(x) = (\phi_{w_1}(x), \dots, \phi_{w_m}(x))$, and any feature map defines a kernel by inner product:
+
+$$
+K_{\mathrm{net}}(x, y) \;=\; \sum_{u=1}^{m} \phi_{w_u}(x)\, \phi_{w_u}(y).
+$$
+
+This is a PSD kernel by construction, finite-rank, and it changes as the prototypes move. It records the geometry of the hidden representation. It is not the network's entire knowledge, because the readout can ignore loud feature directions or amplify quiet ones.
+
+Mercer's theorem concerns the integral operator defined by a continuous kernel and a measure. On a finite sample, the computation here is empirical kernel PCA: the eigendecomposition of the centered feature covariance, equivalently the nonzero singular system of the centered Gram matrix under matched normalization. Its eigenvectors estimate population modes only under sampling and spectral-gap conditions. Change the measure and the modes change. Everything below is therefore a descriptive analysis of the representation on Fashion-MNIST, not a population theorem about every input the network could receive.
+
+The picture to hold is geometric. Push the images through the trained bank and the feature cloud is, to second order, an ellipsoid. The empirical modes are its axes and the eigenvalues are its variances. A large eigenvalue marks a direction along which this sampled representation varies loudly. Whether that direction is cheap for a regularized learner depends on the objective and normalization; whether it is semantic depends on the labels and examples at its poles. What does training do to these measured directions?
+
+## Grab first, refine after
+
+We trained the network twice from one initialization, on [the protocol the frozen-features study used](/blog/lazy-training) at this width: once with everything free (88.84 ± 0.20 percent over three seeds), once with the bank frozen and only the readout learning (84.10 ± 0.15), and snapshotted the full model at every epoch (bundle `kgl_blog-mercer-v1`). Each snapshot's kernel was decomposed on the full test set. The frozen twin's spectrum cannot move, so every change below is feature learning, isolated.
+
+<SpectrumScrub caption="The trained network's kernel, eigendecomposed on the full test set at every epoch of training; the frozen twin's static spectrum for reference. Left: the eigenvalue spectrum. Right: the cumulative share of the (centered) label function captured by the top k modes. Press play. Epoch 1 is the event: the spectrum snaps into concentration and the label curve leaps; the remaining eleven epochs relax the spectrum back outward while accuracy keeps climbing." />
+
+The plot has two acts, and neither is the steady drift you might expect. Act one is a single epoch long and violent: the effective dimension of the kernel collapses from 14.7 to 4.7, and the share of the label function living in the top ten modes leaps from 39 to 58 percent. One epoch of gradient descent does not gently improve the kernel; it grabs the label structure and reorganizes the entire spectrum around it. Act two is the remaining eleven epochs, and it runs *backwards* by the naive reading: the effective dimension climbs back to about 10, the top-ten label share eases down to 52 percent, and the top-forty share peaks and then drifts, all while test accuracy rises from 83 to nearly 89. Training first buys the coarse alignment, then deliberately spends some of it, spreading label energy into higher, finer modes where the difficult distinctions live. The same shape has turned up before, [in loss plateaus that were reorganizations in disguise](/blog/three-states-of-information); here the microscope watches the reorganization directly, in the kernel's own coordinates.
+
+## The concepts, ranked
+
+An eigenvalue spectrum says how much structure there is, not what the structure says. For that, look at the eigenfunctions, and here the prototype network pays off again: its modes are functions on images, so their extremes *are images you can look at*.
+
+<ModeGallery caption="The top sixteen Mercer modes of the trained kernel, bars sized by eigenvalue share; click any mode. The two rows of thumbnails are the real test images with the most positive and most negative values of that eigenfunction, its two poles; the bar chart is the mode's mean value on each class. Every mode is a learned contrast, and the first few are startlingly clean: the top mode alone carries 38 percent of the readout's weight." />
+
+Mode 1 has a clear semantic reading on this sample: one pole is shirts and pullovers, the other boots and sneakers. Mode 2 opposes trousers to sneakers; mode 3 sneakers to coats. These are principal axes of the trained feature ellipsoid, not automatically independent concepts. Their names come from inspecting pole images and class means, and tied or nearly tied eigenvalues permit rotations that change individual axes. The decomposition ranks variance; the readout tells us how much the classifier uses each direction.
+
+<ClassModeMap caption="The same sixteen modes as one map: rows are classes, columns are modes in eigenvalue order, color is the class's mean value on the mode. A class is the signature of signs along its row. The footwear classes move together on the early modes, coarse concepts, and only split from one another on later, smaller ones: sandal against sneaker is a refinement the spectrum files under fine print." />
+
+The map makes the ranking's logic visible. Early modes carve coarse partitions (footwear against clothing, trousers against everything boxy); the distinctions between similar classes, sandal versus sneaker, shirt versus coat, live in later modes with smaller eigenvalues. The kernel spends its loud directions on easy, large-scale structure and whispers the hard cases, which is the geometry [the calibration post](/blog/calibration-of-a-bounded-net) would predict mistakes to follow, and exactly where act two of the training plot was putting its energy.
+
+## How many concepts is the network?
+
+A ranked, orthogonal decomposition invites the bluntest question in the spectral playbook: truncate it. The tail sum of eigenvalues is the mean squared feature-reconstruction error on the empirical measure. It does **not** bound classification-accuracy loss without also controlling the readout norm and the prediction margins. The panel therefore measures the predictor after truncation instead of inferring its accuracy from the spectrum.
+
+<TruncationDial caption="The trained network rebuilt from its top k empirical feature-covariance modes, recomputed on 800 test images; the frozen twin is shown under the same truncation. Slide k: at four modes the trained reconstruction sorts about half the images; at twelve it is within eight points of the full network. The thumbnails flip green as predictive axes accumulate; semantic meaning is not implied by rank alone." />
+
+The trained network reassembles fast: twelve modes recover 81 of its 88 percent, thirty-two recover 85, and by sixty-four of 256 the reconstruction is within a point of the whole machine. The frozen twin needs more empirical modes to recover its lower ceiling. This shows that, on this sample, feature training aligned the readout more strongly with leading variance directions. A population source condition is stronger: it places the target in the range of a power of a declared integral operator and supports a rate only with capacity, noise, and regularization assumptions. The experiment is evidence of empirical spectral alignment, not a proof that training manufactured such a source condition.
+
+## The two questions the spectrum answers separately
+
+Sixty-four is a number about the *kernel*, and it is worth being exact about what it does and does not say, because there is a second question hiding next to the first.
+
+The empirical modes are the axes along which this representation varies on the measured Fashion-MNIST sample. Sixty-four is the rank needed to reconstruct this predictor within the reported accuracy tolerance, not the dimension of the full RKHS or a universal capacity count. The readout is a $256\times10$ matrix, so the logits factor through at most ten coordinates, and classification is invariant to a shared logit shift, leaving at most nine decision-relevant contrasts.
+
+So decompose that instead. The covariance of the logits, $S = A^\top C A$, is a ten by ten matrix whose eigenvectors are the orthogonal output contrasts the network actually spends its capacity on, ranked by how much the verdict moves along each. Truncating in *those* coordinates, the network is whole at ten: nine of them reach 86.6 percent and the tenth completes the model exactly, because at rank ten the projection is the identity.
+
+Both numbers are real and they measure different things. Sixty-four is how much of the kernel's spread the function is spilled across; ten is how many independent contrasts the function contains. The gap between them is the interesting quantity, and it says the network's decisions are not aligned with the directions its own kernel varies along most: the loudest thing the kernel does and the thing the readout listens to are not the same axis. Which raises the obvious follow-up, one this post's instrument cannot answer and [the interrogation protocol](/blog/yat-protocol) is built for: if the two orderings disagree, which one should you call a concept?
+
+*Scope: accuracies are three seeds of one Kaggle run (bundle `kgl_blog-mercer-v1`, m = 256, twelve epochs); spectral quantities are seed 0's snapshots. The decomposition and truncation score use the same 10,000-image test sample, so the curves are descriptive reconstructions on that sample rather than an independent generalization estimate. A publication-grade protocol should discover modes on a training or audit split and evaluate truncation and semantic labels on a separate split. Modes are defined up to sign and up to rotation where eigenvalues tie.*
+
+## The second exam: one hundred classes
+
+Fashion-MNIST exposes a counting trap. A ten-class readout has at most ten logit-covariance axes and at most nine decision-relevant contrasts, so finding roughly ten output directions says as much about matrix shape as it does about learned structure. Grayscale CIFAR-100 raises the ceiling to one hundred axes and ninety-nine decision contrasts. The same audit can now distinguish “fifteen” from “one hundred” without the answer being fixed in advance.
+
+The tested model is one Yat layer with 1,024 raw-pixel prototypes and a linear 100-class readout, trained for 24 epochs with the learning rate bracketed in-run. Across three seeds it reaches **17.65 ± 0.17%** top-1. That is about eighteen times chance and far from a competitive CIFAR-100 model; it is sufficient for asking what this explicit, shallow function learned.
+
+Rebuilding the predictor from its leading output axes gives a smooth accuracy curve rather than a clean elbow. Bootstrap stability supplies the second test: an axis counts as individually identifiable only when its direction returns under resampling above a declared 0.9 agreement gate. That gate holds for **14.7 ± 1.2 axes**. Solving a matching problem before scoring raises the stable-subspace count to **18.3 ± 0.9**, which shows exactly where individual-axis naming becomes fragile.
+
+<HundredRebuild caption="Accuracy reconstructed from the leading axes beside bootstrap agreement. Predictive value continues into the tail, while individual-axis identifiability stops near fifteen. The gate is operational and declared, not a theorem that turns eigenvectors into concepts." />
+
+CIFAR-100 provides twenty ground-truth superclasses, so semantic evidence no longer has to come only from visual inspection. The gain-weighted top ten axes have superclass alignment **0.549 ± 0.003**, against **0.181 ± 0.051** for matched random directions; the last twenty axes score **0.122**. Leading axes capture coarse structure, while the late tail mostly distinguishes within-superclass variation.
+
+<TaxonomyLens caption="Class loadings grouped by CIFAR-100's declared superclasses. Early axes move whole superclass blocks together; later axes split siblings inside those blocks. The null comparison gives the semantic reading a measured baseline." />
+
+The class codebook is also a packing experiment. Projecting one hundred centered class means into fifteen dimensions gives rms cosine **0.402 ± 0.003**, above the Welch floor of **0.239**. The excess is structured: different-superclass pairs average near the simplex value, while same-superclass pairs average **+0.389**. The most-confused class pairs have mean cosine **+0.757**; all other pairs average about zero. The representation spends its unavoidable overlap on visual siblings rather than distributing it evenly.
+
+<CodebookSqueeze caption="The hundred class directions under a changing dimension budget. The Welch floor shows unavoidable crowding; the same-superclass split shows which overlap the trained model chooses to preserve." />
+
+Two diagnostics replicate and one changes. The learned softening remains far below the distances encountered by the winning runs; hotter learning rates move it into those distances and reduce accuracy. Concept axes remain diffuse across hundreds of prototypes, and deleting the largest rows followed by a readout refit restores the signal. The direction-versus-place ledger flips relative to Fashion-MNIST: on CIFAR-100 the leading axes are direction-driven under both tested decompositions. The method survives because the changed verdict is visible.
+
+<EpsFollows caption="The learned softening against the distances the layer actually sees, plus the learning-rate sweep. Winning runs leave the softening idle; hotter runs move it into the data scale and lose accuracy." />
+
+<SupportVsNull caption="Support size for stable axes against matched random directions, followed by the delete-and-refit test. The axes are more concentrated than chance but nowhere near a small removable committee." />
+
+The second dataset therefore sharpens the instrument. A concept count needs a ceiling that does not predetermine it, stability under resampling, semantic evidence against an external label structure, and a distinction between individually named axes and a stable subspace. Without those four pieces, an eigenspectrum is a useful decomposition but not yet a concept inventory.
+
+## The microscope was always in the box
+
+Nothing in this post required a Yat-only eigendecomposition. Any hidden feature map can be placed under the same empirical microscope. Yat earns its place when the resulting axes are traced back through named prototype sections and kernel channels. Under that microscope, this run shows a sharp first-epoch concentration followed by a slower spread into finer empirical modes. A matched ReLU feature-Gram baseline remains the missing control for deciding how much of that trajectory is specifically caused by Yat.
+
+<CiteAs
+  slug="mercer-microscope"
+  title="The Trained Network, Under Mercer's Microscope"
+  pubDate="2026-07-27"
+/>

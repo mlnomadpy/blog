@@ -34,7 +34,7 @@ keywords:
 ---
 import CiteAs from '../../components/CiteAs.astro';
 
-*The [explainer](/blog/edit-a-network-by-hand/) argued that a Yat-kernel network is a list of prototype pictures, so you can teach it a class by adding pictures and make it forget one by deleting them, with no training. This is the implementation: build the network in [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html), then watch teaching reduce to a `jnp.concatenate` and forgetting to a boolean mask. Every figure and number below is from a real run; the script is `scripts/yat_editable_fmnist.py`.*
+*Teaching this network a class it has never seen is `jnp.concatenate`. Making it forget one is a boolean mask. Neither takes a gradient step, and both come with an assertion you can run. The [explainer](/blog/edit-a-network-by-hand/) makes the case that a Yat-kernel network is a list of prototype pictures; below is the list, in [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html), with the two edits and the Fashion-MNIST numbers they produce.*
 
 *Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/edit-a-network-by-hand-jax-flax-nnx): the same code, block by block, with the math written out and every figure reproduced from a real run.*
 
@@ -66,7 +66,7 @@ class YatEdit(nnx.Module):
         return per_class.max(-1)                      # nearest prototype within each class
 ```
 
-There is no `nnx.Linear`, no nonlinearity, and crucially no entanglement: prototype $u$ lives entirely in row $u$ of `W` and row $u$ of `A`. The decision rule is nearest-prototype within each class: class $c$ is scored by its best-matching row, $s_c(x) = \max_{u\,:\,\text{class}(u)=c} \phi_u(x)$, the `mode='max'` readout in `scripts/yat_editable_fmnist.py` and the rule behind every number in this post. The [explainer](/blog/edit-a-network-by-hand/) writes the same structure as a pure linear readout, $s(x) = A^\top \phi(x)$, a sum over each class's rows instead of a max; that view is worth keeping (it is what a linear layer can express, and it is where the field-superposition picture comes from), but it scores a few points lower, 68% against 79% at this scale. What every edit below actually rides on is shared by both readouts: class $c$'s score is computed from class $c$'s rows and no others, so appending rows extends one class and masking rows removes one, with zero cross-talk.
+There is no `nnx.Linear`, no nonlinearity, and crucially no entanglement: prototype $u$ lives entirely in row $u$ of `W` and row $u$ of `A`. The decision rule is nearest-prototype within each class: class $c$ is scored by its best-matching row, $s_c(x) = \max_{u\,:\,\text{class}(u)=c} \phi_u(x)$, the `mode='max'` readout and the rule behind every number in this post. The [explainer](/blog/edit-a-network-by-hand/) writes the same structure as a pure linear readout, $s(x) = A^\top \phi(x)$, a sum over each class's rows instead of a max; that view is worth keeping (it is what a linear layer can express, and it is where the field-superposition picture comes from), but it scores a few points lower, 68% against 79% at this scale. What every edit below actually rides on is shared by both readouts: class $c$'s score is computed from class $c$'s rows and no others, so appending rows extends one class and masking rows removes one, with zero cross-talk.
 
 ## Build it by hand
 
@@ -102,7 +102,7 @@ The network classifies before any training, because it is a kernel machine from 
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/edit-settle.gif" alt="Test points released as particles in a 2D map of Fashion-MNIST, falling into the basins of the classes the network assigns them" loading="lazy" width="440" height="422" />
-  <figcaption>Classification as settling, on real Fashion-MNIST laid out by UMAP. Each particle is a test image released into the prototype field; it falls into the basin of the class the network (in full 784 dimensions) assigns it, and the ten basins fill with colour. The forward pass is this descent into the nearest well. Rendered by <code>scripts/render_yat_edit_gifs.py</code>.</figcaption>
+  <figcaption>Classification as settling, on real Fashion-MNIST laid out by UMAP. Each particle is a test image released into the prototype field; it falls into the basin of the class the network (in full 784 dimensions) assigns it, and the ten basins fill with colour. The forward pass is this descent into the nearest well.</figcaption>
 </figure>
 
 Everything from here is editing that field.
@@ -139,7 +139,7 @@ The two classes it had never encountered are recognized at **95%** and **94%** t
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/edit-teach.gif" alt="A 2D map of Fashion-MNIST where basins of attraction grow in one class at a time as their prototype masses fade into the landscape, with no training" loading="lazy" width="440" height="422" />
-  <figcaption>Teaching as basins forming, on real Fashion-MNIST laid out by UMAP, with zero gradient steps. Each class you teach fades in its prototype masses and a new basin grows into the landscape, claiming its territory; the accuracy in the title is the real 784-dimensional number. Because the fields superpose, the basins already present do not shift when a new one appears. Rendered by <code>scripts/render_yat_edit_gifs.py</code>.</figcaption>
+  <figcaption>Teaching as basins forming, on real Fashion-MNIST laid out by UMAP, with zero gradient steps. Each class you teach fades in its prototype masses and a new basin grows into the landscape, claiming its territory; the accuracy in the title is the real 784-dimensional number. Because the fields superpose, the basins already present do not shift when a new one appears.</figcaption>
 </figure>
 
 ## Forgetting a class is a mask
@@ -174,14 +174,14 @@ Sandal recall goes to **0**: nothing in the network resembles a sandal anymore, 
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/edit-forget.gif" alt="A 2D map of Fashion-MNIST where the Sandal basin collapses as its prototype masses fade to zero and neighbouring basins flood in to reclaim the territory, the rest unchanged" loading="lazy" width="440" height="422" />
-  <figcaption>Forgetting as a basin collapsing, in JAX, by fading the Sandal prototype masses to zero. Its well vanishes and the neighbouring basins flood in to reclaim exactly the territory it held, while the rest of the landscape does not move, the other nine classes' recall shifting by tenths of a point. Exact unlearning, as a boolean mask in the code and a removed mass in the field. Rendered by <code>scripts/render_yat_edit_gifs.py</code>.</figcaption>
+  <figcaption>Forgetting as a basin collapsing, by fading the Sandal prototype masses to zero. Its well vanishes and the neighbouring basins flood in to reclaim the territory it held, while the rest of the landscape does not move, the other nine classes' recall shifting by tenths of a point. Exact unlearning, as a boolean mask in the code and a removed mass in the field.</figcaption>
 </figure>
 
 ## Why the edits are exact, in one sentence
 
 In an ordinary network the knowledge of a class is smeared across shared weights, so adding a class with gradient descent overwrites a little of every other class (catastrophic forgetting) and deleting one is a research problem (machine unlearning) whose exact baseline is to retrain from scratch. Here a class is a contiguous block of rows, so protecting it during an edit is *do not index those rows* and erasing it is *index them out*. `jnp.concatenate` and a boolean mask are the entire continual-learning and unlearning stack, because the architecture stores knowledge in a form you can address.
 
-## What this leaves out
+## Boundary of the result
 
 These rows are prototype pictures because the input space is pixel space; that is what makes the edits legible and is also the limit. Put the Yat kernel on top of learned features and a prototype becomes a feature-space exemplar, the ProtoPNet recipe ([Chen et al., 2019](https://arxiv.org/abs/1806.10574)), and those features still cost a training run, so the no-training claim narrows to no-training-of-the-head. That boundary, how much of a network you can construct rather than optimize, is the subject the [explainer](/blog/edit-a-network-by-hand/) leaves open. What does not change is the object: a layer whose unit stores a row you can read, append, and delete, so that on images the row is a picture and editing the network is editing a list.
 

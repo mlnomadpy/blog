@@ -20,14 +20,14 @@ keywords:
   - frozen features flax nnx
   - train only readout jax
   - random features implementation
-  - nnx difffstate filter
+  - nnx diffstate filter
 ---
 import CiteAs from '../../components/CiteAs.astro';
 import SeriesNav from '../../components/SeriesNav.astro';
 
 <SeriesNav />
 
-*The [explainer](/blog/lazy-training/) freezes a bank of random Yat units and asks how many frozen neurons buy a trained one. This is the implementation side: the layer, the freeze, the fairness protocol, and the telemetry, all from `scripts/yat_lazy.py`, the script the Kaggle bundles ran (`kgl_blog-yatlazy-v1` and its audits); figures are rendered from the bundles by `scripts/render_lazy_gifs.py`.*
+*Freezing part of a model in NNX is one filter object, not a `stop_gradient` sprinkled through the forward pass, and that is the least surprising thing here. The surprise is in the fairness protocol: the seven arms wanted learning rates spanning two orders of magnitude, and the frozen Yat bank wanted the hottest rate on the grid. The [explainer](/blog/lazy-training/) asks how many frozen neurons buy a trained one; below are the layer, the filter, the per-arm bracketing that keeps the answer fair, and the movement telemetry that caught the anti-lazy power law. Bundles: `kgl_blog-yatlazy-v1` and its audits.*
 
 ## The layer, and how to freeze only part of a model
 
@@ -54,7 +54,7 @@ class YatLayer(nnx.Module):
         return (dot + b) ** 2 / (jnp.maximum(d2, 0.0) + eps)
 ```
 
-Freezing is not a `stop_gradient` scattered through the forward pass; in NNX it is a *filter*. The frozen arms declare that only the head's parameters are trainable, hand that filter to the optimizer and to `value_and_grad`, and the bank never sees an update:
+The filter is one object handed to two places. A frozen arm declares that only the head's parameters are trainable, passes that declaration to the optimizer and to `value_and_grad`, and the bank never sees an update:
 
 ```python
 trainable = (nnx.All(nnx.Param, nnx.PathContains("head"))
@@ -109,7 +109,7 @@ The convex readouts tolerate rates ten to a hundred times hotter than the full n
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/lazy-ladder.png" alt="Accuracy against width for five arms with seed error bars, three dotted reference rungs, and the trained arm's dashed curve above all frozen curves at every width" loading="lazy" />
-  <figcaption>The width ladder: ten widths are ten facts, so this is a chart, not an animation. The trained arm's dashed curve enters at 86.3 with sixteen units, above every frozen point in the sweep.</figcaption>
+  <figcaption>The width ladder. The trained arm's dashed curve enters at 86.3 with sixteen units, already above every frozen point anywhere in the sweep.</figcaption>
 </figure>
 
 <figure class="jax-fig">
@@ -140,7 +140,7 @@ The trajectory bundle (`kgl_blog-yatlazy-traj`) retrains three arms at m = 64 wi
   <figcaption>Median prototype travel and held-out accuracy through the trajectory run's 24 epochs, drawn in training time. The random-init Yat arm keeps traveling all run and finishes on top (88.7); the data-seeded Yat and Gaussian arms barely move (about 1x and 0.8x) and finish below it (87.1, 84.5). The arm that travels furthest wins, and the Gaussian, which the classical literature expects to be the stiffest, moves least and gains least.</figcaption>
 </figure>
 
-*Every number is from `scripts/yat_lazy.py` on Kaggle: the main grid `kgl_blog-yatlazy-v1` (seven arms, widths 16 to 8,192, three seeds, per-arm bracketed rates), the budget audits `kgl_blog-yatlazy-bigm` and `-bigm2`, the rate audits `-lrsweep` and `-lrsweep2`, and the trajectory bundle `-traj` (m = 64, 24 epochs, per-epoch snapshots). The Gram and readout-race figures are computed by `scripts/render_lazy_gifs.py` from raw Fashion-MNIST with the run's exact layer math; the analysis and the redundancy measurement live in `scripts/export_yat_lazy_viz.py`.*
+*Every number is from real runs on Kaggle: the main grid `kgl_blog-yatlazy-v1` (seven arms, widths 16 to 8,192, three seeds, per-arm bracketed rates), the budget audits `kgl_blog-yatlazy-bigm` and `-bigm2`, the rate audits `-lrsweep` and `-lrsweep2`, and the trajectory bundle `-traj` (m = 64, 24 epochs, per-epoch snapshots). The Gram and readout-race figures are computed from raw Fashion-MNIST with the run's exact layer math, and the redundancy measurement comes out of the same analysis.*
 
 <CiteAs
   slug="lazy-training-jax-flax-nnx"

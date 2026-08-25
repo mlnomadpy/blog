@@ -1,7 +1,7 @@
 ---
-title: 'SimO₂: Repulsion and Geometry by Construction'
-description: 'Every contrastive loss bolts a patch onto cosine similarity to stop it collapsing, sampled negatives, a variance hinge, a predictor and stop-gradient. SimO₂ needs none of them: built on the biased ⵟ-kernel, the similarity is repulsive by construction and lands on a closed-form equilibrium you can steer with a single scalar. The honest pitch is mechanism and designable geometry, not a benchmark number. With live in-browser simulations.'
-seoDescription: "SimO₂: a ⵟ-kernel contrastive objective that is repulsive by construction and reaches a closed-form, steerable equilibrium. No sampled negatives, no collapse."
+title: 'Can Repulsion Be Built into the Similarity?'
+description: 'SimO₂ tests whether a biased Yat-kernel similarity can create a steerable repulsive equilibrium without the usual contrastive machinery. The current construction exposes a decisive failure mode: epsilon can collapse and invalidate the advertised equilibrium. This draft derives that crux and identifies the constraint a successful version must satisfy.'
+seoDescription: "A draft analysis of kernel-built repulsion, its proposed equilibrium, and the epsilon-collapse failure that must be resolved."
 pubDate: 2026-05-31
 draft: true
 tags: [ml, contrastive-learning, representation-learning, yat-kernel, simo2, afcl, orthogonality, neural-collapse, kernel-methods]
@@ -105,7 +105,7 @@ import ContrastiveLab from '../../components/viz/ContrastiveLab.astro';
 import SimoExplorer from '../../components/viz/SimoExplorer.astro';
 import CiteAs from '../../components/CiteAs.astro';
 
-*Most contrastive losses are a cosine similarity plus a patch that stops it from collapsing. SimO₂ removes the patch by changing the similarity. This is the loss on its own terms, what it brings that the others don't, and, just as plainly, where the "so what" is weaker. Two figures run live in your browser.*
+*Most contrastive losses are a cosine similarity plus a patch that stops it from collapsing. SimO₂ removes the patch by changing the similarity. This is the loss on its own terms: what it brings that the others don't, and where its claim currently stops.*
 
 Line up the contrastive zoo and you notice every member is carrying a crutch.
 InfoNCE and SimCLR keep the representation from collapsing to a point with
@@ -122,7 +122,7 @@ need the patch. That is the entire idea behind **SimO₂**.
 ## Four routes around collapse
 
 Why does every member of the zoo need a crutch in the first place? Because
-**collapse** is not an edge case; it is the global optimum. Pull positives
+**collapse** is the global optimum rather than an edge case. Pull positives
 together with nothing pushing back and the constant map, every input sent to one
 vector, wins outright. Nor is uniformity a default you can lean on: even a
 random, untrained deep network already bunches its normalized outputs into a
@@ -236,13 +236,14 @@ Repulsion alone only says "not here." The surprising part of the ⵟ-kernel's
 version is that it also says *where to go instead*: the curve's zero sits at
 $S = -b$, so pushing $k$ down does not fling different-class pairs toward the
 degenerate antipode, the "opposite is different" failure
-[cosine losses fall into](/blog/opposite-is-not-different/), it parks them at a
+[cosine losses fall into](/blog/untangling-the-moons/), it parks them at a
 cosine *you picked*. The math underneath: the inter-class loss is, to leading
 order, the **biased frame potential**
 $\sum_{i\neq j}(\langle\mathbf{e}_i,\mathbf{e}_j\rangle + b)^2$, minimised not at the rank-collapsing
-antipode but at $\langle\mathbf{e}_i,\mathbf{e}_j\rangle = -b$. So the equilibrium it settles into
-is not an emergent accident; it is closed-form and **steerable by the single
-scalar $b$.**
+antipode but at $\langle\mathbf{e}_i,\mathbf{e}_j\rangle = -b$. The equilibrium it settles
+into therefore has a closed form, and it is **steerable by the single scalar
+$b$** rather than emerging from the interaction of a temperature, a batch, and
+whatever the data happened to look like.
 
 If that is really true, it makes a prediction you can watch, and it is not a
 gentle one: somewhere as you raise $b$, the geometry should not slide, it should
@@ -269,11 +270,11 @@ nearest-centroid classification at the simplex, what the accompanying paper
 develops as a certified radius, strictly larger than the $\sqrt{2}/2$ an
 orthogonal-margin loss could reach.
 
-The point is not the specific numbers; it is that **embedding geometry becomes a
-control problem.** No standard contrastive loss hands you an equilibrium you can
-dial.
+Take the specific numbers or leave them; what changes is that **embedding
+geometry becomes a control problem.** No standard contrastive loss hands you an
+equilibrium you can dial.
 
-## Can gradient descent be trusted to find it?
+## Whether descent actually gets there
 
 A closed-form optimum is worth little if training gets stuck somewhere else, and
 there is a potential methodological first hiding here. Every prior proof that a
@@ -289,8 +290,8 @@ is not something the cosine families offer.
 ## The experiment
 
 Theory aside, here is a small lab: a shared encoder, four contrastive losses
-trained side by side on the same dataset and initialisation, **live in your
-browser** (the gradients are checked against finite differences).
+trained side by side on the same dataset and initialisation, live in the page as
+you read (the gradients are checked against finite differences).
 [Untangling the Moons](/blog/untangling-the-moons/) raced the whole contrastive
 lineage this way; this race is narrower and asks one question, whether the
 kernel alone can match the patched losses, with SimO₂ in the fourth lane.
@@ -302,7 +303,7 @@ SimO₂/AFCL reaches the **same max-margin simplex** with **neither**, the
 repulsion is the kernel. Switch the dataset (two-moons, rings, spirals, four
 classes), change `n` or the seed, **Step** through it, or just let it race.
 
-<ContrastiveLab caption="Four contrastive losses on one encoder, trained live in your browser. align-only crowds the classes; SupCon and SigLIP separate them with their usual machinery; SimO₂/AFCL reaches the same separated simplex with no temperature, no negatives, no predictor. Each panel shows live accuracy and loss; pick a dataset, set n / seed, Step or Play. Colour = class." />
+<ContrastiveLab caption="Four contrastive losses on one encoder, trained side by side. align-only crowds the classes; SupCon and SigLIP separate them with their usual machinery; SimO₂/AFCL reaches the same separated simplex with no temperature, no negatives, no predictor. Each panel shows live accuracy and loss; pick a dataset, set n / seed, Step or Play. Colour = class." />
 
 And because SimO₂ has only one real knob, you can *explore* it the way you'd
 explore any single loss, sweep the bias, pick a regime, change the data, and
@@ -314,16 +315,16 @@ bifurcation $b_c$.
 
 <SimoExplorer caption="A single-loss deep dive on SimO₂/AFCL, live on the autodiff engine. Left: the embedding. Right: loss and nearest-centroid accuracy over training. Top controls: regime presets, dataset, and the bias-b slider, the one scalar that steers the equilibrium. Everything updates live; the line under the widget names the regime (orthogonal frame / interior / simplex) against the bifurcation b_c = 1/[2(C−1)]." />
 
-## The honest "so what"
+## Where the claim stops
 
-None of the above says **SimO₂ beats InfoNCE, VICReg, or BYOL on accuracy.** It
-doesn't, not because it loses, but because that is a different claim with a
-different burden of proof, and the downstream-win experiments are not yet done.
-If a reviewer asks "why should I switch losses," the truthful answer is
-**controllability and the analysis**, repulsion by construction and a designable
-equilibrium the accompanying paper works to certify, not a leaderboard. Pitch it
-as a benchmark result and it is unfinished; pitch it as mechanism and designable
-geometry and it is a genuinely distinct fourth route. I'd rather state that plainly than oversell it.
+None of the above says **SimO₂ beats InfoNCE, VICReg, or BYOL on accuracy.** That
+is a different claim with a different burden of proof, and the downstream-win
+experiments are not yet done. What is on offer to someone asking why they should
+switch losses is **controllability and the analysis**: repulsion by construction,
+and a designable equilibrium the accompanying paper works to certify. As a
+benchmark result this is unfinished. As a fourth route around collapse, one that
+lives in the similarity rather than in machinery bolted around it, it is complete
+enough to use.
 
 The one-line version: **SimO₂ gives you collapse prevention as an intrinsic,
 kernel-geometric property, with a closed-form equilibrium you steer by a scalar

@@ -46,7 +46,7 @@ keywords:
 ---
 import CiteAs from '../../components/CiteAs.astro';
 
-*The [explainer](/blog/three-states-of-information/) named three states a representation passes through while training (**random**, **organized**, **structured**) and argued the loss plateaus are the transitions between them. This is the implementation companion: four tiny JAX runs that **measure** each state directly. The spectrum's effective rank falling from high rank toward `C−1`; the simplicity bias that fits a near-linear boundary before it wraps the moons; the class-mean cosines locking onto the Welch value `−1/(C−1)`; and the contrastive loss splitting into two forces on two clocks. Each metric is an eigenvalue or a loss, nothing scripted.*
+*A state is only a state if some number can tell you which one you are in. The [explainer](/blog/three-states-of-information/) named three that a representation passes through while training (**random**, **organized**, **structured**) and argued the loss plateaus are the transitions between them; what follows is four tiny JAX runs, one instrument each. The effective rank of the feature covariance falling from high rank toward `C−1`. The simplicity bias fitting a near-linear boundary before it wraps the moons. The class-mean cosines locking onto the Welch value `−1/(C−1)`. And the contrastive loss splitting into two forces that turn out to resolve on two different clocks, in the wrong order.*
 
 *Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/three-states-of-information-jax): the same code, block by block, with the math written out and every figure reproduced from a real run.*
 
@@ -93,7 +93,7 @@ print("final effective rank:", float(effective_rank(evT)))    # 3.86, close to C
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/ts-spectrum-states.gif" alt="Animated feature-covariance eigenspectrum collapsing from a flat high-rank profile to a low-rank C-1-mode frame, with a state badge reading RANDOM, ORGANIZED, STRUCTURED" loading="eager" width="1100" height="520" />
-  <figcaption>Training reshapes the spectrum, computed live in JAX. A small classifier is trained with cross-entropy; each frame takes the eigenspectrum of the `d=12` feature covariance. The untrained network starts at effective rank 7.6, and the first few steps grind the tail down so fast that the animation opens mid-fall, at 4.7 with the badge already reading ORGANIZED; the spectrum then settles onto a `C−1`-mode frame (STRUCTURED, effective rank 3.9). The badge reads the state off the spectrum and a 2-D class-separation metric.</figcaption>
+  <figcaption>Training reshaping the spectrum. A small classifier is trained with cross-entropy; each frame takes the eigenspectrum of the `d=12` feature covariance. The untrained network starts at effective rank 7.6, and the first few steps grind the tail down so fast that the animation opens mid-fall, at 4.7 with the badge already reading ORGANIZED; the spectrum then settles onto a `C−1`-mode frame (STRUCTURED, effective rank 3.9). The badge reads the state off the spectrum and a 2-D class-separation metric.</figcaption>
 </figure>
 
 ## Organized first: the simplicity bias
@@ -126,7 +126,7 @@ def boundary_complexity(p, grid, shape):
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/ts-simplicity-bias.gif" alt="Animated two-moons decision boundary starting near-linear and gradually curving to wrap the moons, with accuracy and boundary-complexity curves" loading="lazy" width="1100" height="520" />
-  <figcaption>The simplicity bias, computed live in JAX. A 2→48→48→2 MLP fits two moons. Left: the decision boundary starts near-linear and only gradually wraps the moons. Right: train accuracy saturates quickly while the boundary-complexity proxy keeps climbing, as the network fits the low-order split first and adds curvature later. Organized before structured, in one picture.</figcaption>
+  <figcaption>The simplicity bias, one frame per checkpoint. A 2→48→48→2 MLP fits two moons. Left: the decision boundary starts near-linear and only gradually wraps them. Right: the two curves come apart, train accuracy saturating early while the boundary-complexity proxy keeps climbing long after. The network buys the low-order split first and pays for curvature later.</figcaption>
 </figure>
 
 ## Structured: the simplex and the Welch value
@@ -151,7 +151,7 @@ print("equiangularity std:", float(cos.std()))   # -> 0 as the frame tightens
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/ts-neural-collapse.gif" alt="Animated neural collapse: class means arranging into a simplex while a histogram of pairwise class-mean cosines concentrates onto minus one over C minus one" loading="lazy" width="1100" height="520" />
-  <figcaption>Neural collapse, computed live in JAX. A `C=6` classifier's class means (left, PCA to 2-D) settle into a simplex; the histogram of all pairwise class-mean cosines (right) tightens onto the Welch line `−1/(C−1) = −0.20`. As the frame becomes equiangular the spread (std) shrinks toward zero, the structured state made into a single converging number.</figcaption>
+  <figcaption>Neural collapse, watched from both sides. A `C=6` classifier's class means (left, PCA to 2-D) settle into a simplex; the histogram of all pairwise class-mean cosines (right) tightens onto the Welch line `−1/(C−1) = −0.20`. As the frame becomes equiangular the spread (std) shrinks toward zero, the structured state made into a single converging number.</figcaption>
 </figure>
 
 ## Two clocks: alignment and uniformity
@@ -186,25 +186,18 @@ def enc(p, x):
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/ts-align-uniform.gif" alt="Animated contrastive embedding spreading onto a circle then snapping positive pairs together, with alignment and uniformity loss curves resolving on different timescales" loading="lazy" width="1100" height="520" />
-  <figcaption>The alignment/uniformity split, computed live in JAX. An encoder trained with the Wang–Isola loss maps eight augmented classes onto the unit circle. Right panel: uniformity (the spread, orange) resolves fast, while alignment (blue) climbs a tell-tale early hump as spreading flings positives apart, then resolves slowly. The badge names this run's two stations, spread-but-loose and then uniform-plus-aligned; read its middle label with care, because global spread without local order is the mirror image of the explainer's organized state, not the same stop. The end is the structured state either way: uniform *and* aligned.</figcaption>
+  <figcaption>The alignment/uniformity split, running backwards. An encoder trained with the Wang–Isola loss maps eight augmented classes onto the unit circle. Right panel: uniformity (the spread, orange) resolves fast, while alignment (blue) climbs a tell-tale early hump as spreading flings positives apart, then resolves slowly. The badge names this run's two stations, spread-but-loose and then uniform-plus-aligned; read its middle label with care, because global spread without local order is the mirror image of the explainer's organized state, not the same stop. The end is the structured state either way: uniform *and* aligned.</figcaption>
 </figure>
 
-## Rendering the GIFs
+## How the animations are computed
 
-All four animations are generated with Python, JAX, and matplotlib, every metric (eigenspectrum, effective rank, equiangular cosines, alignment/uniformity losses) recomputed live each frame from the current parameters:
+All four are generated with Python, JAX, and matplotlib, every metric (eigenspectrum, effective rank, equiangular cosines, alignment/uniformity losses) recomputed live each frame from the current parameters: the spectrum walking from random to structured as effective rank falls from $d$ to $C-1$; the two-moons boundary picking up low-order structure first; the class-mean cosines descending to $-1/(C-1)$, the simplex; and the contrastive run resolving uniformity and then alignment on two clocks.
 
-```bash
-python scripts/render_ts_spectrum_states_gif.py   # spectrum: random -> structured, effective rank d -> C-1
-python scripts/render_ts_simplicity_bias_gif.py   # two-moons boundary: low-order structure first
-python scripts/render_ts_neural_collapse_gif.py   # class-mean cosines -> -1/(C-1), the simplex
-python scripts/render_ts_align_uniform_gif.py     # contrastive: uniformity then alignment, two clocks
-```
-
-None is a benchmark; they are visual audits of the three states. The objects are deliberately tiny so the state is legible, but the metrics (participation ratio, equiangularity, alignment, uniformity) are exactly the probes the explainer recommends logging during a plateau on a real run.
+None is a benchmark. The objects are deliberately tiny so the state stays legible, but the four metrics (participation ratio, equiangularity, alignment, uniformity) are the same probes the explainer recommends logging during a plateau on a real run, and they cost a few lines each to add.
 
 ## The point
 
-The explainer made the case in pictures and prose; this companion turns each state into a number you can watch fall or concentrate. **Random** is a spread, high-rank spectrum. **Organized** is local, low-order structure fit first: dominant modes emerging, a near-linear boundary. **Structured** is the `C−1`-mode frame, the equiangular simplex at `−1/(C−1)`, the sphere uniform and aligned at once, however the two forces split the work of getting there. Same three states, four different instruments, all live in JAX.
+The explainer made the case in pictures and prose; this companion turns each state into a number you can watch fall or concentrate. **Random** is a spread, high-rank spectrum. **Organized** is local, low-order structure fit first: dominant modes emerging, a near-linear boundary. **Structured** is the `C−1`-mode frame, the equiangular simplex at `−1/(C−1)`, the sphere uniform and aligned at once, however the two forces split the work of getting there. Three states, four instruments, and a plateau you can now name while it is happening.
 
 ---
 

@@ -1,5 +1,5 @@
 ---
-title: "Building the Energy-Conserving Net in JAX/Flax NNX"
+title: "Building the Hamiltonian-Step Net in JAX/Flax NNX"
 seoTitle: "Hamiltonian Neural Networks in JAX/Flax NNX"
 description: "A runnable companion to the energy-conservation post: the HNN pendulum field as the symplectic gradient of one learned scalar, the plain field model it beats on drift, and the leapfrog classifier whose residual block is a kick-drift-kick step of a learned potential, all as Flax NNX modules with lax.scan doing depth. Every figure is rendered from the real Kaggle run."
 seoDescription: "HNN and leapfrog-ResNet in Flax NNX: learned scalar, symplectic gradient, kick-drift-kick blocks, depth as lax.scan, with GIFs from the real run."
@@ -22,7 +22,7 @@ import SeriesNav from '../../components/SeriesNav.astro';
 
 <SeriesNav />
 
-*The [explainer](/blog/a-network-that-conserves-energy/) trains a network whose motion is derived from a learned scalar, so the scalar is conserved by construction, then turns the same idea into a residual block. This is the implementation: both field models and the leapfrog classifier as [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html) modules, depth as a `lax.scan`, and the structural claims re-checked from scratch. The published numbers are from `scripts/hamiltonian_net.py` on Kaggle; every code block below runs as written in `scripts/hamiltonian_nnx_check.py`, and every figure is rendered from the real run by `scripts/render_hamiltonian_gifs.py`.*
+*Fit two models to the same pendulum arrows and nothing separates them: 3.4e-04 for the plain field, 1.1e-04 for the one whose motion comes from a learned scalar. The difference does not exist until you integrate, and then it is the only thing there is. That gap is what the [explainer](/blog/a-network-that-conserves-energy/) is about. Below are both field models and the leapfrog classifier as [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html) modules, depth as a `lax.scan`, and the structural claims re-derived from scratch against the Kaggle run.*
 
 ## One scalar, two outputs for free
 
@@ -104,14 +104,14 @@ In the check run the plain field drifts 6.4% of the starting energy over the rol
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/hamnet-pendulum-race.gif" alt="Two learned pendulum fields integrated from the same start: phase-space trajectories drawing left, true energy along each rollout drawing right; the plain field's energy leaves the dashed starting level while the HNN's stays on it" loading="lazy" />
-  <figcaption>The race, from the real run's exported rollouts. Left: phase space. Right: the true pendulum energy along each trajectory, dashes at the starting level. The plain field model reproduces the arrows and still leaks; the HNN cannot leak, because its arrows are built from a level set.</figcaption>
+  <figcaption>Both rollouts drawing at once, from the run's exported trajectories. Left: phase space. Right: the true pendulum energy along each numerically integrated path, dashes at the starting level. The plain field's energy peels away; the HNN stays in a narrow band because its continuous vector field is tangent to a learned level set.</figcaption>
 </figure>
 
 What the HNN learned is worth looking at directly: one scalar over phase space whose level sets *are* the orbits.
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/hamnet-level-set.gif" alt="The learned scalar H(q,p) as a contoured landscape with the HNN trajectory tracing along a single level set" loading="lazy" />
-  <figcaption>The trained HNN's scalar, contoured, with the rollout riding it. The trajectory follows one stripe because the field is the rotated gradient of this exact surface: conservation is the geometry, not a fit.</figcaption>
+  <figcaption>The trained HNN's scalar, contoured, with the rollout riding it. The trajectory stays on one stripe because the field is the gradient of this surface rotated a quarter turn, and a gradient has nothing to say along its own level set.</figcaption>
 </figure>
 
 ## The leapfrog classifier
@@ -169,7 +169,7 @@ In the check run this reaches 100% on held-out moons at its training depth and 1
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/hamnet-state-cloud.gif" alt="Two scatter clouds of hidden states advancing layer by layer, with a readout tracking the leapfrog net's learned energy, which stays in a narrow band, while the plain net's readout shows the quantity is undefined" loading="lazy" />
-  <figcaption>The hidden state through depth, layer by layer, real weights on real test points, with the readout tracking the one quantity only the leapfrog network possesses: its learned energy, holding in a band while the clouds move. The plain net's entry reads undefined, and that is the finding: not a smaller number, a missing row.</figcaption>
+  <figcaption>The hidden state through depth, layer by layer, real weights on real test points, with the readout tracking the one quantity only the leapfrog network possesses: its learned energy, holding in a band while the clouds move. The plain net's entry reads undefined. Not a smaller number, a missing row.</figcaption>
 </figure>
 
 ## Depth as a dial you can turn after training
@@ -185,6 +185,6 @@ The one-line summary of the whole build: put the learnable thing one derivative 
 
 ---
 
-*Published numbers: `scripts/hamiltonian_net.py` (Kaggle, three seeds; bundle `scripts/results/kgl_blog-hamiltonian-v1/`). The code blocks in this post run as written in `scripts/hamiltonian_nnx_check.py` (Kaggle, bundle `scripts/results/kgl_blog-hamiltonian-nnx-check/`). Figures: `scripts/render_hamiltonian_gifs.py` from the run bundle.*
+*Published numbers: Kaggle, three seeds, bundle `kgl_blog-hamiltonian-v2`. The code blocks in this post run as written on Kaggle, bundle `kgl_blog-hamiltonian-nnx-check`. Figures are rendered from the run bundle.*
 
-<CiteAs slug="a-network-that-conserves-energy-jax-flax-nnx" title="Building the Energy-Conserving Net in JAX/Flax NNX" pubDate="2026-07-16" />
+<CiteAs slug="a-network-that-conserves-energy-jax-flax-nnx" title="Building the Hamiltonian-Step Net in JAX/Flax NNX" pubDate="2026-07-16" />

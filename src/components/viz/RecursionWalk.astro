@@ -1,0 +1,99 @@
+---
+interface Props { caption?: string; height?: number; }
+const { caption, height = 405 } = Astro.props;
+---
+<figure class="viz recursionwalk" data-caption={caption} data-height={height} data-height-mobile="560" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+<script>
+// The trained mixer run live on a real test image. Step the recursion and
+// watch the sixteen tokens reorganize: the token-cosine matrix at each depth,
+// and the verdict the readout would give if the network stopped there.
+import { defineViz } from './engine/vizkit.js';
+import { T as TXT, fmt, gate, loadingText, grayGlyph } from './engine/draw.js';
+import { load, walk, gram, top5 } from './patchconv.js';
+
+defineViz('recursionwalk', {
+  title: 'One image through the recursion, live',
+  height: 405,
+  controls: [
+    { type: 'range', name: 'img', label: 'image', min: 1, max: 24, step: 1, value: 1, int: true },
+    { type: 'range', name: 'r', label: 'rounds of conversation', min: 0, max: 8, step: 1, value: 0, int: true, play: { period: 9000, loop: false } },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) {
+    gate(api, () => Promise.all([load('weights'), load('thumbs')]), (a, [w, th]) => {
+      a.state.w = w; a.state.th = th; a.state.runs = {};
+    });
+  },
+  draw(api) {
+    const { ctx, colors, size: { W, H } } = api, st = api.state;
+    if (!st.ready) { loadingText(api, 'loading the trained mixer…'); return; }
+    const ii = Math.round(api.get('img')) - 1, r = Math.round(api.get('r'));
+    st.runs[ii] ??= walk(st.w, st.th.imgs[ii], 8);
+    const run = st.runs[ii];
+    const pad = 14, top = 34;
+
+    // left: the image as its 4x4 grid of patches
+    const gs = Math.min((W * 0.26 - pad) / 4, (H - top - 120) / 4);
+    TXT(ctx, colors, 'label');
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('the sixteen patches', pad, top - 8);
+    const img = st.th.imgs[ii];
+    for (let gy = 0; gy < 4; gy++) for (let gx = 0; gx < 4; gx++) {
+      const patch = [];
+      for (let py = 0; py < 8; py++) for (let px = 0; px < 8; px++) {
+        patch.push(img[(gy * 8 + py) * 32 + gx * 8 + px]);
+      }
+      grayGlyph(ctx, patch, 8, pad + gx * (gs + 3), top + gy * (gs + 3), gs, gs,
+                { invert: false, key: `rw${ii}-${gy}-${gx}` });
+    }
+    TXT(ctx, colors, 'small');
+    const yTrue = st.th.y[ii];
+    ctx.fillText(`true: ${st.th.names[yTrue]}`, pad, top + 4 * (gs + 3) + 16);
+    ctx.fillText(`(${st.th.coarse_names[st.th.fine2coarse[yTrue]]})`, pad, top + 4 * (gs + 3) + 30);
+
+    // middle: the token cosine matrix at this depth
+    const mx = pad + W * 0.28, msz = Math.min(W * 0.3, H - top - 90);
+    TXT(ctx, colors, 'label');
+    ctx.fillText(`token agreement after ${r} round${r === 1 ? '' : 's'}`, mx, top - 8);
+    const G = gram(run.states[r], st.w.m);
+    const cell = msz / 16;
+    for (let i = 0; i < 16; i++) for (let j = 0; j < 16; j++) {
+      const v = G[i * 16 + j];
+      ctx.fillStyle = `rgba(74,127,179,${Math.max(0, Math.min(1, v)) * 0.95})`;
+      ctx.fillRect(mx + j * cell, top + i * cell, cell - 0.5, cell - 0.5);
+    }
+    TXT(ctx, colors, 'small');
+    ctx.fillStyle = colors.faint;
+    ctx.fillText('row i, column j: cosine between', mx, top + msz + 14);
+    ctx.fillText('patch tokens i and j on the sphere', mx, top + msz + 28);
+
+    // right: the verdict if the network stopped here
+    const rx = mx + msz + 30, rw = W - rx - pad;
+    TXT(ctx, colors, 'label');
+    ctx.fillText('stop here and read out:', rx, top - 8);
+    const lg = run.logitsAt[r], t5 = top5(lg);
+    const lo = Math.min(...t5.map((c) => lg[c]));
+    const hi = lg[t5[0]];
+    t5.forEach((c, k) => {
+      const y = top + 10 + k * 34;
+      const wd = Math.max(4, ((lg[c] - lo) / Math.max(hi - lo, 1e-6)) * (rw - 10) * 0.9 + 6);
+      const right = c === yTrue;
+      ctx.fillStyle = right ? 'rgba(58,143,94,0.85)' : 'rgba(122,128,138,0.5)';
+      ctx.fillRect(rx, y, wd, 12);
+      TXT(ctx, colors, 'small');
+      ctx.fillStyle = right ? '#3a8f5e' : colors.faint;
+      ctx.fillText(st.th.names[c], rx, y - 3);
+    });
+    const pred = t5[0];
+    const coRight = st.th.fine2coarse[pred] === st.th.fine2coarse[yTrue];
+    TXT(ctx, colors, 'small');
+    ctx.fillStyle = colors.faint;
+    ctx.fillText('the same weights every round;', rx, top + 200);
+    ctx.fillText('only the depth dial moves', rx, top + 214);
+    api.readout('rd', `after ${r} round${r === 1 ? '' : 's'}: predicts ${st.th.names[pred]}` +
+      ` (${pred === yTrue ? 'right' : coRight ? 'wrong class, right superclass' : 'wrong superclass'})`);
+  },
+});
+</script>

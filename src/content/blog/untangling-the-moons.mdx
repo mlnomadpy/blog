@@ -1,9 +1,10 @@
 ---
 title: 'Untangling the Moons: A Visual History of Contrastive Learning'
 seoTitle: "Untangling the Moons: Contrastive Learning Visualized"
-description: Eight contrastive losses, twenty years of history, one interactive playground. Watch pair, triplet, InfoNCE, CLIP, SupCon, SigLIP, alignment+uniformity, and cosine→0 organize 2D points, and see which ones know when to stop.
+description: Eight contrastive losses, twenty years of history, and one geometric audit. Watch the losses organize the same 2D points while separating opposition, orthogonality, simplex packing, and statistical independence.
 seoDescription: "Eight contrastive losses (pair, triplet, InfoNCE, CLIP, SupCon, SigLIP, alignment+uniformity, cosine) organizing 2D points in one interactive playground."
 pubDate: 2026-05-26
+updatedDate: 2026-08-25
 companion: organizing-randomness-jax
 tags: [ml, contrastive, embeddings, kernels, interpretability, contrastive-learning, infonce, simclr, clip, siglip, supcon, triplet-loss, self-supervised-learning, representation-learning]
 references:
@@ -115,21 +116,23 @@ keywords:
 ---
 import LossExplorer from '../../components/viz/LossExplorer.astro';
 import ContrastiveRace from '../../components/viz/ContrastiveRace.astro';
+import OppositionVsOrthogonality from '../../components/viz/OppositionVsOrthogonality.astro';
+import SimplexPacking from '../../components/viz/SimplexPacking.astro';
 import CiteAs from '../../components/CiteAs.astro';
 
 *Twenty years of contrastive learning, eight losses, ten datasets, and the question of when a loss should stop pushing.*
 
 ---
 
-Contrastive learning is the standard recipe for turning raw data into a usable embedding space, and the recipe has been rewritten roughly every three years. Read as a framing device (and it is a framing device, the real history is messier), each rewrite responds to the previous one's failure mode. Triplet relativised pair contrastive's brittle global margin. InfoNCE replaced triplet's fragile sampling with a softmax, though it arrived from predictive coding and mutual-information estimation rather than as a triplet patch. CLIP scaled InfoNCE to multimodal data; SupCon generalised it to many positives; alignment-and-uniformity decomposed what it was doing; and SigLIP was the first to question whether the negatives target was right at all.
+Contrastive learning is a standard recipe for turning raw data into a usable embedding space, and the recipe has been rewritten repeatedly. Read as a conceptual lineage, each rewrite changes a different part of the optimization problem. Triplet loss makes separation relative to an anchor. InfoNCE replaces explicit mining with a softmax over candidates, though it arrived from predictive coding and mutual-information estimation rather than as a triplet patch. CLIP scales the construction to paired modalities; SupCon admits many positives; alignment-and-uniformity decomposes two aggregate forces; SigLIP replaces global softmax normalization with pairwise logistic terms.
 
-What most of the lineage glosses over is a question of geometry. They push different-class pairs *as far apart as possible*, and on the unit sphere the per-pair gradient points at cosine $-1$, diametrically opposite. But the maximally discriminative arrangement of $k$ classes on the sphere is not all-pairs-at-$-1$, which no set of more than two unit vectors can realise; it is the regular simplex, whose inter-class cosine rushes toward orthogonality as $k$ grows. So for any large-vocabulary problem the right target is *approximately* orthogonality, and a loss whose gradient keeps hauling negatives toward $-1$ is spending effort on separation the geometry neither needs nor can deliver. I made the precise case, including the exact simplex cosine and why two classes are the one case where opposition is genuinely correct, in [*Opposite Is Not Different*](/blog/opposite-is-not-different/). Here the demonstration is mechanical: in 2D, with the points *being* the embeddings, you can watch where each loss's path goes and where it stops.
+The geometric question is joint, not pairwise. Holding the rest of an InfoNCE row fixed, lowering one negative similarity lowers the loss. But every embedding participates in many terms, and the Gram matrix must remain feasible, so training cannot minimize each pair independently. A centered regular simplex is one attainable class-level arrangement when dimension permits; other objectives and sampling schemes produce other compromises. Here the demonstration is mechanical: in 2D, with the points *being* the embeddings, you can watch the coupled forces evolve.
 
-A caveat worth stating up front, because the 2D demos make it vivid in a slightly misleading way. With two classes, the two-moons case most of these panels use, the simplex optimum *is* $-1$, so there is nothing to overshoot; opposition is correct. The geometric argument bites for *many* classes, where it can only be shown in dimensions too high to animate. What the 2D panels show faithfully is the *dynamics*, which losses freeze, which never stop, which flatten at a sensible place, and those dynamics are the durable lesson here.
+The 2D panels answer a deliberately narrow question: what do these loss formulas do when the embeddings themselves are optimized? They do not reproduce encoder training, semantic negatives, or high-dimensional class geometry. Their value is visibility. You can inspect which terms become exactly inactive, which decay smoothly, which couple a whole row, and which objectives remain frustrated because the requested arrangement does not fit in two dimensions.
 
 The fastest way to feel any of this is to skip the encoder entirely. Take 60 points in 2D, label them by class, and treat the positions themselves as the embeddings. Run gradient descent on the loss of your choice. Eight losses, eight geometries, eight failure modes, each visible in under a minute.
 
-This post walks the lineage by idea, not strictly by date (CLIP and SupCon are contemporaneous, 2020–21, and ordered here by the conceptual thread, not their arXiv stamps). Each loss gets an interactive explorer locked to that loss; the default preset starts from **random positions and random labels** so the loss has to impose all the geometry itself, and the rest of the presets surface the loss's named pathologies on demand. At the end, all eight race on the same dataset, from the same initial points, at the same step counter.
+This post walks the lineage by idea, not strictly by date (CLIP and SupCon are contemporaneous, 2020–21, and ordered here by the conceptual thread, not their arXiv stamps). Each loss gets its own explorer, and the rest of the presets surface that loss's named pathologies on demand. At the end, all eight race on the same dataset, from the same initial points, at the same step counter.
 
 ## The setup
 
@@ -145,7 +148,42 @@ Ten datasets are available in the dropdown:
 - **four classes / eight classes**, multi-class stress.
 - **two spirals**, **imbalanced moons**, **noisy moons**, adversarial settings.
 
-The default preset uses random data for every explorer because pre-organised datasets give the loss too much of a head start. What you want to see is the *law*, the configuration each loss converges to, and a structured initial state lets the loss get away with doing very little.
+Every explorer opens on **random positions and random labels**, because a pre-organised dataset lets the loss get away with doing very little and the thing worth watching is the configuration it imposes when nothing is handed to it.
+
+## Before the history: three meanings of different
+
+Put two unit vectors on a circle. At cosine $+1$ they coincide. At cosine $-1$ they are antiparallel. At cosine $0$ neither projects onto the other. None of those facts establishes statistical independence, which belongs to random variables and a joint distribution rather than to one deterministic pair of arrows.
+
+| cosine | directional relation | span | unsigned projection overlap |
+| ---: | --- | ---: | ---: |
+| $+1$ | parallel | one dimension | $1$ |
+| $-1$ | antiparallel | one dimension | $1$ |
+| $0$ | orthogonal | two dimensions | $0$ |
+
+<OppositionVsOrthogonality caption="At ±u the pair spans one line. Everywhere else it spans the plane; orthogonality is the special two-dimensional arrangement with zero projection. Antiparallelism minimizes signed cosine instead. Those are different extrema of different questions." />
+
+For one InfoNCE anchor,
+
+$$
+L=-\log\frac{e^{s_+/\tau}}{e^{s_+/\tau}+\sum_j e^{s_j/\tau}},
+\qquad
+\frac{\partial L}{\partial s_j}=\frac{p_j}{\tau}>0.
+$$
+
+Lowering one negative logit lowers this anchor's loss while the other logits are frozen. That exact local derivative is not a global instruction to put every negative pair at cosine $-1$. Shared embeddings move many logits together, and their Gram matrix must remain positive semidefinite.
+
+For $n$ unit vectors, feasibility gives
+
+$$
+0\leq\left\lVert\sum_i u_i\right\rVert^2
+=n+2\sum_{i<j}\langle u_i,u_j\rangle,
+$$
+
+so the average pairwise inner product is at least $-1/(n-1)$. When $n\le d+1$, a centered regular simplex attains that bound with every off-diagonal cosine equal to $-1/(n-1)$. The binary case is the exceptional one where the value is $-1$; as the class count grows, the feasible centered value approaches zero.
+
+<SimplexPacking caption="The attainable regular-simplex cosine is −1/(n−1) when n≤d+1. Two classes are antipodal; three form a triangle at −1/2; larger centered codebooks approach zero. This is a joint packing result, not an independent target for every negative pair." />
+
+SigLIP changes the coupling by replacing a row-wise softmax with pairwise logistic terms. Its negative gradients become small below a learned bias-relative transition but vanish only asymptotically; it does not install a universal equilibrium cosine. Softmax cross-entropy likewise has no finite minimizer on separable data without normalization or regularization. Simplex-like limits require their assumptions to be named. With that geometry fixed, the history below becomes easier to read: each loss changes a pressure profile or a coupling rule, not the meaning of cosine itself.
 
 ## 1. The original: Hadsell, Chopra, and LeCun, 2006
 
@@ -165,9 +203,9 @@ The margin does all the work. Without it the repulsion has no scale and the embe
 
 The named failure modes:
 
-- **Margin too small.** No reward for separating classes far. Loss drops to zero almost immediately; accuracy stays near chance. The loss curve looks healthy and the embedding is useless. The literature's name for this, *trivial solution*, already appears in Hadsell's paper.
-- **Margin too large.** Repulsion never saturates. Negatives keep getting pushed further forever; the embedding norm grows without bound; the loss curve never stabilises. In a real network this is where you get gradient explosions.
-- **Class imbalance.** Every pair contributes equally to the gradient. With an 80/20 split the majority class dominates and the minority gets dragged. Standard fix is pair re-weighting; vanilla pair contrastive does not.
+- **Margin too small.** No reward for separating classes far. The loss drops to zero almost immediately while accuracy stays near chance, so the curve looks healthy and the embedding is useless. Hadsell's paper already has a name for it: the *trivial solution*.
+- **Margin too large.** Repulsion never saturates, so negatives keep being pushed further forever and the embedding norm grows without bound. In a real network this is where gradients explode.
+- **Class imbalance.** Every pair weighs the same in the gradient, so an 80/20 split lets the majority drag the minority wherever it goes.
 
 By 2014 the problem with pair contrastive was visible in production face-recognition systems: $m$ is a global hyperparameter that wants to be different for different parts of the data manifold. The fix would be to make the comparison *relative*, to ask not *is this pair close enough?* but *is the positive closer than the negative, by how much?* That is the next loss.
 
@@ -186,9 +224,9 @@ Only triplets that *violate* the inequality contribute gradient. The hope was th
 
 The named failure modes:
 
-- **Easy triplets.** At initialisation, random triplets are usually satisfied trivially. The loss is near zero from step one and no learning happens. FaceNet's own response was *semi-hard mining*: pick the negative that violates the triplet by the smallest positive amount. By 2017 there were [online miners](https://arxiv.org/abs/1706.07567), [batch-hard miners](https://arxiv.org/abs/1703.07737), miner schedules, and an industry of triplet-mining infrastructure. The point of all of it was to compensate for the fact that the triplet loss, left alone, has no gradient on most of its input.
-- **Aggressive margin.** Set the margin bigger than the typical inter-class distance and no triplet is ever satisfied. The embedding wanders stochastically.
-- **Class imbalance.** Random anchor sampling means most anchors come from the majority. Balanced batch sampling required.
+- **Easy triplets.** At initialisation, random triplets are usually satisfied trivially. The loss is near zero from step one and no learning happens. FaceNet's own response was *semi-hard mining*: pick the negative that violates the triplet by the smallest positive amount. By 2017 there were [online miners](https://arxiv.org/abs/1706.07567), [batch-hard miners](https://arxiv.org/abs/1703.07737), miner schedules, and an industry of triplet-mining infrastructure, all of it compensating for a loss that, left alone, has no gradient on most of its input.
+- **Aggressive margin.** Set $m$ bigger than the typical inter-class distance and no triplet is ever satisfied; the embedding wanders stochastically.
+- **Class imbalance**, arriving this time through sampling rather than weighting: anchors are drawn at random, so most of them come from the majority class.
 
 Pair contrastive and triplet together define what the literature later named the **margin family**, losses whose gradient vanishes once a margin condition is satisfied. The margin family's appeal is that it knows when to stop. Its problem is that it stops too soon, and selecting which examples it should think about is its own engineering project. By 2018 the field was ready to give up on margins entirely.
 
@@ -231,7 +269,7 @@ Each side is an InfoNCE term. The symmetrisation is what makes the trained embed
 
 CLIP's failure modes are InfoNCE's failure modes, amplified by scale. CLIP doesn't freeze the temperature, it *learns* the logit scale as a log-parameterised scalar (initialised around $\tau = 0.07$ and clipped to keep logits bounded), but that only relocates the sensitivity rather than removing it: the learned scale is still the main throttle on how hard negatives keep separating, and there is no target that says *stop*. The spherical geometry compounds it: the embedding dimension ($512$ in the public release) was chosen for matrix-multiplication throughput, not for the simplex bound that $\mathrm{ImageNet}$-scale class counts would need; and the literal compute cost, measured in GPU-years, is staggering, much of it spent on the gradient bookkeeping to keep a $32,768 \times 32,768$ similarity matrix on-device.
 
-The geometric tension I argued in [*Opposite Is Not Different*](/blog/opposite-is-not-different/) is at its most consequential here. CLIP's loss has its per-pair minimum at cosine $-1$, but no set of more than two unit vectors can be pairwise antiparallel, in any number of dimensions. So the gradient pulls toward a target it can never reach for most pairs, and the model approximates the simplex only by averaging over a huge number of negatives. The cost is paid in batch size.
+This is where coupling becomes computationally visible. Each CLIP row compares one match with every candidate caption in the batch, and the symmetric term repeats the comparison in the other direction. Larger batches provide more negatives and change the gradient estimator, while requiring more similarity computation and communication. The geometry constrains the joint arrangement; it does not by itself explain CLIP's chosen batch size.
 
 ## 5. Reintroducing supervision: SupCon, 2020
 
@@ -250,7 +288,7 @@ The effect is dramatic. Where InfoNCE pulls each anchor toward *a* positive each
 The named failure modes of SupCon are not about under-fitting. They are about *being too good a classifier*:
 
 - **Representation collapse.** With low $\tau$ and many positives, each class collapses to a single point on the circle. Linearly separable to perfection; but anything you cared about within a class, pose, style, lighting, the things downstream non-classification tasks need, is gone. SupCon is approximately optimal for downstream classification and approximately worst for downstream tasks that need within-class variation. This within-class collapse, and the simplex arrangement the *class means* settle into, is *neural collapse*, named by [Papyan, Han & Donoho (2020)](https://arxiv.org/abs/2008.08186) for cross-entropy and connected to SupCon by [Graf et al. (2021)](https://arxiv.org/abs/2102.08013). Whether you like it depends on what you want the embedding for.
-- **Imbalanced classes.** $|P(a)|$ ranges across classes; the per-anchor average is on a different scale for each class; the softmax denominator is dominated by the majority. Re-weighting or sub-sampling required.
+- **Imbalanced classes**, for the third time in this post and by a third mechanism: $|P(a)|$ varies across classes, so the per-anchor average sits on a different scale for each one and the softmax denominator belongs to the majority. Every loss in the lineage breaks under imbalance; each one breaks in its own way, which is why no single fix travels between them.
 - **Label noise.** SupCon trusts its labels completely. A flipped label becomes a positive pulled toward the wrong centroid, dragging the cluster boundary every step. Robust-SupCon variants exist; vanilla does not handle this.
 
 By 2020 InfoNCE and SupCon between them dominated practical embedding work, and the field had a new conceptual problem. The losses worked, but it was unclear *why*. The softmax form bundles several things together, what is the right way to think about what these losses are doing in the limit?
@@ -292,37 +330,35 @@ $$
 \mathcal{L}_{\text{SigLIP}} \;=\; \sum_{i, j} \log\!\Bigl(1 + \exp\!\bigl(-y_{ij}\,(t \cdot \mathrm{sim}_{ij} + b)\bigr)\Bigr)
 $$
 
-with $y_{ij} = +1$ for matched pairs (image $i$ with caption $i$) and $-1$ otherwise, $t > 0$ a learned temperature, and $b$ a learned bias. The structural change is twofold. **Pairwise, not softmax**: each pair $(i, j)$ contributes independently, there is no normalisation over the batch. **Learnable bias**: the bias $b$ controls *where* negatives equilibrate. For a mismatched pair, the loss saturates (gradient vanishes) once $t \cdot \mathrm{sim}_{ij} + b \ll 0$, i.e., once $\mathrm{sim}_{ij} < -b/t$. The bias is the loss's stop sign on the cosine axis.
+with $y_{ij}=+1$ for matched pairs and $-1$ otherwise, $t>0$ a learned scale, and $b$ a learned bias. The structural change is twofold. **Pairwise, not row-softmax**: no denominator forces all candidates in a row to compete through one normalization. **A movable logistic transition**: $b$ and $t$ determine where a pair's gradient changes most rapidly. For a mismatched pair the gradient becomes exponentially small when $t\,\mathrm{sim}_{ij}+b\ll0$; it does not vanish at a finite universal cosine.
 
 The implications, for the geometric question the lineage had been ignoring:
 
-1. SigLIP's negatives target is **configurable**, not pinned to $-1$. The optimiser stops pushing once a negative is far enough, and the threshold is whatever the bias says it is.
-2. Because $t$ and $b$ are learnable, the network can *discover* a target rather than chase $-1$ indefinitely. The loss saturates well short of opposition, the bias gives the gradient an explicit stopping point, which is the structural difference from the softmax family. (Exactly where a trained bias lands is an empirical question I won't put a number on here without a run to cite.)
-3. The pairwise structure removes the $N \times N$ softmax denominator. Small batches work; the engineering bottleneck that defined CLIP-era training is gone.
+1. SigLIP's negative pressure has a **learned transition region** rather than a row-relative softmax probability.
+2. The negative gradient decays smoothly as a pair moves below that region. The bias is therefore a throttle, not an equilibrium certificate.
+3. Pairwise factorization removes global softmax normalization and changes distributed communication. Implementations may still evaluate many or all image–text pairs, so the pairwise compute does not disappear automatically.
 
-<LossExplorer loss="siglip" preset="default" caption="SigLIP (Zhai et al., 2023). The slider is the equilibrium cosine for negatives, the value of the bias, divided by the temperature. Default targets orthogonality (cos ≈ 0); the 'target opposition' preset recovers CLIP-style behaviour. The 'shallow target' preset shows the configurability that no other loss has." />
+<LossExplorer loss="siglip" preset="default" caption="SigLIP (Zhai et al., 2023). The slider moves the bias-relative transition region for negative pairs. It changes where repulsive gradients become small; it is not a finite equilibrium cosine. Compare how the same points move as that pressure profile shifts." />
 
 The named regimes:
 
-- **Target orthogonality** (cos = 0). Negatives are pushed apart only until they reach orthogonality, then the gradient vanishes, the classes settle on perpendicular axes and the loss flattens. For a large class count this sits right next to the simplex optimum; for very few classes it stops short of it (the simplex would prefer a negative cosine), which is a feature here, no runaway spreading, not a match to the optimum.
-- **Target opposition** (cos = $-1$). Setting the bias to recover CLIP-style behaviour. Negatives are dragged toward antipodal. For two classes that *is* the simplex optimum, so 2D shows no penalty; the cost only appears with many classes in high dimensions, where insisting on $-1$ for every pair is geometrically unsatisfiable and the gradient burns batch size fighting it.
-- **Shallow target** (cos = $-0.5$). A deliberately chosen intermediate stop. The point is not that $-0.5$ is special, it is that the bias lets you *pick* the stopping cosine, which no other loss in the family exposes.
+- **Transition near orthogonality.** Negative pressure becomes small as similarities move below zero, so the two-class animation can appear to settle near perpendicular directions. The exact result remains coupled to positives, scale, bias, and optimization time.
+- **Transition near opposition.** Moving the logistic transition left keeps appreciable negative pressure active farther around the circle. This resembles a harder repulsion schedule; it is not mathematically equivalent to CLIP's row-softmax coupling.
+- **Shallow target** (cos = $-0.5$). A deliberately chosen intermediate stop. Nothing is special about $-0.5$; what is special is that the bias lets you *pick* the stopping cosine at all, which no other loss in the family exposes.
 
-SigLIP is the first member of the lineage that *names* the target on the cosine axis as a tunable object rather than inheriting the cosine-$-1$ gradient direction from Hadsell's margin. Its better small-batch accuracy follows from giving the negatives an explicit stopping point instead of an open-ended push.
+SigLIP makes the negative-pressure profile tunable through a learned bias and scale. Its reported small-batch behavior is an empirical property of that objective and training system; this 2D panel isolates one plausible contributor, the way pairwise gradients decay.
 
 The remaining question is whether to hard-code the stop rather than learn it. The cleanest such objective, pull positives to cos $1$, push negatives to cos $0$, stop, is the next section.
 
 ## 8. Giving the loss a place to stop: cosine-to-zero
 
-Two claims need separating here, because the previous post and parts of the literature blur them. The first is about **equilibrium**: where do these losses actually land? The second is about **dynamics**: what does the gradient do along the way? They have different answers, and only the second is a real complaint.
+Two objects need separating. **Local pressure** asks how the loss changes when one similarity moves while other logits are held fixed. **Joint geometry** asks where all shared embeddings can move together under the full objective. The first comes from a derivative; the second requires the coupled optimization problem.
 
-On equilibrium, the softmax family is mostly *fine*. InfoNCE, CLIP, and SupCon do not converge to all-pairs-at-$-1$; that configuration cannot exist for more than two classes, because the Gram matrix of $k$ unit vectors with every off-diagonal entry equal to $-1$ stops being positive semidefinite the moment $k$ exceeds two, so no arrangement realises it in any dimension. What they converge to is the regular simplex, every inter-class cosine equal to $-1/(k-1)$ (this is the neural-collapse result). The simplex is the near-optimal arrangement. So the equilibrium is *right*, or close to it.
+Regular simplices arise in symmetric normalized class models and in particular neural-collapse limits. They are a useful reference geometry, not a universal convergence theorem for InfoNCE, CLIP, and SupCon on arbitrary data.
 
-The real issue is **dynamics**. The per-pair gradient of every one of these losses points at $\cos = -1$, with no built-in notion of "far enough." Pair contrastive's margin stops it; the softmax family's only brake is what the rest of the batch geometrically permits, which is why the spreading never quite stops, why temperature is the de-facto throttle, and (the expensive consequence) why CLIP-scale training needs enormous batches to supply enough negatives to approximate the simplex against an objective that is always pulling further than the geometry allows. The losses end up in roughly the right place; they take a wasteful path to get there, and they carry no signal for when to stop.
+The dynamics differ cleanly. Hinge margins become exactly inactive once their inequalities are satisfied. Logistic negative terms decay toward zero smoothly. Softmax pressure is relative: a negative matters according to its probability within the current candidate set. Temperature rescales these profiles, while the encoder and Gram geometry couple their effects. The animations let those mechanisms be compared without assigning all of them one destination.
 
-That is what an explicit target buys. The simplex optimum, $-1/(k-1)$, is $-1$ only for two classes and collapses toward $0$ as classes multiply, $-\tfrac12$ at three, $-\tfrac{1}{9}$ at ten, essentially $0$ by ImageNet scale. So a fixed, dimension-independent stop at orthogonality ($\cos = 0$) is a clean *approximation* to the simplex target: it slightly under-separates for small $k$ (it would leave margin on the table at two or three classes) and is almost exact for large $k$. SigLIP makes that stop a learnable bias; the next loss hard-codes it at zero.
-
-The cosine scale has *three* landmarks, not two: alignment at $+1$, orthogonality at $0$, opposition at $-1$, and measured by independence rather than distance, opposition is exactly as redundant as alignment, while orthogonality is where two directions stop carrying information about each other. That is the whole argument of [*Opposite Is Not Different*](/blog/opposite-is-not-different/) in one sentence, so I won't re-derive it here. The simplest objective consistent with it pulls positives to cosine $1$ and pushes negatives to cosine $0$, not $-1$:
+An explicit squared target supplies a different signal. The next objective minimizes negative-pair cosine at zero by construction. It is not a reconstruction of InfoNCE or SigLIP; it is a controlled geometric alternative whose feasibility can be read directly:
 
 $$
 \mathcal{L}_{\text{cos→0}}(i, j) \;=\;
@@ -334,14 +370,14 @@ $$
 
 <LossExplorer loss="orthog" preset="default" caption="Cosine→0 (the orthogonality objective). Default preset is two classes from random data: they settle on perpendicular axes and the loss flattens, the objective is exactly satisfiable when the class count does not exceed the dimension. The 'four classes' and 'eight classes' presets show the ceiling: more orthogonal directions than 2D can hold." />
 
-What this loss does on random data is cleanest with two classes in 2D: it lands them on perpendicular axes, every inter-class cosine hits zero, and the optimisation halts because the objective is *genuinely satisfiable*, orthogonality is achievable exactly when the number of classes does not exceed the dimension ($k \le d$). With four classes in 2D it cannot be: only two orthogonal directions exist, so the loss is frustrated from the start and settles at a compromise below perfect separability, the same geometric ceiling as the eight-class case, just milder. (This is also a place where orthogonality is *less* efficient than the simplex it approximates: the simplex packs $k$ classes into $k-1$ dimensions, while exact orthogonality needs a full $k$. cos→0 trades a little dimension-efficiency for a dimension-independent, overshoot-free target.)
+On random data with two classes in 2D the behaviour is as clean as it gets: the points land on perpendicular axes, every inter-class cosine hits zero, and the optimisation halts, because orthogonality is genuinely achievable whenever $k \le d$. Four classes in 2D cannot be, so the loss is frustrated from the start and settles at a compromise below perfect separability. Note the trade this makes against the simplex it approximates: the simplex packs $k$ classes into $k-1$ dimensions, while exact orthogonality needs a full $k$, so cos→0 gives up some dimension-efficiency for a target that never overshoots and never needs to know $k$.
 
 The failure modes are revealing in a different way than the rest of the family:
 
-- **Too many classes for the dimension.** As above: with $k > d$ classes the objective is unsatisfiable, the loss compromises (eight classes in 2D settle near a uniform $\pi/4$ spacing), and accuracy plateaus below 100%. This is a geometric ceiling, not an optimisation failure, cosine-to-zero doubles as a diagnostic that the embedding dimension is too small for the class count.
+- **Too many classes for the dimension.** With $k > d$ the objective is unsatisfiable, the loss compromises (eight classes in 2D settle near a uniform $\pi/4$ spacing), and accuracy plateaus below 100%. That ceiling is geometric rather than an optimisation failure, which makes cosine-to-zero double as a diagnostic that the embedding dimension is too small for the class count.
 - **Concentric rings.** Same problem as InfoNCE. Cosine throws away the norm.
 
-What sets cosine-to-zero apart is not that it finds a *better* target than the rest, for large $k$ its target and the simplex nearly coincide, and for small $k$ the simplex is actually a touch better. It is that it carries an explicit *stop*: the negative penalty is exactly minimised at orthogonality, so the loss flattens there instead of pushing forever. SigLIP gets the same stop from a learned bias; the rest of the family has no stop at all, only the geometry of the batch.
+Its target is not universally better. Exact pairwise orthogonality costs one dimension per class direction, whereas a simplex fits $k$ centered classes in $k-1$ dimensions. What the objective buys is interpretability: the negative term is exactly minimized at zero cosine. SigLIP has a smooth logistic transition rather than this finite quadratic minimum; softmax objectives remain relative to the candidate set.
 
 ## The race
 
@@ -353,13 +389,13 @@ A handful of patterns become visible only when the panels are running side by si
 
 **Pair and triplet stop early.** Once the margin is satisfied the gradient vanishes and the points freeze. This is the margin family's signature behaviour: a clean, early termination, with whatever geometric capacity remains unused.
 
-**Softmax-based losses never stop.** InfoNCE, CLIP, SupCon, and Alignment + Uniformity all have non-vanishing gradients. They keep optimising past the point of perfect classification, fine-tuning the angular spread of the negatives long after nearest-centroid accuracy hits 100%. They are heading somewhere sensible (the simplex), but with no internal notion of having arrived; $\tau$ is the de-facto throttle, and at scale the open-ended push is what forces the enormous batch sizes. CLIP and InfoNCE look near-identical in 2D, they are the same loss with a symmetrisation factor.
+**Softmax-based losses never stop.** InfoNCE, CLIP, SupCon, and Alignment + Uniformity all have non-vanishing gradients. They keep optimising past the point of perfect classification, fine-tuning the angular spread of the negatives long after nearest-centroid accuracy hits 100%, with $\tau$ as the only throttle. CLIP and InfoNCE look near-identical in 2D, they are the same loss with a symmetrisation factor.
 
 **SupCon is the harshest collapser.** Many positives means each point is pulled toward its class centroid every step. Classes become near-Dirac on the circle. Great for classification, terrible if you care about within-class variation.
 
-**SigLIP and cosine-to-zero carry a stop.** SigLIP's pairwise sigmoid saturates once each negative is past the bias threshold; cosine-to-zero's quadratic penalty on negative cosines is exactly minimised at orthogonality. Of the eight, these are the only two whose loss curve *flattens* on its own rather than spreading until the geometry refuses, which, for large class counts, is close to the simplex they're all chasing.
+**SigLIP and cosine-to-zero flatten for different reasons.** SigLIP's pairwise gradient becomes exponentially small below its learned transition region. Cosine-to-zero has an exact finite minimum for each negative term at orthogonality. The animations show both curves flattening, but the mathematics behind the flattening is different.
 
-## What this leaves out
+## Boundary of the result
 
 What about the losses that never appeared? Everything above acts on one primitive, pairwise distances or similarities, and two adjacent ideas step outside it in ways that don't translate to 2D:
 
@@ -368,6 +404,6 @@ What about the losses that never appeared? Everything above acts on one primitiv
 
 The eight losses racing here all act on the same primitive (pairwise similarities) and disagree about a single geometric question: *how far should different-class pairs be?* Once you watch the disagreement play out at 60 random points in 2D, with each loss's named pathologies exposed one preset at a time, the trade-offs the literature has been arguing about for nearly two decades stop being abstract.
 
-The pattern seven of them share is not that they *land* in the wrong place, they converge to the simplex, which is near-optimal. It is that their gradient points at $\cos = -1$ with no idea when to stop, and inherits that direction unexamined from Hadsell's margin. The cost is dynamical: a wasteful path, and at scale, batch sizes large enough to brute-force the simplex against an objective that always pulls further. SigLIP was the first to give the negatives an explicit stop by learning a bias; cosine-to-zero hard-codes that stop at orthogonality, a dimension-independent approximation to the simplex target that is nearly exact for many classes and deliberately conservative for few. The useful idea was never "opposition is wrong" in some absolute sense; for two classes it is exactly right. It is that a loss should know where to stop, and orthogonality is a good place to put the stop when the classes are many.
+Eight losses can organize the same points while implementing different contracts. Margins switch off at finite inequalities. Softmax losses rank candidates through a shared denominator. Logistic terms fade smoothly. Alignment and uniformity act on aggregate geometry. Cosine-to-zero names a finite pairwise target. The useful question is not which loss chose the morally correct angle; it is which pressure profile, coupling, and feasible geometry fit the representation problem in front of you.
 
 <CiteAs slug="untangling-the-moons" title="Untangling the Moons: A Visual History of Contrastive Learning" pubDate="2026-05-26" />

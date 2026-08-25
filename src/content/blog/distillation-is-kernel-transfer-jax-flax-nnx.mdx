@@ -40,13 +40,13 @@ keywords:
 ---
 import CiteAs from '../../components/CiteAs.astro';
 
-*The [explainer](/blog/distillation-is-kernel-transfer/) argued that what distillation transfers is a geometry, a class-similarity kernel, not an answer key, and it ran an experiment to prove it: a student trained on nothing but pairwise relations, no labels anywhere, that still out-organizes the label-trained student on the geometry-native probe. This is the implementation. The teacher is a small [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html) CNN; the kernel is a five-line extraction from its softened outputs; the relational student trains with a loss that never names a class. There is a real training loop here, but the student's loss never sees a label. Every number is from a real run; the script is `scripts/kernel_distill.py`.*
+*One loss function in this post is the entire experiment. It takes a batch of images, asks the teacher for its softened outputs, turns those into a pairwise Gram, and penalizes the student's embedding Gram for disagreeing with it. No integer label is ever passed in. Everything else here, the teacher CNN in [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html), the five-line kernel extraction, the two probes, exists to say what a student trained on that loss learned anyway, which the [explainer](/blog/distillation-is-kernel-transfer/) reads as evidence that distillation moves a geometry rather than an answer key.*
 
 *Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/distillation-is-kernel-transfer-jax): the same code, block by block, with the math written out and every figure reproduced from a real run.*
 
 ## The teacher, an ordinary CNN
 
-Where does dark knowledge come from? From a network that already knows something. So the first thing to build is an honest teacher: a small convolutional classifier on Fashion-MNIST, trained the usual way on labels. The one design choice worth naming is that the module exposes its penultimate layer through an `embed` method, because everything below reads geometry off that latent, never off the logits.
+Where does dark knowledge come from? From a network that already knows something. So the first thing to build is an ordinary teacher: a small convolutional classifier on Fashion-MNIST, trained the usual way on labels. One design choice does matter downstream. The module exposes its penultimate layer through an `embed` method, because everything below reads geometry off that latent, never off the logits.
 
 ```python
 import jax, jax.numpy as jnp, optax
@@ -92,14 +92,14 @@ def class_kernel(z, T):                        # z: [N, 10] teacher test logits
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/distill-kernel-assemble.gif" alt="A running-mean class kernel building up from single outer products as real teacher outputs stream one garment at a time; the fed row and column light up and the shirt-family and shoe-family blocks emerge from the average" loading="lazy" width="940" height="400" />
-  <figcaption>The kernel as a running mean of receipts. Left: a real test garment and the teacher's softened output p at T = 4. Middle: the single receipt p pᵀ that output contributes, its class row and column highlighted. Right: the estimate S accumulating. Individual outputs are noisy, but by a couple hundred examples the shirt-family and shoe-family blocks stand out of the average. Every number is a real teacher output from the run. Rendered by <code>scripts/render_distill_gifs.py</code>.</figcaption>
+  <figcaption>The kernel as a running mean of receipts. Left: a real test garment and the teacher's softened output p at T = 4. Middle: the single receipt p pᵀ that output contributes, its class row and column highlighted. Right: the estimate S accumulating. Individual outputs are noisy, but by a couple hundred examples the shirt-family and shoe-family blocks stand out of the average.</figcaption>
 </figure>
 
 Read across the temperature grid, the kernel's mean off-diagonal climbs from **0.032** at $T=1$ through **0.298** at $T=4$ to **0.902** at $T=16$, and its effective rank falls from **8.9** to **7.0** to **4.3**. Cold, the classes are strangers and $S$ is near the identity; hot, everything resembles everything and $S$ washes toward uniform. The choice $T=4$ selects a specific geometry in between, and everything the student inherits is downstream of it.
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/distill-temperature-dial.gif" alt="A temperature dial sweeping T from 0.5 to 32; the class kernel morphs from near-identity through a blocky family structure to near-uniform, while the real mean-off-diagonal curve and effective-rank curve draw themselves alongside" loading="lazy" width="920" height="420" />
-  <figcaption>The temperature dial, recomputed live from the run's real logits. Left: S(T) morphing from identity (classes are strangers) through blocks (the families stand out) to uniform (everything resembles everything). Right: the run's real mean-off-diagonal and effective-rank curves drawing themselves across the dial. Temperature is the knob on how much geometry leaves the teacher. Rendered by <code>scripts/render_distill_gifs.py</code>.</figcaption>
+  <figcaption>The temperature dial, swept over the teacher's exported logits. Left: S(T) morphing from identity (classes are strangers) through blocks (the families stand out) to uniform (everything resembles everything). Right: the mean-off-diagonal and effective-rank curves drawing themselves across the dial. Temperature is the knob on how much geometry leaves the teacher.</figcaption>
 </figure>
 
 ## The standard-KD student, for reference
@@ -147,7 +147,7 @@ There is no classifier head in this student's training path at all. The teacher'
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/distill-handoff.gif" alt="Two Gram matrices side by side over thirty class-sorted garments; the student's Gram, starting nearly featureless, develops the teacher target's shirt-family and shoe-family blocks epoch by epoch from real checkpoints, while a relational-loss curve falls to near zero" loading="lazy" width="920" height="390" />
-  <figcaption>The handoff, from real per-epoch checkpoints. Left: the teacher's target Gram on 30 garments (class-colored strips; the blocks are the shirt and shoe families). Middle: the seed-0 student's Gram over the same garments at each recorded epoch, developing those blocks without ever hearing a class name. Right: the run's real relational loss melting. Rendered by <code>scripts/render_distill_gifs.py</code>.</figcaption>
+  <figcaption>The handoff, from real per-epoch checkpoints. Left: the teacher's target Gram on 30 garments (class-colored strips; the blocks are the shirt and shoe families). Middle: the seed-0 student's Gram over the same garments at each recorded epoch, developing those blocks without ever hearing a class name. Right: the run's real relational loss melting.</figcaption>
 </figure>
 
 ## Measuring everyone the same way
@@ -175,11 +175,11 @@ The five runs, from the run (relational student across seeds 0, 1, 2; everything
 | true labels | the answer key | 87.0% | 80.0% |
 | random init | nothing | 77.5% | 62.0% |
 
-The floor is high: a random CNN already probes at 77.5% linear, so nobody gets credit for the first three quarters of the scale. The interval that measures *training* runs from 77.5 to the label ceiling at 87.0, and the relations-only student lands at 83.7 to 84.9, about two thirds of what a label could add, from a signal that never contained a label. And on the ruler that cannot cheat, the nearest-centroid probe, the label-free student scores **81.2%**, *above* the label-trained student's 80.0% and essentially at the teacher's own 81.7%.
+The floor is high: a random CNN already probes at 77.5% linear, so nobody gets credit for the first three-quarters of the scale. The interval that measures *training* runs from 77.5 to the label ceiling at 87.0, and the relations-only student lands at 83.7 to 84.9, about two-thirds of what a label could add, from a signal that never contained a label. And on the ruler that cannot cheat, the nearest-centroid probe, the label-free student scores **81.2%**, *above* the label-trained student's 80.0% and essentially at the teacher's own 81.7%.
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/distill-probe-race.gif" alt="Two panels of accuracy curves drawing themselves epoch by epoch, one for the linear probe and one for the nearest-centroid probe; the relations-only, KD, and label curves climb from the random floor, and on the centroid panel the relations-only curve ends above the label curve" loading="lazy" width="920" height="410" />
-  <figcaption>The probe race, from the run's real per-epoch curves. Left: linear probe. Right: nearest-centroid probe. Each run climbs from its random floor. On the geometry-native centroid probe the relations-only student finishes above the label-trained student: a student told only how pairs relate arranges its classes better than one told the answers. Rendered by <code>scripts/render_distill_gifs.py</code>.</figcaption>
+  <figcaption>The probe race, from the run's real per-epoch curves. Left: linear probe. Right: nearest-centroid probe. Each run climbs from its random floor. On the geometry-native centroid probe the relations-only student finishes above the label-trained student: a student told only how pairs relate arranges its classes better than one told the answers.</figcaption>
 </figure>
 
 ## Whose spectrum, and whose mistakes
@@ -196,19 +196,19 @@ Measured, the copy is more faithful to the wire than the author is. By the last 
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/distill-spectrum-inherit.gif" alt="Eigenvalue bars for the student's latent growing epoch by epoch from a random init toward the outline of the transferred kernel's spectrum, while dashed ticks marking the teacher's own private latent spectrum stay unmatched; an L1 gap readout falls to 0.24" loading="lazy" width="920" height="440" />
-  <figcaption>Spectrum inheritance, from the run's real per-epoch eigenvalues. The student's bars (orange) grow from a random init into the outline of the transferred kernel S(T=4) (blue), not into the teacher's own private latent (dashed ticks). The L1 gap to S(4) closes to 0.24 while the gap to the teacher's latent stays at 0.47. Nothing in the relational loss mentions eigenvalues. Rendered by <code>scripts/render_distill_gifs.py</code>.</figcaption>
+  <figcaption>Spectrum inheritance, from the run's real per-epoch eigenvalues. The student's bars (orange) grow from a random init into the outline of the transferred kernel S(T=4) (blue), not into the teacher's own private latent (dashed ticks). The L1 gap to S(4) closes to 0.24 while the gap to the teacher's latent stays at 0.47. Nothing in the relational loss mentions eigenvalues.</figcaption>
 </figure>
 
 The inherited geometry even fails like the teacher. Rank every model's off-diagonal confusions on the test set and the relational student's mistake pattern correlates with the teacher's at **0.957** (the random control manages 0.712). The teacher's centroid probe sends stray Shirts mostly to T-shirt, Pullover, and Coat at rates 0.26, 0.22, 0.15; the label-free student's rates are 0.24, 0.23, 0.17. It did not just learn where the classes are; it learned which mistakes are natural.
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/distill-errors-inherit.png" alt="Two confusion off-diagonal heatmaps side by side, teacher and label-free student, with a scatter of the paired mistake rates landing near the y = x line and a Pearson correlation of 0.957" loading="lazy" width="940" height="420" />
-  <figcaption>Inherited mistakes, every point real. The teacher's and the label-free student's off-diagonal confusion rates sit side by side; the paired rates land near the y = x line and the Pearson correlation over all pairs is the real 0.957, far above the random control's 0.712. The student inherits which confusions are natural. Rendered by <code>scripts/render_distill_gifs.py</code>.</figcaption>
+  <figcaption>Inherited mistakes. The teacher's and the label-free student's off-diagonal confusion rates sit side by side; the paired rates land near the y = x line and the Pearson correlation over all pairs is 0.957, far above the random control's 0.712. Which confusions are natural came across the wire with everything else.</figcaption>
 </figure>
 
 ## What the code shows
 
-The whole experiment is one script and five networks. The teacher serializes its class kernel through its softened outputs; a student that matches nothing but pairwise relations reconstructs the embedding on its side of the wire, closes about two thirds of the random-to-labels gap, out-organizes the label-trained student on the geometry-native probe, and grows the transferred kernel's spectrum eigenvalue by eigenvalue. None of the numbers here are chosen. They are what `scripts/kernel_distill.py` prints, and the loss that produced the label-free student never once named a class.
+The whole experiment is one script and five networks. The teacher serializes its class kernel through its softened outputs; a student that matches nothing but pairwise relations reconstructs the embedding on its side of the wire, closes about two-thirds of the random-to-labels gap, out-organizes the label-trained student on the geometry-native probe, and grows the transferred kernel's spectrum eigenvalue by eigenvalue. None of the numbers here are chosen. They are what the run prints, and the loss that produced the label-free student never once named a class.
 
 ---
 

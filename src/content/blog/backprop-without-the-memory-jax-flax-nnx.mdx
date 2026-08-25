@@ -26,7 +26,7 @@ import SeriesNav from '../../components/SeriesNav.astro';
 
 <SeriesNav />
 
-*The [explainer](/blog/backprop-without-the-memory/) argues that a momentum residual network can be trained without storing its forward pass, because the block inverts. This is the implementation: the exact inverse, the `jax.custom_vjp` whose backward pass walks the trajectory backward, the XLA instrument that measured 674 MB against a flat 3.2, and the float32 cliff reproduced in twenty lines of numpy. Everything below is `scripts/reversible_memory.py`, the script the Kaggle run executed (bundle `kgl_blog-revmem-v1`); code blocks are quoted from it, not paraphrased.*
+*The whole memory claim rests on one tuple. The forward rule below hands back the parameters and the final state as its residuals, and nothing indexed by depth; at 512 layers that is 3.2 MB of scratch where standard backprop reserves 674. The [explainer](/blog/backprop-without-the-memory/) argues the case; here are the block's exact inverse, the `jax.custom_vjp` that walks the trajectory backward rather than storing it, XLA's own reading of the compiled step, and the float32 cliff reproduced in twenty lines of numpy. Code blocks are quoted from the Kaggle run (bundle `kgl_blog-revmem-v1`), not paraphrased.*
 
 ## The block and its undo
 
@@ -90,9 +90,9 @@ Two details carry the memory claim. The residual tuple in `rev_fwd` holds the en
   <figcaption>The two disciplines, one training step. The standard lane's bank fills during the forward sweep and drains during the backward; the reversible lane never holds more than one state. Meters carry the run's measured activation memory at depth 512.</figcaption>
 </figure>
 
-## Measuring memory honestly
+## Two instruments, one number
 
-Peak memory is easy to measure wrong. Two disciplines from the run. First, each (depth, mode) point runs in a *fresh process*, because the allocator's `peak_bytes_in_use` is a process-lifetime high-water mark and later measurements inherit earlier peaks. Second, alongside the runtime allocator, the run reads XLA's static analysis of the compiled step, which reports exactly how much scratch the executable reserves:
+Peak memory is easy to measure wrong, and this run takes two precautions. Each (depth, mode) point runs in a *fresh process*, because the allocator's `peak_bytes_in_use` is a process-lifetime high-water mark and later measurements inherit earlier peaks. And alongside the runtime allocator, the run reads XLA's static analysis of the compiled step, which reports how much scratch the executable reserves before it runs at all:
 
 ```python
 compiled = g.lower(p).compile()
@@ -137,7 +137,7 @@ And the growth is not vaguely exponential, it is the *predicted* exponential. Pl
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/revmem-error-growth.gif" alt="Log-scale reconstruction error growing with each backward step for mu 0.9, 0.6, 0.3, each measured curve running parallel to its dashed predicted budget line" loading="lazy" />
-  <figcaption>Reconstruction error, measured at every backward step (solid) against the noise budget (dashed), one color per friction. Each curve rides its prediction's slope. The budget is not a bound, it is the mechanism.</figcaption>
+  <figcaption>Reconstruction error at every backward step (solid) against the noise budget (dashed), one color per friction. Each curve rides the slope its budget predicted, which is more than a bound would have given: the budget is describing the mechanism, not fencing it.</figcaption>
 </figure>
 
 On the full network the run measures gradient agreement (cosine between the rewind gradient and the stored-activation gradient on identical weights and batch): 1.000000 everywhere the budget is small, 0.30 at $\mu = 0.6$, depth 32, where the budget crosses one, and nan at $\mu = 0.3$, depth 128, where the budget is $10^{66}$.
@@ -151,7 +151,7 @@ On the full network the run measures gradient agreement (cosine between the rewi
 
 Inside the budget the two gradients are the same numbers, so training should be indistinguishable up to noise, and the run checks at depth 64, $\mu = 0.9$: standard 81.6% test accuracy, reversible 79.7%, one seed each, reversible 17% slower on the wall. The [explainer](/blog/backprop-without-the-memory/) closes the loop with the architectural moral: the amplification exists because $\mu < 1$, and the [frictionless leapfrog block](/blog/a-network-that-conserves-energy) rewinds by subtraction alone, no division, no budget, no cliff.
 
-*Every number above is from `scripts/reversible_memory.py` run on Kaggle (bundle `kgl_blog-revmem-v1`); the float32 demonstrations are rendered by `scripts/render_revmem_gifs.py` from the same arithmetic the panels run live.*
+*Every number above is from one run on Kaggle (bundle `kgl_blog-revmem-v1`); the float32 demonstrations are rendered from the same arithmetic the panels run live.*
 
 <CiteAs
   slug="backprop-without-the-memory-jax-flax-nnx"

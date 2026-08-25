@@ -34,13 +34,25 @@ export default defineConfig({
   site: 'https://tahabouhsine.com',
   base: '/blog',
   trailingSlash: 'ignore',
-  // Posts moved from the blog root into the writeups section keep their old
-  // URLs alive via redirects, so inbound links and search rankings survive.
+  // Moved writeups and consolidated posts keep their old URLs alive via
+  // redirect pages with canonical destinations. GitHub Pages is static, so
+  // Astro emits HTML redirects rather than origin-level HTTP 301 responses.
   // Destinations need the /blog base spelled out: Astro applies `base` to the
   // redirect source path but not the destination string.
   redirects: {
     '/ai-illiteracy-pt1': '/blog/writeups/ai-illiteracy-pt1',
     '/poem-0-1': '/blog/writeups/poem-0-1',
+    '/opposite-is-not-different': '/blog/untangling-the-moons',
+    '/what-an-mlp-knows': '/blog/what-a-finite-kernel-buys-an-mlp',
+    '/your-neuron-is-a-picture': '/blog/what-a-finite-kernel-buys-an-mlp',
+    '/yat-mlp-fmnist-jax-flax-nnx': '/blog/yat-mlp-jax-flax-nnx',
+    '/regularization-is-a-price-list': '/blog/what-can-a-weight-be',
+    '/regularization-is-a-price-list-jax-flax-nnx': '/blog/what-can-a-weight-be-jax-flax-nnx',
+    '/you-dont-have-to-train-the-features': '/blog/train-the-features',
+    '/handbuilt-features-jax-flax-nnx': '/blog/train-the-features-jax-flax-nnx',
+    '/a-risk-model-that-names-its-reasons': '/blog/survival-model-on-trial',
+    '/a-risk-model-that-names-its-reasons-jax-flax-nnx': '/blog/survival-model-on-trial-jax-flax-nnx',
+    '/fifteen-ideas': '/blog/mercer-microscope',
   },
   // Web Workers (the off-thread Yat-kernel compute in the viz) import jax-js,
   // which code-splits; ES module workers are required for that.

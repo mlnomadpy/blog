@@ -149,14 +149,85 @@ and strengthen the sentence. This applies to prose, captions, descriptions,
 readouts, and the prompts you write for sub-agents (do not inject "frame
 honestly" boilerplate that seeds the tic).
 
+**Vary the move. A device used every time is a template, not a voice.** A 2026-07-28
+audit of all 78 posts found the same four habits everywhere, and every independent
+reader flagged them unprompted. Before shipping, check the draft against each:
+
+- **The inverted epigram as closer** (`X is not Y. It is Z.`) had 45 instances in 27
+  posts and ended nearly every section in the corpus. At most one per post, and not
+  in every post. Let sections end flat on the finding, on a consequence, on a
+  question, or mid-thought.
+- **The rhetorical-question heading** had 44 in 23 posts, in the worst cases every
+  heading in the post. Cap at about a third of a post's headings; vary the rest to
+  noun phrases or plain declaratives. (This does not soften "run on questions"
+  above: plant questions in the prose, not in every `##`.)
+- **"computed live in your browser"** appeared 37 times in 17 posts, sometimes twice
+  in one caption. It is a UI fact. At most one per post, only where liveness is the
+  point.
+- **The certification adverb** ("exactly the", "exactly what", "exactly where") ran
+  to 126 instances, usually certifying a match the reader should be free to judge.
+  Keep it for mathematical exactness; cut it as an intensifier.
+- Also on the watch list: "not a metaphor / not decoration" (25), "is the
+  finding/point/argument" (20), "the price of" (20), "load-bearing" (7), "the whole
+  point", "worth naming". And **money-metaphor saturation**: price/cost/bill/ledger/
+  budget/tax ran to 483 instances corpus-wide. Fine in a post about a price list;
+  a verbal habit anywhere else.
+
+**Never re-derive what an earlier post owns.** The direction-versus-point contrast was
+written out fresh in six posts, Nadaraya-Watson in five, the gravity-well metaphor in
+five, the simplex cosine in six. Check the concept ledger in `docs/blog-series.md`,
+link the post that owns the idea, and give it one clause of reminder rather than a
+paragraph of re-teaching.
+
+**The voice grows with the series.** Someone forty posts in is not the writer who
+started, and should not sound like it. Match the register to where the post sits:
+
+- *Early arcs.* The reader knows ML and not this program. Teach, establish
+  vocabulary, be enthusiastic. Devices are welcome, just not the same one twice a
+  section.
+- *Middle arcs.* The reader has the vocabulary. Stop re-teaching it and stop
+  re-arguing the frame at the top of every post. Reference and move.
+- *Late arcs.* The reader has travelled with you. Assume the geometry, the
+  instruments, and the standards; spend the words on what is new and let the
+  apparatus be invisible. State findings plainly instead of landing every section on
+  a reversal.
+
+Three rules that apply hardest late: **never tell the reader they are late** (no "this
+series has spent fifteen posts", no "for the sixteenth time"); **no debt-recitation
+openers** (a post that opens by reciting what the last one left unfinished is written
+for the author, not the reader, and a stranger arriving from search is lost by
+paragraph two, so orient in one sentence and start); and **do not pre-announce a
+failure as valuable** ("the way it failed says more than success would have"). Report
+the failure and let it be valuable. Publishing your own losses is the best habit in
+this corpus; framing sentences around them are the tic, not the honesty.
+
+**Prose may not claim what the missing control would have established.** The audit
+found the corpus repeatedly isolating a variable in the equation and never in an
+experiment: four posts whose classifier is `max` over k-means centroids with no
+Euclidean control, a shared-operator network with no non-kernel operator ablation, a
+random-backbone comparison against an untrained head rather than a fitted one. Where
+a control does not exist, the sentence must be scoped to what was measured, and the
+absent comparison named in one clean clause. "Existence proof, not a benchmark" is a
+legitimate frame when it is stated before the numbers and tied to a success
+criterion; it is not a licence to skip the control that would price the mechanism.
+
 ## Hard rules (non-negotiable, they have all cost rewrites)
 
 - **No em dashes anywhere in reader-facing text** (prose, captions, on-canvas
   readouts, titles). Replace a prose em dash with a comma, a colon, or a
   restructure. Em-dash *glyphs* are fine and must stay: legend line-markers
   (`— cos θ` meaning a solid line) and "no value yet" placeholders (`>—<`).
-- **Every number is from a real run.** The run lives in `scripts/`, is named in
-  the post, and reproduces. Never invent or round-guess a result.
+- **Every number is from a real run.** The run lives in `scripts/` and reproduces.
+  Never invent or round-guess a result.
+- **Never name a repository file path in reader-facing text.** No `scripts/*.py`, no
+  `scripts/results/...`, no `public/.../x.json`, in prose, `caption=` attributes,
+  `<figcaption>`s, or scope notes. The reader does not have the repo; the path costs
+  them attention and buys nothing, and the JAX companion is where Python belongs.
+  Cite provenance in words plus the Kaggle run ID: "three seeds on Kaggle (bundle
+  `kgl_blog-mixer-v1`)". Keep the realness promise, drop the path. Source-code
+  comments in `src/components/` may keep paths; those are maintainer-facing.
+  A `https://github.com/` link is fine when the reader can actually open it, but
+  make the link text read as prose, not as a filename.
 - **Never surface "jax-js"** to readers. Frame compute as the post's real (Python)
   computation run live in the browser.
 - **`draft: true` until the user says publish.** Do not commit/publish unprompted.
@@ -222,6 +293,11 @@ These three bugs recur and are invisible until you screenshot on a real device:
    not redundant with another panel? If it is weak, rebuild it.
 4. **Grep then look** for em dashes in reader-facing strings (`grep $'—'`),
    and confirm "jax-js" is nowhere in captions/readouts.
+4b. **Run the tic check.** `python3 scripts/ticcheck.py [<post>...]` counts the
+   habits listed under "Vary the move" across the corpus, or against the posts you
+   name. Read its per-post line for your draft before shipping: if your post is at
+   the top of any list, the tic is yours to fix. Also grep the draft's own pet
+   phrases against `src/content/blog/` so no stock idiom lands in two live posts.
 5. **Companion has a faithful GIF per concept (>= 3 floor).** A JAX companion is not
    done until every distinct idea has its own `<figure class="jax-fig">` pointing at a
    real `public/*.gif` from `scripts/render_*_gif.py` (three is the minimum, not the

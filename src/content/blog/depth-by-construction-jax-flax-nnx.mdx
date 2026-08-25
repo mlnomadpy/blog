@@ -36,7 +36,7 @@ keywords:
 ---
 import CiteAs from '../../components/CiteAs.astro';
 
-*The [explainer](/blog/depth-by-construction/) took the recipe for a second feature layer off the shelf, built junctions, continuations, bends and stripes by hand on top of the hand-built first layer, and measured a flat rung: 82.9% for both layers, against 83.3% for one. This is the implementation. Layer 2 is pure numpy, four lines of min-AND over the layer-1 maps; the head is the same [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html) module of placed k-means prototypes that votes with the Yat kernel, no training loop anywhere. Every number is from a real run; the script is `scripts/handbuilt_depth.py`.*
+*The second feature layer is four lines of `np.minimum`. That is not a summary of it, that is the layer: junctions, continuations, bends and stripes are each one pointwise AND over the hand-built first layer's maps, and the classifier sitting on top is the same [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html) module of placed k-means prototypes as before, with no training loop anywhere in the post. The [explainer](/blog/depth-by-construction/) reports what a century of vision science buys when you spend it this way: 82.9% for both layers, against 83.3% for one. The code is short enough to see why.*
 
 *Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/depth-by-construction-jax-flax-nnx): the same code, block by block, with the math written out and every figure reproduced from a real run.*
 
@@ -68,11 +68,11 @@ def cells(maps):                                          # 2x2 mean-pool to the
     return maps.reshape(n, NCH, CELL, 2, CELL, 2).mean((3, 5))
 ```
 
-A junction is the whole idea in one picture: take the map of one orientation and the map of another, and keep only where both fire. That pointwise minimum is a new detector, computed from layer 1 exactly the way layer 1 was computed from pixels, with nothing fit.
+A junction is the whole idea in one picture: take the map of one orientation and the map of another, and keep only where both fire. That pointwise minimum is a new detector, computed from layer 1 the same way layer 1 was computed from pixels, with nothing fit.
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/blog/depth-junction-assembly.png" alt="Three panels on a real bag: the 30-degree edge map, the 90-degree edge map, and their pointwise minimum, a 30+90 junction detector that fires only at the corners where both orientations are present" loading="lazy" width="946" height="429" />
-  <figcaption>The entire mechanism of layer 2, on a real garment. Left, the 30° edge map of a bag; middle, its 90° edge map; right, their pointwise minimum, a detector that is bright only where <em>both</em> orientations are present in the same cell, which is what a junction is. This is <code>np.minimum(e1, e2)</code>, the cheapest faithful AND of two non-negative energies, no parameter fit. Rendered by <code>scripts/render_depth_figs.py</code>.</figcaption>
+  <img src="/blog/depth-junction-build.gif" alt="Three panels on a real bag: the 30-degree edge map, the 90-degree edge map, and their pointwise minimum, a 30+90 junction detector that fires only at the corners where both orientations are present" loading="lazy" width="946" height="429" />
+  <figcaption>The entire mechanism of layer 2, on a real garment. Left, the 30° edge map of a bag; middle, its 90° edge map; right, their pointwise minimum, a detector that is bright only where <em>both</em> orientations are present in the same cell, which is what a junction is. This is <code>np.minimum(e1, e2)</code>, the cheapest faithful AND of two non-negative energies, no parameter fit. The animation reveals the garment, the two edge maps, and their minimum in computational order.</figcaption>
 </figure>
 
 ## The four lines that are the layer
@@ -113,7 +113,7 @@ Fifteen junction pairs, six continuations, six bends, six stripes: **33 named de
 
 ## The head is the same placed module
 
-What classifies these features? The exact head from the first two companions, unchanged. The constructed Yat head is a Flax NNX module whose variables are *placed*, not learned: `W` holds k-means centroids of the training features, `A` is a one-hot table routing each prototype's vote to its class, and the forward pass is the Yat kernel against every prototype, then the per-class maximum, then an argmax. That it slots onto layer-2 features without touching a line is the point: depth changed the representation, not the classifier.
+What classifies these features? The exact head from the first two companions, unchanged. The constructed Yat head is a Flax NNX module whose variables are *placed*, not learned: `W` holds k-means centroids of the training features, `A` is a one-hot table routing each prototype's vote to its class, and the forward pass is the Yat kernel against every prototype, then the per-class maximum, then an argmax. It slots onto layer-2 features without a line changing, which is the whole reason the comparison is clean: depth changed the representation and nothing else.
 
 ```python
 from flax import nnx
@@ -167,16 +167,16 @@ Fc_te = np.concatenate([F1te, F2te], 1)
 acc = build_and_eval(Fc_tr, Fc_te, ytr, yte)                       # -> 82.9%
 ```
 
-It prints **82.9%**, a move of −0.4 on a layer of century-old vision science. Iterating like on any model, each redesign a theory of what broke, does not help: junctions alone score **83.5%** (the best of six designs), and the rest land at 82.8, 83.0, 82.9, and, for a geometric-mean AND and a two-cell reach, 83.2 and 81.8. Six theories, six refutations by a few tenths.
+It prints **82.9%**, a drop of 0.4 points from a layer of century-old vision science. Iterating as we would on any model, with each redesign expressing a theory of what broke, does not help: junctions alone score **83.5%** (the best of six designs), and the rest land at 82.8, 83.0, 82.9, and, for a geometric-mean AND and a two-cell reach, 83.2 and 81.8. Six theories, six refutations by a few tenths.
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/depth-six-designs.png" alt="Six bars, each a design iteration of the layer-2 vocabulary, all near 83 percent, with junctions-only highlighted as the best at 83.5 and two-cell-reach the worst at 81.8, against a dashed layer-1 baseline of 83.3" loading="lazy" width="924" height="528" />
-  <figcaption>The researcher's sweep, every number from the run. Six design iterations on the layer-2 vocabulary: junctions only (83.5, best, in teal), + continuations (82.8), + bends (83.0), + stripes (82.9), geometric-mean AND (83.2), two-cell reach (81.8). No theory rises above the layer-1 line by more than two tenths; the head shrugs at every new word offered. Rendered by <code>scripts/render_depth_figs.py</code>.</figcaption>
+  <figcaption>The researcher's sweep, every number from the run. Six design iterations on the layer-2 vocabulary: junctions only (83.5, best, in teal), + continuations (82.8), + bends (83.0), + stripes (82.9), geometric-mean AND (83.2), two-cell reach (81.8). No theory rises above the layer-1 line by more than two tenths; the head shrugs at every new word offered.</figcaption>
 </figure>
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/blog/depth-ladder.png" alt="A horizontal accuracy ladder on the 78 to 87 percent range showing blue built-by-hand rungs clustered near 83 and the fully trained network alone in orange at 85.7" loading="lazy" width="936" height="576" />
-  <figcaption>The construction ladder, built (blue) against trained (orange), on the axis that magnifies the photo finish: raw pixels 79.0, layer 1 by hand 83.3, layer 2 alone 78.8, both layers 82.9, best of six 83.5, and the trained head on built features 83.2, all sitting on top of one another, while only the fully trained network keeps its 85.7. Rendered by <code>scripts/render_depth_figs.py</code>.</figcaption>
+  <img src="/blog/depth-ladder-build.gif" alt="A horizontal accuracy ladder on the 78 to 87 percent range showing blue built-by-hand rungs clustered near 83 and the fully trained network alone in orange at 85.7" loading="lazy" width="936" height="576" />
+  <figcaption>The construction ladder, built (blue) against trained (orange), on the axis that magnifies the photo finish: raw pixels 79.0, layer 1 by hand 83.3, layer 2 alone 78.8, both layers 82.9, best of six 83.5, and the trained head on built features 83.2, all sitting on top of one another, while only the fully trained network keeps its 85.7. The staged reveal separates the labels, the hand-built cluster, and the final trained margin.</figcaption>
 </figure>
 
 ## The detectors are real, and that is the trap
@@ -188,8 +188,8 @@ build_and_eval(F2tr, F2te, ytr, yte)                              # layer 2 ALON
 ```
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/blog/depth-layer2-alone.png" alt="Six dimmed layer-1 edge maps of a trouser on the left marked discarded, three bright layer-2 relation maps in the middle marked kept, and a gauge reading 78.8 percent on the right" loading="lazy" width="946" height="473" />
-  <figcaption>Classifying from relations only, the real maps and the real number. Left, the six layer-1 edge maps, dimmed because they are discarded; middle, the hand-built layer-2 detectors (junctions, a continuation) that are kept; right, the gauge at the measured 78.8% the head reaches on layer 2 alone, close to the raw-pixel 79. The words are real words with real signal, even with the edges thrown away. Rendered by <code>scripts/render_depth_figs.py</code>.</figcaption>
+  <img src="/blog/depth-layer2-build.gif" alt="Six dimmed layer-1 edge maps of a trouser on the left marked discarded, three bright layer-2 relation maps in the middle marked kept, and a gauge reading 78.8 percent on the right" loading="lazy" width="946" height="473" />
+  <figcaption>Classifying from relations only, the real maps and the real number. Left, the six layer-1 edge maps, dimmed because they are discarded; middle, the hand-built layer-2 detectors (junctions, a continuation) that are kept; right, the gauge at the measured 78.8% the head reaches on layer 2 alone, close to the raw-pixel 79. The words are real words with real signal, even with the edges thrown away. The animation moves from discarded edge maps to retained relations and then the measured gauge.</figcaption>
 </figure>
 
 So why does adding them to layer 1 do nothing? Because they are *synonyms*. Every layer-2 value is a fixed function of layer-1 values, and a min of two edges says nothing the pair of edges had not already said. The kernel head reads whole vectors, so it was already comparing garments on those coordinates jointly; rewriting the same information in a richer vocabulary gives it nothing new to vote with. You can see the redundancy directly: correlate each layer-2 detector with the layer-1 channels it is built from, and the structure is not noise, it is the detector spelling out its own recipe.
@@ -204,7 +204,7 @@ corr = (L2z.T @ L1z) / len(L1)                                    # each row: a 
 
 <figure class="jax-fig">
   <img src="/blog/depth-synonym-gram.png" alt="A correlation heatmap, rows of layer-2 detectors against columns of layer-1 edge channels, with the continuation rows outlined in teal along a diagonal showing each continuation correlating with its own edge orientation" loading="lazy" width="814" height="550" />
-  <figcaption>The synonym diagnosis, from real feature correlations. The measured correlation of each layer-2 detector with the seven layer-1 channels. The teal-outlined diagonal in the top rows is each continuation correlating almost perfectly with its own orientation; junction rows light up under both their constituent edges. A layer-2 dimension is a fixed function of layer-1 dimensions, so the concat is flat. Rendered by <code>scripts/render_depth_figs.py</code>.</figcaption>
+  <figcaption>The synonym diagnosis, from real feature correlations. The measured correlation of each layer-2 detector with the seven layer-1 channels. The teal-outlined diagonal in the top rows is each continuation correlating almost perfectly with its own orientation; junction rows light up under both their constituent edges. A layer-2 dimension is a fixed function of layer-1 dimensions, so the concat is flat.</figcaption>
 </figure>
 
 ## Counting the wall
@@ -220,7 +220,7 @@ triples_possible = (NCH ** 3) * (9 ** 2) // 6                     # ~4,630 three
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/depth-vocab-wall.png" alt="An accuracy scatter flat near 83 percent as vocabulary grows from 7 to 40 names, on a log x-axis that extends right to dashed markers at 224 and 4630 possible detector types, far past the built curve" loading="lazy" width="902" height="506" />
-  <figcaption>The combinatorial wall, to scale. The built vocabulary grows from 7 to 40 names and stays flat at 83.3, 83.5, 82.8, 83.0, 82.9; the log axis extends to show how many detectors there were to choose from: 224 pairwise types, ~4,630 three-way, with the fully trained network's 85.7% above the whole curve. Naming does not run out. Knowing which names matter does. Rendered by <code>scripts/render_depth_figs.py</code>.</figcaption>
+  <figcaption>The combinatorial wall, to scale. The built vocabulary grows from 7 to 40 names and stays flat at 83.3, 83.5, 82.8, 83.0, 82.9; the log axis extends to show how many detectors there were to choose from: 224 pairwise types, ~4,630 three-way, with the fully trained network's 85.7% above the whole curve. Naming does not run out. Knowing which names matter does.</figcaption>
 </figure>
 
 ## What this measures

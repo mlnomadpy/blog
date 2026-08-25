@@ -1,0 +1,108 @@
+---
+title: "A Network Made of Parts"
+seoTitle: "Patch-Wise Kernel Networks: Parts vs Wholes"
+description: "Cut the image into patches, run one shared kernel bank over every patch, average the results, and classify. Linearity makes the output exactly decomposable into per-patch score contributions. The architecture was also supposed to fix three failures of the whole-image network. It fixed none: softening falls with distance, and concepts remain distributed across most of the bank at every tested granularity."
+seoDescription: "One shared Yat bank over image patches, mean-pooled: exact per-patch score decomposition, and three predictions about locality that the experiment refuted."
+pubDate: 2026-07-30
+draft: false
+tags: [kernels, yat, patches, interpretability, vision, jax]
+references:
+  - authors: "Dosovitskiy, A., et al."
+    year: 2021
+    title: "An Image Is Worth 16x16 Words: Transformers for Image Recognition at Scale"
+    venue: "ICLR 2021"
+    arxiv: "2010.11929"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+keywords:
+  - patch based network
+  - mean pooling attribution
+  - kernel network parts
+  - yat kernel patches
+---
+import PatchBallots from '../../components/viz/PatchBallots.astro';
+import GranularityDial from '../../components/viz/GranularityDial.astro';
+import ScaleChase from '../../components/viz/ScaleChase.astro';
+import CiteAs from '../../components/CiteAs.astro';
+import SeriesNav from '../../components/SeriesNav.astro';
+
+<SeriesNav />
+
+*A Yat unit is a place in input space, and everything the kernel promises follows from that: things near the prototype score high, things far from it do not. On whole Fashion-MNIST images that promise never gets tested, because in 784 dimensions nothing is ever near anything. This post shrinks the space until it can be.*
+
+Start with the numbers that make the emptiness concrete. An image is a point in 784 dimensions, and the typical squared distance from an image to one of a trained network's prototypes is about 300, with the closest approach anywhere in the test set at 33. [An audit of that network](/blog/yat-protocol) came back with three readings that all look like symptoms of the same emptiness. The softening length never engages, because no input gets close enough to feel it. The kernel's proximity half goes unused, because distances carry no information at that range. And every concept is smeared across two-thirds of the bank, because every prototype is roughly equidistant from everything and so none of them specializes.
+
+There is an obvious way to shrink the space: stop looking at whole images. Cut each one into patches, run **one shared bank of Yat units** over every patch, average the resulting features across patches, and put the same linear readout on top. Parts are small, parts repeat, and the space of 4×4 patches is dense in a way the space of whole garments is not. Structurally this is [a vision transformer](https://arxiv.org/abs/2010.11929) with the attention taken out, which also makes it a clean cousin of [the kernel attention this series built](/blog/attention-is-a-compatibility-kernel).
+
+## What averaging buys before anything is trained
+
+One property arrives for free, and it is the reason this architecture is worth building even where it loses. Mean pooling is linear, so it commutes with the readout:
+
+$$
+\text{logits}(x) \;=\; A^\top \left(\frac{1}{|p|}\sum_p \phi(x_p)\right) \;=\; \frac{1}{|p|}\sum_p \underbrace{A^\top \phi(x_p)}_{\text{patch } p\text{'s own vote}}.
+$$
+
+The network's output *is* the average of per-patch votes. Not approximately, not in the sense of a saliency estimate: each patch produces a full ten-way ballot, and the model is the tally. Attribution here needs no gradients, no probes, no occlusion tests, none of the machinery that exists because ordinary networks cannot be asked this question.
+
+<PatchBallots caption="The exact ballot. Click any test image: the grid beside it colours each patch by the class that patch voted for, with intensity showing by how much, and the bars are the tally the model actually computes. Nothing here is estimated. This is the arithmetic the forward pass performs." />
+
+The maps are readable in the way you would hope. Sleeves and torso regions vote for shirts and coats, the sole-and-heel band votes for footwear, and empty background patches abstain by voting weakly for everything. This is the payoff the architecture delivers, and it survives everything that follows.
+
+It is worth noticing what the exactness rules out. A saliency map can be wrong about the model it explains, because it is a second model fitted to the first. This one cannot be, because there is no second model: if the bars say a handful of patches outvoted the other forty, that is the arithmetic the forward pass performed, and there is no gap between the explanation and the computation for a critic to get into.
+
+## The granularity dial
+
+Now the experiment. The same bank of 256 units, the same readout, the same twelve epochs, four patch sizes: the whole 28×28 image as the control, then 14, 7, and 4 pixels, giving 1, 4, 16, and 49 patches per image (bundle `kgl_blog-patches-v1`, three seeds each).
+
+One quantity deliberately holds still across the dial, and it matters for reading everything that follows. The vector handed to the readout is 256 numbers at every patch size, because the bank is shared and the patches are averaged. What changes is how many kernel evaluations get folded into each of those 256 numbers: one at whole images, then 4, then 16, then 49. Shrinking the patch does not cut the model's capacity. It raises how much averaging sits between the pixels and the verdict.
+
+<GranularityDial caption="Turn the dial and watch the bank change character: whole-garment templates at 28 pixels become strokes, edges and textures at 4. Beside the gallery are the audit's readings at that granularity, recomputed at each patch size. The prototypes fragment exactly as intended; the readings mostly refuse to follow." />
+
+The prototypes do what parts-based reasoning promises. At 28 pixels they are whole garments, the pictures [this program opened with](/blog/what-a-finite-kernel-buys-an-mlp/). At 4 pixels they are strokes and edges and corner fragments, a vocabulary that looks like the [oriented-edge detectors we assembled by hand](/blog/train-the-features/), except discovered rather than designed. Each unit is also looking at a far smaller thing as the dial turns: 784 numbers, then 196, then 49, then 16. A prototype at four pixels has sixteen degrees of freedom to spend, and it spends them on a corner.
+
+The accuracy does something else:
+
+| patch | patches per image | accuracy |
+| --- | --- | --- |
+| 28×28 | 1 | **88.84 ± 0.20** |
+| 14×14 | 4 | 86.74 ± 0.13 |
+| 7×7 | 16 | 80.90 ± 0.36 |
+| 4×4 | 49 | 75.28 ± 0.15 |
+
+Thirteen and a half points, monotone in the fragmentation, and the decline is not evenly spaced. Splitting the image into four quadrants costs 2.1 points, almost nothing for a fourfold cut in what a unit sees. The next two steps cost 5.8 and 5.6. The damage arrives late, once the parts have got small enough to be genuinely ambiguous standing alone: a quadrant of a garment is still recognizably a garment, a four-pixel stroke is not.
+
+Mean pooling is permutation invariant. Shuffle the forty-nine patches and the logits return unchanged, so this model cannot use arrangement. But the 13.5-point gap does not isolate arrangement: the comparison also changes the receptive field, prototype dimension, number of kernel evaluations, and optimization problem. It is the total cost of replacing a whole-image bank with this unordered patch architecture. Measuring the price of arrangement alone needs a matched patch model with positional information or an arrangement-aware pooling control. What the current experiment does establish is that an unordered bag of four-pixel strokes still reaches 75.28 percent.
+
+## Three predictions, and what actually happened
+
+The point of the exercise was not accuracy, though. It was the three readings, all of which I expected patching to overturn.
+
+**Prediction one: the softening would start to matter.** Patch space is small, so distances should collapse toward $\varepsilon$ and the kernel's floor should finally engage. The distances *did* collapse, spectacularly: the median squared distance from a patch to a prototype falls from 299.7 at whole images to 3.48 at four pixels, a factor of 86. And the ratio of $\varepsilon$ to that distance barely moved, from $9.7\times10^{-5}$ to $7.6\times10^{-4}$. Still three orders of magnitude from engaging.
+
+<ScaleChase caption="Why the prediction failed. All three quantities on one logarithmic axis as the patches shrink: the typical distance, the closest distance anywhere in the test set, and the learned softening. The distances fall by nearly two orders of magnitude, and ε follows them down. The dashed labels are the gap, which stays enormous at every granularity." />
+
+The reason is the third line on that chart. **Training took $\varepsilon$ down with the distances**, from 0.029 to 0.0026, and kept the gap open at every granularity. The softening is not idle because the images are big. It is idle because gradient descent puts it there, wherever you move the scale, and that is a much stronger statement than the one I set out to make. Whatever $\varepsilon$ is for, this network does not want it.
+
+One qualification, visible in the green line: at four pixels the *closest* patches finally reach the floor. The minimum squared distance in the test set is 0.003 against an $\varepsilon$ of 0.0026, so the nearest patch now sits about one softening length from a prototype, where at whole images it sat eleven hundred. The floor engages for the extreme cases and nowhere else.
+
+**Prediction two: the proximity channel would start carrying concepts.** In the whole-image network the fine distinctions were carried almost entirely by the alignment half of the kernel. On patches the channel ledger goes 34 percent proximity at 28 pixels, then 2 percent at 14, then 0 at 7, then 52 percent at 4. Neither the prediction nor its negation: the dependence is non-monotone, collapsing through the middle of the range and returning at the finest granularity, which I cannot explain from the measurements I have and am not going to pretend otherwise. It is the clearest open thread this post leaves.
+
+**Prediction three: concepts would become narrow enough to edit.** This one fails cleanly and is the most interesting failure. The support of a concept, the number of prototypes carrying it, goes 173, 172, 187, 174 out of 256. It does not move at all. Whatever makes concepts diffuse in this architecture, it is not the size of the thing a unit looks at. Break the input into forty-nine parts and each concept is still spread over two-thirds of the bank, so [the exact row edit that removes a class](/blog/edit-a-network-by-hand) still cannot remove a concept, and [the concept surgery that failed on whole images](/blog/spectral-surgery) fails here for the same reason at every granularity.
+
+*Scope: one run on Kaggle (bundle `kgl_blog-patches-v1`): 256 shared units, mean pooling, a linear readout, twelve epochs at the same rate as the whole-image model, three seeds per patch size; the audit applies the same five-instrument protocol to each trained model, on the full test set with a 4,000-image training subset for the concept covariance. Patches are non-overlapping and carry no position information by design. It is a single dataset at a single bank width under a single pooling rule, so the granularity curve is a fact about this stack rather than about patching in general.*
+
+## What the failure is worth
+
+Three predictions, one clean refutation, one unresolved non-monotone result, and one architectural gift. The missing arrangement-aware control prevents the accuracy gap from carrying a single causal name, but the kernel diagnostics can still be read within each trained architecture.
+
+Locality was supposed to be the kernel's whole point: a Yat unit is a *place* in input space, and every argument built on this kernel so far has run through the geometry that follows from that. But when the network is handed a space where locality is actually available, where patches genuinely sit near prototypes, it declines twice. It drives its softening down rather than using the floor, and it spreads every concept across the bank rather than assigning parts to specialists. The trained model would rather be a bank of directions with a distance-shaped gate than the neighborhood machine the geometry offers.
+
+The pictures still work: the ballots are exact, the prototypes are strokes you can name, the audit runs at every granularity. What patching did not deliver is the locality that was supposed to arrive attached to all of that, and after this experiment I no longer think the two were ever one claim.
+
+<CiteAs
+  slug="patch-parts"
+  title="A Network Made of Parts"
+  pubDate="2026-07-30"
+/>

@@ -1,0 +1,84 @@
+---
+interface Props { caption?: string; height?: number; }
+const { caption, height = 420 } = Astro.props;
+---
+<figure class="viz supportvsnull" data-caption={caption} data-height={height} data-height-mobile="520" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+<script>
+// The reading that only exists because the instrument now carries a null.
+// Sixteen real concepts' support sizes against sixty-four random directions
+// through the same readout: the real ones are somewhat narrower, and nowhere
+// near the committee a deletable concept would need. Below, the refit test
+// that separates hidden from erased.
+import { defineViz } from './engine/vizkit.js';
+import { T, fmt, gate, loadingText, legend } from './engine/draw.js';
+import { load } from './fifteen.js';
+
+defineViz('supportvsnull', {
+  title: 'Concept support, against what chance would give',
+  height: 420,
+  controls: [{ type: 'readout', name: 'rd' }],
+  setup(api) { gate(api, () => load('support'), (a, d) => { a.state.d = d; }); },
+  draw(api) {
+    const { ctx, colors, size: { W, H } } = api, st = api.state;
+    if (!st.ready) { loadingText(api, 'loading the null…'); return; }
+    const d = st.d, pad = 14, top = 32;
+    const box = { x: pad + 30, y: top, w: W - 2 * pad - 40, h: H - top - 168 };
+    const lx = (v) => box.x + (v / d.m) * box.w;
+    ctx.strokeStyle = colors.border;
+    ctx.strokeRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1);
+    // where a deletable committee would sit
+    ctx.fillStyle = '#3a8f5e'; ctx.globalAlpha = 0.12;
+    ctx.fillRect(box.x, box.y, lx(d.m / 10) - box.x, box.h);
+    ctx.globalAlpha = 1;
+    T(ctx, colors, 'small');
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = '#3a8f5e';
+    ctx.fillText('what a deletable concept would look like', lx(4), box.y + 14);
+    // histograms as strips of ticks
+    const strip = (vals, y, color) => {
+      for (const v of vals) {
+        ctx.strokeStyle = color; ctx.globalAlpha = 0.7; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(lx(v), y - 12); ctx.lineTo(lx(v), y + 12); ctx.stroke();
+        ctx.globalAlpha = 1; ctx.lineWidth = 1;
+      }
+    };
+    strip(d.nulls, box.y + box.h * 0.35, colors.muted);
+    strip(d.per_concept.flat(), box.y + box.h * 0.72, '#c2553a');
+    T(ctx, colors, 'small');
+    ctx.fillStyle = colors.muted;
+    ctx.fillText('random directions through the same readout', box.x + 6, box.y + box.h * 0.35 - 18);
+    ctx.fillStyle = '#c2553a';
+    ctx.fillText('the real concepts (16 per seed, three seeds)', box.x + 6, box.y + box.h * 0.72 - 18);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillStyle = colors.faint;
+    for (const v of [0, 256, 512, 768, 1024]) ctx.fillText(String(v), lx(v), box.y + box.h + 4);
+    ctx.textAlign = 'left';
+    ctx.fillText('support: how many of the 1,024 prototypes carry the direction', box.x, box.y + box.h + 18);
+
+    // the refit verdict
+    const a = d.audit;
+    const ry = box.y + box.h + 44;
+    T(ctx, colors, 'label');
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('delete the top-support rows, then refit a fresh readout', pad, ry);
+    const cells = [
+      ['nothing deleted', a.refit_intact.mean],
+      ['16 rows deleted', a.refit_del16.mean],
+      ['64 rows deleted', a.refit_del64.mean],
+    ];
+    cells.forEach(([lab, v], i) => {
+      const x = pad + i * ((W - 2 * pad) / 3);
+      T(ctx, colors, 'title');
+      ctx.font = '600 20px ui-sans-serif, system-ui, sans-serif';
+      ctx.fillStyle = colors.accent;
+      ctx.fillText(`${fmt(v, 1)}%`, x, ry + 30);
+      T(ctx, colors, 'small');
+      ctx.fillText(lab, x, ry + 48);
+    });
+    T(ctx, colors, 'small');
+    ctx.fillText('the refit comes back whole every time: the concept was hidden, not erased', pad, H - 13);
+    api.readout('rd', `real support ${fmt(d.audit.real.mean, 0)} ± ${fmt(d.audit.real.sd, 0)} of ${d.m}, null ${fmt(d.audit.null.mean, 0)}`);
+  },
+});
+</script>

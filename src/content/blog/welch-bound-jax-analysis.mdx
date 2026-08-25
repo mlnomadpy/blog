@@ -39,8 +39,7 @@ import CiteAs from '../../components/CiteAs.astro';
 *Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/the-welch-bound-and-a-good-latent-space-jax): the same code, block by block, with the math written out and every figure reproduced from a real run.*
 
 
-The point of the theory post was not "the Welch bound is cool." The useful
-claim was operational:
+The theory post ended on a claim that only pays off if you can actually run it:
 
 > Given a batch of embeddings, you should be able to tell whether the space is
 > collapsing, whether it is using its dimensions, whether class means are moving
@@ -56,9 +55,10 @@ JAX scene built so you can watch the metric's needle move:
 4. **Welch gap:** how close the worst crosstalk gets to the floor, when they do not fit.
 5. **Reachability:** whether a plain optimizer finds these targets from any start, or only by luck.
 
-The generator that made every GIF here lives in
-`scripts/jax-welch-geometry/`. The code blocks below are the core math stripped
-down to the pieces you would actually paste into a training loop.
+Every GIF here comes from [the generator in this blog's
+repository](https://github.com/mlnomadpy/blog/tree/master/scripts/jax-welch-geometry).
+The code blocks below are the core math stripped down to the pieces you would
+actually paste into a training loop.
 
 ## The Shared Scaffolding
 
@@ -148,7 +148,7 @@ This number is the first line of the report. It does not tell you whether the
 classes are arranged well; it only tells you whether each class is becoming a
 tight code. In neural collapse notation, this is the first thing that vanishes.
 
-## 2. Rank: Is The Space Being Used?
+## 2. Rank: The Dimension That Quietly Died
 
 A model can make clusters look separated while secretly wasting dimensions. The
 next audit asks whether the embedding really occupies the axes available to it.
@@ -228,7 +228,7 @@ def simplex_step(means, lr=0.04):
 
 In a real training run you usually would not optimize `simplex_error` alone.
 You would log it. If it falls while the collapse ratio also falls, your class
-means are not merely separating; they are becoming the centered codebook the
+means have gone past separating and started to form the centered codebook the
 theory predicts.
 
 ## 4. Welch: When The Codes Do Not Fit
@@ -385,27 +385,15 @@ the story is happening.
 
 ## Regenerate The Figures
 
-The renderer lives in `scripts/jax-welch-geometry/`:
+The [renderer](https://github.com/mlnomadpy/blog/tree/master/scripts/jax-welch-geometry)
+validates each descent against theory before it draws anything. Collapse ratio and
+effective rank are controlled contrasts, so they ship as static figures; the simplex
+descent, the Welch descent, and the reachability landscape are real optimizations, so
+they animate.
 
-```bash
-cd scripts/jax-welch-geometry
-pip install -r requirements.txt
-python generate.py
-```
-
-It validates each descent against theory, then writes five files. The two audit
-metrics are controlled contrasts, so they ship as static figures; the three
-descents are real optimizations, so they animate:
-
-- `public/jax-welch/class-collapse.png`
-- `public/jax-welch/rank-collapse.png`
-- `public/jax-welch/simplex-descent.gif`
-- `public/jax-welch/welch-descent.gif`
-- `public/jax-welch/benign-landscape.gif`
-
-The important thing is that the pictures are not separate from the code. The
-same JAX arrays produce the points, Gram matrices, and metrics. The visual is
-just the audit report made visible.
+One set of JAX arrays produces the points, the Gram matrices, and the numbers
+underneath them, so each figure is the report on this page drawn rather than
+retyped.
 
 <CiteAs
   slug="welch-bound-jax-analysis"
