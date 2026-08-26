@@ -1,0 +1,525 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="generator" content="Astro v5.18.1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#fbfaf6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)"><title>The Empirical Spectrum of a Trained Yat Network</title><meta name="description" content="Eigendecompose a trained Yat network's kernel: watch training align the spectrum with the labels, read the modes as concepts, rebuild the net from k of them."><meta name="keywords" content="mercer decomposition neural network, spectral interpretability, kernel eigenfunctions, trained network spectrum, yat network explanation, kernels, mercer, spectra, interpretability, yat, mlp, jax"><meta name="author" content="Taha Bouhsine"><link rel="canonical" href="https://tahabouhsine.com/blog/mercer-microscope/"><link rel="icon" href="/blog/favicon.svg" type="image/svg+xml"><link rel="alternate" type="application/rss+xml" title="Records of the !mmortal Data Scientist" href="/blog/rss.xml"><link rel="sitemap" href="/blog/sitemap-index.xml"><link rel="me" href="https://github.com/mlnomadpy"><link rel="me" href="https://x.com/mlnomadpy"><link rel="me" href="https://www.linkedin.com/in/tahabsn/"><link rel="me" href="https://scholar.google.com/citations?user=IsBjb3EAAAAJ"><link rel="me" href="https://g.dev/tahabsn"><link rel="author" href="https://github.com/mlnomadpy"><meta property="og:type" content="article"><meta property="og:site_name" content="Records of the !mmortal Data Scientist"><meta property="og:title" content="The Empirical Spectrum of a Trained Yat Network"><meta property="og:description" content="Eigendecompose a trained Yat network's kernel: watch training align the spectrum with the labels, read the modes as concepts, rebuild the net from k of them."><meta property="og:url" content="https://tahabouhsine.com/blog/mercer-microscope/"><meta property="og:locale" content="en_US"><meta property="og:image" content="https://tahabouhsine.com/blog/og/mercer-microscope.png"><meta property="og:image:alt" content="The Trained Network, Under Mercer's Microscope — Records of the !mmortal Data Scientist"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:type" content="image/png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@mlnomadpy"><meta name="twitter:creator" content="@mlnomadpy"><meta name="twitter:title" content="The Empirical Spectrum of a Trained Yat Network"><meta name="twitter:description" content="Eigendecompose a trained Yat network's kernel: watch training align the spectrum with the labels, read the modes as concepts, rebuild the net from k of them."><meta name="twitter:image" content="https://tahabouhsine.com/blog/og/mercer-microscope.png"><meta name="twitter:image:alt" content="The Trained Network, Under Mercer's Microscope — Records of the !mmortal Data Scientist"><meta property="article:published_time" content="2026-07-27T00:00:00.000Z"><meta property="article:modified_time" content="2026-08-25T00:00:00.000Z"><meta property="article:author" content="Taha Bouhsine"><meta property="article:section" content="Kernels"><meta property="article:tag" content="kernels"><meta property="article:tag" content="mercer"><meta property="article:tag" content="spectra"><meta property="article:tag" content="interpretability"><meta property="article:tag" content="yat"><meta property="article:tag" content="mlp"><meta property="article:tag" content="jax"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","@id":"https://tahabouhsine.com/blog/mercer-microscope/#article","headline":"The Trained Network, Under Mercer's Microscope","name":"The Trained Network, Under Mercer's Microscope","description":"Eigendecompose a trained Yat network's kernel: watch training align the spectrum with the labels, read the modes as concepts, rebuild the net from k of them.","image":["https://tahabouhsine.com/blog/og/mercer-microscope.png"],"datePublished":"2026-07-27T00:00:00.000Z","dateModified":"2026-08-25T00:00:00.000Z","author":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#author","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","jobTitle":"Machine Learning Researcher","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"publisher":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#publisher","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"mainEntityOfPage":{"@type":"WebPage","@id":"https://tahabouhsine.com/blog/mercer-microscope/"},"keywords":"mercer decomposition neural network, spectral interpretability, kernel eigenfunctions, trained network spectrum, yat network explanation, kernels, mercer, spectra, interpretability, yat, mlp, jax","url":"https://tahabouhsine.com/blog/mercer-microscope/","inLanguage":"en-US","wordCount":2583,"timeRequired":"PT13M","articleSection":"Kernels","isPartOf":{"@type":"Blog","@id":"https://tahabouhsine.com/blog/","name":"Records of the !mmortal Data Scientist","url":"https://tahabouhsine.com/blog/"}}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Blog","item":"https://tahabouhsine.com/blog/"},{"@type":"ListItem","position":2,"name":"Kernels","item":"https://tahabouhsine.com/blog/tag/kernels/"},{"@type":"ListItem","position":3,"name":"The Trained Network, Under Mercer's Microscope","item":"https://tahabouhsine.com/blog/mercer-microscope/"}]}</script><script>
+    (function () {
+      if (window.__gaSetup) return;
+      window.__gaSetup = true;
+      var GA_ID = 'G-373438VHJB';
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ dataLayer.push(arguments); }
+      window.gtag = window.gtag || gtag;
+      window.__gaEventQueue = window.__gaEventQueue || [];
+      window.__trackGA = function (eventName, params) {
+        if (!eventName) return;
+        var item = { name: eventName, params: params || {} };
+        if (window.__gaLoaded) {
+          gtag('event', item.name, item.params);
+        } else {
+          window.__gaEventQueue.push(item);
+        }
+      };
+
+      // Track whether the first astro:page-load has fired, so a mid-session
+      // Accept can still record the current page.
+      window.__gaFirstLoadDone = window.__gaFirstLoadDone || false;
+      document.addEventListener('astro:page-load', function () { window.__gaFirstLoadDone = true; });
+
+      window.__loadGA = function () {
+        if (window.__gaLoaded) return;
+        window.__gaLoaded = true;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+        document.head.appendChild(s);
+        gtag('js', new Date());
+        gtag('config', GA_ID, { send_page_view: false });
+        (window.__gaEventQueue || []).splice(0).forEach(function (item) {
+          gtag('event', item.name, item.params);
+        });
+        function sendPV() {
+          gtag('event', 'page_view', {
+            page_title: document.title,
+            page_location: location.href,
+            page_path: location.pathname + location.search,
+          });
+        }
+        document.addEventListener('astro:page-load', sendPV);
+        // If the initial page-load already happened (accept mid-session),
+        // record this page now; otherwise the listener catches the first one.
+        if (window.__gaFirstLoadDone) sendPV();
+      };
+
+      try {
+        if (localStorage.getItem('analytics-consent') === 'granted') window.__loadGA();
+      } catch (e) {}
+    })();
+  </script><script>
+  (() => {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'light' || stored === 'dark') {
+      document.documentElement.setAttribute('data-theme', stored);
+    }
+  })();
+</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.DDq-TDm1.css">
+<link rel="stylesheet" href="/blog/_astro/_slug_.1UYF8z3a.css">
+<style>.series-nav[data-astro-cid-w7ld43o3]{margin:0 0 1.1rem;border:1px solid var(--border);border-radius:8px;background:var(--bg-sunken);overflow:hidden}summary[data-astro-cid-w7ld43o3]{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.55rem .9rem;cursor:pointer;list-style:none;user-select:none;transition:background var(--transition-fast)}summary[data-astro-cid-w7ld43o3]::-webkit-details-marker{display:none}summary[data-astro-cid-w7ld43o3]:hover{background:color-mix(in srgb,var(--accent) 6%,var(--bg-sunken))}.sn-strip[data-astro-cid-w7ld43o3]{display:flex;align-items:baseline;gap:.5rem;min-width:0;font-family:var(--mono);font-size:.68rem;letter-spacing:.11em;text-transform:uppercase}.sn-part[data-astro-cid-w7ld43o3]{color:var(--accent);white-space:nowrap}.sn-sep[data-astro-cid-w7ld43o3]{color:var(--fg-faint)}.sn-series[data-astro-cid-w7ld43o3]{color:var(--fg-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sn-chevron[data-astro-cid-w7ld43o3]{flex:none;display:inline-flex;color:var(--fg-faint);transition:transform var(--transition-fast),color var(--transition-fast)}summary[data-astro-cid-w7ld43o3]:hover .sn-chevron[data-astro-cid-w7ld43o3]{color:var(--accent)}.series-nav[data-astro-cid-w7ld43o3][open] .sn-chevron[data-astro-cid-w7ld43o3]{transform:rotate(180deg)}.sn-list[data-astro-cid-w7ld43o3]{list-style:none;margin:0;padding:.25rem .9rem .55rem;border-top:1px dashed var(--border)}.sn-list[data-astro-cid-w7ld43o3] li[data-astro-cid-w7ld43o3]{margin:0}.sn-item[data-astro-cid-w7ld43o3]{display:flex;align-items:baseline;gap:.6rem;padding:.32rem 0;text-decoration:none;color:inherit}.sn-num[data-astro-cid-w7ld43o3]{flex:none;width:1.1rem;font-family:var(--mono);font-size:.72rem;color:var(--fg-faint);text-align:right;font-variant-numeric:tabular-nums}.sn-title[data-astro-cid-w7ld43o3]{font-family:var(--serif);font-size:.93rem;line-height:1.4;color:var(--fg-muted);transition:color var(--transition-fast)}a[data-astro-cid-w7ld43o3].sn-item:hover .sn-title[data-astro-cid-w7ld43o3],li[data-astro-cid-w7ld43o3].current .sn-num[data-astro-cid-w7ld43o3]{color:var(--accent)}li[data-astro-cid-w7ld43o3].current .sn-title[data-astro-cid-w7ld43o3]{color:var(--fg);font-weight:600}.sn-note[data-astro-cid-w7ld43o3]{flex:none;font-family:var(--mono);font-size:.6rem;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 55%,transparent);border-radius:4px;padding:.06rem .38rem;white-space:nowrap;align-self:center}@media(max-width:600px){.sn-series[data-astro-cid-w7ld43o3]{white-space:normal}.sn-strip[data-astro-cid-w7ld43o3]{flex-wrap:wrap;row-gap:.15rem}.sn-note[data-astro-cid-w7ld43o3]{display:none}li[data-astro-cid-w7ld43o3].current .sn-note[data-astro-cid-w7ld43o3]{display:inline-block}}
+</style><style>.cite-as[data-astro-cid-p234urri]{margin:3.5rem 0 0;padding-top:1.5rem;border-top:1px solid var(--border)}.cite-as[data-astro-cid-p234urri] h2[data-astro-cid-p234urri]{font-family:var(--mono);font-size:.82rem;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-faint);font-weight:500;margin:0 0 .75rem}.cite-as[data-astro-cid-p234urri] h3[data-astro-cid-p234urri]{font-family:var(--mono);font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-faint);font-weight:500;margin:1.5rem 0 .6rem}.cite-line[data-astro-cid-p234urri]{font-family:var(--serif);font-size:.98rem;line-height:1.55;color:var(--fg-muted);margin:0 0 .5rem}.cite-line[data-astro-cid-p234urri] em[data-astro-cid-p234urri]{color:var(--fg)}.cite-bib[data-astro-cid-p234urri]{margin:.4rem 0 0;position:relative}.cite-bib[data-astro-cid-p234urri] summary[data-astro-cid-p234urri]{cursor:pointer;font-family:var(--mono);font-size:.78rem;color:var(--fg-muted);padding:.25rem 0;user-select:none}.cite-bib[data-astro-cid-p234urri] summary[data-astro-cid-p234urri]:hover{color:var(--accent)}.cite-bib[data-astro-cid-p234urri] pre[data-astro-cid-p234urri]{margin:.4rem 0 0;padding:.85rem 1rem;background:var(--bg-elev);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;font-size:.82rem;line-height:1.55}.cite-bib[data-astro-cid-p234urri] pre[data-astro-cid-p234urri] code[data-astro-cid-p234urri]{background:transparent;border:0;padding:0}.cite-copy[data-astro-cid-p234urri]{position:absolute;top:2.1rem;right:.55rem;background:var(--bg);border:1px solid var(--border);color:var(--fg-muted);font-family:var(--mono);font-size:.72rem;padding:.25rem .55rem;border-radius:var(--radius-sm);cursor:pointer;transition:color var(--transition-fast),border-color var(--transition-fast)}.cite-copy[data-astro-cid-p234urri]:hover,.cite-copy[data-astro-cid-p234urri].copied{color:var(--accent);border-color:var(--accent)}
+</style></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/series">series</a><a href="/blog/archive">archive</a><a href="/blog/map">map</a><a href="/blog/writeups">writeups</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>
+  (() => {
+    const apply = (theme) => {
+      document.documentElement.setAttribute('data-theme', theme);
+      const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+      if (meta) meta.setAttribute('content', theme === 'dark' ? '#0e1116' : '#fbfaf6');
+      // Sync giscus iframe if present
+      const giscus = document.querySelector('iframe.giscus-frame');
+      if (giscus && giscus.contentWindow) {
+        giscus.contentWindow.postMessage(
+          { giscus: { setConfig: { theme: theme === 'dark' ? 'dark' : 'light' } } },
+          'https://giscus.app'
+        );
+      }
+    };
+
+    const init = () => {
+      const btns = document.querySelectorAll('[data-theme-toggle]');
+      btns.forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', () => {
+          const current = document.documentElement.getAttribute('data-theme')
+            || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          const next = current === 'dark' ? 'light' : 'dark';
+          localStorage.setItem('theme', next);
+          apply(next);
+        });
+      });
+    };
+
+    init();
+    document.addEventListener('astro:after-swap', init);
+    document.addEventListener('astro:page-load', init);
+  })();
+</script> </nav> </div> </header> <main id="main">  <div class="reading-progress" data-reading-progress aria-hidden="true"></div> <script>
+  (() => {
+    const init = () => {
+      const bar = document.querySelector('[data-reading-progress]');
+      if (!bar) return;
+      const update = () => {
+        const h = document.documentElement;
+        const scrolled = h.scrollTop;
+        const max = h.scrollHeight - h.clientHeight;
+        const pct = max > 0 ? Math.min(100, (scrolled / max) * 100) : 0;
+        bar.style.width = pct + '%';
+      };
+      // Coalesce scroll events into one paint per frame so fast/touch
+      // scrolling stays smooth.
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => { update(); ticking = false; });
+      };
+      update();
+      window.removeEventListener('scroll', window.__rp_onScroll || (() => {}));
+      window.removeEventListener('resize', window.__rp_onScroll || (() => {}));
+      window.__rp_onScroll = onScroll;
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+    };
+    init();
+    document.addEventListener('astro:page-load', init);
+    document.addEventListener('astro:after-swap', init);
+  })();
+</script> <article data-blog-post data-pagefind-body data-pagefind-meta="date:2026-07-27"> <header class="post-header">  <h1 data-pagefind-meta="title">The Trained Network, Under Mercer&#39;s Microscope</h1> <p class="meta"> <time datetime="2026-07-27T00:00:00.000Z">July 27, 2026</time>  · updated <time datetime="2026-08-25T00:00:00.000Z">August 25, 2026</time>  · 13 min read </p> <p style="margin-top:0.65rem" data-pagefind-meta="tags:kernels,mercer,spectra,interpretability,yat,mlp,jax"> <a class="tag" href="/blog/tag/kernels/">#kernels</a><a class="tag" href="/blog/tag/mercer/">#mercer</a><a class="tag" href="/blog/tag/spectra/">#spectra</a><a class="tag" href="/blog/tag/interpretability/">#interpretability</a><a class="tag" href="/blog/tag/yat/">#yat</a><a class="tag" href="/blog/tag/mlp/">#mlp</a><a class="tag" href="/blog/tag/jax/">#jax</a> </p> </header> <details class="series-nav" data-astro-cid-w7ld43o3><summary data-astro-cid-w7ld43o3><span class="sn-strip" data-astro-cid-w7ld43o3><span class="sn-part" data-astro-cid-w7ld43o3>Part 1 of 4</span><span class="sn-sep" aria-hidden="true" data-astro-cid-w7ld43o3>·</span><span class="sn-series" data-astro-cid-w7ld43o3>The Kernel as an Instrument</span></span><span class="sn-chevron" aria-hidden="true" data-astro-cid-w7ld43o3><svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" data-astro-cid-w7ld43o3><path d="M2.5 4.5 6 8l3.5-3.5" data-astro-cid-w7ld43o3></path></svg></span></summary><ol class="sn-list" data-astro-cid-w7ld43o3><li class="current" data-astro-cid-w7ld43o3><span class="sn-item" aria-current="page" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>1</span><span class="sn-title" data-astro-cid-w7ld43o3>The Trained Network, Under Mercer&#39;s Microscope</span><span class="sn-note" data-astro-cid-w7ld43o3>you are here</span></span></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/spectral-surgery/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>2</span><span class="sn-title" data-astro-cid-w7ld43o3>The Concept That Would Not Die</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/yat-protocol/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>3</span><span class="sn-title" data-astro-cid-w7ld43o3>How to Interrogate a Kernel Network</span></a></li><li data-astro-cid-w7ld43o3><a class="sn-item" href="/blog/patch-parts/" data-astro-cid-w7ld43o3><span class="sn-num" data-astro-cid-w7ld43o3>4</span><span class="sn-title" data-astro-cid-w7ld43o3>A Network Made of Parts</span></a></li></ol></details>   
+<p><em>Mercer’s theorem is normally consulted before a network exists, the way a builder consults a code book: <a href="/blog/what-can-a-weight-be">it says which functions a kernel can express cheaply</a>, in advance. Point it at the finished building instead. Take a trained Yat network, 256 prototypes on Fashion-MNIST, and ask Mercer to explain what training made.</em></p>
+<p>How do you ask a trained network what it learned? The usual answers all involve picking it apart one unit at a time: stare at neurons, probe activations, hope the pieces mean something individually. That road runs further than usual here, because <a href="/blog/what-a-finite-kernel-buys-an-mlp/">a Yat unit is a prototype you can render as a picture</a>. But even so the units are the <em>parts list</em>, not the design. Two hundred fifty-six prototypes with a readout is still two hundred fifty-six separate stories, and the network does not think in single prototypes any more than a chord is a note.</p>
+<p>There is a second way to ask. Any hidden representation <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>h</mi><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">h(x)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord mathnormal">h</span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose">)</span></span></span></span> induces the PSD kernel <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>K</mi><mi>h</mi></msub><mo stretchy="false">(</mo><mi>x</mi><mo separator="true">,</mo><mi>y</mi><mo stretchy="false">)</mo><mo>=</mo><mi>h</mi><mo stretchy="false">(</mo><mi>x</mi><msup><mo stretchy="false">)</mo><mi mathvariant="normal">⊤</mi></msup><mi>h</mi><mo stretchy="false">(</mo><mi>y</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">K_h(x,y)=h(x)^\top h(y)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em">K</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">h</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0359em">y</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1.0991em;vertical-align:-0.25em"></span><span class="mord mathnormal">h</span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">⊤</span></span></span></span></span></span></span></span><span class="mord mathnormal">h</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0359em">y</span><span class="mclose">)</span></span></span></span>, whether <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>h</mi></mrow><annotation encoding="application/x-tex">h</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em"></span><span class="mord mathnormal">h</span></span></span></span> came from Yat, ReLU, or a hand-built feature map. On a finite dataset, centering that feature cloud and taking its SVD gives ranked orthogonal modes. Yat’s extra gift is that the coordinates can be traced back to input-space prototypes and to named alignment and proximity channels. This post computes the empirical decomposition at every epoch and reads what that particular model made.</p>
+<h2 id="the-networks-own-kernel">The network’s own kernel<a class="heading-anchor-link" aria-label="Link to heading" href="#the-networks-own-kernel"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The object under the microscope is not the kernel of a single unit but the kernel of the whole trained bank. A Yat layer with prototypes <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>w</mi><mn>1</mn></msub><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><msub><mi>w</mi><mi>m</mi></msub></mrow><annotation encoding="application/x-tex">w_1, \dots, w_m</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0269em">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em"><span style="top:-2.55em;margin-left:-0.0269em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0269em">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em"><span style="top:-2.55em;margin-left:-0.0269em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">m</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span></span></span></span> maps an image to its feature vector <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Φ</mi><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mo>=</mo><mo stretchy="false">(</mo><msub><mi>ϕ</mi><msub><mi>w</mi><mn>1</mn></msub></msub><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><msub><mi>ϕ</mi><msub><mi>w</mi><mi>m</mi></msub></msub><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\Phi(x) = (\phi_{w_1}(x), \dots, \phi_{w_m}(x))</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord">Φ</span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1.0001em;vertical-align:-0.2501em"></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">ϕ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0269em">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3173em"><span style="top:-2.357em;margin-left:-0.0269em;margin-right:0.0714em"><span class="pstrut" style="height:2.5em"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2501em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal">ϕ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0269em">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1645em"><span style="top:-2.357em;margin-left:-0.0269em;margin-right:0.0714em"><span class="pstrut" style="height:2.5em"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight">m</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2501em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose">))</span></span></span></span>, and any feature map defines a kernel by inner product:</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>K</mi><mrow><mi mathvariant="normal">n</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">t</mi></mrow></msub><mo stretchy="false">(</mo><mi>x</mi><mo separator="true">,</mo><mi>y</mi><mo stretchy="false">)</mo><mtext>  </mtext><mo>=</mo><mtext>  </mtext><munderover><mo>∑</mo><mrow><mi>u</mi><mo>=</mo><mn>1</mn></mrow><mi>m</mi></munderover><msub><mi>ϕ</mi><msub><mi>w</mi><mi>u</mi></msub></msub><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mtext> </mtext><msub><mi>ϕ</mi><msub><mi>w</mi><mi>u</mi></msub></msub><mo stretchy="false">(</mo><mi>y</mi><mo stretchy="false">)</mo><mi mathvariant="normal">.</mi></mrow><annotation encoding="application/x-tex">K_{\mathrm{net}}(x, y) \;=\; \sum_{u=1}^{m} \phi_{w_u}(x)\, \phi_{w_u}(y).</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em">K</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathrm mtight">net</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0359em">y</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:2.9185em;vertical-align:-1.2671em"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.6514em"><span style="top:-1.8829em;margin-left:0em"><span class="pstrut" style="height:3.05em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">u</span><span class="mrel mtight">=</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.05em"><span class="pstrut" style="height:3.05em"></span><span><span class="mop op-symbol large-op">∑</span></span></span><span style="top:-4.3em;margin-left:0em"><span class="pstrut" style="height:3.05em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">m</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.2671em"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal">ϕ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0269em">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1645em"><span style="top:-2.357em;margin-left:-0.0269em;margin-right:0.0714em"><span class="pstrut" style="height:2.5em"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight">u</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2501em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord"><span class="mord mathnormal">ϕ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0269em">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1645em"><span style="top:-2.357em;margin-left:-0.0269em;margin-right:0.0714em"><span class="pstrut" style="height:2.5em"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight">u</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2501em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0359em">y</span><span class="mclose">)</span><span class="mord">.</span></span></span></span></span>
+<p>This is a PSD kernel by construction, finite-rank, and it changes as the prototypes move. It records the geometry of the hidden representation. It is not the network’s entire knowledge, because the readout can ignore loud feature directions or amplify quiet ones.</p>
+<p>Mercer’s theorem concerns the integral operator defined by a continuous kernel and a measure. On a finite sample, the computation here is empirical kernel PCA: the eigendecomposition of the centered feature covariance, equivalently the nonzero singular system of the centered Gram matrix under matched normalization. Its eigenvectors estimate population modes only under sampling and spectral-gap conditions. Change the measure and the modes change. Everything below is therefore a descriptive analysis of the representation on Fashion-MNIST, not a population theorem about every input the network could receive.</p>
+<p>The picture to hold is geometric. Push the images through the trained bank and the feature cloud is, to second order, an ellipsoid. The empirical modes are its axes and the eigenvalues are its variances. A large eigenvalue marks a direction along which this sampled representation varies loudly. Whether that direction is cheap for a regularized learner depends on the objective and normalization; whether it is semantic depends on the labels and examples at its poles. What does training do to these measured directions?</p>
+<h2 id="grab-first-refine-after">Grab first, refine after<a class="heading-anchor-link" aria-label="Link to heading" href="#grab-first-refine-after"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>We trained the network twice from one initialization, on <a href="/blog/lazy-training">the protocol the frozen-features study used</a> at this width: once with everything free (88.84 ± 0.20 percent over three seeds), once with the bank frozen and only the readout learning (84.10 ± 0.15), and snapshotted the full model at every epoch (bundle <code>kgl_blog-mercer-v1</code>). Each snapshot’s kernel was decomposed on the full test set. The frozen twin’s spectrum cannot move, so every change below is feature learning, isolated.</p>
+<figure class="viz mercerspectrum" data-caption="The trained network's kernel, eigendecomposed on the full test set at every epoch of training; the frozen twin's static spectrum for reference. Left: the eigenvalue spectrum. Right: the cumulative share of the (centered) label function captured by the top k modes. Press play. Epoch 1 is the event: the spectrum snaps into concentration and the label curve leaps; the remaining eleven epochs relax the spectrum back outward while accuracy keeps climbing." data-height="470" data-height-mobile="600" tabindex="0"> <div class="viz-cell"></div> </figure> <script type="module" src="/blog/_astro/SpectrumScrub.astro_astro_type_script_index_0_lang.BXTBg_fy.js"></script>
+<p>The plot has two acts, and neither is the steady drift you might expect. Act one is a single epoch long and violent: the effective dimension of the kernel collapses from 14.7 to 4.7, and the share of the label function living in the top ten modes leaps from 39 to 58 percent. One epoch of gradient descent does not gently improve the kernel; it grabs the label structure and reorganizes the entire spectrum around it. Act two is the remaining eleven epochs, and it runs <em>backwards</em> by the naive reading: the effective dimension climbs back to about 10, the top-ten label share eases down to 52 percent, and the top-forty share peaks and then drifts, all while test accuracy rises from 83 to nearly 89. Training first buys the coarse alignment, then deliberately spends some of it, spreading label energy into higher, finer modes where the difficult distinctions live. The same shape has turned up before, <a href="/blog/three-states-of-information">in loss plateaus that were reorganizations in disguise</a>; here the microscope watches the reorganization directly, in the kernel’s own coordinates.</p>
+<h2 id="the-concepts-ranked">The concepts, ranked<a class="heading-anchor-link" aria-label="Link to heading" href="#the-concepts-ranked"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>An eigenvalue spectrum says how much structure there is, not what the structure says. For that, look at the eigenfunctions, and here the prototype network pays off again: its modes are functions on images, so their extremes <em>are images you can look at</em>.</p>
+<figure class="viz mercermodes" data-caption="The top sixteen Mercer modes of the trained kernel, bars sized by eigenvalue share; click any mode. The two rows of thumbnails are the real test images with the most positive and most negative values of that eigenfunction, its two poles; the bar chart is the mode's mean value on each class. Every mode is a learned contrast, and the first few are startlingly clean: the top mode alone carries 38 percent of the readout's weight." data-height="470" data-height-mobile="620" tabindex="0"> <div class="viz-cell"></div> </figure> <script type="module" src="/blog/_astro/ModeGallery.astro_astro_type_script_index_0_lang.BB33QT37.js"></script>
+<p>Mode 1 has a clear semantic reading on this sample: one pole is shirts and pullovers, the other boots and sneakers. Mode 2 opposes trousers to sneakers; mode 3 sneakers to coats. These are principal axes of the trained feature ellipsoid, not automatically independent concepts. Their names come from inspecting pole images and class means, and tied or nearly tied eigenvalues permit rotations that change individual axes. The decomposition ranks variance; the readout tells us how much the classifier uses each direction.</p>
+<figure class="viz mercerclassmap" data-caption="The same sixteen modes as one map: rows are classes, columns are modes in eigenvalue order, color is the class's mean value on the mode. A class is the signature of signs along its row. The footwear classes move together on the early modes, coarse concepts, and only split from one another on later, smaller ones: sandal against sneaker is a refinement the spectrum files under fine print." data-height="420" data-height-mobile="520" tabindex="0"> <div class="viz-cell"></div> </figure> <script type="module" src="/blog/_astro/ClassModeMap.astro_astro_type_script_index_0_lang.EYhqirQF.js"></script>
+<p>The map makes the ranking’s logic visible. Early modes carve coarse partitions (footwear against clothing, trousers against everything boxy); the distinctions between similar classes, sandal versus sneaker, shirt versus coat, live in later modes with smaller eigenvalues. The kernel spends its loud directions on easy, large-scale structure and whispers the hard cases, which is the geometry <a href="/blog/calibration-of-a-bounded-net">the calibration post</a> would predict mistakes to follow, and exactly where act two of the training plot was putting its energy.</p>
+<h2 id="how-many-concepts-is-the-network">How many concepts is the network?<a class="heading-anchor-link" aria-label="Link to heading" href="#how-many-concepts-is-the-network"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>A ranked, orthogonal decomposition invites the bluntest question in the spectral playbook: truncate it. The tail sum of eigenvalues is the mean squared feature-reconstruction error on the empirical measure. It does <strong>not</strong> bound classification-accuracy loss without also controlling the readout norm and the prediction margins. The panel therefore measures the predictor after truncation instead of inferring its accuracy from the spectrum.</p>
+<figure class="viz mercertrunc" data-caption="The trained network rebuilt from its top k empirical feature-covariance modes, recomputed on 800 test images; the frozen twin is shown under the same truncation. Slide k: at four modes the trained reconstruction sorts about half the images; at twelve it is within eight points of the full network. The thumbnails flip green as predictive axes accumulate; semantic meaning is not implied by rank alone." data-height="470" data-height-mobile="620" tabindex="0"> <div class="viz-cell"></div> </figure> <script type="module" src="/blog/_astro/TruncationDial.astro_astro_type_script_index_0_lang.-R11IUZr.js"></script>
+<p>The trained network reassembles fast: twelve modes recover 81 of its 88 percent, thirty-two recover 85, and by sixty-four of 256 the reconstruction is within a point of the whole machine. The frozen twin needs more empirical modes to recover its lower ceiling. This shows that, on this sample, feature training aligned the readout more strongly with leading variance directions. A population source condition is stronger: it places the target in the range of a power of a declared integral operator and supports a rate only with capacity, noise, and regularization assumptions. The experiment is evidence of empirical spectral alignment, not a proof that training manufactured such a source condition.</p>
+<h2 id="the-two-questions-the-spectrum-answers-separately">The two questions the spectrum answers separately<a class="heading-anchor-link" aria-label="Link to heading" href="#the-two-questions-the-spectrum-answers-separately"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Sixty-four is a number about the <em>kernel</em>, and it is worth being exact about what it does and does not say, because there is a second question hiding next to the first.</p>
+<p>The empirical modes are the axes along which this representation varies on the measured Fashion-MNIST sample. Sixty-four is the rank needed to reconstruct this predictor within the reported accuracy tolerance, not the dimension of the full RKHS or a universal capacity count. The readout is a <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>256</mn><mo>×</mo><mn>10</mn></mrow><annotation encoding="application/x-tex">256\times10</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em"></span><span class="mord">256</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:0.6444em"></span><span class="mord">10</span></span></span></span> matrix, so the logits factor through at most ten coordinates, and classification is invariant to a shared logit shift, leaving at most nine decision-relevant contrasts.</p>
+<p>So decompose that instead. The covariance of the logits, <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>S</mi><mo>=</mo><msup><mi>A</mi><mi mathvariant="normal">⊤</mi></msup><mi>C</mi><mi>A</mi></mrow><annotation encoding="application/x-tex">S = A^\top C A</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em"></span><span class="mord mathnormal" style="margin-right:0.0576em">S</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.8491em"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491em"><span style="top:-3.063em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">⊤</span></span></span></span></span></span></span></span><span class="mord mathnormal" style="margin-right:0.0715em">C</span><span class="mord mathnormal">A</span></span></span></span>, is a ten by ten matrix whose eigenvectors are the orthogonal output contrasts the network actually spends its capacity on, ranked by how much the verdict moves along each. Truncating in <em>those</em> coordinates, the network is whole at ten: nine of them reach 86.6 percent and the tenth completes the model exactly, because at rank ten the projection is the identity.</p>
+<p>Both numbers are real and they measure different things. Sixty-four is how much of the kernel’s spread the function is spilled across; ten is how many independent contrasts the function contains. The gap between them is the interesting quantity, and it says the network’s decisions are not aligned with the directions its own kernel varies along most: the loudest thing the kernel does and the thing the readout listens to are not the same axis. Which raises the obvious follow-up, one this post’s instrument cannot answer and <a href="/blog/yat-protocol">the interrogation protocol</a> is built for: if the two orderings disagree, which one should you call a concept?</p>
+<p><em>Scope: accuracies are three seeds of one Kaggle run (bundle <code>kgl_blog-mercer-v1</code>, m = 256, twelve epochs); spectral quantities are seed 0’s snapshots. The decomposition and truncation score use the same 10,000-image test sample, so the curves are descriptive reconstructions on that sample rather than an independent generalization estimate. A publication-grade protocol should discover modes on a training or audit split and evaluate truncation and semantic labels on a separate split. Modes are defined up to sign and up to rotation where eigenvalues tie.</em></p>
+<h2 id="the-second-exam-one-hundred-classes">The second exam: one hundred classes<a class="heading-anchor-link" aria-label="Link to heading" href="#the-second-exam-one-hundred-classes"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Fashion-MNIST exposes a counting trap. A ten-class readout has at most ten logit-covariance axes and at most nine decision-relevant contrasts, so finding roughly ten output directions says as much about matrix shape as it does about learned structure. Grayscale CIFAR-100 raises the ceiling to one hundred axes and ninety-nine decision contrasts. The same audit can now distinguish “fifteen” from “one hundred” without the answer being fixed in advance.</p>
+<p>The tested model is one Yat layer with 1,024 raw-pixel prototypes and a linear 100-class readout, trained for 24 epochs with the learning rate bracketed in-run. Across three seeds it reaches <strong>17.65 ± 0.17%</strong> top-1. That is about eighteen times chance and far from a competitive CIFAR-100 model; it is sufficient for asking what this explicit, shallow function learned.</p>
+<p>Rebuilding the predictor from its leading output axes gives a smooth accuracy curve rather than a clean elbow. Bootstrap stability supplies the second test: an axis counts as individually identifiable only when its direction returns under resampling above a declared 0.9 agreement gate. That gate holds for <strong>14.7 ± 1.2 axes</strong>. Solving a matching problem before scoring raises the stable-subspace count to <strong>18.3 ± 0.9</strong>, which shows exactly where individual-axis naming becomes fragile.</p>
+<figure class="viz hundredrebuild" data-caption="Accuracy reconstructed from the leading axes beside bootstrap agreement. Predictive value continues into the tail, while individual-axis identifiability stops near fifteen. The gate is operational and declared, not a theorem that turns eigenvectors into concepts." data-height="490" data-height-mobile="640" tabindex="0"> <div class="viz-cell"></div> </figure> <script type="module" src="/blog/_astro/HundredRebuild.astro_astro_type_script_index_0_lang.H1FPZl7D.js"></script>
+<p>CIFAR-100 provides twenty ground-truth superclasses, so semantic evidence no longer has to come only from visual inspection. The gain-weighted top ten axes have superclass alignment <strong>0.549 ± 0.003</strong>, against <strong>0.181 ± 0.051</strong> for matched random directions; the last twenty axes score <strong>0.122</strong>. Leading axes capture coarse structure, while the late tail mostly distinguishes within-superclass variation.</p>
+<figure class="viz taxonomylens" data-caption="Class loadings grouped by CIFAR-100's declared superclasses. Early axes move whole superclass blocks together; later axes split siblings inside those blocks. The null comparison gives the semantic reading a measured baseline." data-height="500" data-height-mobile="640" tabindex="0"> <div class="viz-cell"></div> </figure> <script type="module" src="/blog/_astro/TaxonomyLens.astro_astro_type_script_index_0_lang.Dswonc-H.js"></script>
+<p>The class codebook is also a packing experiment. Projecting one hundred centered class means into fifteen dimensions gives rms cosine <strong>0.402 ± 0.003</strong>, above the Welch floor of <strong>0.239</strong>. The excess is structured: different-superclass pairs average near the simplex value, while same-superclass pairs average <strong>+0.389</strong>. The most-confused class pairs have mean cosine <strong>+0.757</strong>; all other pairs average about zero. The representation spends its unavoidable overlap on visual siblings rather than distributing it evenly.</p>
+<figure class="viz codebooksqueeze" data-caption="The hundred class directions under a changing dimension budget. The Welch floor shows unavoidable crowding; the same-superclass split shows which overlap the trained model chooses to preserve." data-height="480" data-height-mobile="620" tabindex="0"> <div class="viz-cell"></div> </figure> <script type="module" src="/blog/_astro/CodebookSqueeze.astro_astro_type_script_index_0_lang.CWYMPcFS.js"></script>
+<p>Two diagnostics replicate and one changes. The learned softening remains far below the distances encountered by the winning runs; hotter learning rates move it into those distances and reduce accuracy. Concept axes remain diffuse across hundreds of prototypes, and deleting the largest rows followed by a readout refit restores the signal. The direction-versus-place ledger flips relative to Fashion-MNIST: on CIFAR-100 the leading axes are direction-driven under both tested decompositions. The method survives because the changed verdict is visible.</p>
+<figure class="viz epsfollows" data-caption="The learned softening against the distances the layer actually sees, plus the learning-rate sweep. Winning runs leave the softening idle; hotter runs move it into the data scale and lose accuracy." data-height="430" data-height-mobile="540" tabindex="0"> <div class="viz-cell"></div> </figure> <script type="module" src="/blog/_astro/EpsFollows.astro_astro_type_script_index_0_lang.CZBCfwCy.js"></script>
+<figure class="viz supportvsnull" data-caption="Support size for stable axes against matched random directions, followed by the delete-and-refit test. The axes are more concentrated than chance but nowhere near a small removable committee." data-height="420" data-height-mobile="520" tabindex="0"> <div class="viz-cell"></div> </figure> <script type="module" src="/blog/_astro/SupportVsNull.astro_astro_type_script_index_0_lang.xjSRw3I-.js"></script>
+<p>The second dataset therefore sharpens the instrument. A concept count needs a ceiling that does not predetermine it, stability under resampling, semantic evidence against an external label structure, and a distinction between individually named axes and a stable subspace. Without those four pieces, an eigenspectrum is a useful decomposition but not yet a concept inventory.</p>
+<h2 id="the-microscope-was-always-in-the-box">The microscope was always in the box<a class="heading-anchor-link" aria-label="Link to heading" href="#the-microscope-was-always-in-the-box"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Nothing in this post required a Yat-only eigendecomposition. Any hidden feature map can be placed under the same empirical microscope. Yat earns its place when the resulting axes are traced back through named prototype sections and kernel channels. Under that microscope, this run shows a sharp first-epoch concentration followed by a slower spread into finer empirical modes. A matched ReLU feature-Gram baseline remains the missing control for deciding how much of that trajectory is specifically caused by Yat.</p>
+<section class="cite-as" aria-labelledby="cite-mercer-microscope" data-astro-cid-p234urri> <h2 id="cite-mercer-microscope" data-astro-cid-p234urri>Cite as</h2> <p class="cite-line" data-astro-cid-p234urri>
+Bouhsine, T. (<time datetime="2026-07-27T00:00:00.000Z" data-astro-cid-p234urri>2026, July 27</time>).
+<em data-astro-cid-p234urri>The Trained Network, Under Mercer&#39;s Microscope</em>. Records of the !mmortal Data Scientist.
+<a href="https://tahabouhsine.com/blog/mercer-microscope/" data-astro-cid-p234urri>https://tahabouhsine.com/blog/mercer-microscope/</a> </p> <details class="cite-bib" data-astro-cid-p234urri> <summary data-astro-cid-p234urri>BibTeX</summary> <pre data-astro-cid-p234urri><code class="bibtex" data-astro-cid-p234urri>@misc{bouhsine2026mercermicroscope,
+  author       = {Bouhsine, Taha},
+  title        = {The Trained Network, Under Mercer&#39;s Microscope},
+  year         = {2026},
+  month        = {jul},
+  howpublished = {\url{https://tahabouhsine.com/blog/mercer-microscope/}},
+  note         = {Blog post, Records of the !mmortal Data Scientist}
+}</code></pre> <button type="button" class="cite-copy" data-copy="@misc{bouhsine2026mercermicroscope,
+  author       = {Bouhsine, Taha},
+  title        = {The Trained Network, Under Mercer's Microscope},
+  year         = {2026},
+  month        = {jul},
+  howpublished = {\url{https://tahabouhsine.com/blog/mercer-microscope/}},
+  note         = {Blog post, Records of the !mmortal Data Scientist}
+}" aria-label="Copy BibTeX" data-astro-cid-p234urri>copy</button> </details>  </section>  <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('.cite-copy').forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(btn.dataset.copy || '');
+            const original = btn.textContent;
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = original;
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>  <section class="references" aria-labelledby="references-heading" data-astro-cid-rn7nvbl4><h2 id="references-heading" data-astro-cid-rn7nvbl4>References</h2><ol data-astro-cid-rn7nvbl4><li id="ref-1" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Mercer, J.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(1909)</span>. <span class="ref-title" data-astro-cid-rn7nvbl4>Functions of Positive and Negative Type, and their Connection with the Theory of Integral Equations</span>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>Philosophical Transactions of the Royal Society A 209, 415-446</span>.</li><li id="ref-2" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Cucker, F., Smale, S.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2002)</span>. <span class="ref-title" data-astro-cid-rn7nvbl4>On the Mathematical Foundations of Learning</span>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>Bulletin of the AMS 39(1), 1-49</span>.</li><li id="ref-3" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Caponnetto, A., De Vito, E.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2007)</span>. <span class="ref-title" data-astro-cid-rn7nvbl4>Optimal Rates for the Regularized Least-Squares Algorithm</span>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>Foundations of Computational Mathematics 7, 331-368</span>.</li><li id="ref-4" data-astro-cid-rn7nvbl4><span class="ref-authors" data-astro-cid-rn7nvbl4>Bouhsine, T.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2026)</span>. <a class="ref-title" href="https://arxiv.org/abs/2605.03262" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance</a>.
+<a class="ref-ext" href="https://arxiv.org/abs/2605.03262" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:2605.03262</a></li></ol></section> </article> <script>(function(){const payload = {"post_title":"The Trained Network, Under Mercer's Microscope","post_slug":"mercer-microscope","post_path":"/blog/mercer-microscope/","post_tags":"kernels,mercer,spectra,interpretability,yat,mlp,jax","word_count":2583,"reading_time_minutes":13,"is_draft":false};
+
+  (() => {
+    const thresholds = [25, 50, 75, 90, 100];
+    const state = { viewed: false, sent: new Set() };
+
+    const track = (name, params = {}) => {
+      if (typeof window.__trackGA === 'function') {
+        window.__trackGA(name, {
+          ...payload,
+          ...params,
+          non_interaction: name === 'blog_post_view',
+        });
+      }
+    };
+
+    const init = () => {
+      const article = document.querySelector('[data-blog-post]');
+      if (!article) return;
+
+      if (!state.viewed) {
+        state.viewed = true;
+        track('blog_post_view');
+      }
+
+      const progress = () => {
+        const rect = article.getBoundingClientRect();
+        const articleTop = window.scrollY + rect.top;
+        const articleHeight = Math.max(1, article.offsetHeight);
+        const viewportBottom = window.scrollY + window.innerHeight;
+        return Math.max(0, Math.min(100, ((viewportBottom - articleTop) / articleHeight) * 100));
+      };
+
+      const update = () => {
+        const pct = progress();
+        thresholds.forEach((threshold) => {
+          if (pct >= threshold && !state.sent.has(threshold)) {
+            state.sent.add(threshold);
+            track('blog_post_read_depth', { read_percent: threshold });
+            if (threshold === 90) {
+              track('blog_post_read', { read_percent: threshold });
+            }
+          }
+        });
+      };
+
+      if (window.__postAnalyticsCleanup) window.__postAnalyticsCleanup();
+
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => {
+          update();
+          ticking = false;
+        });
+      };
+
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+      window.__postAnalyticsCleanup = () => {
+        window.removeEventListener('scroll', onScroll);
+        window.removeEventListener('resize', onScroll);
+      };
+      update();
+    };
+
+    init();
+    document.addEventListener('astro:page-load', init, { once: true });
+  })();
+})();</script> <aside class="related" aria-labelledby="related-heading" data-astro-cid-dpgbfi7r><h2 id="related-heading" data-astro-cid-dpgbfi7r>Related posts</h2><ul data-astro-cid-dpgbfi7r><li data-astro-cid-dpgbfi7r><a href="/blog/spectral-surgery/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>The Concept That Would Not Die</span><span class="related-desc" data-astro-cid-dpgbfi7r>An empirical feature covariance gives a trained kernel network ranked orthogonal axes. Deleting one axis is an exact algebraic intervention; the experiment asks whether it is also a semantic one. It is not: the damage spreads broadly and a small probe recovers the targeted distinction.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-07-28T00:00:00.000Z" data-astro-cid-dpgbfi7r>Jul 28, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/mlp-block-is-a-representer-theorem-jax-flax-nnx/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>A White-Box Kernel FFN in JAX/Flax NNX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion: build a transformer whose feed-forward block is a finite learned-center kernel expansion. Train it on tinyshakespeare, then read each memory slot, attribute outputs exactly, edit one slot, and test peak kernel response as an abstention score.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-06-27T17:00:00.000Z" data-astro-cid-dpgbfi7r>Jun 27, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/yat-mlp-jax-flax-nnx/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>The Yat-Kernel MLP in JAX/Flax NNX</span><span class="related-desc" data-astro-cid-dpgbfi7r>Build a finite bank of Yat-kernel sections in JAX/Flax NNX, verify the kernel, train it on two moons and Fashion-MNIST, inspect exact prototype contributions, and test the initialization control that separates visible centers from noisy ones.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-06-18T17:00:00.000Z" data-astro-cid-dpgbfi7r>Jun 18, 2026</time></span></a></li></ul></aside> <nav class="post-nav" aria-label="Adjacent posts"><a href="/blog/lazy-training/" class="prev" rel="prev"><div class="label">← Prototype Network</div><div class="title">How Many Random Neurons Buy a Trained One?</div></a><a href="/blog/spectral-surgery/" class="next" rel="next"><div class="label">Part 2 →</div><div class="title">The Concept That Would Not Die</div></a></nav> <script data-astro-rerun>(function(){const postSlug = "mercer-microscope";
+const lastRead = {"slug":"mercer-microscope","title":"The Trained Network, Under Mercer's Microscope","series":"The Kernel as an Instrument","part":1,"total":4};
+
+    try {
+      const raw = JSON.parse(localStorage.getItem('read-posts') || '[]');
+      const read = (Array.isArray(raw) ? raw : []).filter((s) => s !== postSlug);
+      read.push(postSlug);
+      while (read.length > 200) read.shift();
+      localStorage.setItem('read-posts', JSON.stringify(read));
+      if (lastRead) localStorage.setItem('last-read', JSON.stringify(lastRead));
+    } catch {}
+  })();</script> <section aria-label="Comments" id="giscus-mount" style="margin-top:3rem" data-giscus="{&#34;repo&#34;:&#34;mlnomadpy/blog&#34;,&#34;repoId&#34;:&#34;MDEwOlJlcG9zaXRvcnk0MDQ4MzY2NDU=&#34;,&#34;category&#34;:&#34;Announcements&#34;,&#34;categoryId&#34;:&#34;DIC_kwDOGCFRJc4C9EiR&#34;,&#34;mapping&#34;:&#34;pathname&#34;,&#34;reactionsEnabled&#34;:&#34;1&#34;,&#34;emitMetadata&#34;:&#34;0&#34;,&#34;inputPosition&#34;:&#34;top&#34;,&#34;theme&#34;:&#34;preferred_color_scheme&#34;,&#34;lang&#34;:&#34;en&#34;}"></section><script>
+    (() => {
+      const load = () => {
+        const mount = document.getElementById('giscus-mount');
+        if (!mount || mount.dataset.loaded === '1') return;
+        const cfg = JSON.parse(mount.dataset.giscus);
+        const theme = document.documentElement.getAttribute('data-theme')
+          || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        const s = document.createElement('script');
+        s.src = 'https://giscus.app/client.js';
+        s.async = true;
+        s.crossOrigin = 'anonymous';
+        const attrs = {
+          'data-repo': cfg.repo,
+          'data-repo-id': cfg.repoId,
+          'data-category': cfg.category,
+          'data-category-id': cfg.categoryId,
+          'data-mapping': cfg.mapping,
+          'data-strict': '0',
+          'data-reactions-enabled': cfg.reactionsEnabled,
+          'data-emit-metadata': cfg.emitMetadata,
+          'data-input-position': cfg.inputPosition,
+          'data-theme': theme,
+          'data-lang': cfg.lang,
+          'data-loading': 'lazy',
+        };
+        for (const k in attrs) s.setAttribute(k, attrs[k]);
+        mount.appendChild(s);
+        mount.dataset.loaded = '1';
+      };
+      load();
+      document.addEventListener('astro:page-load', load);
+      document.addEventListener('astro:after-swap', load);
+    })();
+  </script> <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('pre').forEach((pre) => {
+        if (pre.dataset.copyEnhanced) return;
+        pre.dataset.copyEnhanced = '1';
+        const btn = document.createElement('button');
+        btn.className = 'code-copy';
+        btn.type = 'button';
+        btn.textContent = 'copy';
+        btn.setAttribute('aria-label', 'Copy code');
+        btn.addEventListener('click', async () => {
+          const code = pre.querySelector('code');
+          const text = (code ? code.innerText : pre.innerText) || '';
+          try {
+            await navigator.clipboard.writeText(text);
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = 'copy';
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+        pre.appendChild(btn);
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>  </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span class="site-footer__links"> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> <a class="site-footer__support" href="https://buymeacoffee.com/mlnomadpy" target="_blank" rel="noopener noreferrer" aria-label="Support this blog on Buy Me a Coffee">
+buy me a coffee
+</a> </span> </footer> <div id="consent-banner" class="consent-banner" role="dialog" aria-live="polite" aria-label="Analytics consent" hidden><p class="consent-text">
+I use Google Analytics to see which posts get read. It sets cookies only
+      if you accept. No ads, no selling data.
+</p><div class="consent-actions"><button type="button" id="consent-decline" class="consent-btn consent-decline">Decline</button><button type="button" id="consent-accept" class="consent-btn consent-accept">Accept</button></div></div>
+
+  <script>
+    (() => {
+      const KEY = 'analytics-consent';
+      const setup = () => {
+        const banner = document.getElementById('consent-banner');
+        if (!banner) return;
+        let choice = null;
+        try { choice = localStorage.getItem(KEY); } catch (e) {}
+        // Already decided → keep hidden.
+        if (choice === 'granted' || choice === 'denied') { banner.hidden = true; return; }
+        banner.hidden = false;
+
+        const decide = (value) => {
+          try { localStorage.setItem(KEY, value); } catch (e) {}
+          banner.hidden = true;
+          if (value === 'granted' && typeof window.__loadGA === 'function') window.__loadGA();
+        };
+        const accept = document.getElementById('consent-accept');
+        const decline = document.getElementById('consent-decline');
+        if (accept && !accept.dataset.bound) {
+          accept.dataset.bound = '1';
+          accept.addEventListener('click', () => decide('granted'));
+        }
+        if (decline && !decline.dataset.bound) {
+          decline.dataset.bound = '1';
+          decline.addEventListener('click', () => decide('denied'));
+        }
+      };
+      setup();
+      document.addEventListener('astro:page-load', setup);
+    })();
+  </script>
+
+  <style>
+    /* Author `display:flex` below would otherwise override the UA [hidden]
+       rule, leaving the banner visible after a choice. This wins on specificity. */
+    .consent-banner[hidden] { display: none !important; }
+    .consent-banner {
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      right: 1rem;
+      max-width: 30rem;
+      margin-left: auto;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+      padding: 0.95rem 1.1rem;
+      background: var(--bg-elev, #fff);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      font-family: var(--sans);
+    }
+    .consent-text {
+      margin: 0;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: var(--fg-muted);
+    }
+    .consent-actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+    }
+    .consent-btn {
+      font-family: var(--sans);
+      font-size: 0.82rem;
+      padding: 0.4rem 0.95rem;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    }
+    .consent-decline {
+      background: transparent;
+      color: var(--fg-muted);
+    }
+    .consent-decline:hover { color: var(--fg); border-color: var(--fg-faint); }
+    .consent-accept {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg);
+      font-weight: 600;
+    }
+    .consent-accept:hover { filter: brightness(1.05); }
+    @media (max-width: 520px) {
+      .consent-banner { left: 0.6rem; right: 0.6rem; bottom: 0.6rem; }
+    }
+  </style> <script>
+      // Inject a fullscreen toggle button onto every .viz figure on the page.
+      (() => {
+        const ENTER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10V4h6"/><path d="M20 10V4h-6"/><path d="M4 14v6h6"/><path d="M20 14v6h-6"/></svg>';
+        const EXIT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H4v6"/><path d="M14 4h6v6"/><path d="M10 20H4v-6"/><path d="M14 20h6v-6"/></svg>';
+        const inFs = () => document.fullscreenElement || document.webkitFullscreenElement;
+        const enhance = () => {
+          document.querySelectorAll('.viz').forEach((fig) => {
+            if (fig.dataset.fsReady) return;
+            fig.dataset.fsReady = '1';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'viz-fs-btn';
+            btn.setAttribute('aria-label', 'Toggle fullscreen');
+            btn.innerHTML = ENTER_SVG + '<span>fullscreen</span>';
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              try {
+                if (inFs() === fig) {
+                  await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen?.());
+                } else if (fig.requestFullscreen) {
+                  await fig.requestFullscreen();
+                } else if (fig.webkitRequestFullscreen) {
+                  await fig.webkitRequestFullscreen();
+                }
+              } catch (_) {}
+            });
+            fig.appendChild(btn);
+          });
+          const sync = () => {
+            document.querySelectorAll('.viz-fs-btn').forEach((b) => {
+              const fig = b.parentElement;
+              const open = inFs() === fig;
+              b.innerHTML = (open ? EXIT_SVG : ENTER_SVG) + '<span>' + (open ? 'exit' : 'fullscreen') + '</span>';
+            });
+          };
+          document.addEventListener('fullscreenchange', sync);
+          document.addEventListener('webkitfullscreenchange', sync);
+        };
+        enhance();
+        document.addEventListener('astro:page-load', enhance);
+        document.addEventListener('astro:after-swap', enhance);
+      })();
+
+      // Teardown registry for the bespoke (non-vizkit) viz. Those hand-rolled their
+      // own observers / rAF loops and never cleaned up, so on an Astro view-transition
+      // swap the detached canvas kept firing forever. Each such viz pushes a {n:node,
+      // c:cleanup} entry here; we sweep on every swap and dispose whatever detached.
+      // vizkit-based viz self-clean via their own alive() guard and are not listed.
+      (() => {
+        const R = window.__vizReg || (window.__vizReg = new Set());
+        if (window.__vizSweepHooked) return;
+        window.__vizSweepHooked = true;
+        const sweep = () => { R.forEach((e) => { if (!e.n || !e.n.isConnected) { R.delete(e); try { e.c(); } catch (_) {} } }); };
+        document.addEventListener('astro:after-swap', sweep);
+        document.addEventListener('astro:page-load', sweep);
+      })();
+    </script> </body> </html>

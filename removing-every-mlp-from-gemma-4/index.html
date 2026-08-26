@@ -1,0 +1,673 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="generator" content="Astro v5.18.1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#fbfaf6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)"><title>Removing Every MLP from Gemma 4 12B</title><meta name="description" content="A local Gemma 4 12B MLP ablation removes 71% of its parameters. Here are the measured effects on quality, perplexity, and Apple Silicon speed."><meta name="keywords" content="Gemma 4 12B local benchmark, remove MLP transformer, attention-only transformer ablation, Gemma 4 Apple Silicon speed, MLX language model benchmark, ml, transformers, gemma, mlp, attention, ablation, inference, mlx, apple-silicon"><meta name="author" content="Taha Bouhsine"><link rel="canonical" href="https://tahabouhsine.com/blog/removing-every-mlp-from-gemma-4/"><link rel="icon" href="/blog/favicon.svg" type="image/svg+xml"><link rel="alternate" type="application/rss+xml" title="Records of the !mmortal Data Scientist" href="/blog/rss.xml"><link rel="sitemap" href="/blog/sitemap-index.xml"><link rel="me" href="https://github.com/mlnomadpy"><link rel="me" href="https://x.com/mlnomadpy"><link rel="me" href="https://www.linkedin.com/in/tahabsn/"><link rel="me" href="https://scholar.google.com/citations?user=IsBjb3EAAAAJ"><link rel="me" href="https://g.dev/tahabsn"><link rel="author" href="https://github.com/mlnomadpy"><meta property="og:type" content="article"><meta property="og:site_name" content="Records of the !mmortal Data Scientist"><meta property="og:title" content="Removing Every MLP from Gemma 4 12B"><meta property="og:description" content="A local Gemma 4 12B MLP ablation removes 71% of its parameters. Here are the measured effects on quality, perplexity, and Apple Silicon speed."><meta property="og:url" content="https://tahabouhsine.com/blog/removing-every-mlp-from-gemma-4/"><meta property="og:locale" content="en_US"><meta property="og:image" content="https://tahabouhsine.com/blog/og/removing-every-mlp-from-gemma-4.png"><meta property="og:image:alt" content="I Removed Every MLP from Gemma 4 12B — Records of the !mmortal Data Scientist"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:type" content="image/png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@mlnomadpy"><meta name="twitter:creator" content="@mlnomadpy"><meta name="twitter:title" content="Removing Every MLP from Gemma 4 12B"><meta name="twitter:description" content="A local Gemma 4 12B MLP ablation removes 71% of its parameters. Here are the measured effects on quality, perplexity, and Apple Silicon speed."><meta name="twitter:image" content="https://tahabouhsine.com/blog/og/removing-every-mlp-from-gemma-4.png"><meta name="twitter:image:alt" content="I Removed Every MLP from Gemma 4 12B — Records of the !mmortal Data Scientist"><meta property="article:published_time" content="2026-08-11T19:00:00.000Z"><meta property="article:author" content="Taha Bouhsine"><meta property="article:section" content="Machine Learning"><meta property="article:tag" content="ml"><meta property="article:tag" content="transformers"><meta property="article:tag" content="gemma"><meta property="article:tag" content="mlp"><meta property="article:tag" content="attention"><meta property="article:tag" content="ablation"><meta property="article:tag" content="inference"><meta property="article:tag" content="mlx"><meta property="article:tag" content="apple-silicon"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","@id":"https://tahabouhsine.com/blog/removing-every-mlp-from-gemma-4/#article","headline":"I Removed Every MLP from Gemma 4 12B","name":"I Removed Every MLP from Gemma 4 12B","description":"A local Gemma 4 12B MLP ablation removes 71% of its parameters. Here are the measured effects on quality, perplexity, and Apple Silicon speed.","image":["https://tahabouhsine.com/blog/og/removing-every-mlp-from-gemma-4.png"],"datePublished":"2026-08-11T19:00:00.000Z","dateModified":"2026-08-11T19:00:00.000Z","author":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#author","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","jobTitle":"Machine Learning Researcher","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"publisher":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#publisher","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"mainEntityOfPage":{"@type":"WebPage","@id":"https://tahabouhsine.com/blog/removing-every-mlp-from-gemma-4/"},"keywords":"Gemma 4 12B local benchmark, remove MLP transformer, attention-only transformer ablation, Gemma 4 Apple Silicon speed, MLX language model benchmark, ml, transformers, gemma, mlp, attention, ablation, inference, mlx, apple-silicon","url":"https://tahabouhsine.com/blog/removing-every-mlp-from-gemma-4/","inLanguage":"en-US","wordCount":1905,"timeRequired":"PT10M","articleSection":"Machine Learning","isPartOf":{"@type":"Blog","@id":"https://tahabouhsine.com/blog/","name":"Records of the !mmortal Data Scientist","url":"https://tahabouhsine.com/blog/"}}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Blog","item":"https://tahabouhsine.com/blog/"},{"@type":"ListItem","position":2,"name":"Machine Learning","item":"https://tahabouhsine.com/blog/tag/ml/"},{"@type":"ListItem","position":3,"name":"I Removed Every MLP from Gemma 4 12B","item":"https://tahabouhsine.com/blog/removing-every-mlp-from-gemma-4/"}]}</script><script>
+    (function () {
+      if (window.__gaSetup) return;
+      window.__gaSetup = true;
+      var GA_ID = 'G-373438VHJB';
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ dataLayer.push(arguments); }
+      window.gtag = window.gtag || gtag;
+      window.__gaEventQueue = window.__gaEventQueue || [];
+      window.__trackGA = function (eventName, params) {
+        if (!eventName) return;
+        var item = { name: eventName, params: params || {} };
+        if (window.__gaLoaded) {
+          gtag('event', item.name, item.params);
+        } else {
+          window.__gaEventQueue.push(item);
+        }
+      };
+
+      // Track whether the first astro:page-load has fired, so a mid-session
+      // Accept can still record the current page.
+      window.__gaFirstLoadDone = window.__gaFirstLoadDone || false;
+      document.addEventListener('astro:page-load', function () { window.__gaFirstLoadDone = true; });
+
+      window.__loadGA = function () {
+        if (window.__gaLoaded) return;
+        window.__gaLoaded = true;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+        document.head.appendChild(s);
+        gtag('js', new Date());
+        gtag('config', GA_ID, { send_page_view: false });
+        (window.__gaEventQueue || []).splice(0).forEach(function (item) {
+          gtag('event', item.name, item.params);
+        });
+        function sendPV() {
+          gtag('event', 'page_view', {
+            page_title: document.title,
+            page_location: location.href,
+            page_path: location.pathname + location.search,
+          });
+        }
+        document.addEventListener('astro:page-load', sendPV);
+        // If the initial page-load already happened (accept mid-session),
+        // record this page now; otherwise the listener catches the first one.
+        if (window.__gaFirstLoadDone) sendPV();
+      };
+
+      try {
+        if (localStorage.getItem('analytics-consent') === 'granted') window.__loadGA();
+      } catch (e) {}
+    })();
+  </script><script>
+  (() => {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'light' || stored === 'dark') {
+      document.documentElement.setAttribute('data-theme', stored);
+    }
+  })();
+</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.DDq-TDm1.css">
+<link rel="stylesheet" href="/blog/_astro/_slug_.1UYF8z3a.css">
+<style>.series-nav[data-astro-cid-w7ld43o3]{margin:0 0 1.1rem;border:1px solid var(--border);border-radius:8px;background:var(--bg-sunken);overflow:hidden}summary[data-astro-cid-w7ld43o3]{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.55rem .9rem;cursor:pointer;list-style:none;user-select:none;transition:background var(--transition-fast)}summary[data-astro-cid-w7ld43o3]::-webkit-details-marker{display:none}summary[data-astro-cid-w7ld43o3]:hover{background:color-mix(in srgb,var(--accent) 6%,var(--bg-sunken))}.sn-strip[data-astro-cid-w7ld43o3]{display:flex;align-items:baseline;gap:.5rem;min-width:0;font-family:var(--mono);font-size:.68rem;letter-spacing:.11em;text-transform:uppercase}.sn-part[data-astro-cid-w7ld43o3]{color:var(--accent);white-space:nowrap}.sn-sep[data-astro-cid-w7ld43o3]{color:var(--fg-faint)}.sn-series[data-astro-cid-w7ld43o3]{color:var(--fg-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sn-chevron[data-astro-cid-w7ld43o3]{flex:none;display:inline-flex;color:var(--fg-faint);transition:transform var(--transition-fast),color var(--transition-fast)}summary[data-astro-cid-w7ld43o3]:hover .sn-chevron[data-astro-cid-w7ld43o3]{color:var(--accent)}.series-nav[data-astro-cid-w7ld43o3][open] .sn-chevron[data-astro-cid-w7ld43o3]{transform:rotate(180deg)}.sn-list[data-astro-cid-w7ld43o3]{list-style:none;margin:0;padding:.25rem .9rem .55rem;border-top:1px dashed var(--border)}.sn-list[data-astro-cid-w7ld43o3] li[data-astro-cid-w7ld43o3]{margin:0}.sn-item[data-astro-cid-w7ld43o3]{display:flex;align-items:baseline;gap:.6rem;padding:.32rem 0;text-decoration:none;color:inherit}.sn-num[data-astro-cid-w7ld43o3]{flex:none;width:1.1rem;font-family:var(--mono);font-size:.72rem;color:var(--fg-faint);text-align:right;font-variant-numeric:tabular-nums}.sn-title[data-astro-cid-w7ld43o3]{font-family:var(--serif);font-size:.93rem;line-height:1.4;color:var(--fg-muted);transition:color var(--transition-fast)}a[data-astro-cid-w7ld43o3].sn-item:hover .sn-title[data-astro-cid-w7ld43o3],li[data-astro-cid-w7ld43o3].current .sn-num[data-astro-cid-w7ld43o3]{color:var(--accent)}li[data-astro-cid-w7ld43o3].current .sn-title[data-astro-cid-w7ld43o3]{color:var(--fg);font-weight:600}.sn-note[data-astro-cid-w7ld43o3]{flex:none;font-family:var(--mono);font-size:.6rem;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 55%,transparent);border-radius:4px;padding:.06rem .38rem;white-space:nowrap;align-self:center}@media(max-width:600px){.sn-series[data-astro-cid-w7ld43o3]{white-space:normal}.sn-strip[data-astro-cid-w7ld43o3]{flex-wrap:wrap;row-gap:.15rem}.sn-note[data-astro-cid-w7ld43o3]{display:none}li[data-astro-cid-w7ld43o3].current .sn-note[data-astro-cid-w7ld43o3]{display:inline-block}}
+</style><style>.cite-as[data-astro-cid-p234urri]{margin:3.5rem 0 0;padding-top:1.5rem;border-top:1px solid var(--border)}.cite-as[data-astro-cid-p234urri] h2[data-astro-cid-p234urri]{font-family:var(--mono);font-size:.82rem;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-faint);font-weight:500;margin:0 0 .75rem}.cite-as[data-astro-cid-p234urri] h3[data-astro-cid-p234urri]{font-family:var(--mono);font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-faint);font-weight:500;margin:1.5rem 0 .6rem}.cite-line[data-astro-cid-p234urri]{font-family:var(--serif);font-size:.98rem;line-height:1.55;color:var(--fg-muted);margin:0 0 .5rem}.cite-line[data-astro-cid-p234urri] em[data-astro-cid-p234urri]{color:var(--fg)}.cite-bib[data-astro-cid-p234urri]{margin:.4rem 0 0;position:relative}.cite-bib[data-astro-cid-p234urri] summary[data-astro-cid-p234urri]{cursor:pointer;font-family:var(--mono);font-size:.78rem;color:var(--fg-muted);padding:.25rem 0;user-select:none}.cite-bib[data-astro-cid-p234urri] summary[data-astro-cid-p234urri]:hover{color:var(--accent)}.cite-bib[data-astro-cid-p234urri] pre[data-astro-cid-p234urri]{margin:.4rem 0 0;padding:.85rem 1rem;background:var(--bg-elev);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;font-size:.82rem;line-height:1.55}.cite-bib[data-astro-cid-p234urri] pre[data-astro-cid-p234urri] code[data-astro-cid-p234urri]{background:transparent;border:0;padding:0}.cite-copy[data-astro-cid-p234urri]{position:absolute;top:2.1rem;right:.55rem;background:var(--bg);border:1px solid var(--border);color:var(--fg-muted);font-family:var(--mono);font-size:.72rem;padding:.25rem .55rem;border-radius:var(--radius-sm);cursor:pointer;transition:color var(--transition-fast),border-color var(--transition-fast)}.cite-copy[data-astro-cid-p234urri]:hover,.cite-copy[data-astro-cid-p234urri].copied{color:var(--accent);border-color:var(--accent)}
+</style></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/series">series</a><a href="/blog/archive">archive</a><a href="/blog/map">map</a><a href="/blog/writeups">writeups</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>
+  (() => {
+    const apply = (theme) => {
+      document.documentElement.setAttribute('data-theme', theme);
+      const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+      if (meta) meta.setAttribute('content', theme === 'dark' ? '#0e1116' : '#fbfaf6');
+      // Sync giscus iframe if present
+      const giscus = document.querySelector('iframe.giscus-frame');
+      if (giscus && giscus.contentWindow) {
+        giscus.contentWindow.postMessage(
+          { giscus: { setConfig: { theme: theme === 'dark' ? 'dark' : 'light' } } },
+          'https://giscus.app'
+        );
+      }
+    };
+
+    const init = () => {
+      const btns = document.querySelectorAll('[data-theme-toggle]');
+      btns.forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', () => {
+          const current = document.documentElement.getAttribute('data-theme')
+            || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          const next = current === 'dark' ? 'light' : 'dark';
+          localStorage.setItem('theme', next);
+          apply(next);
+        });
+      });
+    };
+
+    init();
+    document.addEventListener('astro:after-swap', init);
+    document.addEventListener('astro:page-load', init);
+  })();
+</script> </nav> </div> </header> <main id="main">  <div class="reading-progress" data-reading-progress aria-hidden="true"></div> <script>
+  (() => {
+    const init = () => {
+      const bar = document.querySelector('[data-reading-progress]');
+      if (!bar) return;
+      const update = () => {
+        const h = document.documentElement;
+        const scrolled = h.scrollTop;
+        const max = h.scrollHeight - h.clientHeight;
+        const pct = max > 0 ? Math.min(100, (scrolled / max) * 100) : 0;
+        bar.style.width = pct + '%';
+      };
+      // Coalesce scroll events into one paint per frame so fast/touch
+      // scrolling stays smooth.
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => { update(); ticking = false; });
+      };
+      update();
+      window.removeEventListener('scroll', window.__rp_onScroll || (() => {}));
+      window.removeEventListener('resize', window.__rp_onScroll || (() => {}));
+      window.__rp_onScroll = onScroll;
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+    };
+    init();
+    document.addEventListener('astro:page-load', init);
+    document.addEventListener('astro:after-swap', init);
+  })();
+</script> <article data-blog-post data-pagefind-body data-pagefind-meta="date:2026-08-11"> <header class="post-header">  <h1 data-pagefind-meta="title">I Removed Every MLP from Gemma 4 12B</h1> <p class="meta"> <time datetime="2026-08-11T19:00:00.000Z">August 11, 2026</time>   · 10 min read </p> <p style="margin-top:0.65rem" data-pagefind-meta="tags:ml,transformers,gemma,mlp,attention,ablation,inference,mlx,apple-silicon"> <a class="tag" href="/blog/tag/ml/">#ml</a><a class="tag" href="/blog/tag/transformers/">#transformers</a><a class="tag" href="/blog/tag/gemma/">#gemma</a><a class="tag" href="/blog/tag/mlp/">#mlp</a><a class="tag" href="/blog/tag/attention/">#attention</a><a class="tag" href="/blog/tag/ablation/">#ablation</a><a class="tag" href="/blog/tag/inference/">#inference</a><a class="tag" href="/blog/tag/mlx/">#mlx</a><a class="tag" href="/blog/tag/apple-silicon/">#apple-silicon</a> </p> </header>    <p>Delete 8.5 billion parameters from a 12-billion-parameter language model and it runs three times faster. That sounds like a pruning result. It is not. The fast model answers every multiple-choice question with <strong>B</strong> and, when allowed to speak freely, emits the audio control token until the generation limit stops it.</p>
+<p>That is what happened when I removed every MLP block from Gemma 4 12B.</p>
+<p>The result is more useful than “the model broke.” It puts numbers on both sides of the break. The MLPs account for 71 percent of this checkpoint’s parameters. Skipping them raises local decode speed from 32–34 tokens per second to 87–103 on an M5 Pro. But the same edit raises continuation perplexity from 7.74 to 3.06 trillion. <strong>The MLP is almost exactly where the speed was, and removing it is almost exactly where language stopped.</strong></p>
+<h2 id="what-exactly-did-i-remove">What, exactly, did I remove?<a class="heading-anchor-link" aria-label="Link to heading" href="#what-exactly-did-i-remove"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p><a href="https://huggingface.co/google/gemma-4-12B-it">Gemma 4 12B</a> is the dense, unified model in the Gemma 4 family. Its unusual multimodal front end projects raw image patches and audio frames directly into the language-model embedding space instead of using separate encoders. Behind that front end is a decoder-only transformer with 48 layers, a 3,840-dimensional residual stream, and a 15,360-dimensional gated MLP in every layer.</p>
+<p>Each MLP has three matrices: a gate projection, an up projection, and a down projection. Ignoring quantization metadata, its parameter count is</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mn>3</mn><mo>×</mo><mn>3,840</mn><mo>×</mo><mn>15,360</mn><mo>=</mo><mn>176,947,200.</mn></mrow><annotation encoding="application/x-tex">3 \times 3{,}840 \times 15{,}360
+= 176{,}947{,}200.</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em"></span><span class="mord">3</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em"></span><span class="mord">3</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">840</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em"></span><span class="mord">15</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">360</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em"></span><span class="mord">176</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">947</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">200.</span></span></span></span></span>
+<p>Across 48 layers that becomes</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mn>48</mn><mo>×</mo><mn>176,947,200</mn><mo>=</mo><mn>8,493,465,600</mn></mrow><annotation encoding="application/x-tex">48 \times 176{,}947{,}200
+= 8{,}493{,}465{,}600</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em"></span><span class="mord">48</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em"></span><span class="mord">176</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">947</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">200</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em"></span><span class="mord">8</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">493</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">465</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">600</span></span></span></span></span>
+<p>parameters: 71.0 percent of the checkpoint’s 11.96 billion parameters. “Remove the MLP” is not a small lesion here. It removes most of the model.</p>
+<p>But the intervention itself is clean. A Gemma decoder layer first adds attention to the residual stream, then adds the MLP:</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mtable rowspacing="0.25em" columnalign="right left" columnspacing="0em"><mtr><mtd><mstyle scriptlevel="0" displaystyle="true"><mi>h</mi></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="true"><mrow><mrow></mrow><mo>=</mo><mi>x</mi><mo>+</mo><msub><mrow><mi mathvariant="normal">PostNorm</mi><mo>⁡</mo></mrow><mtext>attn</mtext></msub><mtext> ⁣</mtext><mrow><mo fence="true">(</mo><mi mathvariant="normal">Attn</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mrow><mi mathvariant="normal">PreNorm</mi><mo>⁡</mo></mrow><mtext>attn</mtext></msub><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mo stretchy="false">)</mo><mo fence="true">)</mo></mrow><mo separator="true">,</mo></mrow></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel="0" displaystyle="true"><mi>y</mi></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="true"><mrow><mrow></mrow><mo>=</mo><mi>h</mi><mo>+</mo><msub><mrow><mi mathvariant="normal">PostNorm</mi><mo>⁡</mo></mrow><mtext>mlp</mtext></msub><mtext> ⁣</mtext><mrow><mo fence="true">(</mo><mi mathvariant="normal">MLP</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mrow><mi mathvariant="normal">PreNorm</mi><mo>⁡</mo></mrow><mtext>mlp</mtext></msub><mo stretchy="false">(</mo><mi>h</mi><mo stretchy="false">)</mo><mo stretchy="false">)</mo><mo fence="true">)</mo></mrow><mi mathvariant="normal">.</mi></mrow></mstyle></mtd></mtr></mtable><annotation encoding="application/x-tex">\begin{aligned}
+h &amp;= x + \operatorname{PostNorm}_{\text{attn}}\!\left(\operatorname{Attn}(\operatorname{PreNorm}_{\text{attn}}(x))\right),\\
+y &amp;= h + \operatorname{PostNorm}_{\text{mlp}}\!\left(\operatorname{MLP}(\operatorname{PreNorm}_{\text{mlp}}(h))\right).
+\end{aligned}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:2.7em;vertical-align:-1.1em"></span><span class="mord"><span class="mtable"><span class="col-align-r"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.6em"><span style="top:-3.76em"><span class="pstrut" style="height:3em"></span><span class="mord"><span class="mord mathnormal">h</span></span></span><span style="top:-2.26em"><span class="pstrut" style="height:3em"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em">y</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.1em"><span></span></span></span></span></span><span class="col-align-l"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.6em"><span style="top:-3.76em"><span class="pstrut" style="height:3em"></span><span class="mord"><span class="mord"></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mord mathnormal">x</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mop"><span class="mop"><span class="mord mathrm">PostNorm</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em"><span style="top:-2.55em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">attn</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:-0.1667em"></span><span class="mspace" style="margin-right:0.1667em"></span><span class="minner"><span class="mopen delimcenter" style="top:0em">(</span><span class="mop"><span class="mord mathrm">Attn</span></span><span class="mopen">(</span><span class="mop"><span class="mop"><span class="mord mathrm">PreNorm</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em"><span style="top:-2.55em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">attn</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose">))</span><span class="mclose delimcenter" style="top:0em">)</span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mpunct">,</span></span></span><span style="top:-2.26em"><span class="pstrut" style="height:3em"></span><span class="mord"><span class="mord"></span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mord mathnormal">h</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mop"><span class="mop"><span class="mord mathrm">PostNorm</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">mlp</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:-0.1667em"></span><span class="mspace" style="margin-right:0.1667em"></span><span class="minner"><span class="mopen delimcenter" style="top:0em">(</span><span class="mop"><span class="mord mathrm">MLP</span></span><span class="mopen">(</span><span class="mop"><span class="mop"><span class="mord mathrm">PreNorm</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em"><span style="top:-2.55em;margin-right:0.05em"><span class="pstrut" style="height:2.7em"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">mlp</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">h</span><span class="mclose">))</span><span class="mclose delimcenter" style="top:0em">)</span></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord">.</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.1em"><span></span></span></span></span></span></span></span></span></span></span></span>
+<p>I replaced the MLP’s output with an array of zeros. RMS normalization maps that zero array to zero, so the second line reduces exactly to <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi><mo>=</mo><mi>h</mi></mrow><annotation encoding="application/x-tex">y=h</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em"></span><span class="mord mathnormal" style="margin-right:0.0359em">y</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.6944em"></span><span class="mord mathnormal">h</span></span></span></span>. The attention branch, residual path, layer norms, token embeddings, and language-model head all remain. The depth remains 48. There is no retraining and no change to the attention weights.</p>
+<p>In the MLX model, the surgical part is this small:</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">class</span><span style="color:#6F42C1;--shiki-dark:#F69D50"> ZeroMLP</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(</span><span style="color:#6F42C1;--shiki-dark:#6CB6FF">nn</span><span style="color:#24292E;--shiki-dark:#ADBAC7">.</span><span style="color:#6F42C1;--shiki-dark:#6CB6FF">Module</span><span style="color:#24292E;--shiki-dark:#ADBAC7">):</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">    def</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> __call__</span><span style="color:#24292E;--shiki-dark:#ADBAC7">(self, x):</span></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">        return</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> mx.zeros_like(x)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49;--shiki-dark:#F47067">for</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> layer </span><span style="color:#D73A49;--shiki-dark:#F47067">in</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> model.layers:</span></span>
+<span class="line"><span style="color:#24292E;--shiki-dark:#ADBAC7">    layer.mlp </span><span style="color:#D73A49;--shiki-dark:#F47067">=</span><span style="color:#24292E;--shiki-dark:#ADBAC7"> ZeroMLP()</span></span></code></pre>
+<p>This is a test of the <strong>trained attention-only subnetwork inside Gemma</strong>, not a test of whether an attention-only model could learn language if trained from scratch.</p>
+<h2 id="the-local-experiment">The local experiment<a class="heading-anchor-link" aria-label="Link to heading" href="#the-local-experiment"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>I ran both conditions on the same MacBook Pro:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>item</th><th>setting</th></tr></thead><tbody><tr><td>hardware</td><td>Apple M5 Pro, 20-core GPU, 48 GB unified memory</td></tr><tr><td>model</td><td><code>mlx-community/gemma-4-12B-it-4bit</code></td></tr><tr><td>quantization</td><td>MLX affine 4-bit, group size 64</td></tr><tr><td>runtime</td><td>MLX LM 0.31.3, MLX 0.32.0</td></tr><tr><td>generation</td><td>greedy, thinking disabled</td></tr><tr><td>control</td><td>intact quantized checkpoint</td></tr><tr><td>intervention</td><td>all 48 MLP outputs replaced by zero</td></tr></tbody></table>
+<p>Quality needs more than one number, especially when a model may fail in a strange way. I used three views.</p>
+<p>First, a deterministic diagnostic slice of 40 MMLU questions spread evenly through the test set, covering 32 subjects. This is deliberately too small to be a leaderboard result; it is large enough to distinguish useful multiple-choice behavior from collapse. I scored the next-token logits for A, B, C, and D after opening Gemma’s final-answer channel.</p>
+<p>Second, I gave the model a 128-token WikiText-2 passage and scored the next 512 reference tokens under teacher forcing. Because this is an instruction-tuned checkpoint, the passage was framed as a chat request to continue the text exactly. The result is a conditional continuation perplexity, compared only against the same checkpoint under the ablation.</p>
+<p>Third, I generated answers to four fixed prompts: an explanation, a word problem, a coding task, and a short story. Those outputs tell us what the aggregate metrics cannot: <em>how</em> the model fails.</p>
+<p>For speed, I measured 64-token greedy generations after prompts of 128, 512, and 2,048 tokens. Every row below is the median of three warmed runs. Prefill and decode are reported separately because they stress the hardware differently.</p>
+<h2 id="the-quality-did-not-degrade-it-collapsed">The quality did not degrade. It collapsed.<a class="heading-anchor-link" aria-label="Link to heading" href="#the-quality-did-not-degrade-it-collapsed"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>measure</th><th style="text-align:right">intact</th><th style="text-align:right">no MLP</th></tr></thead><tbody><tr><td>MMLU diagnostic</td><td style="text-align:right"><strong>72.5%</strong> (29/40)</td><td style="text-align:right"><strong>22.5%</strong> (9/40)</td></tr><tr><td>WikiText continuation NLL</td><td style="text-align:right"><strong>2.05 nats/token</strong></td><td style="text-align:right"><strong>28.75 nats/token</strong></td></tr><tr><td>WikiText continuation perplexity</td><td style="text-align:right"><strong>7.74</strong></td><td style="text-align:right"><strong>3.06 × 10¹²</strong></td></tr><tr><td>free generation</td><td style="text-align:right">coherent text</td><td style="text-align:right">repeated &lt;audio|&gt; token</td></tr></tbody></table>
+<p>The 22.5 percent MMLU score looks close to random chance. It is worse than that. The no-MLP model chose <strong>B on all 40 questions</strong>. Nine happened to have B as the answer. The number does not show residual knowledge; it shows a constant classifier landing on the right label nine times.</p>
+<p>The continuation result is just as severe. Mean negative log-likelihood rises by 26.70 nats per token. Exponentiating that difference, the reference text becomes about <strong>395 billion times less likely</strong> under the attention-only network.</p>
+<p>And then there is the output itself. Asked why the sky is blue, the intact model wrote:</p>
+<blockquote>
+<p>The sky is blue because of a phenomenon called Rayleigh scattering, where sunlight interacts with the Earth’s atmosphere. As sunlight travels through the air, the gas molecules scatter shorter, blue wavelengths of light much more easily than longer colors like red or yellow.</p>
+</blockquote>
+<p>The no-MLP model wrote:</p>
+<blockquote>
+<p>&lt;audio|&gt; repeated for all 80 generated tokens.</p>
+</blockquote>
+<p>It produced the same audio-token loop for the sheep problem, the palindrome function, and the story. This is an especially revealing failure in the unified 12B model: the token is part of the model’s real multimodal vocabulary. Attention still moves states between positions, but without the learned feed-forward transformations those states fall into a control-token attractor instead of the region from which ordinary language is decoded.</p>
+<p>That last sentence is an inference from the outputs, not a mechanistic localization claim. This experiment does not prove that one MLP stores “audio mode,” or that facts live exclusively in MLP weights. It shows that the intact network’s attention and MLP branches are co-adapted so strongly that deleting one entire family drives the residual stream far outside the regime where the language head behaves normally.</p>
+<h2 id="the-speedup-is-real">The speedup is real<a class="heading-anchor-link" aria-label="Link to heading" href="#the-speedup-is-real"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The broken model is impressively fast.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th style="text-align:right">prompt</th><th style="text-align:right">prefill, intact</th><th style="text-align:right">prefill, no MLP</th><th style="text-align:right">speedup</th><th style="text-align:right">decode, intact</th><th style="text-align:right">decode, no MLP</th><th style="text-align:right">speedup</th></tr></thead><tbody><tr><td style="text-align:right">128 tokens</td><td style="text-align:right">557 tok/s</td><td style="text-align:right">1,501 tok/s</td><td style="text-align:right"><strong>2.70×</strong></td><td style="text-align:right">34.3 tok/s</td><td style="text-align:right">102.9 tok/s</td><td style="text-align:right"><strong>3.00×</strong></td></tr><tr><td style="text-align:right">512 tokens</td><td style="text-align:right">881 tok/s</td><td style="text-align:right">3,025 tok/s</td><td style="text-align:right"><strong>3.43×</strong></td><td style="text-align:right">32.8 tok/s</td><td style="text-align:right">97.5 tok/s</td><td style="text-align:right"><strong>2.98×</strong></td></tr><tr><td style="text-align:right">2,048 tokens</td><td style="text-align:right">836 tok/s</td><td style="text-align:right">2,678 tok/s</td><td style="text-align:right"><strong>3.20×</strong></td><td style="text-align:right">32.0 tok/s</td><td style="text-align:right">87.0 tok/s</td><td style="text-align:right"><strong>2.72×</strong></td></tr></tbody></table>
+<p>Decode is close to a clean 3× improvement at short and medium contexts. That makes sense on Apple Silicon: autoregressive decoding repeatedly streams model weights through a bandwidth-constrained system, and the MLP matrices are most of those weights. Remove 71 percent of the parameters and there is much less memory traffic per generated token.</p>
+<p>Prefill is dominated more by matrix multiplication and amortizes fixed overhead over the sequence. It improves by 2.7–3.4×, peaking on the 512-token shape in this small test. The exact rates are machine- and runtime-specific; the stable result is the scale of the change. Across every measured context, skipping the MLP saves most of the forward-pass time.</p>
+<p>So the compute accounting and the parameter accounting tell the same story. The MLP is not an inexpensive memory cabinet attached to an attention machine. In this dense model, it is most of the machine.</p>
+<h2 id="why-doesnt-attention-carry-the-model-by-itself">Why doesn’t attention carry the model by itself?<a class="heading-anchor-link" aria-label="Link to heading" href="#why-doesnt-attention-carry-the-model-by-itself"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>It is tempting to describe a transformer as two independent systems: attention routes information, while MLPs store facts. If that picture were literally modular, removing the MLPs might leave a forgetful but grammatical model—one that can copy, compose, and perhaps reason over whatever remains in context.</p>
+<p>That is not what the trained network contains.</p>
+<p>Attention writes into a residual stream whose next readers were trained in the presence of an MLP update at every layer. The next attention block therefore expects coordinates already rotated, gated, amplified, or suppressed by the previous feed-forward branch. Remove all 48 updates and the first layer may still produce a plausible perturbation, but the mismatch compounds with depth. By the top of the network, the language head is reading a representation it was never trained to decode.</p>
+<p>The experiment cannot separate three possible roles of the missing MLPs:</p>
+<ol>
+<li>storing associations in their gated projection matrices,</li>
+<li>performing token-wise computation that reshapes features for later attention, and</li>
+<li>keeping the residual stream on the distribution expected by subsequent layers.</li>
+</ol>
+<p>All three disappear at once. The special-token loop says the third role matters; the MMLU and likelihood collapse say the combined loss is catastrophic. To decide which layers do what, the next experiment should turn the all-or-nothing cut into a sweep.</p>
+<h2 id="the-experiments-this-one-asks-for">The experiments this one asks for<a class="heading-anchor-link" aria-label="Link to heading" href="#the-experiments-this-one-asks-for"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The obvious follow-up is a depth profile: remove one MLP at a time, then contiguous quarters, alternating layers, and finally all 48. If the last few blocks are disproportionately important for decoding, quality should fall late. If the network accumulates representational drift, the curve should decay with the number of cuts and depend on where they occur.</p>
+<p>A second experiment would replace deletion with a gain parameter,</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>y</mi><mo>=</mo><mi>h</mi><mo>+</mo><mi>α</mi><mtext> </mtext><mi mathvariant="normal">MLP</mi><mo>⁡</mo><mo stretchy="false">(</mo><mi>h</mi><mo stretchy="false">)</mo><mo separator="true">,</mo><mspace width="2em"></mspace><mi>α</mi><mo>∈</mo><mo stretchy="false">[</mo><mn>0</mn><mo separator="true">,</mo><mn>1</mn><mo stretchy="false">]</mo><mo separator="true">,</mo></mrow><annotation encoding="application/x-tex">y = h + \alpha\,\operatorname{MLP}(h), \qquad \alpha \in [0,1],</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em"></span><span class="mord mathnormal" style="margin-right:0.0359em">y</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.0833em"></span><span class="mord mathnormal">h</span><span class="mspace" style="margin-right:0.2222em"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mord mathnormal" style="margin-right:0.0037em">α</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mop"><span class="mord mathrm">MLP</span></span><span class="mopen">(</span><span class="mord mathnormal">h</span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em"></span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord mathnormal" style="margin-right:0.0037em">α</span><span class="mspace" style="margin-right:0.2778em"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2778em"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em"></span><span class="mopen">[</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="mord">1</span><span class="mclose">]</span><span class="mpunct">,</span></span></span></span></span>
+<p>and measure when the audio-token attractor appears. That would distinguish a graceful loss of capability from a sharp phase change.</p>
+<p>The deeper comparison is training. An attention-only transformer trained from initialization would have a chance to reorganize its residual stream around the missing computation. It might learn something useful, especially with more attention depth or different nonlinearities. This ablation makes no claim about that architecture’s capacity. It establishes a narrower fact about Gemma 4 12B: <strong>you cannot recover an attention-only language model by extracting the attention half of the trained model.</strong></p>
+<h2 id="reproducing-it">Reproducing it<a class="heading-anchor-link" aria-label="Link to heading" href="#reproducing-it"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>The full harness is in <code>scripts/gemma4_no_mlp.py</code>, and the raw per-question, per-prompt, and per-run results are in <code>scripts/results/gemma4_no_mlp.json</code>. The core setup is:</p>
+<pre class="astro-code astro-code-themes github-light github-dark-dimmed" style="background-color:#fff;--shiki-dark-bg:#22272e;color:#24292e;--shiki-dark:#adbac7;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1;--shiki-dark:#F69D50">uv</span><span style="color:#032F62;--shiki-dark:#96D0FF"> venv</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> --python</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> 3.14</span><span style="color:#032F62;--shiki-dark:#96D0FF"> .venv-gemma4</span></span>
+<span class="line"><span style="color:#6F42C1;--shiki-dark:#F69D50">uv</span><span style="color:#032F62;--shiki-dark:#96D0FF"> pip</span><span style="color:#032F62;--shiki-dark:#96D0FF"> install</span><span style="color:#005CC5;--shiki-dark:#6CB6FF"> --python</span><span style="color:#032F62;--shiki-dark:#96D0FF"> .venv-gemma4/bin/python</span><span style="color:#032F62;--shiki-dark:#96D0FF"> mlx-lm</span><span style="color:#032F62;--shiki-dark:#96D0FF"> datasets</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6F42C1;--shiki-dark:#F69D50">hf</span><span style="color:#032F62;--shiki-dark:#96D0FF"> download</span><span style="color:#032F62;--shiki-dark:#96D0FF"> mlx-community/gemma-4-12B-it-4bit</span><span style="color:#005CC5;--shiki-dark:#F47067"> \</span></span>
+<span class="line"><span style="color:#005CC5;--shiki-dark:#6CB6FF">  --local-dir</span><span style="color:#032F62;--shiki-dark:#96D0FF"> tmp/gemma-4-12B-it-4bit</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6F42C1;--shiki-dark:#F69D50">.venv-gemma4/bin/python</span><span style="color:#032F62;--shiki-dark:#96D0FF"> scripts/gemma4_no_mlp.py</span></span></code></pre>
+<p>The MLX conversion is not Google’s official QAT artifact, so its intact score should not be compared directly with Google’s published benchmark table. That does not weaken the ablation comparison: both conditions use the same quantized weights, tokenizer, prompts, runtime, and sampler. The only difference is whether the 48 MLP branches execute.</p>
+<h2 id="what-did-the-85-billion-parameters-buy">What did the 8.5 billion parameters buy?<a class="heading-anchor-link" aria-label="Link to heading" href="#what-did-the-85-billion-parameters-buy"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>On this machine, they buy about two-thirds of the latency. Inside this trained model, they also buy the difference between language and a control-token loop.</p>
+<p>That is the cleanest reading of the experiment. Attention without the MLP is not a smaller Gemma. It is a fast path through weights that no longer compose into Gemma’s function. The model runs three times faster because most of the model is gone, and the output tells us exactly how much “most” meant.</p>
+<section class="cite-as" aria-labelledby="cite-removing-every-mlp-from-gemma-4" data-astro-cid-p234urri> <h2 id="cite-removing-every-mlp-from-gemma-4" data-astro-cid-p234urri>Cite as</h2> <p class="cite-line" data-astro-cid-p234urri>
+Bouhsine, T. (<time datetime="2026-08-11T19:00:00.000Z" data-astro-cid-p234urri>2026, August 11</time>).
+<em data-astro-cid-p234urri>I Removed Every MLP from Gemma 4 12B</em>. Records of the !mmortal Data Scientist.
+<a href="https://tahabouhsine.com/blog/removing-every-mlp-from-gemma-4/" data-astro-cid-p234urri>https://tahabouhsine.com/blog/removing-every-mlp-from-gemma-4/</a> </p> <details class="cite-bib" data-astro-cid-p234urri> <summary data-astro-cid-p234urri>BibTeX</summary> <pre data-astro-cid-p234urri><code class="bibtex" data-astro-cid-p234urri>@misc{bouhsine2026removingeverymlpfromgemma4,
+  author       = {Bouhsine, Taha},
+  title        = {I Removed Every MLP from Gemma 4 12B},
+  year         = {2026},
+  month        = {aug},
+  howpublished = {\url{https://tahabouhsine.com/blog/removing-every-mlp-from-gemma-4/}},
+  note         = {Blog post, Records of the !mmortal Data Scientist}
+}</code></pre> <button type="button" class="cite-copy" data-copy="@misc{bouhsine2026removingeverymlpfromgemma4,
+  author       = {Bouhsine, Taha},
+  title        = {I Removed Every MLP from Gemma 4 12B},
+  year         = {2026},
+  month        = {aug},
+  howpublished = {\url{https://tahabouhsine.com/blog/removing-every-mlp-from-gemma-4/}},
+  note         = {Blog post, Records of the !mmortal Data Scientist}
+}" aria-label="Copy BibTeX" data-astro-cid-p234urri>copy</button> </details>  </section>  <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('.cite-copy').forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(btn.dataset.copy || '');
+            const original = btn.textContent;
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = original;
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>  <section class="references" aria-labelledby="references-heading" data-astro-cid-rn7nvbl4><h2 id="references-heading" data-astro-cid-rn7nvbl4>References</h2><ol data-astro-cid-rn7nvbl4><li id="ref-1" data-alt-id="ref-gemma4-report" data-astro-cid-rn7nvbl4><span id="ref-gemma4-report" class="ref-anchor" aria-hidden="true" data-astro-cid-rn7nvbl4></span><span class="ref-authors" data-astro-cid-rn7nvbl4>Gemma Team</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2026)</span>. <a class="ref-title" href="https://arxiv.org/abs/2607.02770" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>Gemma 4 Technical Report</a>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>arXiv</span>.<a class="ref-ext" href="https://arxiv.org/abs/2607.02770" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:2607.02770</a></li><li id="ref-2" data-alt-id="ref-gemma4-guide" data-astro-cid-rn7nvbl4><span id="ref-gemma4-guide" class="ref-anchor" aria-hidden="true" data-astro-cid-rn7nvbl4></span><span class="ref-authors" data-astro-cid-rn7nvbl4>Pinto, A. S., Steiner, A., Misiunas, K., Roth, K., Tschannen, M., and Sanseviero, O.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2026)</span>. <a class="ref-title" href="https://developers.googleblog.com/gemma-4-12b-the-developer-guide/" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>Gemma 4 12B: The Developer Guide</a>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>Google Developers Blog</span>.</li><li id="ref-3" data-alt-id="ref-mmlu" data-astro-cid-rn7nvbl4><span id="ref-mmlu" class="ref-anchor" aria-hidden="true" data-astro-cid-rn7nvbl4></span><span class="ref-authors" data-astro-cid-rn7nvbl4>Hendrycks, D., Burns, C., Basart, S., et al.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2021)</span>. <a class="ref-title" href="https://arxiv.org/abs/2009.03300" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>Measuring Massive Multitask Language Understanding</a>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>ICLR</span>.<a class="ref-ext" href="https://arxiv.org/abs/2009.03300" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:2009.03300</a></li><li id="ref-4" data-alt-id="ref-wikitext" data-astro-cid-rn7nvbl4><span id="ref-wikitext" class="ref-anchor" aria-hidden="true" data-astro-cid-rn7nvbl4></span><span class="ref-authors" data-astro-cid-rn7nvbl4>Merity, S., Xiong, C., Bradbury, J., and Socher, R.</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2017)</span>. <a class="ref-title" href="https://arxiv.org/abs/1609.07843" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>Pointer Sentinel Mixture Models</a>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>ICLR</span>.<a class="ref-ext" href="https://arxiv.org/abs/1609.07843" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>arXiv:1609.07843</a></li><li id="ref-5" data-alt-id="ref-mlx-lm" data-astro-cid-rn7nvbl4><span id="ref-mlx-lm" class="ref-anchor" aria-hidden="true" data-astro-cid-rn7nvbl4></span><span class="ref-authors" data-astro-cid-rn7nvbl4>MLX Team</span> <span class="ref-year" data-astro-cid-rn7nvbl4>(2026)</span>. <a class="ref-title" href="https://github.com/ml-explore/mlx-lm" target="_blank" rel="noopener noreferrer" data-astro-cid-rn7nvbl4>MLX LM: Run LLMs with MLX</a>.
+<span class="ref-venue" data-astro-cid-rn7nvbl4>GitHub</span>.</li></ol></section> </article> <script>(function(){const payload = {"post_title":"I Removed Every MLP from Gemma 4 12B","post_slug":"removing-every-mlp-from-gemma-4","post_path":"/blog/removing-every-mlp-from-gemma-4/","post_tags":"ml,transformers,gemma,mlp,attention,ablation,inference,mlx,apple-silicon","word_count":1905,"reading_time_minutes":10,"is_draft":false};
+
+  (() => {
+    const thresholds = [25, 50, 75, 90, 100];
+    const state = { viewed: false, sent: new Set() };
+
+    const track = (name, params = {}) => {
+      if (typeof window.__trackGA === 'function') {
+        window.__trackGA(name, {
+          ...payload,
+          ...params,
+          non_interaction: name === 'blog_post_view',
+        });
+      }
+    };
+
+    const init = () => {
+      const article = document.querySelector('[data-blog-post]');
+      if (!article) return;
+
+      if (!state.viewed) {
+        state.viewed = true;
+        track('blog_post_view');
+      }
+
+      const progress = () => {
+        const rect = article.getBoundingClientRect();
+        const articleTop = window.scrollY + rect.top;
+        const articleHeight = Math.max(1, article.offsetHeight);
+        const viewportBottom = window.scrollY + window.innerHeight;
+        return Math.max(0, Math.min(100, ((viewportBottom - articleTop) / articleHeight) * 100));
+      };
+
+      const update = () => {
+        const pct = progress();
+        thresholds.forEach((threshold) => {
+          if (pct >= threshold && !state.sent.has(threshold)) {
+            state.sent.add(threshold);
+            track('blog_post_read_depth', { read_percent: threshold });
+            if (threshold === 90) {
+              track('blog_post_read', { read_percent: threshold });
+            }
+          }
+        });
+      };
+
+      if (window.__postAnalyticsCleanup) window.__postAnalyticsCleanup();
+
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => {
+          update();
+          ticking = false;
+        });
+      };
+
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+      window.__postAnalyticsCleanup = () => {
+        window.removeEventListener('scroll', onScroll);
+        window.removeEventListener('resize', onScroll);
+      };
+      update();
+    };
+
+    init();
+    document.addEventListener('astro:page-load', init, { once: true });
+  })();
+})();</script> <aside class="related" aria-labelledby="related-heading" data-astro-cid-dpgbfi7r><h2 id="related-heading" data-astro-cid-dpgbfi7r>Related posts</h2><ul data-astro-cid-dpgbfi7r><li data-astro-cid-dpgbfi7r><a href="/blog/mlp-block-is-a-representer-theorem/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>The MLP Block Can Be a Kernel Memory</span><span class="related-desc" data-astro-cid-dpgbfi7r>Replace an MLP activation with a kernel and its feed-forward block becomes an explicit learned-center expansion. Its slots can be read, attributed, and edited, but this architectural parameterization is not the classical representer theorem.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-06-27T00:00:00.000Z" data-astro-cid-dpgbfi7r>Jun 27, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/readout-as-convex-combination/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>The Readout is a Convex Combination of Prototypes</span><span class="related-desc" data-astro-cid-dpgbfi7r>The second linear map in a transformer MLP is a dictionary of output prototypes, one per hidden unit. If the hidden activations are nonnegative and normalized, W_out reads the active neurons as a convex combination of output prototypes. Two independent constraints, nonnegativity and summing to one, sort the readout into four regimes: convex, conic, affine, and linear. This reframes the MLP readout as the same object that makes attention legible (a weighted sum over named basis elements), connects it to feed-forward key-value memories and modern Hopfield retrieval, and shows when a kernel makes it convex by construction.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-06-04T19:00:00.000Z" data-astro-cid-dpgbfi7r>Jun 4, 2026</time></span></a></li><li data-astro-cid-dpgbfi7r><a href="/blog/mlp-block-is-a-representer-theorem-jax-flax-nnx/" data-astro-cid-dpgbfi7r><span class="related-title" data-astro-cid-dpgbfi7r>A White-Box Kernel FFN in JAX/Flax NNX</span><span class="related-desc" data-astro-cid-dpgbfi7r>A runnable companion: build a transformer whose feed-forward block is a finite learned-center kernel expansion. Train it on tinyshakespeare, then read each memory slot, attribute outputs exactly, edit one slot, and test peak kernel response as an abstention score.</span><span class="related-meta" data-astro-cid-dpgbfi7r><time datetime="2026-06-27T17:00:00.000Z" data-astro-cid-dpgbfi7r>Jun 27, 2026</time></span></a></li></ul></aside> <nav class="post-nav" aria-label="Adjacent posts"><a href="/blog/patch-parts/" class="prev" rel="prev"><div class="label">← Previous</div><div class="title">A Network Made of Parts</div></a><span></span></nav> <script data-astro-rerun>(function(){const postSlug = "removing-every-mlp-from-gemma-4";
+const lastRead = null;
+
+    try {
+      const raw = JSON.parse(localStorage.getItem('read-posts') || '[]');
+      const read = (Array.isArray(raw) ? raw : []).filter((s) => s !== postSlug);
+      read.push(postSlug);
+      while (read.length > 200) read.shift();
+      localStorage.setItem('read-posts', JSON.stringify(read));
+      if (lastRead) localStorage.setItem('last-read', JSON.stringify(lastRead));
+    } catch {}
+  })();</script> <section aria-label="Comments" id="giscus-mount" style="margin-top:3rem" data-giscus="{&#34;repo&#34;:&#34;mlnomadpy/blog&#34;,&#34;repoId&#34;:&#34;MDEwOlJlcG9zaXRvcnk0MDQ4MzY2NDU=&#34;,&#34;category&#34;:&#34;Announcements&#34;,&#34;categoryId&#34;:&#34;DIC_kwDOGCFRJc4C9EiR&#34;,&#34;mapping&#34;:&#34;pathname&#34;,&#34;reactionsEnabled&#34;:&#34;1&#34;,&#34;emitMetadata&#34;:&#34;0&#34;,&#34;inputPosition&#34;:&#34;top&#34;,&#34;theme&#34;:&#34;preferred_color_scheme&#34;,&#34;lang&#34;:&#34;en&#34;}"></section><script>
+    (() => {
+      const load = () => {
+        const mount = document.getElementById('giscus-mount');
+        if (!mount || mount.dataset.loaded === '1') return;
+        const cfg = JSON.parse(mount.dataset.giscus);
+        const theme = document.documentElement.getAttribute('data-theme')
+          || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        const s = document.createElement('script');
+        s.src = 'https://giscus.app/client.js';
+        s.async = true;
+        s.crossOrigin = 'anonymous';
+        const attrs = {
+          'data-repo': cfg.repo,
+          'data-repo-id': cfg.repoId,
+          'data-category': cfg.category,
+          'data-category-id': cfg.categoryId,
+          'data-mapping': cfg.mapping,
+          'data-strict': '0',
+          'data-reactions-enabled': cfg.reactionsEnabled,
+          'data-emit-metadata': cfg.emitMetadata,
+          'data-input-position': cfg.inputPosition,
+          'data-theme': theme,
+          'data-lang': cfg.lang,
+          'data-loading': 'lazy',
+        };
+        for (const k in attrs) s.setAttribute(k, attrs[k]);
+        mount.appendChild(s);
+        mount.dataset.loaded = '1';
+      };
+      load();
+      document.addEventListener('astro:page-load', load);
+      document.addEventListener('astro:after-swap', load);
+    })();
+  </script> <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('pre').forEach((pre) => {
+        if (pre.dataset.copyEnhanced) return;
+        pre.dataset.copyEnhanced = '1';
+        const btn = document.createElement('button');
+        btn.className = 'code-copy';
+        btn.type = 'button';
+        btn.textContent = 'copy';
+        btn.setAttribute('aria-label', 'Copy code');
+        btn.addEventListener('click', async () => {
+          const code = pre.querySelector('code');
+          const text = (code ? code.innerText : pre.innerText) || '';
+          try {
+            await navigator.clipboard.writeText(text);
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = 'copy';
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+        pre.appendChild(btn);
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>  </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span class="site-footer__links"> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> <a class="site-footer__support" href="https://buymeacoffee.com/mlnomadpy" target="_blank" rel="noopener noreferrer" aria-label="Support this blog on Buy Me a Coffee">
+buy me a coffee
+</a> </span> </footer> <div id="consent-banner" class="consent-banner" role="dialog" aria-live="polite" aria-label="Analytics consent" hidden><p class="consent-text">
+I use Google Analytics to see which posts get read. It sets cookies only
+      if you accept. No ads, no selling data.
+</p><div class="consent-actions"><button type="button" id="consent-decline" class="consent-btn consent-decline">Decline</button><button type="button" id="consent-accept" class="consent-btn consent-accept">Accept</button></div></div>
+
+  <script>
+    (() => {
+      const KEY = 'analytics-consent';
+      const setup = () => {
+        const banner = document.getElementById('consent-banner');
+        if (!banner) return;
+        let choice = null;
+        try { choice = localStorage.getItem(KEY); } catch (e) {}
+        // Already decided → keep hidden.
+        if (choice === 'granted' || choice === 'denied') { banner.hidden = true; return; }
+        banner.hidden = false;
+
+        const decide = (value) => {
+          try { localStorage.setItem(KEY, value); } catch (e) {}
+          banner.hidden = true;
+          if (value === 'granted' && typeof window.__loadGA === 'function') window.__loadGA();
+        };
+        const accept = document.getElementById('consent-accept');
+        const decline = document.getElementById('consent-decline');
+        if (accept && !accept.dataset.bound) {
+          accept.dataset.bound = '1';
+          accept.addEventListener('click', () => decide('granted'));
+        }
+        if (decline && !decline.dataset.bound) {
+          decline.dataset.bound = '1';
+          decline.addEventListener('click', () => decide('denied'));
+        }
+      };
+      setup();
+      document.addEventListener('astro:page-load', setup);
+    })();
+  </script>
+
+  <style>
+    /* Author `display:flex` below would otherwise override the UA [hidden]
+       rule, leaving the banner visible after a choice. This wins on specificity. */
+    .consent-banner[hidden] { display: none !important; }
+    .consent-banner {
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      right: 1rem;
+      max-width: 30rem;
+      margin-left: auto;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+      padding: 0.95rem 1.1rem;
+      background: var(--bg-elev, #fff);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      font-family: var(--sans);
+    }
+    .consent-text {
+      margin: 0;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: var(--fg-muted);
+    }
+    .consent-actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+    }
+    .consent-btn {
+      font-family: var(--sans);
+      font-size: 0.82rem;
+      padding: 0.4rem 0.95rem;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    }
+    .consent-decline {
+      background: transparent;
+      color: var(--fg-muted);
+    }
+    .consent-decline:hover { color: var(--fg); border-color: var(--fg-faint); }
+    .consent-accept {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg);
+      font-weight: 600;
+    }
+    .consent-accept:hover { filter: brightness(1.05); }
+    @media (max-width: 520px) {
+      .consent-banner { left: 0.6rem; right: 0.6rem; bottom: 0.6rem; }
+    }
+  </style> <script>
+      // Inject a fullscreen toggle button onto every .viz figure on the page.
+      (() => {
+        const ENTER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10V4h6"/><path d="M20 10V4h-6"/><path d="M4 14v6h6"/><path d="M20 14v6h-6"/></svg>';
+        const EXIT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H4v6"/><path d="M14 4h6v6"/><path d="M10 20H4v-6"/><path d="M14 20h6v-6"/></svg>';
+        const inFs = () => document.fullscreenElement || document.webkitFullscreenElement;
+        const enhance = () => {
+          document.querySelectorAll('.viz').forEach((fig) => {
+            if (fig.dataset.fsReady) return;
+            fig.dataset.fsReady = '1';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'viz-fs-btn';
+            btn.setAttribute('aria-label', 'Toggle fullscreen');
+            btn.innerHTML = ENTER_SVG + '<span>fullscreen</span>';
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              try {
+                if (inFs() === fig) {
+                  await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen?.());
+                } else if (fig.requestFullscreen) {
+                  await fig.requestFullscreen();
+                } else if (fig.webkitRequestFullscreen) {
+                  await fig.webkitRequestFullscreen();
+                }
+              } catch (_) {}
+            });
+            fig.appendChild(btn);
+          });
+          const sync = () => {
+            document.querySelectorAll('.viz-fs-btn').forEach((b) => {
+              const fig = b.parentElement;
+              const open = inFs() === fig;
+              b.innerHTML = (open ? EXIT_SVG : ENTER_SVG) + '<span>' + (open ? 'exit' : 'fullscreen') + '</span>';
+            });
+          };
+          document.addEventListener('fullscreenchange', sync);
+          document.addEventListener('webkitfullscreenchange', sync);
+        };
+        enhance();
+        document.addEventListener('astro:page-load', enhance);
+        document.addEventListener('astro:after-swap', enhance);
+      })();
+
+      // Teardown registry for the bespoke (non-vizkit) viz. Those hand-rolled their
+      // own observers / rAF loops and never cleaned up, so on an Astro view-transition
+      // swap the detached canvas kept firing forever. Each such viz pushes a {n:node,
+      // c:cleanup} entry here; we sweep on every swap and dispose whatever detached.
+      // vizkit-based viz self-clean via their own alive() guard and are not listed.
+      (() => {
+        const R = window.__vizReg || (window.__vizReg = new Set());
+        if (window.__vizSweepHooked) return;
+        window.__vizSweepHooked = true;
+        const sweep = () => { R.forEach((e) => { if (!e.n || !e.n.isConnected) { R.delete(e); try { e.c(); } catch (_) {} } }); };
+        document.addEventListener('astro:after-swap', sweep);
+        document.addEventListener('astro:page-load', sweep);
+      })();
+    </script> </body> </html>
