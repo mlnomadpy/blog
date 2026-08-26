@@ -5,7 +5,7 @@ interface Props {
 }
 const { caption, height = 400 } = Astro.props;
 ---
-<figure class="viz eig-cascade" data-poster="eig-cascade" data-caption={caption} data-height={height} tabindex="0">
+<figure class="viz eig-cascade" data-caption={caption} data-height={height} tabindex="0">
   <div class="viz-cell"></div>
 </figure>
 
@@ -35,7 +35,7 @@ function effDim(lam) {
 }
 
 defineViz('eig-cascade', {
-  title: 'The price list decides which modes survive',
+  title: 'The spectrum and λ decide which modes survive',
   height: 400,
   controls: [
     { type: 'range', name: 'lam', label: 'regularization λ', min: -3, max: 2, step: 0.05, value: -1, fmt: (v) => (10 ** v).toFixed(2) },
@@ -59,7 +59,7 @@ defineViz('eig-cascade', {
 
     // title
     T(ctx, colors, 'label');
-    ctx.fillText('each bar is the eigenvalue λₖ: the price of mode k. tight budget kills the tail first.', pad, pad + 13);
+    ctx.fillText('bar height is log eigenvalue λₖ; small-eigenvalue modes are expensive in the RKHS norm.', pad, pad + 13);
 
     // LEFT: eigenvalue spectrum
     const specLeft = pad, specW = splitX - pad - 10;
@@ -71,7 +71,8 @@ defineViz('eig-cascade', {
     const maxL = l[1] || 1;
     for (let k = 1; k <= K; k++) {
       const bx = specLeft + 8 + (k - 1) * (barW + 1);
-      const bh = (l[k] / maxL) * (specH - 24);
+      const logLevel = Math.max(-12, Math.log10(Math.max(l[k] / maxL, 1e-12)));
+      const bh = ((logLevel + 12) / 12) * (specH - 24);
       const by = specTop + specH - 10 - bh;
       const alive = l[k] / (l[k] + lam) > 0.05;
       ctx.fillStyle = alive ? rgba(ACC_RGB, 0.8) : rgba(parseColor(colors.muted), 0.3);
@@ -83,7 +84,7 @@ defineViz('eig-cascade', {
     T(ctx, colors, 'small', { align: 'left' });
     ctx.fillText('mode k', specLeft + 6, specTop + specH + 4);
     T(ctx, colors, 'small', { align: 'right' });
-    ctx.fillText('λₖ', specLeft + specW - 4, specTop + 14);
+    ctx.fillText('log λₖ', specLeft + specW - 4, specTop + 14);
 
     // RIGHT: effective dimension gauge
     const gaugeLeft = splitX + 6, gaugeW = W - splitX - pad - 6;
@@ -92,7 +93,7 @@ defineViz('eig-cascade', {
     softPanel(ctx, gaugeLeft, gaugeTop, gaugeW, gaugeH, colors, { r: 8 });
 
     const dEff = effDim(lam);
-    const maxDim = K;
+    const maxDim = 10;
     const gaugePad = 16;
     const gaugeBarX = gaugeLeft + gaugePad + 20;
     const gaugeBarW = gaugeW - gaugePad * 2 - 24;
@@ -117,7 +118,7 @@ defineViz('eig-cascade', {
     // tick marks
     ctx.fillStyle = colors.faint; ctx.font = '9px ui-monospace, monospace';
     ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-    for (let d = 0; d <= maxDim; d += 10) {
+    for (let d = 0; d <= maxDim; d += 2) {
       const ty = gaugeBarTop + gaugeBarH - (d / maxDim) * gaugeBarH;
       ctx.fillText(String(d), gaugeBarX - 4, ty);
       ctx.strokeStyle = parseColor(colors.border); ctx.globalAlpha = 0.3;

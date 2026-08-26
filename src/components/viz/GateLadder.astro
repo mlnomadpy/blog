@@ -1,0 +1,79 @@
+---
+interface Props { caption?: string; height?: number; }
+const { caption, height = 360 } = Astro.props;
+---
+<figure class="viz gateladder" data-caption={caption} data-height={height} data-height-mobile="440" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+<script>
+// The same identifiability gate that stopped the flat model at fifteen, run
+// on the mixer's pooled layer: four stability strips, one instrument.
+import { defineViz } from './engine/vizkit.js';
+import { T, fmt, gate, loadingText } from './engine/draw.js';
+import { load } from './patchconv.js';
+
+defineViz('gateladder', {
+  title: 'The naming gate, before and after composition',
+  height: 360,
+  controls: [{ type: 'readout', name: 'rd' }],
+  setup(api) {
+    const st = api.state;
+    st.hover = null;
+    gate(api, () => load('story'), (a, d) => { a.state.d = d; });
+    api.canvas.addEventListener('pointermove', (e) => {
+      if (!st.ready || !st.strips) return;
+      const r = api.canvas.getBoundingClientRect();
+      const p = { x: e.clientX - r.left, y: e.clientY - r.top };
+      let hit = null;
+      for (const s of st.strips) {
+        if (p.y >= s.y && p.y <= s.y + s.h && p.x >= s.x && p.x <= s.x + s.w) {
+          hit = { row: s.row, rank: Math.min(99, Math.max(0, Math.floor((p.x - s.x) / s.w * 100))) };
+          break;
+        }
+      }
+      st.hover = hit;
+      api.render();
+    });
+  },
+  draw(api) {
+    const { ctx, colors, size: { W, H } } = api, st = api.state;
+    if (!st.ready) { loadingText(api, 'loading the audit…'); return; }
+    const d = st.d;
+    const pad = 14, top = 34;
+    const rows = [
+      { label: `flat whole-image model: ${fmt(d.flat.named, 1)} nameable`, stab: d.flat_stability },
+      ...d.audit.map((a, i) => ({ label: `mixer seed ${i}: ${a.named} nameable`, stab: a.stability })),
+    ];
+    const rh = (H - top - 60) / rows.length;
+    const bw = (W - pad * 2 - 40);
+    st.strips = [];
+    rows.forEach((row, ri) => {
+      const y = top + ri * rh;
+      T(ctx, colors, 'label');
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      ctx.fillText(row.label, pad, y + 12);
+      const sy = y + 18, sh = rh - 34;
+      row.stab.forEach((v, j) => {
+        const x = pad + (j / 100) * bw;
+        ctx.fillStyle = v >= 0.9 ? '#3a8f5e' : colors.muted;
+        ctx.globalAlpha = v >= 0.9 ? 0.9 : 0.4;
+        ctx.fillRect(x, sy + (1 - v) * sh, bw / 105, Math.max(v * sh, 1));
+        ctx.globalAlpha = 1;
+      });
+      ctx.strokeStyle = colors.faint; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(pad, sy + 0.1 * sh); ctx.lineTo(pad + bw, sy + 0.1 * sh); ctx.stroke();
+      ctx.setLineDash([]);
+      st.strips.push({ x: pad, y: sy, w: bw, h: sh, row: ri, rowsIdx: ri });
+    });
+    T(ctx, colors, 'small');
+    ctx.fillStyle = colors.faint;
+    ctx.fillText('each bar: one concept axis’s bootstrap stability; green clears the 0.9 naming gate; rank 1 to 100 left to right', pad, H - 18);
+    if (st.hover) {
+      const row = rows[st.hover.row];
+      api.readout('rd', `${row.label.split(':')[0]}, axis ${st.hover.rank + 1}: stability ${fmt(row.stab[st.hover.rank], 2)}`);
+    } else {
+      api.readout('rd', `same instrument, same gate, same dataset; only the architecture changed`);
+    }
+  },
+});
+</script>

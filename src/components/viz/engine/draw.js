@@ -171,6 +171,52 @@ export function T(ctx, colors, role = 'label', { color, align = 'left', baseline
   ctx.textAlign = align; ctx.textBaseline = baseline;
 }
 
+// ── glyph sprites: cached small images ──
+// A panel that blits dozens of thumbnails (prototypes, test images, mode
+// poles) every frame should not rebuild an offscreen canvas and an ImageData
+// each time. `paint(ctx2d)` runs once per key; afterwards the sprite is just
+// a drawImage. The cache is bounded and evicts oldest-first.
+const _spriteCache = new Map();
+export function sprite(key, w, h, paint) {
+  let c = _spriteCache.get(key);
+  if (c) return c;
+  c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  paint(c.getContext('2d'), c);
+  _spriteCache.set(key, c);
+  if (_spriteCache.size > 600) _spriteCache.delete(_spriteCache.keys().next().value);
+  return c;
+}
+
+// Blit a single-channel image (Uint8/Float array, `side`x`side`) as a cached
+// grayscale sprite. `key` must identify the pixels; omit it to skip caching.
+export function grayGlyph(ctx, img, side, x, y, w, h, { invert = false, key } = {}) {
+  const paint = (octx) => {
+    const im = octx.createImageData(side, side);
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < side * side; i++) { const v = img[i]; if (v < lo) lo = v; if (v > hi) hi = v; }
+    const span = hi - lo || 1;
+    for (let i = 0; i < side * side; i++) {
+      let t = (img[i] - lo) / span;
+      if (invert) t = 1 - t;
+      const g = (255 * t) | 0;
+      im.data[i * 4] = g; im.data[i * 4 + 1] = g; im.data[i * 4 + 2] = g;
+      im.data[i * 4 + 3] = 255;
+    }
+    octx.putImageData(im, 0, 0);
+  };
+  let src;
+  if (key == null) {
+    src = document.createElement('canvas');
+    src.width = side; src.height = side;
+    paint(src.getContext('2d'));
+  } else {
+    src = sprite(key, side, side, paint);
+  }
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(src, x, y, w, h);
+}
+
 // ── color + number utilities (deduped from nbody/storm and the bespoke panels) ──
 export const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 export const lerp = (a, b, t) => a + (b - a) * t;

@@ -1,0 +1,220 @@
+---
+title: "I Removed Every MLP from Gemma 4 12B"
+seoTitle: "Removing Every MLP from Gemma 4 12B"
+description: "Deleting every feed-forward branch removes 8.5 billion parameters and makes local Gemma 4 inference roughly three times faster. It also turns a capable language model into a machine that emits the audio control token forever."
+seoDescription: "A local Gemma 4 12B MLP ablation removes 71% of its parameters. Here are the measured effects on quality, perplexity, and Apple Silicon speed."
+pubDate: 2026-08-11T12:00:00-07:00
+draft: false
+tags: [ml, transformers, gemma, mlp, attention, ablation, inference, mlx, apple-silicon]
+keywords:
+  - Gemma 4 12B local benchmark
+  - remove MLP transformer
+  - attention-only transformer ablation
+  - Gemma 4 Apple Silicon speed
+  - MLX language model benchmark
+references:
+  - key: gemma4-report
+    authors: "Gemma Team"
+    year: 2026
+    title: "Gemma 4 Technical Report"
+    venue: "arXiv"
+    arxiv: "2607.02770"
+  - key: gemma4-guide
+    authors: "Pinto, A. S., Steiner, A., Misiunas, K., Roth, K., Tschannen, M., and Sanseviero, O."
+    year: 2026
+    title: "Gemma 4 12B: The Developer Guide"
+    venue: "Google Developers Blog"
+    url: "https://developers.googleblog.com/gemma-4-12b-the-developer-guide/"
+  - key: mmlu
+    authors: "Hendrycks, D., Burns, C., Basart, S., et al."
+    year: 2021
+    title: "Measuring Massive Multitask Language Understanding"
+    venue: "ICLR"
+    arxiv: "2009.03300"
+  - key: wikitext
+    authors: "Merity, S., Xiong, C., Bradbury, J., and Socher, R."
+    year: 2017
+    title: "Pointer Sentinel Mixture Models"
+    venue: "ICLR"
+    arxiv: "1609.07843"
+  - key: mlx-lm
+    authors: "MLX Team"
+    year: 2026
+    title: "MLX LM: Run LLMs with MLX"
+    venue: "GitHub"
+    url: "https://github.com/ml-explore/mlx-lm"
+---
+import CiteAs from '../../components/CiteAs.astro';
+
+Delete 8.5 billion parameters from a 12-billion-parameter language model and it runs three times faster. That sounds like a pruning result. It is not. The fast model answers every multiple-choice question with **B** and, when allowed to speak freely, emits the audio control token until the generation limit stops it.
+
+That is what happened when I removed every MLP block from Gemma 4 12B.
+
+The result is more useful than “the model broke.” It puts numbers on both sides of the break. The MLPs account for 71 percent of this checkpoint's parameters. Skipping them raises local decode speed from 32–34 tokens per second to 87–103 on an M5 Pro. But the same edit raises continuation perplexity from 7.74 to 3.06 trillion. **The MLP is almost exactly where the speed was, and removing it is almost exactly where language stopped.**
+
+## What, exactly, did I remove?
+
+[Gemma 4 12B](https://huggingface.co/google/gemma-4-12B-it) is the dense, unified model in the Gemma 4 family. Its unusual multimodal front end projects raw image patches and audio frames directly into the language-model embedding space instead of using separate encoders. Behind that front end is a decoder-only transformer with 48 layers, a 3,840-dimensional residual stream, and a 15,360-dimensional gated MLP in every layer.
+
+Each MLP has three matrices: a gate projection, an up projection, and a down projection. Ignoring quantization metadata, its parameter count is
+
+$$
+3 \times 3{,}840 \times 15{,}360
+= 176{,}947{,}200.
+$$
+
+Across 48 layers that becomes
+
+$$
+48 \times 176{,}947{,}200
+= 8{,}493{,}465{,}600
+$$
+
+parameters: 71.0 percent of the checkpoint's 11.96 billion parameters. “Remove the MLP” is not a small lesion here. It removes most of the model.
+
+But the intervention itself is clean. A Gemma decoder layer first adds attention to the residual stream, then adds the MLP:
+
+$$
+\begin{aligned}
+h &= x + \operatorname{PostNorm}_{\text{attn}}\!\left(\operatorname{Attn}(\operatorname{PreNorm}_{\text{attn}}(x))\right),\\
+y &= h + \operatorname{PostNorm}_{\text{mlp}}\!\left(\operatorname{MLP}(\operatorname{PreNorm}_{\text{mlp}}(h))\right).
+\end{aligned}
+$$
+
+I replaced the MLP's output with an array of zeros. RMS normalization maps that zero array to zero, so the second line reduces exactly to $y=h$. The attention branch, residual path, layer norms, token embeddings, and language-model head all remain. The depth remains 48. There is no retraining and no change to the attention weights.
+
+In the MLX model, the surgical part is this small:
+
+```python
+class ZeroMLP(nn.Module):
+    def __call__(self, x):
+        return mx.zeros_like(x)
+
+for layer in model.layers:
+    layer.mlp = ZeroMLP()
+```
+
+This is a test of the **trained attention-only subnetwork inside Gemma**, not a test of whether an attention-only model could learn language if trained from scratch.
+
+## The local experiment
+
+I ran both conditions on the same MacBook Pro:
+
+| item | setting |
+| --- | --- |
+| hardware | Apple M5 Pro, 20-core GPU, 48 GB unified memory |
+| model | `mlx-community/gemma-4-12B-it-4bit` |
+| quantization | MLX affine 4-bit, group size 64 |
+| runtime | MLX LM 0.31.3, MLX 0.32.0 |
+| generation | greedy, thinking disabled |
+| control | intact quantized checkpoint |
+| intervention | all 48 MLP outputs replaced by zero |
+
+Quality needs more than one number, especially when a model may fail in a strange way. I used three views.
+
+First, a deterministic diagnostic slice of 40 MMLU questions spread evenly through the test set, covering 32 subjects. This is deliberately too small to be a leaderboard result; it is large enough to distinguish useful multiple-choice behavior from collapse. I scored the next-token logits for A, B, C, and D after opening Gemma's final-answer channel.
+
+Second, I gave the model a 128-token WikiText-2 passage and scored the next 512 reference tokens under teacher forcing. Because this is an instruction-tuned checkpoint, the passage was framed as a chat request to continue the text exactly. The result is a conditional continuation perplexity, compared only against the same checkpoint under the ablation.
+
+Third, I generated answers to four fixed prompts: an explanation, a word problem, a coding task, and a short story. Those outputs tell us what the aggregate metrics cannot: *how* the model fails.
+
+For speed, I measured 64-token greedy generations after prompts of 128, 512, and 2,048 tokens. Every row below is the median of three warmed runs. Prefill and decode are reported separately because they stress the hardware differently.
+
+## The quality did not degrade. It collapsed.
+
+| measure | intact | no MLP |
+| --- | ---: | ---: |
+| MMLU diagnostic | **72.5%** (29/40) | **22.5%** (9/40) |
+| WikiText continuation NLL | **2.05 nats/token** | **28.75 nats/token** |
+| WikiText continuation perplexity | **7.74** | **3.06 × 10¹²** |
+| free generation | coherent text | repeated &lt;audio&#124;&gt; token |
+
+The 22.5 percent MMLU score looks close to random chance. It is worse than that. The no-MLP model chose **B on all 40 questions**. Nine happened to have B as the answer. The number does not show residual knowledge; it shows a constant classifier landing on the right label nine times.
+
+The continuation result is just as severe. Mean negative log-likelihood rises by 26.70 nats per token. Exponentiating that difference, the reference text becomes about **395 billion times less likely** under the attention-only network.
+
+And then there is the output itself. Asked why the sky is blue, the intact model wrote:
+
+> The sky is blue because of a phenomenon called Rayleigh scattering, where sunlight interacts with the Earth's atmosphere. As sunlight travels through the air, the gas molecules scatter shorter, blue wavelengths of light much more easily than longer colors like red or yellow.
+
+The no-MLP model wrote:
+
+> &lt;audio&#124;&gt; repeated for all 80 generated tokens.
+
+It produced the same audio-token loop for the sheep problem, the palindrome function, and the story. This is an especially revealing failure in the unified 12B model: the token is part of the model's real multimodal vocabulary. Attention still moves states between positions, but without the learned feed-forward transformations those states fall into a control-token attractor instead of the region from which ordinary language is decoded.
+
+That last sentence is an inference from the outputs, not a mechanistic localization claim. This experiment does not prove that one MLP stores “audio mode,” or that facts live exclusively in MLP weights. It shows that the intact network's attention and MLP branches are co-adapted so strongly that deleting one entire family drives the residual stream far outside the regime where the language head behaves normally.
+
+## The speedup is real
+
+The broken model is impressively fast.
+
+| prompt | prefill, intact | prefill, no MLP | speedup | decode, intact | decode, no MLP | speedup |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 128 tokens | 557 tok/s | 1,501 tok/s | **2.70×** | 34.3 tok/s | 102.9 tok/s | **3.00×** |
+| 512 tokens | 881 tok/s | 3,025 tok/s | **3.43×** | 32.8 tok/s | 97.5 tok/s | **2.98×** |
+| 2,048 tokens | 836 tok/s | 2,678 tok/s | **3.20×** | 32.0 tok/s | 87.0 tok/s | **2.72×** |
+
+Decode is close to a clean 3× improvement at short and medium contexts. That makes sense on Apple Silicon: autoregressive decoding repeatedly streams model weights through a bandwidth-constrained system, and the MLP matrices are most of those weights. Remove 71 percent of the parameters and there is much less memory traffic per generated token.
+
+Prefill is dominated more by matrix multiplication and amortizes fixed overhead over the sequence. It improves by 2.7–3.4×, peaking on the 512-token shape in this small test. The exact rates are machine- and runtime-specific; the stable result is the scale of the change. Across every measured context, skipping the MLP saves most of the forward-pass time.
+
+So the compute accounting and the parameter accounting tell the same story. The MLP is not an inexpensive memory cabinet attached to an attention machine. In this dense model, it is most of the machine.
+
+## Why doesn't attention carry the model by itself?
+
+It is tempting to describe a transformer as two independent systems: attention routes information, while MLPs store facts. If that picture were literally modular, removing the MLPs might leave a forgetful but grammatical model—one that can copy, compose, and perhaps reason over whatever remains in context.
+
+That is not what the trained network contains.
+
+Attention writes into a residual stream whose next readers were trained in the presence of an MLP update at every layer. The next attention block therefore expects coordinates already rotated, gated, amplified, or suppressed by the previous feed-forward branch. Remove all 48 updates and the first layer may still produce a plausible perturbation, but the mismatch compounds with depth. By the top of the network, the language head is reading a representation it was never trained to decode.
+
+The experiment cannot separate three possible roles of the missing MLPs:
+
+1. storing associations in their gated projection matrices,
+2. performing token-wise computation that reshapes features for later attention, and
+3. keeping the residual stream on the distribution expected by subsequent layers.
+
+All three disappear at once. The special-token loop says the third role matters; the MMLU and likelihood collapse say the combined loss is catastrophic. To decide which layers do what, the next experiment should turn the all-or-nothing cut into a sweep.
+
+## The experiments this one asks for
+
+The obvious follow-up is a depth profile: remove one MLP at a time, then contiguous quarters, alternating layers, and finally all 48. If the last few blocks are disproportionately important for decoding, quality should fall late. If the network accumulates representational drift, the curve should decay with the number of cuts and depend on where they occur.
+
+A second experiment would replace deletion with a gain parameter,
+
+$$
+y = h + \alpha\,\operatorname{MLP}(h), \qquad \alpha \in [0,1],
+$$
+
+and measure when the audio-token attractor appears. That would distinguish a graceful loss of capability from a sharp phase change.
+
+The deeper comparison is training. An attention-only transformer trained from initialization would have a chance to reorganize its residual stream around the missing computation. It might learn something useful, especially with more attention depth or different nonlinearities. This ablation makes no claim about that architecture's capacity. It establishes a narrower fact about Gemma 4 12B: **you cannot recover an attention-only language model by extracting the attention half of the trained model.**
+
+## Reproducing it
+
+The full harness is in `scripts/gemma4_no_mlp.py`, and the raw per-question, per-prompt, and per-run results are in `scripts/results/gemma4_no_mlp.json`. The core setup is:
+
+```bash
+uv venv --python 3.14 .venv-gemma4
+uv pip install --python .venv-gemma4/bin/python mlx-lm datasets
+
+hf download mlx-community/gemma-4-12B-it-4bit \
+  --local-dir tmp/gemma-4-12B-it-4bit
+
+.venv-gemma4/bin/python scripts/gemma4_no_mlp.py
+```
+
+The MLX conversion is not Google's official QAT artifact, so its intact score should not be compared directly with Google's published benchmark table. That does not weaken the ablation comparison: both conditions use the same quantized weights, tokenizer, prompts, runtime, and sampler. The only difference is whether the 48 MLP branches execute.
+
+## What did the 8.5 billion parameters buy?
+
+On this machine, they buy about two-thirds of the latency. Inside this trained model, they also buy the difference between language and a control-token loop.
+
+That is the cleanest reading of the experiment. Attention without the MLP is not a smaller Gemma. It is a fast path through weights that no longer compose into Gemma's function. The model runs three times faster because most of the model is gone, and the output tells us exactly how much “most” meant.
+
+<CiteAs
+  slug="removing-every-mlp-from-gemma-4"
+  title="I Removed Every MLP from Gemma 4 12B"
+  pubDate="2026-08-11T12:00:00-07:00"
+/>

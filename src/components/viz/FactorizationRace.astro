@@ -1,0 +1,84 @@
+---
+interface Props { caption?: string; height?: number; }
+const { caption, height = 440 } = Astro.props;
+---
+<figure class="viz factorizationrace" data-caption={caption} data-height={height} data-height-mobile="560" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+<script>
+// The ceiling factorization as a curve through training: fine accuracy is the
+// product of the coarse factor and the sibling pick, and the mixer's whole
+// gain over the flat model comes from the factor the last post said was the
+// bottleneck.
+import { defineViz } from './engine/vizkit.js';
+import { T, fmt, gate, loadingText } from './engine/draw.js';
+import { load } from './patchconv.js';
+
+const SERIES = [
+  { key: 'coarse', label: 'coarse factor (right superclass, 20-way)', color: '#4a7fb3', flat: 26.02 },
+  { key: 'fgc', label: 'sibling pick (given superclass, 5-way)', color: '#3a8f5e', flat: 66.09 },
+  { key: 'fine', label: 'their product (right class, 100-way)', color: '#c2553a', flat: 17.19 },
+];
+
+defineViz('factorizationrace', {
+  title: 'The two factors through training',
+  height: 440,
+  controls: [
+    { type: 'range', name: 'ep', label: 'epoch', min: 1, max: 24, step: 1, value: 24, int: true, play: { period: 10000, loop: false } },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) {
+    gate(api, () => load('story'), (a, d) => { a.state.d = d; });
+  },
+  draw(api) {
+    const { ctx, colors, size: { W, H } } = api, st = api.state;
+    if (!st.ready) { loadingText(api, 'loading the curves…'); return; }
+    const d = st.d, ep = Math.round(api.get('ep'));
+    const pad = 14, top = 30;
+    const box = { x: pad + 34, y: top, w: W - pad * 2 - 44, h: H - top - 108 };
+    const lx = (e) => box.x + ((e - 1) / 23) * box.w;
+    const ly = (a) => box.y + box.h - (a / 72) * box.h;
+    ctx.fillStyle = colors.cellBg;
+    ctx.fillRect(box.x, box.y, box.w, box.h);
+    ctx.strokeStyle = colors.border;
+    ctx.strokeRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1);
+    T(ctx, colors, 'small');
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (const a of [10, 20, 30, 40, 50, 60, 70]) ctx.fillText(a + '%', box.x - 3, ly(a));
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (const e of [1, 6, 12, 18, 24]) ctx.fillText(String(e), lx(e), box.y + box.h + 5);
+    for (const s of SERIES) {
+      // the flat model's final value for this factor, as the line to beat
+      ctx.setLineDash([3, 4]); ctx.strokeStyle = s.color; ctx.globalAlpha = 0.5;
+      ctx.beginPath(); ctx.moveTo(box.x, ly(s.flat)); ctx.lineTo(box.x + box.w, ly(s.flat)); ctx.stroke();
+      ctx.setLineDash([]); ctx.globalAlpha = 1;
+      for (const curve of d.curves) {
+        ctx.strokeStyle = s.color; ctx.globalAlpha = 0.65; ctx.lineWidth = 1.7;
+        ctx.beginPath();
+        curve.forEach((row, i) => {
+          const x = lx(i + 1), y = ly(row[s.key]);
+          i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        });
+        ctx.stroke(); ctx.globalAlpha = 1; ctx.lineWidth = 1;
+      }
+    }
+    ctx.strokeStyle = colors.faint; ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(lx(ep), box.y); ctx.lineTo(lx(ep), box.y + box.h); ctx.stroke();
+    ctx.setLineDash([]);
+    T(ctx, colors, 'label');
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('three seeds; dashes: the flat model’s final value for each factor', box.x, top - 8);
+    let yy = box.y + box.h + 40;
+    for (const s of SERIES) {
+      ctx.fillStyle = s.color;
+      ctx.fillRect(box.x, yy - 8, 18, 3);
+      T(ctx, colors, 'small');
+      ctx.fillStyle = colors.faint;
+      ctx.fillText(s.label, box.x + 24, yy - 3);
+      yy += 17;
+    }
+    const c0 = d.curves[0][ep - 1];
+    api.readout('rd', `epoch ${ep}, seed 0: ${fmt(c0.coarse, 1)} x ${fmt(c0.fgc, 1)} = ${fmt(c0.coarse * c0.fgc / 100, 1)} (measured fine ${fmt(c0.fine, 1)})`);
+  },
+});
+</script>

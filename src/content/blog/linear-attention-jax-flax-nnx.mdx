@@ -1,6 +1,6 @@
 ---
 title: "Cheap Attention in JAX/Flax NNX"
-description: "A runnable companion to Cheap Attention: implement positive-feature linear attention in JAX and Flax NNX, watch the all-pairs ledger turn into a shared feature state, and see exactly where the N×N matrix disappears."
+description: "A runnable companion to Cheap Attention: implement positive-feature linear attention in JAX and Flax NNX, watch the all-pairs ledger turn into a shared feature state, and see where the N×N matrix disappears."
 seoDescription: "Positive-feature linear attention in JAX and Flax NNX: turn the all-pairs softmax ledger into a shared feature state where the N×N matrix never forms."
 pubDate: 2026-05-31T12:30:00-07:00
 draft: false
@@ -30,14 +30,14 @@ keywords:
 ---
 import CiteAs from '../../components/CiteAs.astro';
 
-*The theory post argued that cheap attention is not a separate trick from attention. It is the same kernel sum, evaluated through a finite feature map and parenthesized in the useful order. This is the implementation companion: the JAX arrays, the Flax NNX module, the causal recurrence, and the GIFs that show the bookkeeping changing from an all-pairs ledger to a shared state.*
+*Where does the $N\times N$ table actually go? The theory post answers in algebra: pick a finite feature map, then move one pair of parentheses. Here that answer is arrays you can print, a Flax NNX module you can drop into a model, a causal recurrence that decodes one token at a time, and animations that follow the bookkeeping as it stops being an all-pairs ledger and becomes a shared state.*
 
 *Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/cheap-attention-is-linear-attention-jax): the same code, block by block, with the math written out and every figure reproduced from a real run.*
 
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/blog/gravity-attention-bookkeeping.png" alt="Comparison of gravity and attention: all-pairs ledgers versus shared fields or feature states, with compute bars for each side" loading="eager" width="1280" height="720" />
-  <figcaption>The analogy in one figure, computed in JAX. Gravity has a direct N-body ledger and a field solve. Attention has exact softmax pair scores and a feature-state approximation. The details differ; the bookkeeping shape is the same, and so is the compute gap the shared state buys.</figcaption>
+  <img src="/blog/gravity-attention-bookkeeping-build.gif" alt="Comparison of gravity and attention: all-pairs ledgers versus shared fields or feature states, with compute bars for each side" loading="eager" width="1280" height="720" />
+  <figcaption>The analogy in one figure. Gravity has a direct N-body ledger and a field solve. Attention has exact softmax pair scores and a feature-state approximation. The details differ; the bookkeeping shape is the same, and so is the compute gap the shared state buys. The four stages reveal the two direct ledgers and the two shared-state alternatives in matching order.</figcaption>
 </figure>
 
 ---
@@ -152,11 +152,11 @@ m =  256   relative error 0.183   (worst draw 0.259)
 m = 1024   relative error 0.099   (worst draw 0.134)
 ```
 
-Each 4x in features roughly halves the error: the $1/\sqrt m$ of a Monte-Carlo estimate, visible in the digits. One caveat rides along. These are unit-norm queries and keys; the positive-feature estimator's variance grows like $e^{\|q+k\|^2}$, so vectors with much larger norms need far more features (or the orthogonal-feature tricks a production Performer adds).
+Each 4x in features roughly halves the error: the $1/\sqrt m$ behavior of a Monte Carlo estimate, visible in the digits. The measured rate uses unit-norm queries and keys. Because the positive-feature estimator's variance grows like $e^{\|q+k\|^2}$, larger norms require more features or variance-reduction constructions such as orthogonal features.
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/linear-attention-error.gif" alt="Animated convergence of linear attention: the exact softmax attention matrix, the matrix implied by m positive random features sharpening as m grows, and the relative output error falling along a one-over-square-root-of-m line" loading="lazy" width="1100" height="460" />
-  <figcaption>The same check, animated. Left: the exact attention matrix for a 28-token sequence whose tokens sit on a latent circle, so exact attention is a wrapping band. Middle: the matrix implied by the first $m$ rows of one growing bank of positive random features, an object a real Performer never materializes, formed here so you can watch it converge. Right: the relative error of the actual linear-time output falling as $m$ grows, tracking the dashed $1/\sqrt m$ line down to 0.041 at $m=512$. Every frame is a real JAX computation. Rendered by <code>scripts/render_linear_attention_error_gif.py</code>.</figcaption>
+  <figcaption>The same check, animated. Left: the exact attention matrix for a 28-token sequence whose tokens sit on a latent circle, so exact attention is a wrapping band. Middle: the matrix implied by the first $m$ rows of one growing bank of positive random features, an object a real Performer never materializes, formed here so you can watch it converge. Right: the relative error of the actual linear-time output falling as $m$ grows, tracking the dashed $1/\sqrt m$ line down to 0.041 at $m=512$.</figcaption>
 </figure>
 
 ## The NNX module
@@ -325,26 +325,18 @@ step 1000   loss 0.003
 
 The layer learns to find the flag and broadcast the marked content, and nothing about the loop knows it is training an approximation: the gradient just flows through $\phi$, through the shared state, through the ratio. The implementation choice to watch is not `jit`; it is the tensor you permit yourself to create. If your forward pass forms `scores = q @ k.T`, you are back in the ledger world. If it forms `kv = phi_k.T @ v`, you have crossed into the shared-state world.
 
-## Rendering the GIFs
+## How the animations are computed
 
-All three GIFs in this post are generated with Python, JAX, and matplotlib:
-
-```bash
-python scripts/render_gravity_attention_gif.py
-python scripts/render_linear_attention_pipeline_gif.py
-python scripts/render_linear_attention_error_gif.py
-```
-
-The first renderer computes:
+All three GIFs in this post are generated with Python, JAX, and matplotlib. The gravity animation computes:
 
 - direct softened Newtonian $N$-body accelerations with JAX,
 - a particle-mesh Poisson solve with `jnp.linalg.solve`,
 - exact attention scores,
 - and a finite-feature attention state.
 
-The second renderer follows the causal linear-attention recurrence token by token, and the third recomputes the exact and implied attention matrices at every feature count $m$. They are deliberately small: the point is not a benchmark, but a visual audit of the shapes. If the GIF cannot show where the $N\times N$ object disappeared, the implementation is probably not explaining itself.
+The pipeline animation follows the causal linear-attention recurrence token by token, and the error animation recomputes the exact and implied attention matrices at every feature count $m$. They are deliberately small: the point is not a benchmark, but a visual audit of the shapes. If the GIF cannot show where the $N\times N$ object disappeared, the implementation is probably not explaining itself.
 
-## What this leaves out
+## Boundary of the result
 
 This is a teaching implementation, not a production kernel. A production version would care about:
 

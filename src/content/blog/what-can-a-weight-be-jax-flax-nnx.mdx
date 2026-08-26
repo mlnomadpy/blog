@@ -1,180 +1,197 @@
 ---
-title: "What a Weight Can Be, in JAX/Flax NNX"
-seoTitle: "Kernel RKHS spectra and norms in JAX"
-description: "A runnable companion: compute the price list of a kernel in JAX. The eigenvalues are the kernel's spectral density, found with an FFT; the RKHS norm of a weight is a sum over them. A corner is affordable only under a Sobolev kernel, and the same numbers place the Yat kernel: universal and smooth, roomier than a Gaussian but not a Sobolev space."
-seoDescription: "Compute kernel eigenvalues and RKHS norms in JAX. A corner is finite only under Sobolev; the Yat kernel's IMQ spectrum is exponential, not polynomial."
-pubDate: 2026-06-26T10:00:00-07:00
+title: "A Kernel's Price List, in JAX"
+seoTitle: "Compute Valid RKHS Spectra and Norms in JAX"
+description: "Construct valid periodic kernel spectra, audit truncated RKHS norms for convergence, then solve kernel ridge regression and read regularization as spectral shrinkage, effective dimension, and a measured generalization curve."
+seoDescription: "Construct positive periodic kernel spectra in JAX and compute RKHS norms with convergence checks."
+pubDate: 2026-06-22T10:00:00-07:00
+updatedDate: 2026-08-25
 draft: false
-tags: [ml, kernels, rkhs, sobolev, sphere, spectrum, jax, flax, nnx, implementation, yat, theory]
+tags: [ml, kernels, rkhs, spectral-analysis, jax, sobolev, fourier, smoothness, implementation]
 references:
-  - authors: "Schoenberg, I. J."
-    year: 1942
-    title: "Positive Definite Functions on Spheres"
-    venue: "Duke Mathematical Journal"
+  - authors: "Aronszajn, N."
+    year: 1950
+    title: "Theory of Reproducing Kernels"
+    venue: "Transactions of the American Mathematical Society"
   - authors: "Wendland, H."
     year: 2004
     title: "Scattered Data Approximation"
     venue: "Cambridge University Press"
-  - authors: "Steinwart, I., Christmann, A."
-    year: 2008
-    title: "Support Vector Machines"
-    venue: "Springer"
-  - authors: "Bouhsine, T."
-    year: 2026
-    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
-    arxiv: "2605.03262"
+  - authors: "Schoenberg, I. J."
+    year: 1942
+    title: "Positive Definite Functions on Spheres"
+    venue: "Duke Mathematical Journal"
 keywords:
-  - kernel eigenvalues JAX
-  - RKHS norm computation
-  - Sobolev kernel spectral density
-  - inverse multiquadric eigenvalue decay
-  - kernel ridge corner fit JAX
+  - RKHS norm JAX
+  - kernel eigenvalues
+  - periodic positive definite kernel
+  - Sobolev kernel spectrum
+  - Fourier RKHS
 ---
 import CiteAs from '../../components/CiteAs.astro';
 
-*The [explainer](/blog/what-can-a-weight-be/) said a kernel is a price list for roughness: its eigenvalues set a cost for every frequency, and the RKHS is the weights you can afford. This is that, in JAX. The eigenvalues are the kernel's spectral density, which a fast Fourier transform hands you for free; the RKHS norm of a weight is a single sum over them; and the same numbers settle where the Yat kernel actually lives. Every number is from a real run; the script is `scripts/render_weight_be_gifs.py`.*
+The [explainer](/blog/what-can-a-weight-be/) calls a kernel a price list: each spectral mode has an eigenvalue, and a function pays the squared size of that mode divided by the eigenvalue. This companion computes the bill without smuggling in a spectrum that the kernel does not have.
 
-*Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/what-can-a-weight-be-jax-flax-nnx): the same code, block by block, with the math written out and every figure reproduced from a real run.*
+The safe direction is spectrum first. Choose nonnegative Fourier coefficients, obtain a positive-definite periodic kernel automatically, and then inspect which functions its RKHS can afford.
 
-## A kernel's eigenvalues are its spectral density
+## The domain is part of the kernel
 
-The whole price list is one FFT. On a periodic domain a translation-invariant kernel $k(x, y) = \kappa(x - y)$ is diagonal in the Fourier basis: its eigenfunctions are the modes $\cos(kx), \sin(kx)$, and its eigenvalues $\lambda_k$ are the Fourier transform of $\kappa$.
+Work on the circle $\mathbb T=[0,2\pi)$ with uniform measure. A translation-invariant kernel has a Fourier expansion
+
+$$
+k(x,y)=\kappa(x-y)=\sum_{m\in\mathbb Z}\lambda_m e^{im(x-y)},
+$$
+
+and it is positive definite exactly when $\lambda_m\geq0$. For a real even kernel, $\lambda_{-m}=\lambda_m$.
+
+This is where a tempting shortcut fails: sample a nonperiodic radial function on a finite interval, join the endpoints implicitly with an FFT, and call the coefficients eigenvalues. That operation analyzes the periodic extension created by the sampling grid. If that extension is not positive definite, some coefficients become negative and the resulting “RKHS norm” is not an RKHS norm.
+
+Build the valid object in the other direction:
 
 ```python
-import jax, jax.numpy as jnp
+import jax
+import jax.numpy as jnp
+
+jax.config.update("jax_enable_x64", True)
 
 N = 2048
-grid = jnp.linspace(-jnp.pi, jnp.pi, N, endpoint=False)
+freq = jnp.fft.rfftfreq(N, d=1 / N)       # 0, 1, ..., N/2
 
-@jax.jit
-def spectrum(kappa):                                   # λₖ, the kernel's eigenvalues
-    return jnp.fft.rfft(jnp.fft.ifftshift(kappa)).real
+def positive_spectrum(kind, *, s=1.0, sigma=0.18, rho=0.88):
+    m = freq
+    if kind == "sobolev":
+        return (1.0 + m**2) ** (-s)        # polynomial tail
+    if kind == "heat":
+        return jnp.exp(-0.5 * sigma**2 * m**2)  # Gaussian tail
+    if kind == "poisson":
+        return rho**m                     # exponential tail
+    raise ValueError(kind)
+
+def kernel_samples(lam):
+    # irfft constructs the real periodic kernel represented by lam.
+    return jnp.fft.irfft(lam, n=N) * N
+
+spectra = {name: positive_spectrum(name)
+           for name in ("sobolev", "heat", "poisson")}
+
+for name, lam in spectra.items():
+    assert bool(jnp.all(lam >= 0)), name
+    print(name, float(lam[8]), float(lam[32]))
 ```
 
-Feed it three kernels and the three personalities from the explainer fall straight out. The decays are known in closed form, and the FFT agrees with them down to floating-point precision:
+The assertion is not a cosmetic numerical check. Nonnegative Fourier coefficients are the positive-definiteness condition for this periodic translation-invariant construction.
+
+## Three valid price lists
+
+The examples isolate three decay classes:
+
+| family | eigenvalues $\lambda_m$ | high-frequency price $1/\lambda_m$ |
+| --- | --- | --- |
+| periodic Sobolev | $(1+m^2)^{-s}$ | polynomial |
+| heat kernel | $e^{-\sigma^2m^2/2}$ | Gaussian |
+| Poisson kernel | $\rho^{\lvert m\rvert}$ | exponential |
+
+All three are positive-definite kernels on the circle. Their native spaces differ because their tails differ. The Sobolev spectrum leaves high frequencies expensive but attainable at a polynomial rate. The Poisson and heat spectra charge exponentially and Gaussianly increasing prices.
+
+## Compute a bill, then ask whether it converges
+
+For Fourier coefficients $\hat f_m$, the formal RKHS norm is
+
+$$
+\lVert f\rVert_{\mathcal H_k}^2
+=\sum_{m:\lambda_m>0}\frac{|\hat f_m|^2}{\lambda_m}.
+$$
+
+On a finite grid we can compute only a partial sum. A partial sum is a measurement at resolution $M$, not a proof that the infinite series converges. The useful experiment is therefore a convergence curve over increasing cutoffs.
 
 ```python
-sig, eps = 0.35, 0.12
-lam_gauss = spectrum(jnp.exp(-grid**2 / (2*sig**2)))   # λₖ ∝ exp(−σ²k²/2)   super-exponential
-lam_sobol = spectrum(jnp.exp(-jnp.abs(grid) / sig))    # λₖ ∝ (1 + σ²k²)⁻¹    polynomial ~ k⁻²
-lam_imq   = spectrum(1.0 / (grid**2 + eps))            # λₖ ∝ exp(−√ε·k)      exponential
+x = 2 * jnp.pi * jnp.arange(N) / N
+tent = 1.0 - jnp.abs((x - jnp.pi) / jnp.pi)  # continuous, one sharp corner
+fhat = jnp.fft.rfft(tent) / N
+
+def partial_bills(fhat, lam, cutoffs=(8, 16, 32, 64, 128, 256, 512)):
+    terms = jnp.abs(fhat) ** 2 / jnp.maximum(lam, 1e-300)
+    return jnp.array([jnp.sum(terms[:M + 1]) for M in cutoffs])
+
+for name, lam in spectra.items():
+    print(name, partial_bills(fhat, lam))
 ```
 
-The Gaussian's eigenvalues fall off a cliff, so its space holds only the smoothest, analytic weights. The Sobolev kernel's fall like a gentle power, $\lambda_k \sim k^{-2}$, leaving room for rougher functions. The inverse-multiquadric, which is the Yat kernel's distance gate, falls off exponentially: faster than the Sobolev kernel, slower than the Gaussian, sitting squarely between them.
+A tent has Fourier coefficients of order $m^{-2}$. With the first-order Sobolev spectrum, its norm terms scale like $m^{-4}/m^{-2}=m^{-2}$, so the partial bills converge. With a Poisson spectrum they scale like $m^{-4}\rho^{-m}$ and diverge; with the heat spectrum they grow faster still.
+
+The code and the asymptotics now test each other. If the numerical partial sums disagree with the predicted tail, the implementation is wrong or the grid has not reached the asymptotic regime.
+
+## Finite precision is not infinity
+
+Exponentially small eigenvalues reach floating-point limits quickly. Clipping them avoids division by zero, but clipping also changes the kernel and its norm. Report both the cutoff and the smallest eigenvalue used:
+
+```python
+def audited_partial_bill(fhat, lam, M, floor=1e-280):
+    used = lam[:M + 1]
+    if bool(jnp.any(used <= floor)):
+        return {"M": M, "status": "precision limit", "min_lambda": float(used.min())}
+    bill = jnp.sum(jnp.abs(fhat[:M + 1])**2 / used)
+    return {"M": M, "status": "measured", "bill": float(bill),
+            "min_lambda": float(used.min())}
+```
+
+“The bill exceeded 15 by mode 90” is a plotting threshold. “The partial sums grow at the asymptotic rate predicted by the coefficients” is evidence about membership. The second statement is the one the mathematics can use.
+
+## On a sphere, dimension changes the basis
+
+Normalized features often live on $S^{d-1}$ rather than a circle. A zonal kernel $k(x,y)=\kappa(\langle x,y\rangle)$ is diagonal in spherical harmonics, but the coefficient formula depends on dimension. The relevant orthogonal polynomials are Gegenbauer polynomials with parameter
+
+$$
+\alpha=\frac{d-2}{2},
+$$
+
+and the integration weight is $(1-t^2)^{\alpha-1/2}$. Legendre polynomials are the special case $d=3$, where $S^{d-1}=S^2$ and $\alpha=1/2$. A Legendre transform should therefore be labeled as an $S^2$ calculation, not a dimension-free spherical spectrum.
+
+## Where this leaves the Yat kernel
+
+The Yat kernel combines a polynomial alignment factor with an inverse-multiquadric distance gate. Its spectrum must be computed for that complete kernel on the actual domain and measure. The one-dimensional spectrum of a naively truncated distance gate cannot place the full spherical kernel between Gaussian and Sobolev native spaces.
+
+That placement now has a precise route: choose the domain, construct the integral operator for the full kernel, verify positive eigenvalues, study multiplicities and tail decay, and check numerical convergence against any available analytic result. Until those steps are complete, locality and finite feature structure can be claimed from the formula; a particular native-space smoothness class remains a separate spectral result.
+
+## From a price list to kernel ridge
+
+The same spectrum controls a fixed-kernel estimator. On sampled inputs, build the Gram matrix and solve
+
+```python
+def rbf(X, Z, sigma=0.18):
+    d2 = jnp.sum((X[:, None] - Z[None, :]) ** 2, axis=-1)
+    return jnp.exp(-d2 / (2 * sigma**2))
+
+K = rbf(x_train, x_train)
+alpha = jnp.linalg.solve(K + lam * jnp.eye(K.shape[0]), y_train)
+```
+
+For this normalization, the fitted RKHS norm is `alpha @ K @ alpha`. If `K = U diag(mu) U.T`, the effective dimension is
+
+```python
+mu, U = jnp.linalg.eigh(K)
+d_eff = jnp.sum(mu / (mu + lam))
+c = mu * (U.T @ alpha)
+bill_by_modes = jnp.sum(c**2 / mu)
+```
+
+`bill_by_modes` and `alpha @ K @ alpha` agree up to floating-point error. Point coefficients describe which sampled sections assemble the fit; spectral coefficients describe which modes the regularizer can afford. Ridge shrinks every mode continuously and does not create the exact support sparsity of a hinge-loss SVM.
+
+Sweeping $\lambda$ gives the empirical trade directly. In the companion run, test MSE reaches its minimum at $\lambda=0.42$, where $d_{\mathrm{eff}}=9.8$ out of forty empirical modes. That number is specific to the sampled Gram matrix, target, noise, and normalization; it is evidence from the sweep, not a generalization theorem derived from effective dimension alone.
 
 <figure class="jax-fig">
-  <img src="/blog/weight-be-spectra.png" alt="The eigenvalue decay of three kernels on a log scale: Gaussian a steep cliff, Sobolev a gentle nearly-flat slope, inverse-multiquadric a straight line in between" loading="lazy" width="660" height="500" />
-  <figcaption>The three price lists. On a log scale a super-exponential decay (Gaussian) is a plunging parabola, a polynomial decay (Sobolev) is nearly flat, and an exponential decay (the inverse-multiquadric, the Yat denominator) is a straight line, sitting between the two. The decay is the whole personality of the kernel. Rendered by <code>scripts/render_weight_be_gifs.py</code>.</figcaption>
+  <img src="/blog/reg-ucurve.png" alt="Train and test mean squared error across a kernel ridge regularization sweep, with the test minimum marked" loading="lazy" width="660" height="500" />
+  <figcaption>The measured kernel-ridge U-curve. A loose budget follows noise; an over-tight budget underfits; the test minimum occurs at an intermediate effective dimension.</figcaption>
 </figure>
 
-## The bill: which weights are affordable
+## The reusable test
 
-A weight written in the modes, $f = \sum_k c_k\,\phi_k$, has the RKHS norm
+A trustworthy spectral companion should pass four checks:
 
-$$
-\lVert f \rVert_{\mathcal{H}}^2 = \sum_k \frac{c_k^2}{\lambda_k},
-$$
+1. state the domain and measure;
+2. construct or verify a positive-definite kernel on that domain;
+3. keep every eigenvalue nonnegative up to numerical tolerance;
+4. study partial-norm convergence instead of declaring membership at one cutoff.
 
-one charge per mode. A corner is a triangle wave, whose energy decays as $c_k^2 \sim k^{-4}$. Sum the charges and watch the bill.
+With those checks in place, the metaphor becomes exact: the spectrum is a price list, the coefficients are the shopping basket, and the RKHS norm is the bill.
 
-```python
-import numpy as np
-k = jnp.arange(1, 91)
-ck2 = jnp.where(k % 2 == 1, (1.0 / k**2)**2, 0.0)      # a corner: cₖ² ~ 1/k⁴
-ck2 = ck2 / ck2.sum()
-
-def bill(lam_k):                                       # the running RKHS norm Σ cₖ²/λₖ
-    return jnp.cumsum(ck2 / lam_k)
-```
-
-Under the Sobolev price list the charges shrink like $k^{-4} \cdot k^{2} = k^{-2}$, so the bill converges: the corner is in the space. Under the Gaussian the charges explode like $k^{-4}\,e^{\sigma^2 k^2 / 2}$, so the bill runs to infinity fast. And under the inverse-multiquadric the charges grow like $k^{-4}\,e^{\sqrt{\varepsilon}\,k}$: the bill still diverges, just slowly. A corner is not in the Yat kernel's space either, only it takes many more modes to notice.
-
-<figure class="jax-fig">
-  <img src="/blog/weight-be-bill.png" alt="A corner's cumulative RKHS bill on a log scale: the Sobolev curve stays flat and finite, the Gaussian shoots to an unaffordable ceiling within about 20 modes, the inverse-multiquadric climbs slowly and crosses the ceiling near 90 modes" loading="lazy" width="660" height="500" />
-  <figcaption>A corner's bill, mode by mode. Only the Sobolev bill stays finite (the corner is admitted). The Gaussian's bill reaches the unaffordable ceiling within about twenty modes; the Yat / inverse-multiquadric bill climbs slowly and crosses it near ninety. A corner is too rough for both, but the Yat space is far roomier than the Gaussian's. Rendered by <code>scripts/render_weight_be_gifs.py</code>.</figcaption>
-</figure>
-
-## The same corner, fit in two homes
-
-You can feel the difference without any spectra. Fit a tent by kernel ridge, with a Gaussian, a Yat (inverse-multiquadric), and a Sobolev (Laplace) kernel, and lower the penalty. The Sobolev fit sharpens into the corner; both smooth kernels, the Gaussian and the Yat, round it off forever, because a corner is in neither of their spaces at any price. And notice that nothing here is trained: the weight is *placed*, the representer form written as a tiny Flax NNX module holding the centers and the solved coefficients.
-
-```python
-from flax import nnx
-
-class KernelWeight(nnx.Module):
-    """A placed weight: centers X, coefficients α, read by the kernel. Nothing trained."""
-    def __init__(self, X, alpha, kfn):
-        self.X = nnx.Variable(X); self.alpha = nnx.Variable(alpha); self.kfn = kfn
-    def __call__(self, xq):
-        return self.kfn(xq[:, None], self.X.value[None, :]) @ self.alpha.value
-
-def ridge(X, y, kfn, lam):                             # solve (G + λI) α = y, the representer weight
-    G = kfn(X[:, None], X[None, :])
-    alpha = jnp.linalg.solve(G + lam * jnp.eye(len(X)), y)
-    return KernelWeight(X, alpha, kfn)
-
-gauss = lambda a, b: jnp.exp(-((a - b)**2) / (2 * 0.14**2))
-sobol = lambda a, b: jnp.exp(-jnp.abs(a - b) / 0.14)   # Laplace = H¹
-yat   = lambda a, b: 1.0 / ((a - b)**2 + 0.03)         # inverse-multiquadric gate
-```
-
-<figure class="jax-fig">
-  <img src="/blog/weight-be-corner.gif" alt="A tent signal fit by kernel ridge with a Gaussian, a Yat, and a Sobolev kernel as the penalty is lowered; both the Gaussian and the Yat fit round the apex while only the Sobolev fit sharpens into the corner" loading="lazy" width="640" height="500" />
-  <figcaption>Lowering the penalty, only the Sobolev fit finds the corner. All three are real kernel-ridge solves on the same tent; as the penalty λ falls, the Sobolev (Laplace) fit turns the apex into a point, while both smooth kernels, the Gaussian and the Yat, keep rounding it, because neither space can hold a corner at any cost. Rendered by <code>scripts/render_weight_be_gifs.py</code>.</figcaption>
-</figure>
-
-## On the sphere, the modes are harmonics
-
-Normalized data lives on a sphere, where the natural kernels depend only on the angle, $k(x, y) = \kappa(\langle x, y\rangle)$. Their eigenfunctions are the spherical harmonics, graded by degree, and the eigenvalue of a whole degree is its Legendre coefficient (the Funk-Hecke theorem):
-
-$$
-b_k = \frac{2k + 1}{2} \int_{-1}^{1} \kappa(t)\, P_k(t)\, dt .
-$$
-
-```python
-def legendre(k, t):                                    # Pₖ by recurrence
-    p0, p1 = jnp.ones_like(t), t
-    for n in range(1, k):
-        p0, p1 = p1, ((2*n+1) * t * p1 - n * p0) / (n + 1)
-    return p1 if k > 0 else jnp.ones_like(t)
-
-t = jnp.linspace(-1, 1, 400)
-def degree_spectrum(kappa, K=10):                      # bₖ for a zonal kernel κ(t)
-    return jnp.array([(2*k+1)/2 * jnp.trapezoid(kappa(t) * legendre(k, t), t) for k in range(K+1)])
-```
-
-Sharpen the cap, $\kappa(t) = e^{s(t - 1)}$, and its high degrees grow cheaper, so the same weight (a sum of caps at a few prototypes) is allowed to ripple faster across the globe.
-
-<figure class="jax-fig jax-fig-wide">
-  <img src="/blog/weight-be-sphere.gif" alt="A weight on a shaded sphere as a zonal kernel sharpens, the lobes tightening, alongside the kernel's real Legendre spectrum whose high-degree bars rise" loading="lazy" width="946" height="548" />
-  <figcaption>The weight on the globe, and the kernel's real Legendre spectrum beside it. As the kernel sharpens, the high harmonic degrees grow affordable and the same weight ripples finer. This is the home normalized features live on, and a Yat prototype is a point on it. Rendered by <code>scripts/render_weight_be_gifs.py</code>.</figcaption>
-</figure>
-
-## Where the Yat kernel actually sits
-
-So which home does this series' prototype move into? The [explainer](/blog/what-can-a-weight-be/) already placed it: not Sobolev, roomier than the Gaussian, universal for $\varepsilon > 0$, zonal on the sphere, its legibility bought by locality rather than roughness. What the code adds is the numbers behind that placement, the three decays side by side:
-
-```python
-# the three decays, side by side: super-exponential, polynomial, exponential
-for name, lam in [('Gaussian', lam_gauss), ('Sobolev', lam_sobol), ('Yat / IMQ', lam_imq)]:
-    l = np.asarray(lam); l = l / l[1]
-    print(f'{name:10s} λ₈={l[8]:.1e}  λ₁₆={l[16]:.1e}  λ₃₂={l[32]:.1e}')
-# Gaussian   λ₈=2.1e-02  λ₁₆=1.6e-07  λ₃₂=3.7e-33     (a cliff: analytic only)
-# Sobolev    λ₈=1.3e-01  λ₁₆=3.5e-02  λ₃₂=8.9e-03     (polynomial: corners allowed)
-# Yat / IMQ  λ₈=8.7e-02  λ₁₆=5.4e-03  λ₃₂=2.5e-06     (exponential: smooth, universal, between)
-```
-
-Exponential decay, between the Gaussian's cliff and the Sobolev power law: smooth, universal, roomier than the Gaussian, and not Sobolev, exactly where the explainer placed it.
-
----
-
-*Positive-definite kernels on the sphere are [Schoenberg (1942)](https://doi.org/10.1215/S0012-7094-42-00908-6); native spaces and the Sobolev correspondence are in [Wendland (2004)](https://www.cambridge.org/core/books/scattered-data-approximation/980EEC9DBC4CAA711D089187818135E3); the smallness of the Gaussian RKHS is in [Steinwart and Christmann (2008)](https://link.springer.com/book/10.1007/978-0-387-77242-4); the polynomial-alignment and IMQ construction is [Bouhsine (2026)](https://arxiv.org/abs/2605.03262). The conceptual companion is [What Can a Weight Be?](/blog/what-can-a-weight-be/).*
-
-<CiteAs slug="what-can-a-weight-be-jax-flax-nnx" title="What a Weight Can Be, in JAX/Flax NNX" pubDate="2026-06-26T10:00:00-07:00" />
-
-<style>{`
-.jax-fig { margin: 1.8rem auto; text-align: center; }
-.jax-fig img { max-width: 540px; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; background: #fbf8f1; }
-.jax-fig-wide img { max-width: 880px; }
-.jax-fig figcaption { margin-top: 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--fg-muted); max-width: 64ch; margin-left: auto; margin-right: auto; }
-`}</style>
+<CiteAs slug="what-can-a-weight-be-jax-flax-nnx" title="A Kernel's Price List, in JAX" pubDate="2026-06-22T10:00:00-07:00" />

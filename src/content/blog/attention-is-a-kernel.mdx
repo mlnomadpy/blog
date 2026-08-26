@@ -1,7 +1,7 @@
 ---
-title: Attention is Explainable Because it is a Kernel
-description: Self-attention in transformers is a Nadaraya–Watson kernel smoother. That fact, and not "we visualize the matrix", is why attention heads are readable while MLPs are not.
-seoDescription: "Self-attention is a Nadaraya-Watson kernel smoother. That fact, not the plottable matrix, is why attention heads are readable while MLPs are not."
+title: What Attention Weights Can Explain
+description: Self-attention has the normalized weighted-average form of a compatibility smoother. That exposes exact routing arithmetic, but it does not make attention weights causal explanations or guarantee a Mercer kernel on tokens.
+seoDescription: "Attention exposes normalized routing arithmetic, with clear limits: weighted averages are inspectable, but attention weights are not automatically explanations."
 pubDate: 2026-05-14
 companion: attention-is-kernel-jax-flax-nnx
 tags: [ml, attention, kernels, interpretability, transformers, rkhs, self-attention, mechanistic-interpretability]
@@ -95,11 +95,11 @@ The disparity is so familiar that it is easy to mistake for a fact about visuali
 
 ## The asymmetry that the architecture does not advertise
 
-The answer turns out to be older than the transformer, and it comes from classical statistics: **attention is a kernel smoother, and the MLP is not**.
+The answer turns out to be older than the transformer, and it comes from classical statistics: **attention has the algebra of a normalized compatibility smoother**. It becomes a classical kernel smoother only when the compatibility function satisfies the corresponding kernel conditions.
 
-Once one sees attention as a kernel smoother, the things practitioners do when they "explain a head" (reading off pairwise affinities $q_i \cdot k_j$, attributing portions of the output to specific tokens, reasoning about locality and retrieval) turn out to be exactly the operations that kernel smoothers were designed to support a half-century before transformers existed. The MLP, by contrast, has no kernel and so admits none of these operations natively. Whatever interpretability one can extract from it has to be imposed externally, by training a separate decoder, projecting into a learned dictionary, or otherwise constructing the geometry that the layer itself does not carry.
+Once one sees attention as a kernel smoother, the things practitioners do when they "explain a head" (reading off pairwise affinities $q_i \cdot k_j$, attributing portions of the output to specific tokens, reasoning about locality and retrieval) turn out to be the operations that kernel smoothers were designed to support a half-century before transformers existed. The MLP, by contrast, has no kernel and so admits none of these operations natively. Whatever interpretability one can extract from it has to be imposed externally, by training a separate decoder, projecting into a learned dictionary, or otherwise constructing the geometry that the layer itself does not carry.
 
-That is the claim this piece defends: everything practitioners find "explainable" about attention is downstream of the single structural fact that attention has a kernel, and therefore a geometry, a normalized contribution mass, and (when one is willing to symmetrize) an RKHS in which to reason about it. A standard ReLU MLP has none of these, not because it is more powerful, but because it is not a kernel machine.
+Follow that thought all the way down and it becomes a claim about the whole disparity. Everything practitioners find "explainable" about attention is downstream of the single structural fact that attention has a kernel, and therefore a geometry, a normalized contribution mass, and (when one is willing to symmetrize) an RKHS in which to reason about it. A standard ReLU MLP has none of these, not because it is more powerful, but because it is not a kernel machine.
 
 The mathematical observation itself is not new. That self-attention is a kernel smoother is due to [Tsai et al. (2019)](https://aclanthology.org/D19-1443/), developed further by [Song et al. (2021)](https://ojs.aaai.org/index.php/AAAI/article/view/17172), [Choromanski et al. (2021)](https://arxiv.org/abs/2009.14794), [Katharopoulos et al. (2020)](https://arxiv.org/abs/2006.16236), and [Han et al. (2022)](https://arxiv.org/abs/2210.05794), mostly in service of designing efficient attention variants. What seems to me underdiscussed is what the reformulation explains: it is the reason attention is explainable in the first place.
 
@@ -107,7 +107,7 @@ The mathematical observation itself is not new. That self-attention is a kernel 
 
 What was a statistician in 1964 supposed to do with a scatter of noisy observations and no model to fit? Nadaraya and Watson's answer was almost embarrassingly direct: to predict at a point, let every observation vote, and weight each vote by how close that observation sits to the point you are asking about. The "how close" is a kernel, a bump centered on the query. Slide the query and the bump slides with it; observations under the bump dominate the vote, observations outside it barely count. The prediction is a locally weighted average that follows whatever the data does nearby, with no global model anywhere in sight.
 
-<KernelSmoother caption="Nadaraya–Watson kernel regression, computed live on this page. Drag along the chart to move the query x. The bell at the bottom is the kernel centered at x; data points are sized by their kernel weight. The smoothed curve is the prediction for every x in the domain. Self-attention is this picture, with the kernel replaced by an exponential dot product over learned q/k projections and the y_i replaced by learned value projections." />
+<KernelSmoother caption="Nadaraya–Watson kernel regression. Drag along the chart to move the query x. The bell at the bottom is the kernel centered at x; data points are sized by their kernel weight. The smoothed curve is the prediction for every x in the domain. Self-attention is this picture, with the kernel replaced by an exponential dot product over learned q/k projections and the y_i replaced by learned value projections." />
 
 Now hold that picture and write down the definition every reader knows. Given a token sequence with queries $Q$, keys $K$, and values $V$ obtained by learned linear projections, scaled dot-product attention returns:
 
@@ -129,7 +129,7 @@ $$
 \hat f(x) = \sum_i \frac{K(x, x_i)}{\sum_j K(x, x_j)}\, y_i.
 $$
 
-These two expressions are the same up to relabeling.
+These two expressions have the same normalized weighted-average form.
 
 | Kernel regression | Self-attention |
 |---|---|
@@ -139,11 +139,11 @@ These two expressions are the same up to relabeling.
 | Target $y_i$ | Value projection $v_j$ |
 | Normalized weighting | Softmax denominator |
 
-The only structural difference is that the kernel in attention is non-symmetric: queries and keys are projected by different matrices $W_Q$ and $W_K$, so the exp-inner-product "kernel" is not positive semi-definite as a function of $(q, k)$ and not a Mercer kernel in the strict sense. This caveat will return when we get to RKHS, but for the kernel-smoother reading itself it changes nothing. Attention is a kernel smoother that has learned its kernel and its targets end-to-end, and this fact alone supplies the structural affordances that make attention readable.
+The quotation marks around "kernel" matter. Queries and keys are produced by different maps, so the compatibility $c(x_i,x_j)=\exp(q_i^\top k_j/\sqrt d)$ is generally asymmetric and need not define a PSD Gram matrix on tokens. The layer is Nadaraya–Watson-like in its normalization algebra, but it does not inherit an RKHS until symmetry and PSD are established. The weighted-average reading survives; Mercer theory does not automatically follow it.
 
 ## Three affordances kernel structure gives you
 
-So attention is a kernel smoother that learned its kernel and its targets end to end. What does that buy the person squinting at an attention map? Three things, and they are exactly the moves practitioners already make without naming them.
+What does any of that buy the person squinting at an attention map? Three things, and each one is a move practitioners already make without naming it.
 
 **1. The kernel is an explicit pairwise score.** For every pair of tokens $(i, j)$ there is a single real number $q_i \cdot k_j$ that summarizes how relevant token $j$ is to token $i$ under this head. Visualizing a head means visualizing the matrix of $\alpha_{ij}$. Comparing two heads means comparing two such matrices. The algorithmic descriptions one finds in the mechanistic interpretability literature ("this head copies from the most recent occurrence of the current token," "this head attends from each token to its syntactic head") are statements about the structure of this matrix. The kernel supplies a geometry on tokens, and geometry is the kind of object humans can reason about.
 
@@ -153,7 +153,7 @@ A standard linear layer, where some output coordinate is a linear combination of
 
 <AttentionPatterns caption="Three causal attention matrices over a 12-token sequence, each induced by a different kernel structure. Row i shows what token i attends to; brighter cells are higher α_ij. Left: a positional kernel that decays with distance. Center: an induction-like pattern where each token looks back to positions following earlier occurrences of the previous token. Right: a previous-token kernel. These are not three different layers, they are three different heads. The kernel is what tells you which one you are reading." size={12} />
 
-**3. Kernels carry locality.** Kernel smoothers, by construction, weight nearby points more heavily than distant ones, and the notion of "nearby" is whatever the kernel says it is. In attention, "nearby" is high $q_i \cdot k_j$, which the model is free to shape during training. The upshot is that attention behaves, by default, like a content-addressable nearest-neighbor retrieval over the sequence: $j^{*}_i = \operatorname*{arg\,max}_j q_i \cdot k_j$ in the sharp limit. This is exactly how it gets used in many of the algorithms that mechanistic interpretability has uncovered. Induction heads retrieve previous occurrences of a token. Name-mover heads retrieve antecedents. Positional heads retrieve fixed offsets. None of these descriptions requires anything beyond the kernel-smoother view; they are different specializations of "look up the most similar previous token under this kernel."
+**3. Kernels carry locality.** Kernel smoothers, by construction, weight nearby points more heavily than distant ones, and the notion of "nearby" is whatever the kernel says it is. In attention, "nearby" is high $q_i \cdot k_j$, which the model is free to shape during training. The upshot is that attention behaves, by default, like a content-addressable nearest-neighbor retrieval over the sequence: $j^{*}_i = \operatorname*{arg\,max}_j q_i \cdot k_j$ in the sharp limit. This is how it gets used in many of the algorithms that mechanistic interpretability has uncovered. Induction heads retrieve previous occurrences of a token. Name-mover heads retrieve antecedents. Positional heads retrieve fixed offsets. None of these descriptions requires anything beyond the kernel-smoother view; they are different specializations of "look up the most similar previous token under this kernel."
 
 ## And, when you symmetrize, an RKHS
 
@@ -167,15 +167,15 @@ The [Han et al. analysis](https://arxiv.org/abs/2210.05794) makes this explicit:
 
 The reason this matters for explanation, beyond the formal pleasure of having a Hilbert space, is that the RKHS view supplies two further objects that a generic layer does not have.
 
-The first is a **function-level norm**. The function $f \in \mathcal{H}_K$ that the layer computes has a well-defined $\|f\|_{\mathcal{H}_K}$, and this norm controls smoothness, generalization, and the per-input complexity of the prediction in ways that are classical and quantitative.
+The first is a **function-level norm**. For a fixed symmetric PSD kernel, the function $f\in\mathcal H_K$ has a well-defined $\lVert f\rVert_{\mathcal H_K}$. Bounds derived from that norm still need a declared loss, norm radius, diagonal bound, and sampling model.
 
-The second is a **basis**. The kernel sections $\{K(\cdot, k_j)\}$ are basis elements of $\mathcal{H}_K$, and the function the layer computes is a finite expansion
+The second is a **dictionary**. The kernel sections $\{K(\cdot,k_j)\}$ span the finite function produced by one attention row, but they need not be linearly independent and therefore need not form a basis. The layer computes an expansion
 
 $$
 f(\cdot) = \sum_j \beta_j\, K(\cdot, k_j)
 $$
 
-in this basis with explicit coefficients. "Which token does this output depend on, and by how much?" becomes a literal question about coefficients in a fixed basis, not an interpretive one.
+with explicit coefficients. These are arithmetic contribution weights for that layer, not automatically causal explanations. If the section Gram matrix is singular, the same function can also admit more than one coefficient representation.
 
 <RBFExpansion caption="A function (dashed) approximated as a finite sum of kernel sections K(·, k_j) centered at fixed anchor points. The orange curve is the sum; the lighter strokes are the individual α_j K(·, k_j). Shrinking the kernel width makes each section more local and the explanation more token-specific; widening it pools more sections together. This is what the inside of a kernel-machine layer looks like." />
 
@@ -202,21 +202,21 @@ And you can watch the missing geometry directly, because it is a property of the
 
 The left cloud bends along one curve; the right cloud is a smear. A kernel layer's outputs track the geometry its kernel defines before a single gradient step, so the score on the horizontal axis is a genuine explanation of the behavior on the vertical one. The ReLU layer offers no score with that property, and no amount of training will conjure one, because the parameterization has nowhere to keep it.
 
-This is, in a precise sense, the structural origin of the now-standard observations about MLP neurons. They are polysemantic because the parameterization does not reward monosemy. They are distributed because the parameterization does not pick out a privileged basis. They are basis-dependent in their feature decomposition because no canonical basis is on offer. The phenomenon called "superposition" is just **the absence of a geometry**. There is no metric on input space that the layer respects, and so features have nowhere natural to live except in arbitrary linear combinations of activations.
+This offers one structural explanation for the now-standard observations about MLP neurons. Their decomposition is basis-dependent because the parameterization does not nominate a canonical semantic basis. Superposition is not the absence of all geometry, since any hidden representation induces similarities such as $h(x)^\top h(x')$. The narrower claim is that the ordinary MLP does not expose a normalized token-to-token contribution matrix or a fixed input kernel as part of its forward computation.
 
-By contrast, attention *does* carry a geometry: the kernel. And so attention exposes its features in that geometry, in the only basis the model already uses, namely the token basis. The asymmetry is not that one layer is more powerful than the other; it is that one layer is a kernel machine and the other is not.
+Attention, by contrast, *does* carry a geometry: the kernel. And so it exposes its features in that geometry, in the only basis the model already uses, namely the token basis. Both layers sit in the same stream with comparable capacity. Only one of them keeps a geometry while it computes.
 
 ## But isn't this just the price of universal approximation?
 
 The natural objection here is that universal approximation forces this state of affairs. A function class powerful enough to approximate arbitrary continuous functions cannot afford the rigidity of a kernel expansion.
 
-The objection conflates the function class with the parameterization. Classical kernel methods are themselves universal in the relevant sense. An RKHS $\mathcal{H}_K$ with a sufficiently rich kernel (for example, a characteristic kernel) is dense in $C(\mathcal{X})$ on a compact set, and yet every predictor in $\mathcal{H}_K$ remains a finite expansion
+The objection conflates the function class with the parameterization. Some classical kernels are universal: their RKHS is dense in $C(\mathcal X)$ for the declared compact domain. Characteristicness is a different property, injectivity of probability-measure embeddings, and does not replace the universality hypothesis in general. A finite-sample, norm-regularized optimizer for a fixed universal kernel admits a representer expansion
 
 $$
 f = \sum_i \alpha_i\, K(\cdot, x_i)
 $$
 
-in kernel sections with closed-form norm $\|f\|^2_{\mathcal{H}_K} = \alpha^\top K \alpha$.
+in kernel sections with closed-form norm $\|f\|^2_{\mathcal{H}_K}=\alpha^\top K\alpha$. The whole RKHS is the completion of such finite spans; not every member is itself a finite expansion.
 
 The reason a transformer MLP is not such an object is not that the function class is too rich. It is that the architecture has chosen the cheapest possible primitive (an affine map followed by a pointwise nonlinearity) and accepted the loss of structure as the cost. This is a design decision, not a theorem.
 
@@ -227,19 +227,19 @@ k_{b,\varepsilon}(w, x) = \frac{(w^\top x + b)^2}{\|x - w\|^2 + \varepsilon},
 \qquad b \ge 0,\ \varepsilon > 0,
 $$
 
-is a hidden-unit primitive that is a Mercer kernel for $b \ge 0$, dominates a scaled inverse-multiquadric in the Loewner order so that its RKHS is universal and characteristic, and yields a layer that is by construction a finite learned-center kernel expansion
+is a hidden-unit primitive that is PSD for $b\ge0$, $\varepsilon>0$. For $b>0$, its constant polynomial component gives a positive multiple of the inverse-multiquadric kernel in the PSD decomposition, supporting the paper's universality and characteristicness result on its stated domain. The $b=0$ case does not inherit that argument. A finite layer is a learned-center expansion
 
 $$
 f(x) = \sum_{i=1}^{n} \alpha_i\, k_{b,\varepsilon}(w_i, x)
 $$
 
-with closed-form RKHS norm $\alpha^\top K \alpha$.
+whose squared fixed-kernel RKHS norm is $\alpha^\top K\alpha$ once its centers and hyperparameters are frozen. Optimizing those centers is a nonconvex search over changing finite spans, not the fixed-kernel representer problem.
 
 I am not arguing here that Yat-style MLPs are a practical replacement for the transformer FFN. That is an empirical question and not the subject of this piece. The point is to close the explanatory loop. **The opacity of standard MLPs is not the price of expressivity. It is the price of giving up the kernel.**
 
 ## What this does and does not claim
 
-Attention weights are not the same as explanations, and the literature contains a [well-known](https://arxiv.org/abs/1902.10186) [back-and-forth](https://arxiv.org/abs/1908.04626) on exactly how far one can trust them. What the kernel reading provides is not faithfulness but *affordances*: the structural objects (pairwise scores, normalized contributions, a geometry, sometimes an RKHS) that any honest explanation has to be grounded in.
+Attention weights are not the same as explanations, and the literature contains a [well-known](https://arxiv.org/abs/1902.10186) [back-and-forth](https://arxiv.org/abs/1908.04626) on how far one can trust them. What the kernel reading provides is not faithfulness but *affordances*: the structural objects (pairwise scores, normalized contributions, a geometry, sometimes an RKHS) that any explanation has to be grounded in.
 
 The MLP lacks those objects natively. Until it has them, every explanation of MLP behavior has to import its geometry from elsewhere, whether through a sparse dictionary, a probe, or a trained decoder. Until the kernel is restored, the work of explaining MLPs will continue to be the work of supplying, after the fact, the structure that attention has carried all along.
 
@@ -249,7 +249,7 @@ The MLP lacks those objects natively. Until it has them, every explanation of ML
 
 <CiteAs
   slug="attention-is-a-kernel"
-  title="Attention is Explainable Because it is a Kernel"
+  title="What Attention Weights Can Explain"
   pubDate={frontmatter.pubDate}
   paper={{
     title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance",

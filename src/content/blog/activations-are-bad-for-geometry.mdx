@@ -1,7 +1,7 @@
 ---
-title: Activations Are Bad for Geometry
-description: ReLU, GELU, and friends factor into a layer's Jacobian as a diagonal modulation that wrecks the geometry of the data manifold. Why pointwise activations are a representational bug.
-seoDescription: "ReLU and GELU enter a layer's Jacobian as a diagonal modulation that wrecks the data manifold's geometry. Pointwise activations as a representational bug."
+title: What Activations Do to Geometry
+description: ReLU, GELU, and their relatives enter a layer's Jacobian as an input-dependent row scaling. Here is when that scaling erases directions, when it merely distorts them, and what the usual repairs actually guarantee.
+seoDescription: "Activations enter a layer's Jacobian as row scaling. See when geometry collapses, when it merely distorts, and what architectural repairs guarantee."
 pubDate: 2026-02-20
 tags: [ml, geometry, kernels, interpretability, deep-learning, neural-networks, activation-functions, jacobian, relu]
 references:
@@ -60,7 +60,7 @@ import JacobianWarp from '../../components/viz/JacobianWarp.astro';
 import HighDimCollapse from '../../components/viz/HighDimCollapse.astro';
 import CiteAs from '../../components/CiteAs.astro';
 
-Somewhere today, someone is computing cosine similarities between embeddings, running $k$-nearest-neighbors in a representation space, clustering the activations of a hidden layer, and trusting what comes back. The trust rests on an assumption so default that it is rarely said out loud: the geometry of the representation space means something. Nearby points are near because the data was similar; angles measure relationships; distance is information. So here is the uncomfortable question this post exists to press: how much of that geometry is a property of your data, and how much is an artifact of what the network's activation functions destroyed on the way up?
+Somewhere today, someone is computing cosine similarities between embeddings, running $k$-nearest-neighbors in a representation space, clustering the activations of a hidden layer, and trusting what comes back. The trust rests on an assumption so default that it is rarely said out loud: the geometry of the representation space means something. Nearby points are near because the model found them similar; angles measure relationships; distance is information. So here is the uncomfortable question this post exists to press: how much of that geometry came from the data, and how much was rewritten by the activation functions on the way up?
 
 The destruction has a specific and inspectable mechanism. A neural network layer is a map, and whether that map preserves the geometry of the data manifold, distances, angles, volumes, is decided by its Jacobian. For the standard form $F(\mathbf{x}) = \phi(\mathbf{W}\mathbf{x} + \mathbf{b})$, with input $\mathbf{x} \in \mathbb{R}^d$, layer width $n$, and $\phi$ applied coordinatewise, the Jacobian factors as
 
@@ -68,17 +68,23 @@ $$
 \mathbf{J}_F(\mathbf{x}) = \mathbf{D}_\phi(\mathbf{z}) \, \mathbf{W}, \qquad \mathbf{z} = \mathbf{W}\mathbf{x} + \mathbf{b},
 $$
 
-where $\mathbf{D}_\phi(\mathbf{z}) = \mathrm{diag}(\phi'(z_1), \ldots, \phi'(z_n))$. Read the factorization as a division of labour. $\mathbf{W}$ does all the rotating and mixing; the activation contributes only $\mathbf{D}_\phi$, a diagonal matrix that can do nothing but rescale coordinates, by whatever values $\phi'$ happens to take at the $n$ pre-activations the input produces. Under almost every activation in current use those values are zero, small, or bounded, and none of that is accidental: it is exactly what gives the activation its selectivity. It is also, as we are about to see, what lets it quietly vandalise the geometry your cosine similarities assume is real.
+where $\mathbf{D}_\phi(\mathbf{z}) = \mathrm{diag}(\phi'(z_1), \ldots, \phi'(z_n))$. Read the factorization as a division of labour. $\mathbf{W}$ does all the rotating and mixing; the activation contributes only $\mathbf{D}_\phi$, a diagonal matrix that can do nothing but rescale coordinates, by whatever values $\phi'$ happens to take at the $n$ pre-activations the input produces. Under almost every activation in current use those values are zero, small, or bounded, and none of that is accidental: that squeezing is where the activation's selectivity comes from. It is also, as we are about to see, what lets it quietly vandalise the geometry your cosine similarities assume is real.
 
 ## The Jacobian, activation by activation
 
-How much damage can one diagonal matrix really do? The singular values of $\mathbf{J}_F$ are the singular values of $\mathbf{W}$ *scaled coordinatewise* by the entries of $\mathbf{D}_\phi$, so the answer turns entirely on what $\phi'(z)$ looks like at the $n$ pre-activations the layer actually sees.
+How much damage can one diagonal matrix really do? Left multiplication by $\mathbf D_\phi$ rescales the rows of $\mathbf W$, but it does not rescale the singular values one by one. The singular directions rotate as the row weights change. What survives are bounds: when all derivatives are nonzero,
 
-<ActivationGallery caption="Six common activations and their derivatives. The accent line is φ(z); the dashed line is φ′(z), what the layer's geometry depends on. ReLU has φ′ ∈ {0, 1}, a hard gate. Leaky ReLU avoids the exact zero but jumps between α and 1. Sigmoid and tanh have φ′ tending to zero at both ends. GELU and softplus stay strictly positive and smooth." />
+$$
+\sigma_{\min}(\mathbf D_\phi)\,\sigma_j(\mathbf W)
+\;\le\; \sigma_j(\mathbf D_\phi\mathbf W)
+\;\le\; \sigma_{\max}(\mathbf D_\phi)\,\sigma_j(\mathbf W).
+$$
 
-The picture is uniform. ReLU gives $\phi'(z) \in \{0, 1\}$, a hard gate that zeroes rows of $\mathbf{J}_F$ on the negative half-plane. Sigmoid and tanh never zero exactly but saturate at both ends; small singular values multiply, and the Jacobian becomes ill-conditioned the moment any coordinate is far from zero. Leaky ReLU keeps $\phi'$ strictly positive but pins it into $\{\alpha, 1\}$ with $\alpha \ll 1$, taking a factor-of-$1/\alpha$ hit to the condition number in expectation. GELU and softplus are smooth and $\phi' > 0$ everywhere; their conditioning cost is mild, gradual, and never zero.
+A zero derivative can delete a row entirely. The derivative profile controls how much conditioning can deteriorate, while the orientation of $\mathbf W$ decides whether that deterioration becomes a lost tangent direction.
 
-These differences are not stylistic. They are the difference between a layer that can collapse, a layer that can degenerate, and a layer that mostly behaves.
+<ActivationGallery caption="Six common activations and their derivatives. The accent line is φ(z); the dashed line is φ′(z), what the local geometry depends on. ReLU has φ′ ∈ {0, 1}, a hard gate. Leaky ReLU avoids the exact zero but jumps between α and 1. Sigmoid and tanh have φ′ tending to zero at both ends. Softplus stays positive; GELU is smooth but has a small non-monotone region where its derivative is negative." />
+
+The picture has three regimes. ReLU gives $\phi'(z) \in \{0, 1\}$, a hard gate that zeroes rows of $\mathbf{J}_F$ on the negative half-plane. Sigmoid and tanh never zero at a finite input but saturate at both ends, so their smallest row scales can become tiny. Leaky ReLU keeps the magnitude of its derivative between $\alpha$ and $1$, which limits the damage from this factor alone to at most a factor $1/\alpha$. Softplus stays strictly increasing and smooth. GELU is smooth but not monotone everywhere, so it belongs neither to the hard-gate case nor to the globally invertible case.
 
 ## Rank collapse, made concrete
 
@@ -88,7 +94,7 @@ $$
 \mathrm{rank}\big(\mathbf{J}_F(\mathbf{x})\big) = \mathrm{rank}\big(\mathbf{W}_{S(\mathbf{x}),\,:}\big),
 $$
 
-the rank of $\mathbf{W}$ restricted to its surviving rows. If the rows of $\mathbf{W}_S$ no longer span $\mathbb{R}^d$, the Jacobian loses column rank and a neighborhood of $\mathbf{x}$ is crushed onto a lower-dimensional subset of output space. Information that lived along the killed directions is gone in the strong sense, the next layer receives the same image regardless of where you were inside $\ker \mathbf{J}_F$.
+the rank of $\mathbf{W}$ restricted to its surviving rows. If the rows of $\mathbf{W}_S$ no longer span $\mathbb{R}^d$, the Jacobian loses column rank. Motion along a vector in $\ker \mathbf J_F$ becomes invisible to first order at that input. That is a local statement; proving that two finite, separated inputs collide requires an additional argument about the whole map.
 
 Surely width saves you here. Make the layer wide, $n \gg d$, and even with half the rows gated off, the surviving submatrix is almost certainly still full column rank; the gate fires, and nothing is lost. That reasoning is correct, and it is exactly the reasoning that fails, because it is correct *for one layer*. A network is a product of layers,
 
@@ -96,27 +102,27 @@ $$
 \mathbf{J}_F(\mathbf{x}) = \prod_{\ell = L}^{1} \mathbf{D}_\phi(\mathbf{z}^{(\ell)})\, \mathbf{W}_\ell,
 $$
 
-and ranks of products can only shrink: rank lost at *any* layer, at *any* depth, is lost end-to-end, because no later layer can resurrect a direction that has already been crushed to a point. Width buys you a good chance of surviving each round; depth makes you play the round again and again, and every loss is permanent. Even short of exact collapse, the near-losses compound too, each layer's small singular values multiply into the next layer's, and the end-to-end Jacobian drifts toward effective rank one. Residual connections bias each layer toward $\mathbf{I}$ plus a small perturbation and mitigate the compounding, but they do not guarantee against it.
+and the rank of a matrix product cannot exceed the rank of any factor: a direction annihilated by one layer cannot be reconstructed by later multiplication. Near-collapse is subtler. Singular values of a product are not obtained by multiplying corresponding singular values unless their singular directions align, so depth can amplify, rotate, or partly redistribute distortion. In the random ReLU experiment below the weaker directions decay repeatedly and the effective rank falls; that behavior is measured for this ensemble, not forced for every trained deep network. Residual connections bias each layer toward $\mathbf I$ plus a perturbation and improve the observed rank floor.
 
 You do not have to take the multiplication argument on faith; you can watch it happen.
 
-<DepthRankDecay caption="A stack of random ReLU layers of width 8, probed at a 2D input point, computed live in your browser. Left: the input plane, shaded by how much rank the end-to-end Jacobian has lost at each point (darker shading, more loss), with the pullback ellipse at the draggable probe: the image of a small circle of inputs, drawn along its principal directions. Right: the two singular values of the end-to-end Jacobian and its effective rank, at every depth. Sweep the depth slider and watch σ₂ fall away from σ₁ while the ellipse thins toward a needle; flip on residual connections and watch the identity term hold the rank floor." />
+<DepthRankDecay caption="A stack of random ReLU layers of width 8, probed at a 2D input point. Left: the input plane, shaded by how much rank the end-to-end Jacobian has lost at each point (darker shading, more loss), with the pullback ellipse at the draggable probe: the image of a small circle of inputs, drawn along its principal directions. Right: the two singular values of the end-to-end Jacobian and its effective rank, at every depth. Sweep the depth slider and watch σ₂ fall away from σ₁ while the ellipse thins toward a needle; flip on residual connections and watch the identity term hold the rank floor." />
 
 Play with it for a minute and the depth story stops being abstract. At depth one the ellipse is a healthy ellipse almost everywhere. By depth six or eight, whole regions of the input plane have gone needle-shaped: the effective rank hovers near one, and every input in such a region is being told about through a single surviving direction. Nothing pathological was chosen here, the weights are ordinary random matrices, which is the point: this is what stacked pointwise gating does by default.
 
 ## When activations don't break things
 
-The negative result has a positive sibling. If $\phi$ is strictly monotone and $\mathbf{W}$ has full column rank, then $F$ restricted to any compact data manifold $M \subset \mathbb{R}^d$ is a homeomorphism onto its image, distinct points stay distinct, topology is preserved, no rank collapse anywhere. If $\phi$ is also smooth, the pullback metric $g_M$ is a well-defined Riemannian metric (possibly ill-conditioned, but never singular).
+The negative result has a positive sibling. If $\phi$ is continuous and strictly monotone in every coordinate and $\mathbf W$ has full column rank, then $F$ is injective; restricted to a compact data manifold, it is a homeomorphism onto its image. A nonsingular pullback metric needs more. The derivative must stay nonzero on the attained pre-activations, and $\mathbf D_\phi\mathbf W$ must remain injective on every tangent space $T_xM$.
 
-The test sorts the standard activations cleanly. Sigmoid, tanh, GELU, softplus, and the identity are all strictly monotone; under a full-rank $\mathbf{W}$ they preserve topology, and their only sin is condition number. ReLU is *not* strictly monotone, it has a flat half-line, and that flat half-line is the source of every pathology above. Leaky ReLU with $\alpha > 0$ scrapes by: it is strictly monotone, so $g_M$ is well-defined, but $\phi'$ has a jump at zero, so $g_M$ is only piecewise smooth.
+The test sorts most standard activations cleanly. Sigmoid, tanh, softplus, leaky ReLU with $\alpha>0$, and the identity are strictly monotone. ReLU is not, because it has a flat half-line. GELU is the useful exception to any tidy slogan: its derivative becomes negative on part of the left tail, so global monotonicity is not available even though the map is smooth.
 
-The corollary is that the activation question is largely the question of strict monotonicity. Lose it, and you lose homeomorphism on a measurable region of input space. Keep it, and the only thing left to manage is conditioning.
+The diagnostic is therefore two-part. Global injectivity asks about monotonicity and the rank of $\mathbf W$; local geometric stability asks about the tangent-restricted singular values of $\mathbf D_\phi\mathbf W$. Neither question can replace the other.
 
 ## What the activation does to the metric
 
 The trouble with everything so far is that you cannot picture it. Rank, kernels, the singular values of a Jacobian in hundreds of dimensions: none of that is an image your intuition can hold. But there is a physical picture that carries all of it. Think of the data manifold as a printed sheet of graph paper and the layer as a hand that deforms it. A smooth, strictly monotone activation stretches the sheet, unevenly, but without tearing or creasing: grid lines stay grid lines. Saturation crushes whole regions of the grid toward a point. And ReLU *folds* the sheet, pressing everything on the wrong side of the crease flat onto the crease itself. Once folded, two different points of the sheet lie on top of each other, and no later hand can pull them apart again; it can only carry the folded stack along.
 
-The correspondence is exact, not decorative:
+Every object in the algebra has a counterpart on the sheet:
 
 | geometric object | on the sheet |
 | --- | --- |
@@ -128,7 +134,7 @@ The correspondence is exact, not decorative:
 | $\phi'(z_i) = 0$ (ReLU's flat half-line) | a fold: one direction pressed completely flat |
 | $\mathrm{rank}\,\mathbf{J}_F(\mathbf{x})$ | how many directions of the sheet survive at $\mathbf{x}$ |
 
-And the picture predicts before the algebra confirms: a fold cannot be undone by any further stretching, which is exactly the rank-lost-is-lost-end-to-end rule you just watched compound across depth.
+And the picture predicts before the algebra confirms: once a direction lies in a layer Jacobian's null space, later multiplication cannot recover it. The animation then measures how often that exact loss—and the softer decay around it—occurs in the chosen random stack.
 
 With the picture in hand, the equation can name it. The grid spacing the deformed sheet carries is the pullback metric induced by the layer on a submanifold $M \subset \mathbb{R}^d$,
 
@@ -136,7 +142,7 @@ $$
 g_M(\mathbf{u}, \mathbf{v}) = \mathbf{u}^\top \big(\mathbf{W}^\top \mathbf{D}_\phi^2 \mathbf{W}\big) \mathbf{v}.
 $$
 
-This is the metric the network *thinks* the data lives in. $\mathbf{D}_\phi$ enters twice, squared, with two consequences worth naming.
+This is the metric the network *thinks* the data lives in. $\mathbf{D}_\phi$ enters twice, squared, and it does two distinguishable kinds of damage.
 
 **Directional rescaling.** Each row of $\mathbf{W}$ is weighted by $\phi'(z_i)^2$ in $g_M$. Sigmoid and tanh saturation, the leaky-ReLU $\alpha$ slope, every situation in which a $\phi'(z_i)$ goes small: all push the corresponding row's contribution toward zero. The "learned distance" the layer imposes is dominated by the rows whose neurons haven't saturated; the rest contribute almost nothing to perceived similarity.
 
@@ -158,27 +164,25 @@ By $n = 10$ this is $99.9\%$. In a transformer hidden layer of width $768$, ever
 
 <HighDimCollapse caption="P(at least one ReLU-zeroed coordinate) = 1 − 2⁻ⁿ as a function of layer width n, under the iid symmetric pre-activation model. The expected active fraction stays at ½; the probability that at least one coordinate is dead approaches 1 exponentially. By n = 10 it is already 99.9%; by transformer widths it is indistinguishable from 1." />
 
-The point is not that ReLU is bad in high dimensions. It is that high dimensions are exactly where the geometric pathologies of pointwise activations live, and that handwaving about width does not make them go away.
+High dimensions guarantee that ReLU gating is the operating regime, not that rank collapse is. In a wide layer, half the rows can vanish while the survivors still span every input direction. The quantity to measure is the smallest tangent singular value of the surviving Jacobian, not whether at least one coordinate is zero.
 
 ## The expressivity–geometry tradeoff
 
 Why have an activation at all? Without one, a stack of $L$ layers is the single linear map $\mathbf{W}_L \cdots \mathbf{W}_1$, no nonlinear class boundary, no useful expressivity. The activation buys *selectivity*: $\phi'(z_i) \approx 1$ when a neuron's prototype matches the input and the projection passes through, $\phi'(z_i) \approx 0$ when it doesn't. Selectivity is what the activation is for.
 
-But selectivity is exactly what damages geometry. Sharper activations, derivatives closer to $\{0, 1\}$, separate classes better and lose more geometry. Smoother, never-zero activations preserve more geometry but suppress selectivity, leaving the layer near its linear part. The choice of activation is the choice of where to sit on this axis. ReLU is a corner solution: maximum selectivity, maximum geometric damage. GELU and softplus are middle solutions. Identity is the other corner, perfect geometry, no expressivity gain over a single linear layer.
-
-There is no escape from this tradeoff *as long as the nonlinearity is pointwise*. Every dimension spent on selectivity is taken from the metric.
+Selectivity can damage geometry, but there is no universal one-dimensional tradeoff between the two. A pointwise nonlinearity can be expressive while remaining locally injective, and training can orient $\mathbf W$ so that heavily rescaled rows are redundant. The measurable question is how the task's tangent directions align with the Jacobian's singular directions after training.
 
 ## Reading common tricks as Jacobian regularization
 
 If pointwise activations really are a standing threat to the Jacobian, you would expect the field to have been fighting them all along, without necessarily saying so. It has. Several standard practices, usually treated as separate phenomena, are all variations on a single intervention: keep $\mathbf{J}_F$ away from rank collapse and saturation.
 
-**Residual connections** turn each layer into $\mathbf{x} + F(\mathbf{x})$, whose Jacobian is $\mathbf{I} + \mathbf{D}_\phi \mathbf{W}$ instead of $\mathbf{D}_\phi \mathbf{W}$. The identity term gives the Jacobian a floor, full rank by construction, well-conditioned as long as $\|\mathbf{D}_\phi \mathbf{W}\|$ stays modest. The cumulative rank decay that plagues stacked ReLU layers becomes a perturbation around $\mathbf{I}$ instead of a multiplicative product of degenerate matrices.
+**Residual connections** turn each layer into $\mathbf{x} + F(\mathbf{x})$, whose Jacobian is $\mathbf{I} + \mathbf{D}_\phi \mathbf{W}$ instead of $\mathbf{D}_\phi \mathbf{W}$. The identity term does not guarantee full rank: an eigenvalue of the residual branch can still land at $-1$. It does give a clean sufficient condition. If $\|\mathbf D_\phi\mathbf W\|_2<1$, then every singular value of the residual Jacobian is at least $1-\|\mathbf D_\phi\mathbf W\|_2$.
 
-**Batch and layer normalization** rescale the pre-activation $\mathbf{z}$ to roughly zero mean and unit variance. This is exactly the regime in which sigmoid/tanh/GELU have their largest $\phi'$ and ReLU has its highest active fraction. Without normalization, $\mathbf{z}$ drifts during training; the saturation set grows; $\mathbf{D}_\phi$ shrinks. Normalization holds the input distribution in the activation's *live zone*, $\mathbf{D}_\phi$ stays away from zero.
+**Batch and layer normalization** control the scale of the pre-activation $\mathbf z$. For saturating activations this can keep more samples near the high-derivative region; for ReLU, centering a symmetric distribution keeps the active fraction near one half. Neither operation certifies a Jacobian rank or condition number, but both make the derivative distribution easier to control.
 
 **Weight and spectral normalization** bound the singular values of $\mathbf{W}$. They have no direct effect on $\mathbf{D}_\phi$, but by keeping $\mathbf{W}$'s spectrum tight they prevent the linear factor from compounding whatever damage $\mathbf{D}_\phi$ has already inflicted.
 
-These are not activation replacements. They are stabilizers, they keep the architecture in the regime where $\mathbf{J}_F$ is least bad. The fact that the same analysis explains three different "tricks" is the content: each one holds a different piece of the Jacobian away from a different failure mode.
+None of the three replaces the activation. Each controls a different factor in the Jacobian, but only a measurement of the composed, tangent-restricted Jacobian can say whether the representation preserved the geometry a downstream metric will read.
 
 ## Why this matters for evaluation
 
@@ -188,19 +192,25 @@ The conclusion is not "don't use cosine similarity." It is that cosine similarit
 
 ## The kernel alternative
 
-The tradeoff exists because the architecture has separated geometry (carried by $\mathbf{W}$) from selectivity (provided by $\phi$), and each piece can do its job only at the other's expense. A kernel-machine layer dissolves the separation. A symmetric positive-definite kernel $K(\mathbf{z}, \mathbf{z}')$ provides selectivity (sharper kernels are more selective) and geometry (a Gram matrix is a metric) at the same time. The function the layer computes is a finite expansion in kernel sections,
+A kernel offers a different primitive. A symmetric positive-semidefinite kernel $K(\mathbf z,\mathbf z')$ provides a feature-space inner product and therefore the induced pseudometric
+
+$$
+d_K(z,z')^2=K(z,z)+K(z',z')-2K(z,z').
+$$
+
+It becomes a true metric only when the feature map separates points. A finite kernel layer then computes an expansion in kernel sections,
 
 $$
 f(\cdot) = \sum_j \alpha_j \, K(\cdot, \mathbf{z}_j),
 $$
 
-with a closed-form RKHS norm $\|f\|^2_{\mathcal{H}_K} = \boldsymbol{\alpha}^\top \mathbf{K} \boldsymbol{\alpha}$. There is no $\mathbf{D}_\phi$ sitting in the middle to collapse rank or saturate the metric. The primitive *is* the geometry; selectivity is implemented *as* geometry; kernel similarity *is* the score.
+with a closed-form RKHS norm $\|f\|^2_{\mathcal{H}_K} = \boldsymbol{\alpha}^\top \mathbf{K} \boldsymbol{\alpha}$. This does not guarantee that a finite sampled feature map is injective or well conditioned, but it states the comparison geometry explicitly enough to test both properties.
 
-The pointwise activation is not the price of expressivity. It is the price of refusing to make the primitive a kernel. Pick activations with the same care you pick a loss. They are not there for nonlinearity, and they are not free.
+Expressivity never required a *pointwise* nonlinearity. It required a nonlinearity, and the pointwise form is one choice among several, the one that inserts a diagonal matrix between your data and its geometry and then asks that matrix to do the discriminating. Until you swap the primitive, the diagonal is there on every layer of every forward pass, and it is the thing deciding what your cosine similarities are allowed to mean. So choose $\phi$ with the care you would give a loss function, and check the Jacobian of what you built before you trust a distance computed on top of it.
 
 <CiteAs
   slug="activations-are-bad-for-geometry"
-  title="Activations Are Bad for Geometry"
+  title="What Activations Do to Geometry"
   pubDate={frontmatter.pubDate}
   paper={{
     title: "Manifolds, Activations, and Lost Geometry: How Pointwise Nonlinearities Break the Map",

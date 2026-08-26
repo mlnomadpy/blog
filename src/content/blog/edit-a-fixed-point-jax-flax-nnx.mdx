@@ -1,8 +1,8 @@
 ---
 title: "Editing a Deep Equilibrium Network, in JAX/Flax NNX"
 seoTitle: "Edit a Deep Equilibrium Yat Network in JAX"
-description: "A runnable companion: build the weight-tied Yat equilibrium operator in Flax NNX, then teach a class by appending rows to the readout (F untouched, exact) or into the shared dynamics (one paste, present at every depth), measure the contraction certificate with power iteration and bisect one gain to restore it, audit the drift of 520 old fixed points, watch a layer-only edit evaporate, and forget by masking. Every number is from a real run."
-seoDescription: "Build an editable deep-equilibrium Yat network in Flax NNX: teach with a concatenate, certify with power iteration, bisect one knob, audit the drift."
+description: "A runnable companion: build the weight-tied Yat equilibrium operator in Flax NNX, then teach a class by appending rows to the readout (F untouched, exact) or into the shared dynamics (one paste, present at every depth). Measure local Jacobian slopes, temper the edit gain, audit 520 old fixed points, test multiple starts, watch a finite-prefix edit evaporate, and forget by masking. Every number is from a real run."
+seoDescription: "Build an editable deep-equilibrium Yat network in Flax NNX: teach with a concatenate, audit local stability with power iteration, temper one knob, and measure fixed-point drift."
 pubDate: 2026-07-04T10:00:00-07:00
 draft: false
 tags: [ml, kernels, deep-equilibrium, fixed-point, machine-unlearning, continual-learning, weight-tying, yat, jax, flax, nnx, implementation, deep-learning]
@@ -23,14 +23,14 @@ references:
     arxiv: "2605.03262"
 keywords:
   - editable deep equilibrium model JAX
-  - contraction certificate power iteration
+  - local Jacobian stability power iteration
   - weight-tied network editing Flax NNX
   - machine unlearning fixed point
   - Yat kernel deep equilibrium
 ---
 import CiteAs from '../../components/CiteAs.astro';
 
-*The [explainer](/blog/edit-a-fixed-point/) asked whether the surgical editability of a Yat network survives once its layers melt into one operator iterated to a fixed point. It does, but it splits: readout edits keep every proof from the list network, dynamics edits are more powerful and demand a measurement culture. This is the implementation. The operator is a [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html) module; teaching a class is a `jnp.concatenate`, the contraction certificate is a few lines of power iteration, the rescue is one bisected knob, and every guarantee is either a `jnp.array_equal` or a re-solved fixed point you can read. Every number below is from a real run; the script is `scripts/yat_deq_edit.py`.*
+*The most important diagnostic in this file is a short power iteration called `local_slope`. It reports the operator's largest local slope at each observed fixed point, and the natural class edit sends the maximum from 0.904 to 1.438. That loss of local margin is a reason to temper the edit and probe the solver again, not a global theorem about every state. The [explainer](/blog/edit-a-fixed-point/) works out why editability splits in two once a stack melts into a single iterated operator; here are both edits, the gain audit, and the drift of 520 old fixed points.*
 
 *Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/edit-a-fixed-point-jax-flax-nnx): the same code, block by block, with the math written out and every figure reproduced from a real run.*
 
@@ -73,7 +73,7 @@ class YatDEQ(nnx.Module):
         return self.zstar(x) @ self.C.value.T + self.cb.value
 ```
 
-There is no `nnx.Linear` stack and no depth index anywhere in it. `F` is the entire network; `zstar` runs it until the state stops moving; `__call__` reads that resting place. This is the operator the explainer trained on two interleaving moons and one Gaussian blob, three classes, **1,733** parameters shared across all depth, landing at 97.9 / 98.1 / 100% per-class recall. Its contraction certificate (the measured slope of `F` at the fixed points, which we come back to) sits at mean 0.629, max 0.904, comfortably below one: a single basin, one answer from anywhere.
+There is no `nnx.Linear` stack and no depth index anywhere in it. `F` is the entire network; `zstar` runs it until the state stops moving; `__call__` reads that resting place. This is the operator the explainer trained on two interleaving moons and one Gaussian blob, three classes, **1,733** parameters shared across depth, landing at 97.9 / 98.1 / 100% per-class recall. At the observed test equilibria, the local Jacobian norm has mean 0.629 and max 0.904. Multiple-start tests then probe whether the solver returns to the same basin.
 
 The anatomy offers exactly two places to put new rows, and the whole post is the difference between them. There are the rows that *read* the settled state (the readout `C`) and the rows that *steer* it (the bank `W` inside `F`). Editing the first leaves the equation alone. Editing the second edits the equation, at every depth at once.
 
@@ -107,7 +107,7 @@ The new class is recognized at **85.8%**, and the old classes are not approximat
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/deqedit-teach-readout.gif" alt="Eight taught-class inputs iterating through the state plane to a cluster of anchor equilibria, while a fourth recall bar fades in to 85.8% and the three old-class bars hold flat" loading="lazy" width="968" height="495" />
-  <figcaption>Teaching by readout, run. The frozen operator iterates eight taught inputs to their equilibria (the anchor cluster on the left); a fourth score fades in to its real 85.8% while the old recall bars do not move, because their scores are the same computation. The invariance is exact: a gauge cannot alter the thing it measures. Rendered by <code>scripts/render_deqedit_gifs.py</code>.</figcaption>
+  <figcaption>Teaching by readout, run. The frozen operator iterates eight taught inputs to their equilibria (the anchor cluster on the left); a fourth score fades in to its real 85.8% while the old recall bars do not move, because their scores are the same computation. The invariance is exact: a gauge cannot alter the thing it measures.</figcaption>
 </figure>
 
 The catch is the flipside of the same fact: a readout hung beside the landscape cannot break it, but it cannot *help* it either. The new class's inputs settle wherever the old flow happens to drop them, and the flow was never carved for them. The margin over the old scores is a thin **0.55**, and the inputs settle a mean **0.159** from their nearest anchor, a loose cloud. To do better the mass has to go into the landscape.
@@ -126,14 +126,14 @@ def dyn_edit(model, anchors, gamma):
     return edited
 ```
 
-That is the entire operation, and it works spectacularly better than the readout alone: with the gain tempered (the next section), the new-class recall goes 85.8% to **100%**, the margin fattens from 0.55 to **3.83**, and the settle distance to the nearest anchor tightens from 0.159 to **0.097**. The flow now carries the new class's inputs home instead of merely labeling where they stall. But there is a bill, and it is the load-bearing wall of the whole model.
+That is the entire operation, and it works spectacularly better than the readout alone: with the gain tempered (the next section), the new-class recall goes 85.8% to **100%**, the margin fattens from 0.55 to **3.83**, and the settle distance to the nearest anchor tightens from 0.159 to **0.097**. The flow now carries the new class's inputs home instead of merely labeling where they stall. What it puts at risk is the property the whole model stands on.
 
-## The certificate, as a few lines of power iteration
+## The local stability audit, as a few lines of power iteration
 
-What could go wrong with deepening a well? In a recursion the pasted rows feed their own output back into their own input. Make the well too deep and the slope of `F` crosses one, and the moment it does, the guarantee that "iterate until it stops" returns one well-defined answer is void. The certificate that measures that slope is not paranoia; it is the thing you must re-check after any dynamics edit. It is the top singular value of the operator's Jacobian at each fixed point, and power iteration on $J^\top J$ computes it with Jacobian-vector products, never forming the matrix.
+What could go wrong with deepening a well? In a recursion the pasted rows feed their own output back into their own input. Make the well too deep and the local slope of `F` can cross one around the equilibria the solver visits. The diagnostic below measures that slope: the top singular value of the operator's Jacobian at each observed fixed point, computed by power iteration on $J^\top J$ without forming the matrix. A global contraction certificate would additionally require a uniform bound over the state domain.
 
 ```python
-def certificate(model, x, iters=24, key=jax.random.PRNGKey(7)):
+def local_slope(model, x, iters=24, key=jax.random.PRNGKey(7)):
     """Per-input ‖J_F‖₂ at z* by power iteration on JᵀJ, using jvp/vjp (no matrix formed)."""
     z = model.zstar(x)
     fz = lambda zz: model.F(x, zz)
@@ -148,11 +148,11 @@ def certificate(model, x, iters=24, key=jax.random.PRNGKey(7)):
     return jnp.linalg.norm(Jv, axis=-1)                    # ‖J_F‖₂ per input
 ```
 
-And the natural paste does break it. Choosing $\gamma$ so each anchor gets a healthy pre-activation bump, the raw dynamics edit sends the measured slope to a max of **1.438** over the test probes. Contraction broken, uniqueness void.
+The natural paste breaks the measured local margin. Choosing $\gamma$ so each anchor gets a healthy pre-activation bump sends the maximum slope to **1.438** over the test probes. The raw edit is therefore too aggressive for the operating region the solver has demonstrated.
 
 ```python
 raw = dyn_edit(model, anchors, gamma_raw)
-print("raw edit  max ‖J_F‖₂:", round(float(certificate(raw, Xte).max()), 3))   # 1.438  (broken)
+print("raw edit  max ‖J_F‖₂:", round(float(local_slope(raw, Xte).max()), 3))   # 1.438
 ```
 
 The repair is one number. The edit has a single gain knob, so bisect it: find the largest fraction of the raw $\gamma$ whose measured slope stays under a ceiling of 0.98, a hair of safety below one.
@@ -162,25 +162,25 @@ def rescue_gamma(model, anchors, gamma_raw, ceiling=0.98, steps=14):
     lo, hi = 0.0, 1.0
     for _ in range(steps):
         mid = (lo + hi) / 2
-        smax = certificate(dyn_edit(model, anchors, gamma_raw * mid), Xte).max()
+        smax = local_slope(dyn_edit(model, anchors, gamma_raw * mid), Xte).max()
         lo, hi = (mid, hi) if smax < ceiling else (lo, mid)
     return gamma_raw * lo
 
 gamma = rescue_gamma(model, anchors, gamma_raw)
 edited = dyn_edit(model, anchors, gamma)                   # γ ← 0.462·γ_raw
-print("rescued   max ‖J_F‖₂:", round(float(certificate(edited, Xte).max()), 3))  # 0.980  (certified)
+print("tempered  max ‖J_F‖₂:", round(float(local_slope(edited, Xte).max()), 3))  # 0.980 on probes
 ```
 
-The bisection lands on **0.462** of the raw gain, and the certificate reads mean 0.646, max **0.980**. Certified again, by measurement rather than hope.
+The bisection lands on **0.462** of the raw gain. The local audit reads mean 0.646, max **0.980** over the probes, restoring the chosen empirical operating margin.
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/deqedit-certificate.gif" alt="A scatter of per-probe slopes by class; as the gain ramps up some slopes near the new well slide past the 1.0 contraction wall, then a bisection walks the whole cloud back under the 0.98 ceiling" loading="lazy" width="946" height="495" />
-  <figcaption>The certificate as a dial you can break, then bisect back, every dot a real power-iteration slope. As the gain ramps, the slopes of the inputs whose flow passes the new well slide right, past the 1.0 wall (max 1.438), and the unique-fixed-point guarantee is void. The bisection then walks the whole cloud back under the 0.98 ceiling, the deepest well the contraction will tolerate: γ = 0.462·γ_raw, max slope 0.980. Rendered by <code>scripts/render_deqedit_gifs.py</code>.</figcaption>
+  <figcaption>Local stability as a dial, every dot a measured power-iteration slope at one equilibrium. As the gain rises, probes near the new well move past 1.0 (max 1.438). Bisection returns the observed cloud below the chosen 0.98 ceiling at γ = 0.462·γ_raw. The ceiling is an empirical operating margin over these probes, not a global certificate.</figcaption>
 </figure>
 
 ## Audit the drift: 520 fixed points, re-solved and subtracted
 
-The readout edit's invariance was a proof. The dynamics edit's cannot be, the map moved, so what remains is a measurement, and this is where the recursion earns its keep: solve every old fixed point under the base operator and under the edited one, and subtract.
+The readout edit's invariance was a proof. The dynamics edit's cannot be, the map moved, so what remains is a measurement, and it is the payoff of using a recursion at all: solve every old fixed point under the base operator and under the edited one, and subtract.
 
 ```python
 zb = model.zstar(Xte_old)                                  # 520 base equilibria
@@ -192,13 +192,13 @@ print("drift  median:", round(float(jnp.median(dz)), 3),   # 0.020
       " moved > 0.1:", int((dz > 0.1).sum()), "/ 520")     # 29 / 520
 ```
 
-The drift $\lVert \Delta z^* \rVert$ has median **0.020** and 90th percentile **0.071**, on settled states whose norms run around 3.7: for the typical old input, the basin bottom moved by about half a percent of the state's scale. But the tail is real, **29** of 520 inputs moved more than 0.1, the worst by **1.47**, and it sits near the new well, exactly where the certificate said the flow steepened. Three predictions flip, all near boundaries, taking the old classes from 97.9 / 98.1 / 100 to 96.8 / 97.6 / 100.
+The drift $\lVert \Delta z^* \rVert$ has median **0.020** and 90th percentile **0.071**, on settled states whose norms run around 3.7: for the typical old input, the basin bottom moved by about half a percent of the state's scale. But the tail is real, **29** of 520 inputs moved more than 0.1, the worst by **1.47**, and it sits near the new well, where the local-slope audit found the strongest change. Three predictions flip, all near boundaries, taking the old classes from 97.9 / 98.1 / 100 to 96.8 / 97.6 / 100.
 
-So say it precisely: the recursion downgraded the dynamics edit from *provably untouched* to *measurably barely touched*. Nothing here is exact, and claiming otherwise would be false; what remains is that the disturbance is small, concentrated near the new class, and, unlike any fine-tuning run, fully auditable, because the same solver that computes the answer computes exactly what the edit did to it. If you need the proof back, the readout edit still has it.
+So say it precisely: the recursion downgraded the dynamics edit from *provably untouched* to *measurably barely touched*. Nothing here is exact, and claiming otherwise would be false; what remains is that the disturbance is small, concentrated near the new class, and, unlike any fine-tuning run, fully auditable, because the same solver that computes the answer computes what the edit did to it. If you need the proof back, the readout edit still has it.
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/deqedit-drift.gif" alt="520 old-class fixed points morphing from their base positions to their edited positions in the state plane while a histogram of the displacement draws itself, the tail beyond 0.1 highlighted" loading="lazy" width="968" height="495" />
-  <figcaption>The drift ledger, measured rather than asserted. Every old input's equilibrium is solved twice and subtracted; the points morph from base to edited while the ‖Δz*‖ histogram draws itself. Most barely move (median 0.02), and a real tail out to 1.47 lights up near the taught region, 29 of 520 past 0.1, three predictions flipped. Rendered by <code>scripts/render_deqedit_gifs.py</code>.</figcaption>
+  <figcaption>Every old input's equilibrium, solved twice and subtracted. The points morph from their base positions to their edited ones while the ‖Δz*‖ histogram draws itself underneath. Most barely move (median 0.02), and a real tail out to 1.47 lights up near the taught region, 29 of 520 past 0.1, three predictions flipped.</figcaption>
 </figure>
 
 ## Why a layer-only edit evaporates
@@ -220,11 +220,11 @@ for j in [0, 3, 10, 30]:
 # 0: 2.4e-07   3: 3.3e-07   10: 3.3e-07   30: 3.3e-07
 ```
 
-Nothing survives. Run the hybrid with the edit steering for the first 3, 10, or 30 turns and the state lands back on the *base* equilibrium to within **3.3e-07**, while the solver's own noise floor (the run with no edited turns at all) is already **2.4e-07**. Not weakened, erased. The reason is the same contraction that makes the model trustworthy: the base flow has one basin with one bottom, so the moment it takes over, it forgets everything the excursion did, geometrically fast. In an equilibrium model there is no such thing as editing a layer, because a fixed point only remembers what acts on it at *every* depth. Weight-tying does not merely permit the everywhere-edit, it is the only edit there is.
+Nothing survives. Run the hybrid with the edit steering for the first 3, 10, or 30 turns and the state lands back on the *base* equilibrium to within **3.3e-07**, while the solver's own noise floor (the run with no edited turns at all) is already **2.4e-07**. Not weakened, erased. The reason is the same contraction that makes the model trustworthy: the base flow has one basin with one bottom, so the moment it takes over, it forgets everything the excursion did, geometrically fast. In an equilibrium model there is no such thing as editing a layer, because a fixed point only remembers what acts on it at *every* depth. The everywhere-edit is not one option among several here; it is the only edit the object admits.
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/deqedit-evaporation.gif" alt="Two log-scale distance curves racing over solver turns: the edited-then-base curve holds high for ten turns then collapses geometrically to a noise floor around 1e-7, tracking the base-only curve" loading="lazy" width="946" height="484" />
-  <figcaption>An edit evaporating, on a log scale. The edited operator steers the taught inputs for ten turns (the curve holds high), then the base operator takes over and the excursion collapses geometrically back to the base fixed point, landing at 3.3e-07 against a solver floor of 2.4e-07. Erased, not weakened. Only the shared-operator paste, active at every turn, survives the limit. Rendered by <code>scripts/render_deqedit_gifs.py</code>.</figcaption>
+  <figcaption>An edit evaporating, on a log scale. The edited operator steers the taught inputs for ten turns (the curve holds high), then the base operator takes over and the excursion collapses geometrically back to the base fixed point, landing at 3.3e-07 against a solver floor of 2.4e-07. Erased, not weakened. Only the shared-operator paste, active at every turn, survives the limit.</figcaption>
 </figure>
 
 ## What a stack charges for the same edit
@@ -245,11 +245,11 @@ for j in [0, 1, 3, 6, 12]:
 # 6: 3072  3.81      12: 6144  3.86
 ```
 
-Each pasted layer shoves old inputs' final states further, from 0.46 with one layer to **3.86** with all twelve, well past the tied edit's worst case of 1.47. And there is nothing to certify: a stack has no fixed point, so there is no contraction to re-check, no equivalent of the 0.980 receipt, no principled knob to bisect. You pay twelve times, disturb more, and get no certificate for any of it. One operator, one paste, one measurement is the entire tied bill.
+Each pasted layer moves old inputs' final states further, from 0.46 with one layer to **3.86** with all twelve, past the tied edit's worst case of 1.47. A stack has no single equilibrium operator to audit, so the corresponding object is its end-to-end sensitivity across layers. You pay twelve times for the repeated edit; the tied model needs one paste and one repeatable local audit.
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/deqedit-stack-toll.png" alt="Two panels comparing the tied one-paste edit with the untied stack: a bar chart of numbers written reaching 6,144 and a curve of old-state shift reaching 3.86, both past dashed lines marking the tied network's one-paste reference" loading="lazy" width="968" height="495" />
-  <figcaption>The price of "everywhere" without weight sharing, from the real run. The tied loop pastes 512 numbers once (dashed reference) and the edit exists at every turn by construction. The untied 12-layer stack repeats the paste per layer: the numbers written reach 6,144 while old inputs' final states shift up to 3.86, past the tied worst case of 1.47, with no contraction certificate to re-check. Rendered by <code>scripts/render_deqedit_gifs.py</code>.</figcaption>
+  <figcaption>The price of "everywhere" without weight sharing, from the real run. The tied loop pastes 512 numbers once (dashed reference) and the edit exists at every turn. The untied 12-layer stack repeats the paste per layer: the numbers written reach 6,144 while old inputs' final states shift up to 3.86, past the tied worst case of 1.47.</figcaption>
 </figure>
 
 ## Forgetting splits into two ledgers
@@ -282,16 +282,16 @@ pred = jnp.where(s > masked.max(-1), 2, masked.argmax(-1))
 print("resurrected recall:", float((pred[y_old == 2] == 2).mean()))         # 1.0, never erased
 ```
 
-That is the boundary, and it is the finding of the post: inside a fixed point, *what you constructed, you can delete exactly; what you trained, you can only silence*. The equilibrium model keeps the exact-unlearning guarantee precisely for the knowledge that lives as rows.
+That is the boundary: inside a fixed point, *what you constructed, you can delete exactly; what you trained, you can only silence*. The equilibrium model keeps the exact-unlearning guarantee precisely for the knowledge that lives as rows.
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/deqedit-silence-erase.gif" alt="A cluster of blob-class equilibria in the state plane recolouring from green to its neighbours' colours when the readout row is masked, the recall bar dropping to zero, then recolouring back to green when eight anchors are pasted, positions never moving" loading="lazy" width="946" height="517" />
-  <figcaption>Silenced is not erased, live. Every old input is solved to its equilibrium; only the readout changes, so the blob-class cluster recolours while its positions stay fixed. Mask the trained row and the cluster reads out as its neighbours (recall 0) though the flow that produced it was never touched; paste eight anchor rows and the same equilibria read back out at 100%. The state space remembers what the readout forgot. Rendered by <code>scripts/render_deqedit_gifs.py</code>.</figcaption>
+  <figcaption>Silenced is not erased, live. Every old input is solved to its equilibrium; only the readout changes, so the blob-class cluster recolours while its positions stay fixed. Mask the trained row and the cluster reads out as its neighbours (recall 0) though the flow that produced it was never touched; paste eight anchor rows and the same equilibria read back out at 100%. The state space remembers what the readout forgot.</figcaption>
 </figure>
 
-## What this leaves out
+## Boundary of the result
 
-Two rows, two contracts. Readout rows keep every proof from the list network: exact invariance (`max |Δ| = 0.0`), exact undo, zero gradient steps. Dynamics rows are more powerful, one `jnp.concatenate` re-carves the landscape at every depth at once, something a stack would charge twelve edits and 6,144 numbers for, and in exchange they demand a measurement culture: run `certificate`, re-solve the fixed points, report the drift, `rescue_gamma` when the slope crosses one. The limit is the same as its parent's: these rows are legible because the state space is low-dimensional and the anchors are settled inputs, and true erasure of trained knowledge still means editing the dynamics it is woven into, which is retraining by another name. What does not change is the object: an equation whose rows you can read, append, delete, and certify, so that editing the network is editing one operator and auditing exactly what that did.
+Two rows, two contracts. Readout rows keep every proof from the list network: exact invariance (`max |Δ| = 0.0`), exact undo, zero gradient steps. Dynamics rows are more powerful: one `jnp.concatenate` reshapes the operator at every turn, something the stack repeats across twelve layers. In exchange they demand a measurement culture: run `local_slope`, test multiple starts, re-solve the fixed points, report the drift, and temper the gain when slopes rise. The rows are legible because the state space is low-dimensional and the anchors are settled inputs. True erasure of trained knowledge still means changing the dynamics it is woven into. Editing the network is editing one operator and auditing what that did to everything else.
 
 ---
 

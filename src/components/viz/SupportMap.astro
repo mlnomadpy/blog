@@ -1,0 +1,111 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 470 } = Astro.props;
+---
+<figure class="viz supportmap" data-caption={caption} data-height={height} data-height-mobile="620" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Who carries a concept. Every column is one of the network's concepts, every
+// row a prototype; brightness is that prototype's contribution. The concepts
+// are not held by small committees you could delete, they are spread across
+// most of the bank, which is exactly why a concept cannot be cut out at the
+// neuron level. Click a concept to see its heaviest prototypes as pictures.
+import { defineViz } from './engine/vizkit.js';
+import { T, fmt, gate, loadingText } from './engine/draw.js';
+import { load, thumb } from './yatprotocol.js';
+
+defineViz('supportmap', {
+  title: 'Which prototypes carry which concept',
+  height: 470,
+  controls: [{ type: 'readout', name: 'rd' }],
+
+  setup(api) {
+    const st = api.state;
+    st.sel = 0;
+    gate(api, () => load('support'), (a, data) => { a.state.data = data; });
+    api.canvas.addEventListener('pointerdown', (e) => {
+      if (!st.ready || !st.cols) return;
+      const r = api.canvas.getBoundingClientRect();
+      const p = { x: e.clientX - r.left, y: e.clientY - r.top };
+      const hit = st.cols.find((c) => p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.y + c.h);
+      if (hit) { st.sel = hit.j; api.render(); }
+    });
+  },
+
+  draw(api) {
+    const { ctx, colors, size: { W, H } } = api, st = api.state;
+    if (!st.ready) { loadingText(api, 'loading the support map…'); return; }
+    const d = st.data, m = d.V.length, J = d.V[0].length;
+    const pad = 14, top = 36;
+    const mapW = Math.min(W * 0.42, 300), mapH = H - top - 108;
+    const cw = mapW / J, rh = mapH / m;
+    st.cols = [];
+    for (let j = 0; j < J; j++) {
+      for (let u = 0; u < m; u++) {
+        const v = Math.abs(d.V[u][j]);
+        ctx.fillStyle = j === st.sel
+          ? `rgba(179,102,27,${0.06 + 0.94 * v})`
+          : `rgba(140,140,150,${0.05 + 0.75 * v})`;
+        ctx.fillRect(pad + j * cw, top + u * rh, cw - 0.5, Math.max(0.7, rh));
+      }
+      st.cols.push({ x: pad + j * cw, y: top, w: cw, h: mapH, j });
+      T(ctx, colors, 'small');
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillStyle = j === st.sel ? colors.accent : colors.muted;
+      ctx.fillText(String(j + 1), pad + (j + 0.5) * cw, top - 4);
+    }
+    ctx.strokeStyle = colors.border;
+    ctx.strokeRect(pad + 0.5, top + 0.5, mapW - 1, mapH - 1);
+    T(ctx, colors, 'label');
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('concepts →', pad, top - 20);
+    T(ctx, colors, 'small');
+    ctx.fillText('256 prototypes, top to bottom', pad, top + mapH + 16);
+
+    // the selected concept's heaviest prototypes
+    const j = st.sel;
+    const order = d.V.map((row, u) => [Math.abs(row[j]), u]).sort((a, b) => b[0] - a[0]);
+    const gx0 = pad + mapW + 30;
+    const gw = Math.min(46, (W - gx0 - pad) / 6 - 6);
+    T(ctx, colors, 'label');
+    ctx.fillText(`concept ${j + 1}: ${d.contrast[j][0]} vs ${d.contrast[j][1]}`, gx0, top - 20);
+    T(ctx, colors, 'small');
+    ctx.fillText('its twelve heaviest prototypes:', gx0, top - 4);
+    for (let i = 0; i < 12; i++) {
+      const u = order[i][1];
+      const gx = gx0 + (i % 6) * (gw + 6), gy = top + 8 + Math.floor(i / 6) * (gw + 18);
+      const img = d.protos[u].map((v) => v * 255);
+      thumb(ctx, img, gx, gy, gw, gw, 'sp' + u);
+      ctx.strokeStyle = colors.border;
+      ctx.strokeRect(gx + 0.5, gy + 0.5, gw - 1, gw - 1);
+    }
+    // how concentrated is the support?
+    const tot = order.reduce((s, o) => s + o[0] * o[0], 0);
+    let cum = 0, need = 0;
+    for (const [v] of order) { cum += v * v; need++; if (cum >= 0.9 * tot) break; }
+    const by = top + 8 + 2 * (gw + 18) + 26;
+    T(ctx, colors, 'label');
+    ctx.fillText('share of the concept carried by its top prototypes', gx0, by - 8);
+    const bw2 = W - gx0 - pad;
+    let acc2 = 0;
+    for (let u = 0; u < m; u++) {
+      acc2 += order[u][0] * order[u][0];
+      const x = gx0 + (u / m) * bw2;
+      ctx.fillStyle = u < need ? colors.accent : colors.muted;
+      ctx.globalAlpha = u < need ? 0.85 : 0.4;
+      ctx.fillRect(x, by + 30 - (acc2 / tot) * 30, Math.max(1, bw2 / m), (acc2 / tot) * 30);
+      ctx.globalAlpha = 1;
+    }
+    T(ctx, colors, 'small');
+    ctx.fillText(`${need} prototypes carry 90% of it`, gx0, by + 46);
+    ctx.fillText('a concept is spread over most of the bank, so there is no small committee to delete: this is why the neuron-level', pad, H - 28);
+    ctx.fillText('edit that removes a class cannot remove a concept', pad, H - 13);
+    api.readout('rd', `concept ${j + 1}: support ${fmt(d.support[j], 0)} of ${m} prototypes, 90% of it carried by ${need}`);
+  },
+});
+</script>

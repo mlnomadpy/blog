@@ -1,8 +1,9 @@
 ---
 title: "The Yat-Kernel MLP in JAX/Flax NNX"
-description: "A runnable companion to What a Finite Kernel Buys an MLP: build a layer whose unit is the Yat kernel instead of a linear map plus an activation, assert it is positive definite and nonnegative, write down its exact finite feature map, train it end-to-end on two moons with no activation function, and measure the lazy-loading sparsity, the bounded off-distribution response, the RKHS capacity, and the force field that pulls each prototype onto its data."
-seoDescription: "The Yat-kernel MLP in JAX/Flax NNX: a layer with no activation function. Build it, assert PD + nonnegativity, the exact feature map, and train it on two moons."
+description: "Build a finite bank of Yat-kernel sections in JAX/Flax NNX, verify the kernel, train it on two moons and Fashion-MNIST, inspect exact prototype contributions, and test the initialization control that separates visible centers from noisy ones."
+seoDescription: "Build a finite bank of Yat-kernel sections in JAX/Flax NNX, verify the kernel numerically, derive the numerator's exact feature map, and train it on two moons."
 pubDate: 2026-06-18T10:00:00-07:00
+updatedDate: 2026-08-25
 draft: false
 tags: [ml, kernels, interpretability, mlp, rkhs, yat, jax, flax, nnx, implementation, deep-learning]
 references:
@@ -40,14 +41,14 @@ keywords:
 ---
 import CiteAs from '../../components/CiteAs.astro';
 
-*The [explainer](/blog/what-a-finite-kernel-buys-an-mlp/) argued that if you put a finite, positive-definite kernel where the activation function used to be, an MLP stops being a stack of linear maps glued by a nonlinearity and becomes a kernel machine, with locality, attribution, geometry, capacity control, and a feature map you can write down. This is the implementation companion: build that layer in [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html), turn each claim into an `assert`, and train the thing end to end. Every number and figure below is from a real run. The dimensions are tiny so the objects are legible.*
+*The whole nonlinearity of this network is one expression, and it is not an activation function. The [explainer](/blog/what-a-finite-kernel-buys-an-mlp/) argued that putting a finite, positive-definite kernel where the nonlinearity used to be turns an MLP into a kernel machine, with locality, attribution, geometry, capacity control, and a feature map you can write down. The point of doing it in [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html) is that each of those claims becomes an `assert` you can run: the Gram matrix is checked for positive-definiteness, the feature map for exactness to 1.8e-15, the response for boundedness, the gradient field for holes. Then the layer trains end to end on two moons. The dimensions are tiny throughout so the objects stay legible.*
 
 *Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/what-a-finite-kernel-buys-an-mlp-jax-flax-nnx): the same code, block by block, with the math written out and every figure reproduced from a real run.*
 
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/yat-vs-relu-mlp.gif" alt="Two MLPs learning the same two-moons data side by side: a ReLU MLP with a piecewise-linear boundary, and a Yat-kernel MLP with a smooth boundary and visible prototype rings" loading="eager" width="1100" height="540" />
-  <figcaption>The whole point in one picture, trained live in JAX. Same two-moons data, two units. Left: a standard Linear→ReLU→Linear MLP, a bank of directions whose boundary is piecewise-linear and runs off to infinity. Right: the Yat-kernel MLP, a bank of prototypes (the rings, readable as centres in input space), whose boundary wraps the data, with no activation function anywhere. Both reach 100%; the difference is the geometry.</figcaption>
+  <figcaption>Two MLPs learning the same moons, frame for frame from the real training runs. Left: a standard Linear→ReLU→Linear MLP, a bank of directions whose boundary is piecewise-linear and runs off to infinity. Right: the Yat-kernel MLP, a bank of prototypes (the rings, readable as centres in input space), whose boundary wraps the data, with no activation function anywhere. Both reach 100%; the difference is the geometry.</figcaption>
 </figure>
 
 ## The unit
@@ -76,11 +77,11 @@ class YatLayer(nnx.Module):
         return (dot + b) ** 2 / (dist2 + eps)           # the kernel is the nonlinearity
 ```
 
-The prototype $W_u$ is a *point in input space*, not a direction. A ReLU unit fires on an entire half-plane; the Yat unit has a single localized peak at its center. That difference is the whole story.
+The prototype $W_u$ is a *point in input space*, not a direction. A ReLU unit fires on an entire half-plane; the Yat unit has a single localized peak at its center. Everything else in this post follows from that one change of type.
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/yat-unit-vs-relu.gif" alt="Two response fields: a ReLU unit painting a half-plane ramp, and a Yat unit with a localized peak at its prototype, as the shared weight sweeps a circle" loading="lazy" width="1100" height="560" />
-  <figcaption>The same weight vector $w$, read two ways, computed in JAX. The ReLU unit (left) activates a whole half-plane, $w$ is only a direction. The Yat unit (right) lights up a neighbourhood of $w$, $w$ is a centre. As $w$ sweeps a circle, the ReLU ramp just rotates; the Yat peak follows the point.</figcaption>
+  <figcaption>One weight vector $w$, sweeping a circle, read two ways. The ReLU unit (left) activates a whole half-plane, so $w$ is only a direction and the ramp merely rotates as $w$ travels. The Yat unit (right) lights a neighbourhood of $w$, so $w$ is a centre and the bright patch goes where the point goes. Same numbers, two response fields.</figcaption>
 </figure>
 
 ## It is a kernel: positive definite and nonnegative
@@ -101,11 +102,11 @@ assert jnp.linalg.eigvalsh(0.5 * (G + G.T)).min() >= -1e-8   # positive semi-def
 assert (G >= 0).all()                                        # nonnegative (convex weights)
 ```
 
-Positive-definiteness is what gives the unit an RKHS to reason in; nonnegativity is what lets the readout normalize into honest attribution. Bouhsine (2026) proves the kernel positive definite for $\varepsilon\ge 0$ and universal for $\varepsilon>0$.
+Positive semidefiniteness is what gives the fixed kernel an RKHS; pointwise nonnegativity is what permits normalized convex weights. The admissible kernel uses $b\ge0$ and $\varepsilon>0$. The cited universality result requires the constant alignment term $b>0$ as well; at $b=0$ the even alignment factor loses odd functions on symmetric domains.
 
 ## The finite feature map, exactly
 
-The word *finite* is not decoration. The Yat numerator $(W^\top x + b)^2$ is a degree-2 polynomial kernel, and a degree-2 polynomial kernel has an **exact, finite-dimensional feature map**, six numbers in two dimensions, $O(d^2)$ in general. No infinite series to truncate, unlike the Gaussian RBF. Here it is, and here is the identity $\phi(W)^\top\phi(x) = (W^\top x + b)^2$ holding to machine precision:
+The word carrying the weight in "finite feature map" is *finite*. The Yat numerator $(W^\top x + b)^2$ is a degree-2 polynomial kernel, and a degree-2 polynomial kernel has an **exact, finite-dimensional feature map**, six numbers in two dimensions, $O(d^2)$ in general. No infinite series to truncate, unlike the Gaussian RBF. Here it is, and here is the identity $\phi(W)^\top\phi(x) = (W^\top x + b)^2$ holding to machine precision:
 
 ```python
 s2 = jnp.sqrt(2.0)
@@ -129,7 +130,7 @@ A finite feature map means a *flat* separator in feature space, which is a *curv
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/yat-kernel-trick-lift.gif" alt="Concentric rings lifting into 3-D by their squared radius, where a flat horizontal plane separates inner from outer ring, projecting to a circle on the floor" loading="lazy" width="1000" height="620" />
-  <figcaption>The finite feature map doing the kernel trick, computed in JAX. Two rings, not separable by any line in 2-D, lift along the degree-2 feature $x_1^2+x_2^2$ until a single <em>flat</em> plane slices between them. On the floor, that flat plane is a circle, a curved boundary downstairs is a hyperplane upstairs.</figcaption>
+  <figcaption>The lift, one coordinate of $\phi$ at a time. Two rings, unseparable by any line in 2-D, rise along the degree-2 feature $x_1^2+x_2^2$ until a single <em>flat</em> plane can slide between them. Follow that plane back down to the floor and it lands as a circle: the curve downstairs is a hyperplane upstairs.</figcaption>
 </figure>
 
 ## Train it, with no activation function
@@ -172,16 +173,16 @@ print("learned b, ε:", float(jax.nn.softplus(model.yat.log_b.value)),
       float(jax.nn.softplus(model.yat.log_eps.value)))   # b → 1.02, ε → 0.25
 ```
 
-It reaches the data, and the prototypes do the reaching: they start scattered and migrate onto the moons, the kernel scalars $b$ and $\varepsilon$ drifting to fit the scale. This is the rich, feature-learning regime, the opposite of the NTK's frozen kernel (Jacot et al., 2018), and yet every step is an exact kernel machine.
+It reaches the data, and the prototypes do the reaching: they start scattered and migrate onto the moons, while $b$ and $\varepsilon$ adapt to the scale. At every frozen checkpoint the predictor is a finite expansion in sections of the Yat kernel family. Across checkpoints the centers and hyperparameters move, so training searches changing finite spans rather than solving one fixed RKHS problem.
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/yat-mlp-training.gif" alt="A Yat-kernel MLP learning two-moons: the decision field forms while prototype rings migrate onto the data and the loss falls to near zero" loading="lazy" width="1100" height="520" />
-  <figcaption>The model above, trained in JAX. Left: the decision field with the two-moons data and the 24 prototype rings at their current positions, they migrate onto the data as training proceeds. Right: the cross-entropy loss falling to ≈ 2×10⁻⁵. No activation function is involved at any step.</figcaption>
+  <figcaption>The model in the block above, running. Left: the decision field, with the two-moons data and the 24 prototype rings at their positions on that step; the rings drift onto the data as the field forms around them. Right: the cross-entropy falling to ≈ 2×10⁻⁵. No activation function is involved at any step.</figcaption>
 </figure>
 
 ## Lazy loading: the layer fires a handful of units
 
-Because each unit is peaked at its center, only the prototypes near an input respond. The hidden layer is sparse by construction, which is the basis for fetching only the active units instead of evaluating the whole layer. A ReLU layer cannot do this, half its units fire on any input.
+Each unit is peaked at its center, but the exact kernel response is positive and therefore dense: every prototype contributes something. Retrieval becomes an approximation only after choosing a tolerance or top-$k$ rule and measuring the omitted response mass or prediction error. Response concentration can make that approximation useful; sparsity is not guaranteed by the formula.
 
 ```python
 layer = YatLayer(2, 64, rngs=nnx.Rngs(0))
@@ -196,7 +197,7 @@ print(f"active fraction, Yat {frac_yat*100:.0f}%   ReLU {frac_relu*100:.0f}%")  
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/yat-lazy-retrieval.gif" alt="A query sweeping through a field of prototypes, lighting up only the few nearby ones, with an active-count readout" loading="lazy" width="900" height="620" />
-  <figcaption>Lazy loading, computed in JAX. A query sweeps a field of 18 prototypes; only the handful near it light up (and connect), the rest stay dormant. The active set is a small slice of the layer, the units a kernel layer would actually fetch.</figcaption>
+  <figcaption>Lazy loading. A query sweeps a field of 18 prototypes; the handful near it light up and connect, the rest stay dormant, and the active set turns over as the query travels. Those few are the units a kernel layer would actually have to fetch.</figcaption>
 </figure>
 
 ## Bounded off the distribution
@@ -215,7 +216,7 @@ assert jnp.max(yat_1d) < 5.0                     # bounded no matter how far off
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/yat-ood-boundedness.gif" alt="A ReLU ramp climbing past the top of the plot while a Yat unit's curve stays bounded, as the bandwidth sweeps" loading="lazy" width="1100" height="420" />
-  <figcaption>Off-distribution behaviour, computed in JAX. Outside the shaded data band the ReLU pre-activation climbs out of the top of the plot (unbounded), while the Yat unit's response stays bounded as the bandwidth $\varepsilon$ sweeps from wide to narrow. Unbounded extrapolation versus a bounded answer.</figcaption>
+  <figcaption>What each unit says far from home. Outside the shaded data band the ReLU pre-activation climbs straight out of the top of the plot; the Yat curve keeps its ceiling for every setting of $\varepsilon$ the sweep passes through, narrowing the peak without ever raising the tail.</figcaption>
 </figure>
 
 ## Capacity you can compute, and a force that never vanishes
@@ -239,12 +240,38 @@ assert jnp.min(jnp.linalg.norm(forces, axis=1)) > 1e-4   # force everywhere, no 
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/yat-feature-force.gif" alt="A gradient force field over input space with a probe prototype flowing along it onto one class cluster" loading="lazy" width="900" height="800" />
-  <figcaption>Why a prototype moves, computed in JAX. Each arrow is $-\nabla_P L$, a real gradient; the probe flows along the field onto the class it should detect. There is force everywhere, no half-space where the gradient is zero, which is exactly why a Yat unit never dies the way a ReLU unit can.</figcaption>
+  <figcaption>Why a prototype moves. Each arrow is $-\nabla_P L$ evaluated at that point, and the probe rides the field onto the class it should detect. Look for a region where the arrows go to nothing: there isn't one, which is why a Yat unit cannot die the way a ReLU unit can.</figcaption>
 </figure>
 
-## What this leaves out
+## Fashion-MNIST: the center is an image
 
-This is a teaching implementation, not a drop-in transformer FFN, that is an empirical question the [explainer](/blog/what-a-finite-kernel-buys-an-mlp/) leaves open. Three notes. The distance term costs more memory traffic than a single GEMM, even though it reduces to a matmul plus two norm vectors. The canonical block is $x \to \text{Yat} \to \text{Linear}$, not stacked kernels. And prototype initialization matters more than weight initialization in a ReLU net, because a center is a *location*, not just a scale. None of that changes the object: a layer whose primitive is a finite, positive-definite kernel, and whose every affordance, locality, attribution, geometry, capacity, a feature map, is a property of that kernel rather than something bolted on after the fact.
+The same layer works on flattened $28\times28$ images without changing its arithmetic. Seed each row of `W` from a training image, add a linear readout, and train the module with the ordinary NNX loop above:
+
+```python
+Winit = X[np.random.RandomState(1).permutation(len(X))[:48]]
+model = YatMLP(784, 48, 10, rngs=nnx.Rngs(0), Winit=Winit)
+opt = nnx.Optimizer(model, optax.adam(4e-3), wrt=nnx.Param)
+```
+
+Because `model.yat.W.value` has shape `[48, 784]`, the centers render directly as 48 images. With a linear readout, the contribution of center $u$ to class $c$ is exactly `act[u] * readout.kernel[u, c]`; normalizing raw activations is useful for display but does not turn signed logit terms into causal percentages.
+
+The stronger control changes only the initialization. A bank seeded from real images remains garment-like; a bank seeded from noise matched to the per-pixel mean and variance reaches similar accuracy while remaining noise. The kernel makes an input-space picture possible. Data seeding is what puts the center on the image manifold.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/yat-vs-relu-progression.gif" alt="Three prototype banks during Fashion-MNIST training: image-seeded Yat centers remain garment-like, noise-seeded Yat centers remain noisy, and ReLU filters remain directions" loading="lazy" width="960" height="430" />
+  <figcaption>Matched training runs. Image-seeded Yat centers remain readable; noise-seeded centers classify but stay off-manifold. A comparable ReLU row is a projection direction rather than a declared prototype.</figcaption>
+</figure>
+
+Projecting snapshots through a UMAP fitted once on the data makes the distinction geometric. Image-seeded centers move inside class neighborhoods; noise-seeded centers occupy gaps between them. The projection is descriptive, so nearest-data distances in the original 784-dimensional space remain the primary check.
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/prototype-trajectories.gif" alt="UMAP trajectories of image-seeded and noise-seeded Fashion-MNIST prototypes in one fixed data embedding" loading="lazy" width="1120" height="640" />
+  <figcaption>A single data-fitted UMAP with both sets of prototype trajectories. The original-space nearest-neighbor distances confirm the same separation without relying on the 2-D projection.</figcaption>
+</figure>
+
+## Boundary of the result
+
+This teaching implementation is not evidence of a drop-in transformer FFN advantage. The distance term costs more memory traffic than one GEMM, the canonical block is $x\to\text{Yat}\to\text{Linear}$ rather than an unchanged stack of kernel sections, and visible prototypes depend on initialization as well as parameterization. What the code establishes is narrower: a finite learned-center kernel layer with numerically checked PSD structure, exact layer-local arithmetic, measurable response concentration, and centers whose relation to the data manifold can be tested directly.
 
 ---
 

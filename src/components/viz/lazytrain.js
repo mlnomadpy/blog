@@ -3,6 +3,8 @@
 // linear readout with hand-rolled gradients in the browser; the run panels
 // read the exported bundle JSON.
 
+import { grayGlyph } from './engine/draw.js';
+
 const BASE = `${import.meta.env.BASE_URL ?? '/'}`.replace(/\/$/, '');
 
 const cache = {};
@@ -40,30 +42,54 @@ export function randomBank(m, d, seed) {
   return W;
 }
 
-// Yat features of one image (Float32Array d) against a bank (m x d)
-export function yatRow(x, W, m, d, out) {
+// squared norms of a bank's prototypes: constant across inputs, so they are
+// computed once instead of once per image (this halves the inner loop)
+export function bankNorms(W, m, d) {
+  const wn = new Float32Array(m);
+  for (let u = 0; u < m; u++) {
+    let ww = 0;
+    const off = u * d;
+    for (let a = 0; a < d; a++) { const w = W[off + a]; ww += w * w; }
+    wn[u] = ww;
+  }
+  return wn;
+}
+
+// Yat features of one image (Float32Array d) against a bank (m x d).
+// `wn` is the bank's squared norms; omit it and they are computed inline.
+export function yatRow(x, W, m, d, out, wn) {
   out = out || new Float32Array(m);
+  wn = wn || bankNorms(W, m, d);
   let xx = 0;
   for (let a = 0; a < d; a++) xx += x[a] * x[a];
   for (let u = 0; u < m; u++) {
-    let dot = 0, ww = 0;
+    let dot = 0;
     const off = u * d;
-    for (let a = 0; a < d; a++) { const w = W[off + a]; dot += w * x[a]; ww += w * w; }
+    for (let a = 0; a < d; a++) dot += W[off + a] * x[a];
     const n = dot + B0;
-    const d2 = Math.max(0, xx + ww - 2 * dot);
+    const d2 = Math.max(0, xx + wn[u] - 2 * dot);
     out[u] = (n * n) / (d2 + EPS0);
   }
   return out;
 }
 
-// features for a whole dataset (n x d, flat) -> n x m flat
+// features for a whole dataset (n x d, flat) -> n x m flat. Reads X in place
+// (no per-image copy) and shares one prototype-norm table across the sweep.
 export function yatFeatures(X, n, d, W, m, onProgress) {
   const F = new Float32Array(n * m);
-  const x = new Float32Array(d), row = new Float32Array(m);
+  const wn = bankNorms(W, m, d);
   for (let i = 0; i < n; i++) {
-    for (let a = 0; a < d; a++) x[a] = X[i * d + a];
-    yatRow(x, W, m, d, row);
-    F.set(row, i * m);
+    const xo = i * d, fo = i * m;
+    let xx = 0;
+    for (let a = 0; a < d; a++) { const v = X[xo + a]; xx += v * v; }
+    for (let u = 0; u < m; u++) {
+      let dot = 0;
+      const off = u * d;
+      for (let a = 0; a < d; a++) dot += W[off + a] * X[xo + a];
+      const nn = dot + B0;
+      const d2 = Math.max(0, xx + wn[u] - 2 * dot);
+      F[fo + u] = (nn * nn) / (d2 + EPS0);
+    }
     if (onProgress && i % 200 === 0) onProgress(i / n);
   }
   return F;
@@ -71,25 +97,34 @@ export function yatFeatures(X, n, d, W, m, onProgress) {
 
 // A linear softmax head trained by hand-rolled Adam. State lives in the
 // returned object; step(batchIdx) does one update and returns the loss.
-export function makeHead(m, k, lr = 0.02) {
+// `stride` is the row pitch of the feature block, so a head can read the
+// first m columns of a wider bank without any copy or recompute
+export function makeHead(m, k, lr = 0.02, stride = m) {
   const A = new Float32Array(m * k), b = new Float32Array(k);
   const mA = new Float32Array(m * k), vA = new Float32Array(m * k);
   const mb = new Float32Array(k), vb = new Float32Array(k);
+  // scratch buffers, allocated once: a training step used to allocate a fresh
+  // gradient pair every call, which is the bulk of this loop's garbage
+  const gA = new Float32Array(m * k), gb = new Float32Array(k);
+  const lgBuf = new Float32Array(k);
   let t = 0;
   const b1 = 0.9, b2 = 0.999, eps = 1e-8;
 
   function logits(F, i, out) {
-    for (let c = 0; c < k; c++) {
-      let s = b[c];
-      for (let u = 0; u < m; u++) s += F[i * m + u] * A[u * k + c];
-      out[c] = s;
+    const fo = i * stride;
+    for (let c = 0; c < k; c++) out[c] = b[c];
+    for (let u = 0; u < m; u++) {
+      const f = F[fo + u];
+      if (f === 0) continue;
+      const ao = u * k;
+      for (let c = 0; c < k; c++) out[c] += f * A[ao + c];
     }
   }
 
   function step(F, y, idx) {
     t++;
-    const gA = new Float32Array(m * k), gb = new Float32Array(k);
-    const lg = new Float32Array(k);
+    gA.fill(0); gb.fill(0);
+    const lg = lgBuf;
     let loss = 0;
     for (const i of idx) {
       logits(F, i, lg);
@@ -97,12 +132,20 @@ export function makeHead(m, k, lr = 0.02) {
       for (let c = 0; c < k; c++) mx = Math.max(mx, lg[c]);
       let Z = 0;
       for (let c = 0; c < k; c++) { lg[c] = Math.exp(lg[c] - mx); Z += lg[c]; }
+      const fo = i * stride;
       for (let c = 0; c < k; c++) {
         const p = lg[c] / Z;
         const g = p - (y[i] === c ? 1 : 0);
         if (y[i] === c) loss -= Math.log(Math.max(p, 1e-12));
         gb[c] += g;
-        for (let u = 0; u < m; u++) gA[u * k + c] += g * F[i * m + u];
+        lg[c] = g;                       // reuse the row as the gradient vector
+      }
+      // one pass over the features per sample instead of one per class
+      for (let u = 0; u < m; u++) {
+        const f = F[fo + u];
+        if (f === 0) continue;
+        const ao = u * k;
+        for (let c = 0; c < k; c++) gA[ao + c] += lg[c] * f;
       }
     }
     const n = idx.length;
@@ -121,31 +164,24 @@ export function makeHead(m, k, lr = 0.02) {
   }
 
   function predict(F, i) {
-    const lg = new Float32Array(k);
-    logits(F, i, lg);
+    logits(F, i, lgBuf);
     let bi = 0;
-    for (let c = 1; c < k; c++) if (lg[c] > lg[bi]) bi = c;
+    for (let c = 1; c < k; c++) if (lgBuf[c] > lgBuf[bi]) bi = c;
     return bi;
   }
 
-  return { A, b, step, predict };
+  // accuracy over a whole feature block, allocation-free
+  function accuracy(F, y, n) {
+    let ok = 0;
+    for (let i = 0; i < n; i++) if (predict(F, i) === y[i]) ok++;
+    return (100 * ok) / n;
+  }
+
+  return { A, b, step, predict, accuracy };
 }
 
-// draw a 14x14 grayscale image into a canvas rect (via offscreen, dpr-safe)
-export function drawGlyph(ctx, img, side, x, y, w, h, invert) {
-  const off = document.createElement('canvas');
-  off.width = side; off.height = side;
-  const octx = off.getContext('2d'), im = octx.createImageData(side, side);
-  let lo = Infinity, hi = -Infinity;
-  for (const v of img) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
-  for (let i = 0; i < side * side; i++) {
-    let t = (img[i] - lo) / (hi - lo + 1e-9);
-    if (invert) t = 1 - t;
-    const g = Math.round(255 * t);
-    im.data[i * 4] = g; im.data[i * 4 + 1] = g; im.data[i * 4 + 2] = g;
-    im.data[i * 4 + 3] = 255;
-  }
-  octx.putImageData(im, 0, 0);
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(off, x, y, w, h);
+// draw a small grayscale image; `key` identifies the pixels so the sprite is
+// painted once and blitted thereafter (see engine/draw.js)
+export function drawGlyph(ctx, img, side, x, y, w, h, invert, key) {
+  grayGlyph(ctx, img, side, x, y, w, h, { invert, key });
 }

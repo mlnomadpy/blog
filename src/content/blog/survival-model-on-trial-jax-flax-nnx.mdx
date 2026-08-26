@@ -1,9 +1,10 @@
 ---
 title: "Running the Survival Trial, in JAX/Flax NNX"
 seoTitle: "Running the Survival Trial in JAX/Flax NNX"
-description: "A runnable companion to the survival-model trial: the Yat DeepSurv trunk in Flax NNX, the Cox partial-likelihood loss, an LR-fair per-model training loop with best-epoch selection, the concordance / integrated-Brier / time-dependent-AUC evaluation, and the classical baselines wired through sksurv and lifelines. Every figure is a real number from a real run across five datasets, with the prototypes and the risk stratification captured as they form over training."
+description: "Build the Yat DeepSurv trunk and Cox loss in Flax NNX, recover exact prototype contributions and explicit row edits, then run the LR-fair five-dataset benchmark with concordance, calibration, Brier, AUC, and classical baselines."
 seoDescription: "Build and run the five-dataset survival trial in Flax NNX: Yat DeepSurv, Cox loss, LR-fair training, C-index / IBS / AUC eval, and sksurv baselines."
 pubDate: 2026-07-09T10:00:00-07:00
+updatedDate: 2026-08-25
 draft: false
 tags: [survival-analysis, deepsurv, cox, kernels, interpretability, yat, healthcare-ml, jax, flax, nnx, implementation, benchmark]
 references:
@@ -43,11 +44,11 @@ keywords:
 ---
 import CiteAs from '../../components/CiteAs.astro';
 
-*The [explainer](/blog/survival-model-on-trial/) put a deep Yat-kernel survival model on trial across five real datasets: viable, in the pack on the mid-sized problems, behind on the small and the near-separable ones, and carrying a theory the baselines do not have. This is the machinery underneath it: the Yat DeepSurv trunk in [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html), the Cox partial-likelihood loss, the learning-rate-fair training loop that keeps the neural comparison fair, the concordance / integrated-Brier / time-dependent-AUC evaluation, and the classical baselines wired through [scikit-survival](https://scikit-survival.readthedocs.io/). Every figure is a real number from `scripts/deepsurv_trial.py`; this is a research illustration, not a clinical tool.*
+*Two trunks, one pipeline. The [explainer](/blog/survival-model-on-trial/) put a deep Yat-kernel survival model on trial across five real datasets: viable, in the pack on the mid-sized problems, behind on the small and the near-separable ones, and carrying a theory the baselines do not have. What makes those verdicts worth anything is the plumbing, so the plumbing is what this page is. The Cox partial-likelihood loss. A training loop in which neither net is ever run at a borrowed learning rate. The concordance / integrated-Brier / time-dependent-AUC evaluation, and the classical baselines wired through [scikit-survival](https://scikit-survival.readthedocs.io/). The [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html) trunk is the only piece that changes between the two neural models. A research illustration, not a clinical tool.*
 
 ## The trunk is the only thing that changes
 
-A DeepSurv is a loss with a hole in it: any network that maps a patient to one scalar log-risk can be dropped into the [Cox partial likelihood](/blog/a-risk-model-that-names-its-reasons/) and trained. The standard recipe fills the hole with a ReLU MLP; the white-box model fills it with a bank of Yat kernels, and nothing else about the pipeline moves. So both trunks are two short modules with the same signature.
+A DeepSurv is a loss with a hole in it: any network that maps a patient to one scalar log-risk can be dropped into the [Cox partial likelihood](/blog/survival-model-on-trial/) and trained. The standard recipe fills the hole with a ReLU MLP; the white-box model fills it with a bank of Yat kernels, and nothing else about the pipeline moves. So both trunks are two short modules with the same signature.
 
 ```python
 import jax, jax.numpy as jnp
@@ -76,7 +77,7 @@ class YatSurv(nnx.Module):
         return self.read(self.yat(x))[:, 0]                    # h(x) = sum_u a_u phi_u(x)
 ```
 
-The `Winit` argument is where the legibility is decided. The prototypes are seeded on real patients (k-means centroids of the training cohort), so from the first step every hidden unit is a point in patient space rather than an opaque direction. The standard DeepSurv is the same file with a two-layer ReLU MLP in place of `YatLayer`, and its `Winit` argument does not exist, which is exactly the difference the trial is about.
+The `Winit` argument is where the legibility is decided. The prototypes are seeded on real patients (k-means centroids of the training cohort), so from the first step every hidden unit is a point in patient space rather than an opaque direction. The standard DeepSurv is the same file with a two-layer ReLU MLP in place of `YatLayer`, and it has no `Winit` argument to pass, because there is nowhere in it for a patient to sit.
 
 ## The loss decides who ranks above whom
 
@@ -98,7 +99,7 @@ Here is that loss doing its work. On the WHAS500 cohort, training the real Yat D
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/trial-stratify.gif" alt="Three Kaplan-Meier survival curves for low, mid and high risk tertiles starting nearly overlapping and separating over training epochs" loading="lazy" width="600" height="330" />
-  <figcaption>Risk stratification forming during a real training run. The three curves are Kaplan-Meier estimates on the low, mid and high risk tertiles the model's current log-risks define; they begin overlapping at epoch 0 and pull apart as the Cox loss sorts the cohort. Rendered by <code>scripts/render_trial_figs.py</code>.</figcaption>
+  <figcaption>Risk stratification forming during a real training run. The three curves are Kaplan-Meier estimates on the low, mid and high risk tertiles the model's current log-risks define; they begin overlapping at epoch 0 and pull apart as the Cox loss sorts the cohort.</figcaption>
 </figure>
 
 ## LR-fairness is the whole ballgame in a neural comparison
@@ -147,7 +148,7 @@ Because the prototypes start on real patients, you can watch the trunk do someth
 
 <figure class="jax-fig">
   <img src="/blog/trial-settle.gif" alt="Prototype rings drifting across a 2D projection of the patient cloud over training epochs, colored orange where they raise risk and blue where they protect" loading="lazy" width="440" height="322" />
-  <figcaption>The Yat prototypes settling onto the cohort during the same real run. Grey dots are patients in a fixed 2D shadow of the input space; each ring is a real prototype vector at that epoch, orange if its readout raises risk, blue if it protects. Rendered by <code>scripts/render_trial_figs.py</code>.</figcaption>
+  <figcaption>The Yat prototypes settling onto the cohort during the same real run. Grey dots are patients in a fixed 2D shadow of the input space; each ring is a real prototype vector at that epoch, orange if its readout raises risk, blue if it protects.</figcaption>
 </figure>
 
 ## The metric quartet, and why one number is not enough
@@ -172,7 +173,7 @@ Running that across five datasets, six seeds, with a 300-resample bootstrap on t
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/trial-forest.png" alt="Five small forest plots, one per dataset, showing each model's concordance index with a bootstrap confidence interval, the Yat model in orange landing inside the classical band on most datasets and below it on WHAS500" loading="lazy" width="720" height="185" />
-  <figcaption>Held-out concordance with bootstrap CIs across all five datasets. Grey is classical (Cox, penalized Cox, RSF), blue the standard ReLU DeepSurv, orange the Yat DeepSurv; the shaded band is the classical envelope. The Yat point sits inside the band on METABRIC, SUPPORT and GBSG, and below it on WHAS500 and FLCHAIN. From <code>scripts/deepsurv_trial.py</code>.</figcaption>
+  <figcaption>Held-out concordance with bootstrap CIs across all five datasets. Grey is classical (Cox, penalized Cox, RSF), blue the standard ReLU DeepSurv, orange the Yat DeepSurv; the shaded band is the classical envelope. The Yat point sits inside the band on METABRIC, SUPPORT and GBSG, and below it on WHAS500 and FLCHAIN.</figcaption>
 </figure>
 
 ## The baselines are three lines each
@@ -201,17 +202,17 @@ The rest of the trial is the inheritance the explainer walks through, and each p
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/trial-ablation.png" alt="Two line plots of Yat concordance index against prototype count K for k-means and random seeding on METABRIC and GBSG, both nearly flat" loading="lazy" width="720" height="270" />
-  <figcaption>Yat concordance index against prototype count K, k-means (orange) vs random (blue) seeding, mean and seed spread. Accuracy is flat in K on both datasets. From <code>scripts/deepsurv_trial.py</code>.</figcaption>
+  <figcaption>Yat concordance index against prototype count K, k-means (orange) vs random (blue) seeding, mean and seed spread. Accuracy is flat in K on both datasets.</figcaption>
 </figure>
 
 Calibration is the survival curve read back against reality: bin the held-out patients into risk tertiles and compare each tertile's mean predicted survival to its Kaplan-Meier estimate at a set of horizons. Closer curves are probabilities you can trust.
 
 <figure class="jax-fig jax-fig-wide">
-  <img src="/blog/trial-calibration.png" alt="Predicted survival curves against dashed Kaplan-Meier observed curves for three risk tertiles, for the Yat and standard DeepSurv on METABRIC" loading="lazy" width="720" height="290" />
-  <figcaption>Predicted (solid) vs Kaplan-Meier observed (dashed) survival by risk tertile on METABRIC. The reliability gap is the mean absolute distance between the two. From <code>scripts/deepsurv_trial.py</code>.</figcaption>
+  <img src="/blog/trial-calibration-read.gif" alt="Predicted survival curves against dashed Kaplan-Meier observed curves for three risk tertiles, for the Yat and standard DeepSurv on METABRIC" loading="lazy" width="720" height="290" />
+  <figcaption>Predicted (solid) vs Kaplan-Meier observed (dashed) survival by risk tertile on METABRIC. The reliability gap is the mean absolute distance between the two. The models are revealed separately before the reliability gaps are compared.</figcaption>
 </figure>
 
-The out-of-distribution meter is a single `max` over the kernel activations, and the split is the point: scored across five datasets and three constructions, some bars land above 0.5 (the meter flags a stranger) and some land below (it does not, because the shift is mild or a far-tail point still falls near a prototype).
+The out-of-distribution meter is a single `max` over the kernel activations, and it does not fire everywhere: scored across five datasets and three constructions, some bars land above 0.5 (the meter flags a stranger) and some land below (it does not, because the shift is mild or a far-tail point still falls near a prototype).
 
 ```python
 kmax_in  = phi_test.max(1)                                     # resemblance meter on real patients
@@ -222,7 +223,7 @@ auroc = roc_auc_score(np.r_[np.ones_like(kmax_in), np.zeros_like(kmax_ood)],
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/trial-ood.png" alt="Grouped bar chart of kernel-max OOD AUROC per dataset for three constructions, with several bars below the 0.5 reference line" loading="lazy" width="720" height="290" />
-  <figcaption>Kernel-max OOD AUROC by dataset and construction, with bootstrap CIs. Above 0.5 the meter flags the construction as strange; the below-0.5 bars are where it does not. From <code>scripts/deepsurv_trial.py</code>.</figcaption>
+  <figcaption>Kernel-max OOD AUROC by dataset and construction, with bootstrap CIs. Above 0.5 the meter flags the construction as strange; the below-0.5 bars are where it does not.</figcaption>
 </figure>
 
 Plausibility is a de-normalization and a range check: multiply each prototype by the training standard deviation, add the mean, and ask whether every covariate lands inside the observed min and max. The excursions concentrate on the binary treatment indicators a continuous prototype cannot represent cleanly, while the gene-expression and age covariates stay in range.
@@ -235,10 +236,39 @@ frac_plausible = (in_range.all(1)).mean()                     # share of fully i
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/trial-plausibility.png" alt="A grid of the 24 prototypes by nine covariates, each cell green if the prototype's covariate is inside the training range and orange if outside, with excursions clustered on the treatment indicators" loading="lazy" width="720" height="390" />
-  <figcaption>Per-covariate in-range check for all 24 prototypes on METABRIC. Green is inside the training min/max, orange outside; the excursions cluster on the binary treatment indicators. Eight prototypes are fully in range. From <code>scripts/deepsurv_trial.py</code>.</figcaption>
+  <figcaption>Per-covariate in-range check for all 24 prototypes on METABRIC. Green is inside the training min/max, orange outside; the excursions cluster on the binary treatment indicators. Eight prototypes are fully in range.</figcaption>
 </figure>
 
 That is the whole trial: one loss, two trunks, three classical baselines, and a handful of array operations that turn a single log-risk into a ranking, a calibration, an abstention, and an audit. The results and the full reading of them live in the [explainer](/blog/survival-model-on-trial/).
+
+## Exact terms and explicit edits
+
+The benchmark metrics assess the fitted predictor. The architecture also exposes its score arithmetic without a second explainer model. For a one-output linear readout,
+
+```python
+def decompose(model, x):
+    phi = model.yat(x)                              # [batch, K]
+    a = model.readout.kernel.value[:, 0]            # [K]
+    terms = phi * a[None, :]
+    risk = terms.sum(axis=1) + model.readout.bias.value[0]
+    return risk, terms
+
+risk, terms = decompose(model, X_test)
+np.testing.assert_allclose(risk, np.asarray(model(X_test)).squeeze(), rtol=1e-5)
+```
+
+Those are exact additive log-risk terms for the current layer. They are not causal covariate effects. The centers may also leave the empirical patient manifold, which is why the companion de-normalizes and checks every prototype against observed ranges.
+
+An edit is equally explicit. Masking selected readout rows removes their current contribution while leaving all other parameters fixed:
+
+```python
+def score_with_mask(model, x, keep):
+    phi = model.yat(x)
+    a = model.readout.kernel.value[:, 0] * keep
+    return phi @ a + model.readout.bias.value[0]
+```
+
+This is a reproducible model edit, not retraining and not certified unlearning. Its value is measured by the selectivity of the score and ranking change. Calibration and the kernel-max resemblance meter remain separate diagnostics; neither follows from the additive identity.
 
 <CiteAs slug="survival-model-on-trial-jax-flax-nnx" title="Running the Survival Trial, in JAX/Flax NNX" pubDate="2026-07-09" />
 

@@ -1,8 +1,8 @@
 ---
 title: 'Separate or Represent: The Modality Gap Is a Choice, Not a Bug'
 seoTitle: 'Separate or Represent: The Modality Gap Is a Choice'
-description: 'A latent space can separate concepts or represent them, never both at once, and the modality gap is just the readout of which one you chose. Every figure here is a live in-browser simulation: watch contrastive training discard within-class detail, pry two modalities into separate cones, and decide which job your space is really for, separate or represent, classify or retrieve.'
-seoDescription: "A latent space can separate concepts or represent them, not both, and the modality gap is the readout of which you chose. Separate or represent, with live viz."
+description: 'In a controlled two-modality simulation, objectives that improve class separation can discard within-class coordinates needed for reconstruction, while modality-specific coordinates create a visible gap. The experiment maps that trade rather than treating every modality gap as a defect or a universal necessity.'
+seoDescription: "A controlled simulation of the trade between class separation, within-class information, and modality-specific geometry."
 pubDate: 2026-05-30
 draft: true
 tags: [ml, multimodal, contrastive-learning, modality-gap, representation-learning, clip, retrieval, classification, information-theory, jax]
@@ -59,7 +59,7 @@ import ModalityGapLive from '../../components/viz/ModalityGapLive.astro';
 import ModalityCones from '../../components/viz/ModalityCones.astro';
 import CiteAs from '../../components/CiteAs.astro';
 
-*What is your latent space actually for, and a page of live, in-browser simulations that show why the question decides everything. Every plot below is real gradient descent running in your browser, not a recording.*
+*What is your latent space actually for, and a page of simulations that show why the question decides everything. Every plot below is real gradient descent, running as you watch, not a recording.*
 
 <ModalityGapLive caption="The whole puzzle in one widget. Two modalities of the same signal, two encoders started from the same place, so at step 0 they overlap and there is no gap. Hit train: a SigLIP contrastive objective pries them into two separated cones and the modality gap shoots open (watch the sparkline). Colour is the modality, shape is the class (○ / ✕). Nothing in this loss says 'push the modalities apart', so why do they fly apart, and should you care? Hold that question; the post builds to it." />
 
@@ -120,7 +120,7 @@ is the job: separate or represent.
 
 Talk is cheap. Here is the whole argument in the smallest setup I could build,
 no radio, no transformers, just **four distributions** and one linear projector
-per modality. Everything from here runs live in your browser.
+per modality.
 
 There are **two classes**, $c \in \{0, 1\}$. There is a **within-class factor**
 $t$, a position along each cluster, drawn *independently* for each modality. So
@@ -143,8 +143,8 @@ The widget below *is* the experiment. It generates the four distributions once,
 computes the representing space in closed form, and trains the separating space by
 **real gradient descent, Adam on a SigLIP loss, the gradients hand-derived and
 checked against finite differences, live, no server**
-([`toy.py`](https://github.com/mlnomadpy/blog/tree/master/scripts/jax-modality-gap)
-is the reference JAX run these numbers come from). Hit train and watch the
+([the reference JAX run](https://github.com/mlnomadpy/blog/tree/master/scripts/jax-modality-gap)
+is where these numbers come from). Hit train and watch the
 separating space tighten each class to a point (recover-t R² → 0) while the
 representing space keeps its spread (R² ≈ 0.97). Both still **classify** at 100%,
 that is the one job a separating space is built for. Flip the colour control to
@@ -181,9 +181,9 @@ $p(x, y)$, including what each view carries alone, because it has to put all of
 it back. One objective separates and the other represents by construction; the
 toy just made the difference visible in two dimensions.
 
-## What opens the gap?
+## The ingredient the toy was missing
 
-Opening the gap in full takes one ingredient the linear toy lacked: **depth**.
+Opening the gap in full takes one thing the linear toy lacked: **depth**.
 Swap the single linear projector for **two small ReLU towers**, a couple of
 layers each, enough room for the
 [cone effect](/blog/welch-bound-good-latent-space/) to appear (that post has the
@@ -193,13 +193,13 @@ signal, SigLIP, and, the key move, **both towers start from the same
 initialization**, so at step 0 the two clouds sit exactly on top of each other.
 There is no gap to close, because there is none.
 
-That configuration is exactly the widget that opened this post, so here it is
+That configuration is the widget that opened this post, so here it is
 again, where the story can finally pay it off. Its sparkline tracks the two
 numbers that carry everything: the **gap** (the distance between the two
 modalities' mean embeddings) and the **matched-pair cosine**. Here is what to
 look for when it trains, with the reference numbers from
-[`gap.py`](https://github.com/mlnomadpy/blog/tree/master/scripts/jax-modality-gap),
-the JAX version of the same experiment (two 2-layer ReLU towers, SigLIP with a
+[the JAX version of the same experiment](https://github.com/mlnomadpy/blog/tree/master/scripts/jax-modality-gap)
+(two 2-layer ReLU towers, SigLIP with a
 learnable sharpness initialized at 2, Adam for 1400 steps, seed 0). The gap
 explodes from 0.27 to about 1.9 inside the first hundred steps. Matched-pair
 cosine crosses zero by step 12 and keeps falling, ending at **−0.78**: the loss
@@ -231,11 +231,11 @@ agreement gradient cares about one thing: that a matched pair scores higher than
 mismatched one. It does **not** care where on the sphere the two modalities sit, or
 whether they sit together at all. So the objective is free to satisfy "matched
 beats random" while sliding the two clouds into opposite cones, and given the
-room depth provides, that is exactly what it does. Matched-pair cosine ends up
+room depth provides, that is what it does. Matched-pair cosine ends up
 *negative*: the pairs are pushed apart in absolute terms, still ranked above
 random, the gap wide open.
 
-One honest complication before we make the cones literal. In real CLIP the gap
+One complication before we make the cones literal. In real CLIP the gap
 has a second author: the same Liang et al. paper measures a gap already present
 **at initialization**, before a single gradient step, because two independently
 initialized encoders are born into different cones. Part of the real gap is
@@ -245,21 +245,21 @@ open is the loss's contribution alone. Real
 CLIP's gap is both at once, an offset the encoders were born with and an offset
 the objective, as you just saw, is perfectly happy to widen.
 
-But what is a "cone" here, literally? That geometry is the whole point.
-Embeddings are L2-normalized, so every point is a **unit vector, a direction**
-from the origin. Each modality's directions don't scatter over the whole sphere;
-they bundle into a narrow angular **wedge, a cone**. The modality gap is simply
-the **angle between the two cones' axes**. The view below is the same deep-tower
+But what is a "cone" here, literally? Embeddings are L2-normalized, so every
+point is a **unit vector, a direction** from the origin, and each modality's
+directions bundle into a narrow angular **wedge** rather than scattering over the
+sphere. The modality gap, then, is a single number: the **angle between the two
+wedges' axes**. The view below is the same deep-tower
 run drawn this way: rays from the origin, a shaded wedge per modality, and the gap
 marked as the angle where the axes diverge. Train it and watch the two cones swing
 apart from a single shared bundle to opposite sides.
 
 <ModalityCones caption="The trained embeddings as two cones. Each modality's unit vectors (rays from the origin) bundle into a narrow wedge, that narrowness is the 'cone effect' depth produces. The two cones share an axis at step 0 (gap ≈ 0°) and swing apart as training runs; the labelled angle between their axes is the modality gap. Shape = class (○ / ✕), colour = modality. Toggle the rays off to see the wedges alone." />
 
-So the gap is not the disease. It is a symptom, and an honest one. In the linear
-toy the separating objective showed its hand as collapse (the within-class factor
-thrown away); give it depth and it shows up as geometry (two cones). Both
-are the space telling you it was asked to separate. You can close the geometric gap
+Treat the gap as a symptom and it starts reporting something useful. In the
+linear toy the separating objective showed its hand as collapse (the within-class
+factor thrown away); give it depth and the same objective shows its hand as
+geometry (two cones). Both are the space telling you what it was asked to do. You can close the geometric gap
 with tricks, and it still will not build a representer, because closing the gap
 does not turn a separating space into a representing one. Joint reconstruction
 never opens a gap in the first place, not because it closes gaps better, but
@@ -267,7 +267,7 @@ because it was never asked to separate. One shared decoder, no agreement pressur
 manufacturing two cones. It does not bridge the modalities. It simply represents
 them.
 
-## So when does the gap hurt?
+## When the gap hurts
 
 It hurts when your task is a representation task wearing other clothes.
 
@@ -294,8 +294,8 @@ It is close to harmless when your task is genuinely a separation task.
   feature, a form of relevance filtering, and the independent encoders give you
   modular embeddings that scale to web data.
 
-That last point is the honest counterweight. A separating space's blindness to
-uniqueness is the same property that lets you embed an image without its caption,
+That last point is the counterweight to everything above. A separating space's
+blindness to uniqueness is the same property that lets you embed an image without its caption,
 train on billions of loosely-paired examples, and do open-vocabulary matching. A
 representing space buys synergy and pays in modularity: it wants all modalities
 present, and it spends capacity modeling detail a matcher would gladly discard.
@@ -309,9 +309,9 @@ Here is the rule, the one I wish I had before spending the compute to learn it.
 > A latent space cannot both separate and represent. Classification asks it to
 > forget what creates ambiguity; reconstruction and fine retrieval ask it to keep
 > exactly that. Contrastive learning builds a space that separates; joint
-> reconstruction builds a space that represents. The modality gap is not a bug,
-> it is what a separating space looks like, and if your task needs the signal back,
-> the gap is a sign you asked for separation when you needed representation.
+> reconstruction builds a space that represents. The modality gap is what a
+> separating space looks like from outside, and if your task needs the signal back,
+> the gap is telling you that you asked for separation when you needed representation.
 
 The deciding variable is the job.
 

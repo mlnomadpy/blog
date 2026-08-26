@@ -88,15 +88,13 @@ encoder entirely. Take 60 points in 2D (40 for the orthogonality loss, for a
 reason its section owns up to), assign them **random labels**, and
 treat the positions themselves as the embeddings. Then run gradient descent on
 a contrastive loss and watch the points organize. Random labels on random
-positions means there is no spatial signal at the start, the loss has to
-impose every bit of geometry itself. That is the cleanest possible test of
-what a loss actually *wants*.
+positions means there is no spatial signal at the start, so whatever geometry
+appears is geometry the loss put there, and nothing else.
 
 Every loss below is about fifteen lines of `jax.numpy`. The complete, runnable
 generator, data, losses, training loop, and the matplotlib renderer that made
-these GIFs, lives in
-[`scripts/jax-contrastive/`](https://github.com/mlnomadpy/blog/tree/master/scripts/jax-contrastive)
-in the repo.
+these GIFs, [lives in this blog's
+repository](https://github.com/mlnomadpy/blog/tree/master/scripts/jax-contrastive).
 
 ## The shared scaffolding
 
@@ -279,8 +277,8 @@ def loss_infonce(z, labels, key, tau, *, m):
 
 Because `z` is normalized, `z @ z.T` is the cosine matrix directly. The whole
 loss is `jax.nn.logsumexp` doing the numerically stable denominator and one
-sampled positive in the numerator. That softmax-over-similarities is exactly
-the Nadaraya–Watson kernel operator I unpacked in
+sampled positive in the numerator. That softmax-over-similarities is the
+Nadaraya–Watson kernel operator I unpacked in
 [*Attention is Explainable Because it is a Kernel*](/blog/attention-is-a-kernel/),
 InfoNCE is that operator pointed at a different objective.
 
@@ -316,10 +314,9 @@ classification; brutal to any within-class variation you might have cared about.
 
 ## 5. SigLIP, Zhai et al., 2023
 
-What if the loss let you say where the pushing should stop? SigLIP drops the
-softmax entirely, scores each pair independently with a sigmoid, and,
-crucially, puts a *bias* on it so you choose where different-class pairs stop
-being pushed apart.
+What changes when row-wise softmax competition becomes a pairwise logistic
+term? SigLIP scores each image–text pair with a sigmoid and learns a bias and
+scale. Together they move the region where a pair's gradient is strongest.
 
 $$
 \mathcal{L}_{\text{SigLIP}} = \sum_{i<j} \log\!\bigl(1 + \exp(-y_{ij}\,(t \cdot \text{sim}_{ij} + b))\bigr)
@@ -337,15 +334,15 @@ def loss_siglip(z, labels, key, target, *, m):
 
 <figure class="jax-fig">
   <img src="/blog/jax-contrastive/siglip.gif" alt="SigLIP organizing random 2D points into two arcs that stop near orthogonality" loading="lazy" width="480" height="480" />
-  <figcaption>SigLIP with the negatives target near cosine 0. The pairwise sigmoid saturates once each negative is past the bias threshold, so the classes stop spreading at orthogonality instead of overshooting to opposition.</figcaption>
+  <figcaption>SigLIP with the negative-pair transition near cosine 0. The logistic gradient becomes exponentially small below that region, so this finite run settles near orthogonality. The bias shapes pressure; it does not define a finite equilibrium.</figcaption>
 </figure>
 
-`jax.nn.softplus(x)` is the stable `log(1 + e^x)`, and `target` sets the bias
-`b = -t·target`, the cosine at which the loss for a negative pair goes flat.
-Set it near zero and negatives equilibrate at orthogonality, not at the
-diametric opposition every softmax loss implicitly chases. That is the geometric
-fix I argued for in
-[*Opposite Is Not Different*](/blog/opposite-is-not-different/).
+`jax.nn.softplus(x)` is the stable `log(1 + e^x)`. In this toy implementation,
+`target` sets `b = -t·target`, placing the logistic transition at that cosine.
+Below the transition the negative gradient decays smoothly; it is not exactly
+zero at a finite point. Moving the slider therefore compares pressure profiles,
+not guaranteed destinations. [*Untangling the Moons*](/blog/untangling-the-moons/)
+separates this local derivative from the feasible joint geometry.
 
 ## 6. Cosine→0, the orthogonality objective
 
@@ -370,25 +367,24 @@ def loss_orthog(z, labels, key, _unused, *, m):
 
 <figure class="jax-fig">
   <img src="/blog/jax-contrastive/orthog.gif" alt="Cosine-to-zero loss organizing two classes of random points onto perpendicular axes" loading="lazy" width="480" height="480" />
-  <figcaption>Cosine→0 on two classes. Same-class collapses to a point, different-class settles at a right angle, orthogonality, the dimension-independent stop this loss always targets. (The strict max-margin arrangement for two classes is actually antipodal; cos→0 stops at orthogonality on purpose, since that is the target that generalizes to many classes.)</figcaption>
+  <figcaption>Cosine→0 on two classes. Same-class points collapse together and the different-class term reaches its exact minimum at a right angle. This is the objective's declared target, not a universal optimum for two-class separation.</figcaption>
 </figure>
 
-Three lines of math, and the cleanest geometry of the six: two classes land on
-perpendicular directions and stop, because the loss is genuinely minimized there
-rather than fighting the spherical geometry forever. The target is a
-dimension-independent *approximation* to the simplex optimum $-1/(k-1)$, nearly
-exact when classes are many, deliberately conservative when they are few. The
-[companion post](/blog/untangling-the-moons/) works through why that is the right
-trade, and why it only holds when the class count doesn't exceed the dimension.
+Three lines of math produce the most explicit geometry of the six: the
+different-class term is genuinely minimized at zero cosine. This trades
+dimension efficiency for a named target. A regular simplex fits $k$ centered
+classes in $k-1$ dimensions; exact pairwise orthogonality requires $k$
+dimensions. The [companion post](/blog/untangling-the-moons/) works through that
+trade and shows what happens when the requested directions do not fit.
 
-One caveat the code made me confront. From a *perfectly* balanced random
+The code exposes a second fact. From a *perfectly* balanced random
 start, this loss can stall at a symmetric configuration, each class smeared
 uniformly around the circle, where same-class attraction and different-class
 repulsion cancel. The softmax losses break that symmetry through their sampled
 positive or their normalization; bare orthogonality has nothing to break it
 with. The fix in the generator is mundane, 40 points instead of 60 and
 a seed that isn't perfectly symmetric, but it is a real lesson: an objective
-can be *correct at its minimum* and still need help escaping a saddle.
+can have a transparent minimum and still stall at a symmetric saddle.
 
 ## The two we skipped
 
@@ -409,26 +405,26 @@ obvious.
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/jax-contrastive/grid-six.gif" alt="Six contrastive losses organizing the same random points side by side: pair, triplet, InfoNCE, SupCon, SigLIP, cosine-to-zero" loading="lazy" width="900" height="600" />
-  <figcaption>All six from random clouds with no spatial signal, each panel reporting its own accuracy as it organizes. Pair and triplet (Euclidean) collapse to points and freeze; InfoNCE and SigLIP fan into arcs; SupCon condenses four classes to four clusters; cosine→0 lands two classes on perpendicular axes. The margin family stops early, the softmax family keeps fine-tuning, and SigLIP and cosine→0 stop at the geometrically correct place.</figcaption>
+  <figcaption>All six from random clouds with no spatial signal, each panel reporting its own accuracy as it organizes. Pair and triplet become inactive once their margin inequalities hold; InfoNCE remains row-relative; SupCon condenses four classes; SigLIP's gradients fade; cosine→0 lands two classes on perpendicular axes because zero is its exact negative-pair minimum.</figcaption>
 </figure>
 
 The pattern is the one from the interactive version, now in committed,
-reproducible pixels: **the margin family freezes once satisfied, the softmax
-family never stops, and only SigLIP and cosine→0 halt where the geometry
-actually wants them to.**
+reproducible pixels: **margins switch off at finite inequalities, softmax stays
+relative to the current candidate set, logistic pressure fades smoothly, and
+cosine-to-zero names an exact finite target.**
 
 ## Run it yourself
 
-Everything here is deterministic given the seed. The generator is six small
-files, `data.py`, `losses.py`, `train.py`, `render.py`, `generate.py`, in
-[`scripts/jax-contrastive/`](https://github.com/mlnomadpy/blog/tree/master/scripts/jax-contrastive):
+Everything here is deterministic given the seed. The
+[generator](https://github.com/mlnomadpy/blog/tree/master/scripts/jax-contrastive)
+is a handful of small files, data, losses, training, rendering:
 
 ```bash
 pip install -r requirements.txt        # jax, optax, matplotlib, imageio
 python generate.py --loss all --grid
 ```
 
-Every GIF on this page lands in `public/jax-contrastive/`. Change `--loss`,
+That draws every GIF on this page. Change `--loss`,
 `--dataset` (`random`, `random-4`, `moons`), `--seed`, or `--steps` and watch a
 different trajectory. The optimization is reproducible to the seed; the rendered
 pixels may shift slightly across matplotlib versions, so the guarantee is on the

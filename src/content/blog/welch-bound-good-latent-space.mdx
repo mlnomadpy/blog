@@ -99,7 +99,7 @@ That pile-up is **collapse**. It is the first villain of representation learning
 
 <LatentSpaceBirth caption="A latent space forming under live training, slowed down so the path is visible. Left: the raw 2-D encoder output before L2 normalization; raise raw span to zoom out for the full motion, or lower it to zoom in on collapse. Right: the same points projected onto the unit circle, where the angular/simplex geometry lives. Colour = class, dots = examples, large rings = class centroids. Repulsion ON: same-class points tighten while class centroids spread into an even packing. Repulsion OFF: alignment remains, but there is no pressure between classes, so the normalized view collapses. With 3 classes on the circle, the centroids settle at the simplex angle: cosine -0.5, or 120 degrees apart." />
 
-The interesting part is not merely that repulsion prevents collapse. The interesting part is the shape it chooses. Why do the centroids settle at those angles? Why not push every class to the opposite side of every other class? Why does the good solution look so rigid?
+That repulsion prevents collapse is the boring half. The interesting half is the shape it chooses. Why do the centroids settle at those angles? Why not push every class to the opposite side of every other class? Why does the good solution look so rigid?
 
 To answer that, we need three constraints. A good latent space must be tight, separated, and full-rank. The drama is that these constraints do not automatically agree.
 
@@ -141,7 +141,7 @@ Now the conflict is visible. Separation wants large angles. Rank wants independe
 
 ## The false answer: make everything opposite
 
-What could be more different than opposite? On the cosine scale, -1 looks like "maximally different." But two antiparallel vectors span one line. They are the same direction with a sign flip. This is the cosine-similarity bug from [Opposite Is Not Different](/blog/opposite-is-not-different), returning now as a question about the whole codebook rather than a single pair.
+Cosine $-1$ is minimum signed similarity, while an antiparallel pair still spans one line. Cosine $0$ instead marks zero projection. [Untangling the Moons](/blog/untangling-the-moons/) separates those questions; here the issue belongs to the whole codebook rather than one pair.
 
 Before you drag the green arrow, guess which configuration is more useful for a representation: 180 degrees apart, or 90 degrees apart?
 
@@ -169,7 +169,7 @@ That number is the fingerprint of the regular simplex. Three classes land 120 de
 
 <SimplexPacking caption="The simplex angle, cos = -1/(C-1), as a function of the number of classes. C = 2 gives -1, the only case where opposition is optimal. C = 3 gives -0.5 (120 degrees); C = 4 gives -0.33; by C = 50 it is -0.02, essentially orthogonal. The simplex is the maximally even centered arrangement." />
 
-This is the first payoff. The "good" centroids from the opening animation were not merely spreading out. They were moving toward the only centered arrangement where every class gets the same deal.
+This is the first payoff. Go back to the opening animation and the centroids were not just spreading; they were converging on the only centered arrangement in which every class gets the same deal, and there is exactly one such arrangement for each $C$.
 
 The rotating sphere below shows the same idea in 3-D. With room for orthogonal axes, the vectors can avoid interference entirely. With four centered class means, the tetrahedron appears. Add more vectors than dimensions and the sphere runs out of room.
 
@@ -197,7 +197,7 @@ $$
 
 That is the **Welch bound**. It says: once the codebook is overloaded, some amount of crosstalk is unavoidable. You can move the vectors around, train longer, tune the optimizer, or change the loss temperature. You cannot beat the floor imposed by the dimension.
 
-The bound is universal, but equality is special. When an **equiangular tight frame** exists for that $(C, d)$, it attains the floor: equiangular means the crosstalk is shared evenly instead of dumped onto a few unlucky pairs, and tight means the vectors use the whole space evenly, exactly the compromise the three constraints demanded. Such frames do *not* exist for every $(C, d)$; when none does, the best packing can only approach the same floor rather than sit on it.
+The bound is universal, but equality is special. When an **equiangular tight frame** exists for that $(C, d)$, it attains the floor: equiangular means the crosstalk is shared evenly instead of dumped onto a few unlucky pairs, and tight means the vectors use the whole space evenly, which is the compromise the three constraints demanded. Such frames do *not* exist for every $(C, d)$; when none does, the best packing can only approach the same floor rather than sit on it.
 
 Now the post's title should feel less like jargon. A good latent space is a good overloaded codebook.
 
@@ -226,7 +226,7 @@ They called this **neural collapse**.
 
 Read through the codebook story, neural collapse is not a strange coincidence. The network has learned a low-crosstalk codebook for the classes. Within-class variation vanishes; class means arrange as evenly as the dimension allows; the classifier becomes a decoder for that codebook.
 
-The surprise is not that neural networks found geometry. The surprise is that the geometry is so simple.
+A network with a hundred million parameters, given a hundred epochs past the point of caring, spends them arriving at a shape a radio engineer could have drawn on a napkin in 1974.
 
 ## Contrastive learning is codebook design with two forces
 
@@ -247,7 +247,7 @@ There is one wrinkle worth keeping. A naive pairwise cosine push treats -1 as th
 
 ## The answer
 
-A good latent space is not merely "well separated." It is a codebook satisfying three constraints at once:
+"Well separated" was never enough to specify a good latent space. It is a codebook, and it has to satisfy three constraints at once:
 
 - **alignment:** examples that should match collapse toward the same code;
 - **margin:** different codes have enough angular room to resist noise;

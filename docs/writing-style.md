@@ -34,6 +34,31 @@ understanding*. The current posts skip the seduction. Three failures recur:
 
 ## 2. Principles for engaging theory writing
 
+### House voice: bold object, precise boundary
+
+Rigour is not a defensive tone. State what the mathematics or experiment establishes in a direct sentence, then state its boundary once. Do not surround a real result with apologies.
+
+Use four distinct verbs consistently:
+
+- **is / equals / implies** for an identity or proved consequence;
+- **measures / reaches / changes** for an experiment;
+- **suggests / supports** for an interpretation of measurements;
+- **asks / remains** for an open question.
+
+Replace disclaimer constructions with affirmative scope:
+
+| Avoid | Write |
+| --- | --- |
+| “We are not claiming this is a global contraction.” | “The Jacobian norm is below one at the observed equilibria. A global contraction requires a uniform state-space bound.” |
+| “This does not prove attention is causal.” | “The weights expose routing arithmetic. Causal attribution requires an intervention.” |
+| “This is only one run.” | “This result covers one architecture, three seeds, and Fashion-MNIST.” |
+| “One caveat…” | “The result has one boundary: …” |
+| “What this leaves out” | “Boundary of the result” or the specific unresolved question |
+
+Words such as **exact**, **guarantee**, **certificate**, **conserves**, **convex**, and **by construction** spend mathematical trust. Use each only when its defining conditions are present in the same section. A finite probe set is an audit, not a certificate. A numerical symplectic step has bounded energy error, not exact conservation of the original Hamiltonian. A signed sum is additive, not convex.
+
+Once the boundary is stated, move forward. Do not repeat it in every paragraph.
+
 **P1. Motivation before mechanism.** Open every post, and most sections, with a
 concrete tension the reader feels in their body, not the abstraction that resolves
 it. "To make this network forget a class you delete a few rows" beats "A Yat unit

@@ -1,0 +1,113 @@
+---
+title: "The Concept That Would Not Die"
+seoTitle: "Spectral Surgery on a Trained Kernel Network"
+description: "An empirical feature covariance gives a trained kernel network ranked orthogonal axes. Deleting one axis is an exact algebraic intervention; the experiment asks whether it is also a semantic one. It is not: the damage spreads broadly and a small probe recovers the targeted distinction."
+seoDescription: "Delete an empirical spectral axis from a trained kernel network: the cut is exact, the damage is broad, and the targeted distinction survives."
+pubDate: 2026-07-28
+draft: false
+tags: [kernels, mercer, interpretability, unlearning, yat, mlp]
+references:
+  - authors: "Mercer, J."
+    year: 1909
+    title: "Functions of Positive and Negative Type, and their Connection with the Theory of Integral Equations"
+    venue: "Philosophical Transactions of the Royal Society A 209, 415-446"
+  - authors: "Elhage, N., Hume, T., Olsson, C., et al."
+    year: 2022
+    title: "Toy Models of Superposition"
+    venue: "Transformer Circuits Thread"
+    url: "https://transformer-circuits.pub/2022/toy_model/index.html"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+keywords:
+  - concept erasure
+  - spectral surgery
+  - machine unlearning
+  - mercer modes
+  - interpretability
+---
+import ConceptScalpel from '../../components/viz/ConceptScalpel.astro';
+import DamagePredicted from '../../components/viz/DamagePredicted.astro';
+import ForgettingPrice from '../../components/viz/ForgettingPrice.astro';
+import TopVsBottom from '../../components/viz/TopVsBottom.astro';
+import CiteAs from '../../components/CiteAs.astro';
+import SeriesNav from '../../components/SeriesNav.astro';
+
+<SeriesNav />
+
+*A trained feature map can be given a ranked list of empirical covariance axes. The [Mercer microscope](/blog/mercer-microscope) found that some leading axes align with class contrasts, including a shirt-versus-shoe direction carrying a quarter of the empirical feature variance and a third of the readout energy. That makes them candidate semantic handles, not theorem-certified concepts. This post tests whether the candidates behave like removable parts.*
+
+Deleting things from this network is the series' oldest party trick. [Delete a row of prototypes and a class is gone](/blog/edit-a-network-by-hand), exactly, provably, with the other nine classes untouched to the third decimal. That works because a prototype is a *memory*: one picture, one place in input space, one row of a matrix.
+
+But nobody wants to unlearn a picture. The target is usually a distinction, feature, or shortcut. Here there are sixteen ranked, mutually orthogonal axes, some with empirical semantic alignment. Orthogonal sounds a great deal like separable. So: cut one out and see what happens.
+
+## The cut is exact
+
+Deleting one retained spectral coordinate requires no approximation, which is the whole appeal. The readout reads centered features, and the empirical modes are an orthonormal basis of the sampled feature span, so the logits split into one term per mode with nothing left over on that span:
+
+$$
+f(x) \;=\; \underbrace{\mu^\top A + b}_{\text{constant}} \;+\; \sum_{k} \big\langle \Phi(x) - \mu,\, u_k \big\rangle \, \big(u_k^\top A\big).
+$$
+
+Every term is one empirical mode's contribution to the logits. Removing mode $k$ means dropping its term, which is zeroing one row of the readout: $\hat A_k \leftarrow 0$. No retraining or gradient is needed, and the edit is reversible. This is one line of linear algebra in the empirical spectral coordinates rather than the neuron basis.
+
+<ConceptScalpel caption="The trained network with a switch on each of its top sixteen concepts. Click one to cut it out; every prediction, the confusion matrix, and the broken images are recomputed live from the model's real mode coordinates, so what you see is the actual model minus that concept. Cut concept 1 and nine points of accuracy vanish; cut concept 6 and almost nothing happens." />
+
+The panel already shows the first thing worth measuring: these concepts differ enormously in how load-bearing they are. Cutting mode 1 costs 9.6 points of accuracy. Cutting mode 6 costs 0.3. And the ordering is not the eigenvalue ordering: mode 5, with a sixth of mode 1's eigenvalue, costs 8.2 points, because what matters for the verdict is not how much variance a mode carries but how hard the readout leans on it.
+
+Nine points from one coordinate is a big number, and it needs a control before it means anything. Two controls, in fact. Remove the *same amount of readout energy* along a random direction in feature space, and accuracy falls by 0.2 points. Delete the single most-used prototype outright, the old edit, and accuracy falls by 0.4. Against those, cutting one Mercer mode is forty times more destructive than cutting the same magnitude of anything else. The modes are not merely a description of the network; they are where the function is stored.
+
+Which makes the failure that follows more interesting.
+
+## Failure one: the damage is not surgical
+
+If a concept were a part, cutting it would break the thing that part does. The class-mode map the microscope produced makes that testable in advance: for any mode we know which classes sit at its two poles and how differently the readout weights them, so before making a single cut we can predict which class pairs should collapse. Mode 1 separates shirts from boots, so shirts should start looking like boots.
+
+<DamagePredicted caption="For every class pair and every one of the first eight concepts: what the class-mode map predicted the cut would do, against the new errors the cut actually created. The prediction is made entirely from quantities the microscope exported before any surgery. Hover any dot to name the pair; switch modes to see one cut at a time." />
+
+Shirts do start looking like boots. The single worst pair after cutting mode 1 is exactly shirt-versus-boot, as advertised, and across all 360 pair-cuts the predicted risk correlates with the measured damage at $r = 0.49$ (rank correlation 0.39). The map points the right way.
+
+It also runs out of road fast. Half the variance in the damage is somewhere else, and the cloud shows why: cutting one concept sprays new errors across pairs the map said nothing about. The concentration statistic makes the failure sharp. Take the share of a cut's total damage that lands on its single worst pair: for mode 1 it is 11 percent. For a *random* direction it is 16 percent, and for a deleted prototype 17 percent. The concept cut is not merely unselective, it is **less** concentrated than a random cut of the same size. A Mercer mode is not a class-pair detector that happens to sit high in the spectrum; it is a coordinate of the kernel's spread, and nearly every decision in the network reads from it. Cutting it is not removing a module, it is removing an axis that ten classes were standing on.
+
+## Failure two: the knowledge survives the cut
+
+Still, accuracy on shirts collapsed. Is the shirt-versus-boot knowledge *gone*, or merely unreadable by this particular readout? The distinction matters, and the series has met it before: [editing a shared operator taught us to separate silencing from erasing](/blog/edit-a-fixed-point), because a masked capability that a small probe can resurrect was never removed at all.
+
+The test is the same one: cut the concept, then fit a *fresh* readout on the features and ask whether the distinction comes back. It does, immediately and totally. On the shirt-versus-boot problem, a readout refitted after silencing mode 1 reaches 99.95 percent. So we removed the network's *use* of the concept, not the concept.
+
+The obvious repair is to cut deeper: project mode 1 out of the features themselves, so the coordinate does not exist for any readout to find. Refit again on those truncated features: **98.6 percent**. Removing the axis entirely, from the representation and not just the readout, costs the distinction 1.4 points.
+
+The reason fits in four words: orthogonal is not independent. The modes are orthogonal as *directions* under the empirical measure. Whether the shirt-versus-boot signal lives in one of them is a statement about information, and it does not: the signal is spread across dozens of modes. Empirical PCA diagonalizes the sampled feature covariance. Nothing about Mercer theory or PCA promises to diagonalize semantic knowledge.
+
+## The price of really forgetting
+
+So one axis is not enough. How many are? Rank every mode by how well it separates shirts from boots, delete the top $r$ of them from the features, refit a readout from scratch each time, and watch two numbers at once: the targeted distinction, and everything else.
+
+<ForgettingPrice caption="The cost of erasure. Modes are removed from the features in order of how much they discriminate shirts from boots; after every cut a fresh readout is fitted, both on the two-class problem (red) and on the whole ten-class task (blue). Slide the dial: the distinction we are trying to destroy clings on above 85 percent while the network that has to survive the operation falls to 50." />
+
+The two curves cross the wrong way round, and that crossing is this post's headline. At 8 modes removed, the shirt-versus-boot distinction is still recoverable at 92.7 percent while the full task has slipped to 86.5. At 16, the distinction is at 85.5 and the whole network is at **50.5**, having lost 38 points to protect a distinction that lost 14. Push to 128 modes deleted, half the entire representation, and the pair is *still* at 56 percent, above chance, while the network sits at 26.
+
+The instrument's verdict is unambiguous: within this architecture there is no operation that removes this concept and leaves a working model. Not because the surgery is imprecise, but because the thing we called a concept was never localized in the first place. The network's redundancy is not a bug to be pruned; it is how the network stores anything.
+
+## Where the function actually lives
+
+One last cut, to close the geometry. If concepts are smeared, is there at least a quiet region of the spectrum, some tail of small modes, where a distinction could hide from the loud coordinates?
+
+<TopVsBottom caption="All 512 cuts recomputed live: accuracy after deleting j modes from the top of the spectrum against j modes from the bottom. The top curve falls off a cliff; the bottom curve is nearly flat, because the fine modes carry almost no function at all." />
+
+There is not. Deleting the bottom 128 modes of 256, half the representation by count, costs 0.12 points. Deleting the top 8 costs 53. The function is packed into a few dozen loud coordinates, and since every concept is smeared across those same coordinates, they are all sitting on top of each other by necessity. There is no room in the spectrum for a distinction to have its own quiet place, and that geometric fact is the reason the surgery could never have worked.
+
+*Scope: all numbers come from a local replay of one trained model, the seed-0 final snapshot of the Mercer run (bundle `kgl_blog-mercer-v1`, m = 256, 88.15 percent on the test set at that epoch); the modes are defined on the training measure and every accuracy is measured on the test set. Refitted readouts are fresh linear heads trained on the truncated features; the interactive panels recompute cuts on an 800-image test subset, so their accuracies differ from the full-set numbers in the prose by a fraction of a point. Pair damage is counted as new confusions between two classes. Everything above is a single seed at a single width on a single dataset; the mechanism (orthogonal coordinates, non-localized information) should travel, the specific point losses will not.*
+
+## What the spectrum is for
+
+The empirical spectral decomposition is a genuine map of this trained representation: it ranks variance coordinates, measures their association with class contrasts, shows which ones the readout leans on, and reconstructs the sampled model outputs from a small leading subspace. As a *reading* instrument it is useful.
+
+What it is not is a parts list. The named axes are coordinates, not components; they are orthogonal without being independent, and the targeted information is spread across many of them. Prototype-row deletion can remove a parameterized memory contribution exactly, while deleting a spectral coordinate only silences one route through the current readout. Nothing in this experiment establishes semantic erasure, and the refit probes directly show why.
+
+<CiteAs
+  slug="spectral-surgery"
+  title="The Concept That Would Not Die"
+  pubDate="2026-07-28"
+/>

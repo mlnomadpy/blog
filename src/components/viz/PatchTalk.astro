@@ -1,0 +1,114 @@
+---
+interface Props { caption?: string; height?: number; }
+const { caption, height = 440 } = Astro.props;
+---
+<figure class="viz patchtalk" data-caption={caption} data-height={height} data-height-mobile="580" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+<script>
+// Who controls whom. The token-mix outputs are kernel scores (never negative)
+// and the learned step multiplying them is negative, so each round can only
+// SUPPRESS channels, in proportion to kernel affinity. Hovering a patch shows
+// the exact gradient of that update with respect to every neighbour, computed
+// on the real token state: which patches hold the levers on this one.
+import { defineViz } from './engine/vizkit.js';
+import { T as TXT, fmt, gate, loadingText, grayGlyph } from './engine/draw.js';
+import { load, walk, influence } from './patchconv.js';
+
+defineViz('patchtalk', {
+  title: 'The conversation, signed',
+  height: 440,
+  controls: [
+    { type: 'range', name: 'img', label: 'image', min: 1, max: 24, step: 1, value: 1, int: true },
+    { type: 'range', name: 'r', label: 'after round', min: 0, max: 7, step: 1, value: 1, int: true },
+    { type: 'readout', name: 'rd' },
+  ],
+  setup(api) {
+    const st = api.state;
+    st.hover = 5;
+    gate(api, () => Promise.all([load('weights'), load('thumbs')]), (a, [w, th]) => {
+      a.state.w = w; a.state.th = th; a.state.runs = {};
+    });
+    api.canvas.addEventListener('pointermove', (e) => {
+      if (!st.ready || !st.cells) return;
+      const r = api.canvas.getBoundingClientRect();
+      const p = { x: e.clientX - r.left, y: e.clientY - r.top };
+      for (const c of st.cells) {
+        if (p.x >= c.x && p.x <= c.x + c.s && p.y >= c.y && p.y <= c.y + c.s) {
+          if (st.hover !== c.i) { st.hover = c.i; api.render(); }
+          return;
+        }
+      }
+    });
+  },
+  draw(api) {
+    const { ctx, colors, size: { W, H } } = api, st = api.state;
+    if (!st.ready) { loadingText(api, 'loading the trained mixer…'); return; }
+    const ii = Math.round(api.get('img')) - 1, r = Math.round(api.get('r'));
+    st.runs[ii] ??= walk(st.w, st.th.imgs[ii], 8);
+    const state = st.runs[ii].states[r];
+    const inf = influence(st.w, state, st.hover);
+    const pad = 14, top = 34;
+    const img = st.th.imgs[ii];
+    const gs = Math.min((W * 0.42 - pad) / 4, (H - top - 80) / 4);
+
+    TXT(ctx, colors, 'label');
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('hover a patch: who moves it, and in which direction', pad, top - 8);
+    let mx = 1e-9;
+    for (let j = 0; j < 16; j++) if (j !== st.hover) mx = Math.max(mx, Math.abs(inf[j]));
+    st.cells = [];
+    for (let gy = 0; gy < 4; gy++) for (let gx = 0; gx < 4; gx++) {
+      const i = gy * 4 + gx, x = pad + gx * (gs + 4), y = top + gy * (gs + 4);
+      const patch = [];
+      for (let py = 0; py < 8; py++) for (let px = 0; px < 8; px++) {
+        patch.push(img[(gy * 8 + py) * 32 + gx * 8 + px]);
+      }
+      grayGlyph(ctx, patch, 8, x, y, gs, gs, { invert: false, key: `pt${ii}-${i}` });
+      if (i === st.hover) {
+        ctx.strokeStyle = '#e8b23a'; ctx.lineWidth = 3;
+        ctx.strokeRect(x + 1.5, y + 1.5, gs - 3, gs - 3);
+        ctx.lineWidth = 1;
+      } else {
+        const v = inf[i] / mx;
+        const a = Math.min(1, Math.abs(v)) * 0.62;
+        ctx.fillStyle = v >= 0 ? `rgba(74,127,179,${a})` : `rgba(194,85,58,${a})`;
+        ctx.fillRect(x, y, gs, gs);
+      }
+      st.cells.push({ x, y, s: gs, i });
+    }
+    TXT(ctx, colors, 'small');
+    ctx.fillStyle = colors.faint;
+    ctx.fillText('blue: raising this patch raises what the hovered one receives; red: lowers it;', pad, top + 4 * (gs + 4) + 14);
+    ctx.fillText('the exact kernel gradient on this image, times the learned (negative) step', pad, top + 4 * (gs + 4) + 28);
+
+    // right: the influence profile, ranked
+    const rx = pad + W * 0.48, rw = W - rx - pad;
+    TXT(ctx, colors, 'label');
+    ctx.fillText(`what moves patch (${Math.floor(st.hover / 4) + 1},${st.hover % 4 + 1})`, rx, top - 8);
+    const order = Array.from({ length: 16 }, (_, j) => j)
+      .filter((j) => j !== st.hover)
+      .sort((a2, b2) => Math.abs(inf[b2]) - Math.abs(inf[a2]));
+    const bh = (H - top - 90) / 15;
+    order.forEach((j, k) => {
+      const v = inf[j] / mx;
+      const y = top + 8 + k * bh;
+      const wdt = Math.abs(v) * rw * 0.42;
+      const cx = rx + rw * 0.5;
+      ctx.fillStyle = v >= 0 ? 'rgba(74,127,179,0.8)' : 'rgba(194,85,58,0.8)';
+      ctx.fillRect(v >= 0 ? cx : cx - wdt, y, Math.max(wdt, 1), Math.max(bh - 4, 3));
+      TXT(ctx, colors, 'small');
+      ctx.fillStyle = colors.faint;
+      ctx.textAlign = 'right';
+      ctx.fillText(`(${Math.floor(j / 4) + 1},${j % 4 + 1})`, cx - rw * 0.44, y + bh / 2 + 3);
+      ctx.textAlign = 'left';
+    });
+    ctx.strokeStyle = colors.border;
+    ctx.beginPath();
+    ctx.moveTo(rx + rw * 0.5, top + 4); ctx.lineTo(rx + rw * 0.5, top + 8 + 15 * bh);
+    ctx.stroke();
+    const lead = order[0];
+    api.readout('rd', `round ${r}: patch (${Math.floor(lead / 4) + 1},${lead % 4 + 1}) is patch (${Math.floor(st.hover / 4) + 1},${st.hover % 4 + 1})'s strongest lever (a_t = ${fmt(st.w.a_t, 2)}: the update itself only subtracts)`);
+  },
+});
+</script>

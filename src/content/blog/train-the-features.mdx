@@ -1,9 +1,10 @@
 ---
-title: "You Only Have to Train the Features"
-seoTitle: "You Only Have to Train the Features"
-description: "Leave a convolutional network's weights at their random starting values and build a Yat head on its features by hand: the trained head on that random backbone sorts at chance while the constructed one reaches 74%. On a properly trained backbone the constructed head reaches 83.2% against 85.7% for the trained one. The accuracy lives in the representation; the classifier, and its edits, are furniture you place. This maps the boundary between what you must optimize and what you can construct."
-seoDescription: "A Yat head built on learned features hits 83.2% vs 85.7% trained, and 74% on a random backbone. The accuracy is in the representation, not the classifier."
+title: "How Much of a Fashion-MNIST Network Can You Build by Hand?"
+seoTitle: "Build Fashion-MNIST Features and Classifier by Hand"
+description: "Construct the prototype head on random and learned features, then replace the backbone with named edge and corner measurements. On Fashion-MNIST the zero-training pipeline reaches 83.3%, versus 85.7% for the matched trained model."
+seoDescription: "A prototype head plus hand-built edge and corner features reaches 83.3% on Fashion-MNIST with no gradient training, versus 85.7% end to end."
 pubDate: 2026-06-22T16:00:00-07:00
+updatedDate: 2026-08-25
 draft: false
 companion: train-the-features-jax-flax-nnx
 tags: [ml, kernels, interpretability, prototypes, representation-learning, transfer-learning, yat, deep-learning]
@@ -40,24 +41,28 @@ import BoundaryCurve from '../../components/viz/BoundaryCurve.astro';
 import RepresentationFold from '../../components/viz/RepresentationFold.astro';
 import PixelVsExemplar from '../../components/viz/PixelVsExemplar.astro';
 import BlackBoxHead from '../../components/viz/BlackBoxHead.astro';
+import DetectorBank from '../../components/viz/DetectorBank.astro';
+import AssignedDimensions from '../../components/viz/AssignedDimensions.astro';
+import HandBuiltVote from '../../components/viz/HandBuiltVote.astro';
+import ConstructionLadder from '../../components/viz/ConstructionLadder.astro';
 
 *Which part of a network actually needs to be trained? The obvious answer is all of it, and the obvious answer is wrong. Take a convolutional network and leave every weight at its random starting value; it sorts Fashion-MNIST at chance, ten percent, the way a pile of random numbers should. Now throw away its untrained last layer and build the classifier by hand instead, twenty prototype pictures per class, no gradient steps anywhere, and the same random network suddenly sorts most of the test set correctly. Whatever the training was for, it was not for the classifier. This post is about where that line falls, between what you have to optimize and what you can simply place, and it turns out to fall somewhere sharp: you train the features, and you build everything above them.*
 
 ## What a feature actually is
 
-That promise leans on two words, features and head, and neither is as obvious as it sounds, so pin them down first. A network does its job in two stages. First it boils the raw image down to a short list of numbers that summarize it; those numbers are the **features**, and the stack of layers that produces them is the **backbone**. Then it draws boundaries between the classes using only those numbers; that second part is the **head**, also called the readout or the classifier. Ordinary training moves both stages at once, which is exactly why it is hard to say which one is pulling its weight.
+That promise leans on two words, features and head, and neither is as obvious as it sounds, so pin them down first. A network does its job in two stages. First it boils the raw image down to a short list of numbers that summarize it; those numbers are the **features**, and the stack of layers that produces them is the **backbone**. Then it draws boundaries between the classes using only those numbers; that second part is the **head**, also called the readout or the classifier. Ordinary training moves both stages at once, which is why it is hard to say which one is pulling its weight.
 
 So pull them apart. And to see why the features matter at all, ask what a good one even buys you.
 
 Why does an image need re-describing at all, when its pixels are sitting right there? Because pixels are a representation too, just a poor one. Lay the raw images out by similarity and the two clothes the network confuses most, a pullover and a coat, fall into one overlapping cloud: there is no line you could draw through raw pixels that keeps them apart. A feature is a **learned measurement**, a number the backbone is trained to compute precisely so that this stops being true. Train the backbone and the same two classes pull apart into separate clusters. The measurements were chosen, by gradient descent, to make the classes separable.
 
-<FeatureVsPixel caption="The two clothes the network confuses most, Pullover and Coat, in two spaces. Left: raw pixel space, where they overlap in one cloud and no boundary can split them. Right: the backbone's feature space; slide its training and the same two classes pull apart. The percentage under each panel is how separable the two are in exactly the layout shown. Training the features is what turns the left picture into the right one, computed live in your browser." />
+<FeatureVsPixel caption="The two clothes the network confuses most, Pullover and Coat, in two spaces. Left: raw pixel space, where they overlap in one cloud and no boundary can split them. Right: the backbone's feature space; slide its training and the same two classes pull apart. The percentage under each panel is how separable the two are in the layout shown. Training the features is what turns the left picture into the right one." />
 
 That is what "train the features" means: you train the backbone until its features lay the classes out cleanly. Everything after that, the part that finally says *coat* or *pullover*, is the head, and the rest of this post is about how little that head needs you.
 
 ## Split the bill
 
-So what is each stage worth on its own? Pay for them separately and find out. The features cost a full training run: a small convolutional backbone, two conv-and-pool blocks down to 64 features, trained the ordinary way with a linear head and cross-entropy, reaching **85.7%**. The classifier we refuse to pay for. Freeze the backbone, throw its trained head away, and on the frozen features build a new head by hand: twenty prototype points per class from k-means, each wired to vote for its own class, an image classified by the nearest one. No gradient step ever touches it. It reaches **83.2%**. (Both numbers, and every learned-feature number in this post, come from one run of `scripts/construct_vs_optimize.py` in the repo.)
+So what is each stage worth on its own? Pay for them separately and find out. The features cost a full training run: a small convolutional backbone, two conv-and-pool blocks down to 64 features, trained the ordinary way with a linear head and cross-entropy, reaching **85.7%**. The classifier we refuse to pay for. Freeze the backbone, throw its trained head away, and on the frozen features build a new head by hand: twenty prototype points per class from k-means, each wired to vote for its own class, an image classified by the nearest one. No gradient step ever touches it. It reaches **83.2%**. (Both numbers, and every learned-feature number in this post, come from one real run.)
 
 Training the head, on the very same features, bought **2.5 points**. The other seventy-five, everything that separates this from a coin flip, came from the backbone. (The same built head on raw pixels, from the [previous post](/blog/edit-a-network-by-hand/), capped out at 79%, which is the whole reason we wanted features in the first place.)
 
@@ -75,19 +80,19 @@ It has no free parameters to fit, so its accuracy is a function of $g$ and nothi
 
 How far does the head's independence go? Take the experiment to its limit and train nothing at all. Leave the backbone at its random initialization, every weight a fresh random draw, and build the same head on the garbage features that fall out.
 
-You would expect nothing, and on this backbone the trained head delivers exactly that: it sorts the test set into ten bins that are each a random rainbow, dead at chance. But the built head, on those same random features, sorts them into mostly-pure bins and lands at **74%**.
+You would expect nothing, and the network as a whole delivers exactly that. Nothing in it has been trained, its own output layer is still a random draw, and it sorts the test set into ten bins that are each a random rainbow. But the built head, reading those same random features, sorts them into mostly-pure bins and lands at **74%**.
 
-Seventy-four percent, from a network that never saw a gradient. Random convolutional features are a known free lunch: even an untuned stack of filters scrambles the image in a way that keeps some of its class structure intact, and a head that only has to *read* structure does not care that nobody trained it.
+Seventy-four percent, from a network that never saw a gradient. Random convolutional features are a known free lunch: even an untuned stack of filters scrambles the image in a way that keeps some of its class structure intact, and a head that only has to *read* structure does not care that nobody trained it. What this endpoint measures is narrow, though. It measures how much class structure survives a random stack, which is a lot. It does not weigh building a head against *fitting* one on those same frozen features, because this run never trains a head on them; the classical random-features probe would be the control for that, and the comparison drawn below is between building the head and training the whole network end to end.
 
-<RandomSurprise caption="One untrained network, two heads, sorting the test images into class bins (each dot is an image, coloured by its true class). On this random backbone the trained head sorts at chance, so the bins are a rainbow of every class. Place a prototype head on the same random features and it sorts into mostly-pure bins, 74% right, with no gradient steps. Even random features carry enough structure to sort; the classifier never needed training. The placed head's labels run live in your browser." />
+<RandomSurprise caption="One untrained network, two readings of it, sorting the test images into class bins (each dot is an image, coloured by its true class). Nothing here has trained, so the network's own output layer is still a random draw and its bins are a rainbow of every class. Place a prototype head on the same random features and it sorts into mostly-pure bins, 74% right, with no gradient steps. Even random features carry enough structure to sort." />
 
 ## The whole trade-off, in one curve
 
 Two endpoints make a story but not a law, so watch the whole way across. At every epoch, freeze the backbone, read its trained head, then build a fresh head on the current features and read that too.
 
-The two curves climb together. The trained head starts at chance and the built head starts at 74%, and from the moment the backbone has any real features the two run nearly parallel, a couple of points apart, all the way up. The gap between them is the entire value of training the classifier. Everything else is the backbone lifting both at once.
+The two curves climb together. The end-to-end curve starts at chance, where nothing has trained yet, and the built head starts at 74%; from the moment the backbone has any real features the two run nearly parallel, a couple of points apart, all the way up. That steady couple of points is what training the classifier is worth once the features exist. Everything else is the backbone lifting both at once.
 
-<BoundaryCurve caption="Both heads against backbone training. The trained head (it learns the classifier and the features at once) starts at chance and climbs to 86%. The constructed head (it never trains the classifier, only places prototypes on whatever features exist) starts at 74% on the random backbone and climbs to 83%. Slide to read the gap at any stage: it is a couple of points once any features exist, and the dashed line is the raw-pixel head with no backbone at all. Real run of scripts/construct_vs_optimize.py." />
+<BoundaryCurve caption="Both readings against backbone training. The end-to-end network (it learns the classifier and the features at once) starts at chance, where nothing has trained, and climbs to 86%. The constructed head (it never trains the classifier, only places prototypes on whatever features exist) starts at 74% on the random backbone and climbs to 83%. Slide to read the gap at any stage: it is a couple of points once any features exist, and the dashed line is the raw-pixel head with no backbone at all. Real run." />
 
 The number says the representation does the work. The geometry says why.
 
@@ -107,16 +112,48 @@ There is a bonus hiding in having built the head instead of training it: you can
 
 And the reading survives the move even though the backbone does not. The trained backbone is a genuine black box, sixty-four numbers with no individual meaning. The head riding on top is still a bank of pictures, so the classifier stays legible while the representation under it never was. The interpretability lives in the part you place, not the part you train.
 
-<BlackBoxHead caption="A readable head on an unreadable body. Left: the trained backbone is a black box whose 64 output numbers mean nothing on their own. Right: the placed head is a bank of prototype pictures, and the prediction is resemblance to them. The interpretability lives in the head you place, not the body you train, so you get a legible classifier riding an illegible representation. Hover a class to focus its prototypes." />
+<BlackBoxHead caption="A readable head on an unreadable body. Left: the trained backbone is a black box whose 64 output numbers mean nothing on their own. Right: the placed head is a bank of prototype pictures, and the prediction is resemblance to them. A legible classifier riding an illegible representation. Hover a class to focus its prototypes." />
 
 And the edits, the teaching and forgetting that made the pixel-space head worth having, do they survive the move into feature space? Unchanged in form, because the head is still a list of prototypes with a one-hot readout. Forgetting a class is deleting its block: drop the Sandal prototypes and Sandal recall falls from **93% to 0%** while the other nine classes hold at **82.2% to 82.5%**, untouched, because their scores never referenced a Sandal prototype. Teaching a class is appending a block: build the head from eight classes, then add prototypes for Bag and Boot, and they are recognized at **95%** each while the head reaches its full **83.2%**, exactly as if all ten had been there from the start. Adding and forgetting were never properties of pixels. They are properties of storing a class as its own block of prototypes, which holds in whatever space the prototypes live in.
 
+## Build the features too
+
+The trained backbone is not the only way to arrange a readable space. Before learned vision features, systems used measurements a person could name: oriented gradients, corners, and pooled spatial histograms. Here six fixed edge detectors and one corner detector form the entire vocabulary.
+
+<DetectorBank caption="Six oriented-edge detectors and one corner detector. Every filter is fixed in advance. The panel shows the complete vocabulary rather than a selection from a learned bank." />
+
+Two Sobel filters give the local gradient. Its magnitude and angle are
+
+$$
+m(p)=\sqrt{g_x(p)^2+g_y(p)^2},
+\qquad
+\theta(p)=\operatorname{atan2}(g_y(p),g_x(p))\bmod\pi.
+$$
+
+Each oriented channel uses a triangular angular window around one of six directions; the corner channel is $|g_x(p)|\,|g_y(p)|$. Pool every channel over a $7\times7$ grid and the representation has $7\times49=343$ coordinates. Each coordinate has a literal name such as “vertical-edge energy in the middle-left patch.”
+
+<AssignedDimensions caption="The 343-dimensional hand-built representation. Pick a detector and patch to see exactly which measurement owns each coordinate." />
+
+The same prototype head now reads those 343 values. With twenty class-conditioned k-means centers per class and a nearest-prototype score,
+
+$$
+s_c(x)=\max_{u:\,c(u)=c}k\bigl(\phi(x),\mu_u\bigr),
+\qquad
+\hat y(x)=\arg\max_c s_c(x),
+$$
+
+the full pipeline reaches **83.3%** on the Fashion-MNIST test set. No gradient step fits the detectors or the readout; k-means still estimates prototypes from data, so “hand-built” means constructed without gradient training, not data-free.
+
+<HandBuiltVote caption="The zero-gradient pipeline end to end: fixed detectors, named pooled measurements, class-conditioned k-means centers, and a fixed nearest-prototype vote." />
+
+<ConstructionLadder caption="The matched comparison. A built head on raw pixels is the floor; hand-built features plus the built head reach 83.3%; a trained backbone plus the same head reaches 83.2%; end-to-end training reaches 85.7%. These numbers belong to this dataset, split, and architecture." />
+
 ## Where the line falls
 
-So where does the line between optimize and construct actually fall? At the top of the backbone, and the cut is sharp. A network is a representation with a classifier on top. The representation is the part you must learn: random features give 74%, trained features give 83 to 86, and that climb is the only place real accuracy comes from. The classifier is the part you can build: place prototypes, wire a one-hot readout, and you are within a couple of points of the trained head, with the teaching and forgetting thrown in for free.
+Where does the line between optimize and construct fall in this experiment? The random backbone plus constructed head reaches 74%; training the backbone raises the same construction to 83.2%; jointly optimizing the matched network reaches 85.7%. Most of the measured gain comes from the representation, while the final few points remain sensitive to optimizing the head and backbone together. The prototype head can still be placed directly, keeping its class blocks available for explicit teaching and deletion.
 
-Which leaves the greedy question. If the head comes for free, how much of the *backbone* can you get without training either? More than you would think. Swap the learned features for hand-designed ones, oriented-edge and corner detectors pooled over the image, the kind of thing computer vision built by hand for decades, and feed those to the same built head. With no training anywhere, not in the features and not in the classifier, it reaches **83.3%** (a real run too, `scripts/handbuilt_vision.py`), matching the trained backbone. That is the next post: building the features by hand too, and seeing how far down the construction can reach before you finally have to learn.
+The hand-built and learned-feature experiments now give one answer. In this matched setup, generic vision measurements recover most of the score, while joint training buys the last 2.4 points. That is an existence result for Fashion-MNIST and its strong edge prior, not a claim that modern representation learning is generally dispensable. The next experiment keeps the construction explicit and asks what a second composed layer contributes.
 
 ---
 
-*The prototype-network idea ("this looks like that") is from [Chen et al. (2019)](https://arxiv.org/abs/1806.10574); the surprising strength of random convolutional features is from [Saxe et al. (2011)](https://proceedings.mlr.press/v15/saxe11a.html); [Fashion-MNIST](https://arxiv.org/abs/1708.07747) from Xiao et al. (2017); the Yat kernel from [Bouhsine (2026)](https://arxiv.org/abs/2605.03262). This continues [Your Network Is a List of Pictures. You Can Edit It.](/blog/edit-a-network-by-hand/)*
+*The prototype-network idea ("this looks like that") is from [Chen et al. (2019)](https://arxiv.org/abs/1806.10574); the strength of random convolutional features from [Saxe et al. (2011)](https://proceedings.mlr.press/v15/saxe11a.html); the fixed edge vocabulary follows the HOG lineage of [Dalal and Triggs (2005)](https://doi.org/10.1109/CVPR.2005.177); [Fashion-MNIST](https://arxiv.org/abs/1708.07747) from Xiao et al. (2017); and the Yat kernel from [Bouhsine (2026)](https://arxiv.org/abs/2605.03262). The combined runnable implementation is [Constructing the Fashion-MNIST Network, in JAX/Flax NNX](/blog/train-the-features-jax-flax-nnx/).*

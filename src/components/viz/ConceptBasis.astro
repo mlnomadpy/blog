@@ -1,0 +1,103 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 470 } = Astro.props;
+---
+<figure class="viz conceptbasis" data-caption={caption} data-height={height} data-height-mobile="600" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// Rebuild the whole network from k concepts, live. The network's function
+// factors through a ten-dimensional projection, so ten concepts reproduce it
+// exactly; the variance basis the microscope used needs sixty-four to get
+// close. Slide k and watch both the verdicts and the race.
+import { defineViz } from './engine/vizkit.js';
+import { T, fmt, gate, loadingText, legend } from './engine/draw.js';
+import { load, thumb, rebuildFromConcepts, accuracy } from './yatprotocol.js';
+
+defineViz('conceptbasis', {
+  title: 'The whole network from k concepts',
+  height: 470,
+  controls: [
+    { type: 'range', name: 'k', label: 'concepts kept', min: 1, max: 10, step: 1, value: 3, int: true, play: { period: 7000, loop: false } },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    gate(api, () => load('basis'), (a, data) => {
+      a.state.data = data;
+      a.state.curve = [];
+      for (let k = 1; k <= 10; k++) {
+        const p = rebuildFromConcepts(data.L, data.E, data.base, k);
+        a.state.curve.push({ k, acc: accuracy(p, data.y), pred: p });
+      }
+    });
+  },
+
+  draw(api) {
+    const { ctx, colors, size: { W, H } } = api, st = api.state;
+    if (!st.ready) { loadingText(api, 'loading the concepts…'); return; }
+    const d = st.data, k = Math.round(api.get('k'));
+    const cur = st.curve[k - 1];
+    const pad = 14, top = 30;
+
+    // ── the race: concepts against variance modes ──
+    const cw = W * 0.55;
+    const box = { x: pad + 34, y: top, w: cw - 46, h: H - top - 96 };
+    const lx = (v) => box.x + (Math.log(v) / Math.log(256)) * box.w;
+    const ly = (a) => box.y + box.h - ((a - 15) / (95 - 15)) * box.h;
+    ctx.strokeStyle = colors.border;
+    ctx.strokeRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1);
+    T(ctx, colors, 'small');
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (const a of [20, 40, 60, 80]) ctx.fillText(a + '%', box.x - 3, ly(a));
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (const v of [1, 4, 16, 64, 256]) ctx.fillText(String(v), lx(v), box.y + box.h + 4);
+    // the full model
+    ctx.strokeStyle = colors.faint; ctx.setLineDash([3, 4]);
+    ctx.beginPath(); ctx.moveTo(box.x, ly(d.full)); ctx.lineTo(box.x + box.w, ly(d.full)); ctx.stroke();
+    ctx.setLineDash([]);
+    const drawCurve = (pts, color, lw) => {
+      ctx.strokeStyle = color; ctx.lineWidth = lw;
+      ctx.beginPath();
+      pts.forEach(([x, y], i) => { const px = lx(x), py = ly(y); i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); });
+      ctx.stroke(); ctx.lineWidth = 1;
+      pts.forEach(([x, y]) => { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(lx(x), ly(y), 2.4, 0, 6.283); ctx.fill(); });
+    };
+    drawCurve(d.var_curve, '#4a7fb3', 1.8);
+    drawCurve(st.curve.map((c) => [c.k, c.acc]), '#c2553a', 2.4);
+    ctx.strokeStyle = colors.faint; ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(lx(k), box.y); ctx.lineTo(lx(k), box.y + box.h); ctx.stroke();
+    ctx.setLineDash([]);
+    legend(ctx, box.x + 10, box.y + 14, [
+      { color: '#c2553a', label: 'concepts (what the network uses)' },
+      { color: '#4a7fb3', label: 'variance modes (what the kernel varies along)' },
+    ], colors);
+    T(ctx, colors, 'label');
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('accuracy of the rebuilt network (dashed: the full model)', box.x, box.y - 8);
+
+    // ── verdicts at this k ──
+    const tx = pad + cw + 6;
+    const gw = Math.min(44, (W - tx - pad) / 6 - 5);
+    T(ctx, colors, 'label');
+    ctx.fillText(`rebuilt from ${k} concept${k > 1 ? 's' : ''}`, tx, top - 6);
+    for (let i = 0; i < 24; i++) {
+      const gx = tx + (i % 6) * (gw + 5), gy = top + Math.floor(i / 6) * (gw + 5);
+      thumb(ctx, d.thumbs[i], gx, gy, gw, gw, 'cb' + i);
+      const good = cur.pred[i] === d.y[i];
+      ctx.strokeStyle = good ? '#3a8f5e' : '#c2553a'; ctx.lineWidth = 2;
+      ctx.strokeRect(gx + 1, gy + 1, gw - 2, gw - 2);
+      ctx.lineWidth = 1;
+    }
+    T(ctx, colors, 'small');
+    ctx.fillText('green = this k-concept rebuild already agrees with the label', tx, top + 4 * (gw + 5) + 14);
+    ctx.fillText('the readout is a 256 x 10 matrix, so the network can only ever express ten independent concepts:', pad, H - 44);
+    ctx.fillText('at k = 10 the rebuild is not an approximation, it is the model itself, to the last digit', pad, H - 28);
+    api.readout('rd', `k = ${k}: ${fmt(cur.acc, 1)}% of the subset (the full model gets ${fmt(accuracy(st.curve[9].pred, d.y), 1)}%)`);
+  },
+});
+</script>

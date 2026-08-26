@@ -32,7 +32,7 @@ function blobs() {                                     // two fixed classes (see
 }
 
 defineViz('tworeadings', {
-  title: 'One weight, two readings: a direction you project onto, or a place you sit beside',
+  title: 'One array, two roles: projection direction or declared prototype',
   height: 480,
   controls: [
     { type: 'select', name: 'mode', label: 'read the weight as', reset: false, options: [
@@ -79,7 +79,8 @@ defineViz('tworeadings', {
       for (let r = 0; r < HM2; r++) for (let cc = 0; cc < HM2; cc++) {
         const X = wxOf(x0 + (cc + 0.5) * cell), Y = wyOf(y0 + (r + 0.5) * cell);
         const s = X * w.x + Y * w.y;
-        const col = s >= 0 ? co : cb; const a = 0.10;
+        const col = s >= 0 ? co : cb;
+        const a = 0.05 + 0.22 * Math.min(1, Math.abs(s) / (DOM * (Math.hypot(w.x, w.y) || 1)));
         ctx.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},${a})`;
         ctx.fillRect(x0 + cc * cell, y0 + r * cell, cell + 0.6, cell + 0.6);
       }
@@ -102,6 +103,15 @@ defineViz('tworeadings', {
       }
     }
 
+    // Coordinate grid keeps the two readings on one declared scale.
+    ctx.save(); ctx.strokeStyle = colors.border; ctx.lineWidth = 0.7; ctx.globalAlpha = 0.45;
+    for (let q = -1.5; q <= 1.5; q += 0.5) {
+      ctx.setLineDash([2, 4]);
+      ctx.beginPath(); ctx.moveTo(sx(q), sy(-DOM)); ctx.lineTo(sx(q), sy(DOM)); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(sx(-DOM), sy(q)); ctx.lineTo(sx(DOM), sy(q)); ctx.stroke();
+    }
+    ctx.restore(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+
     // frame
     ctx.strokeStyle = colors.border; ctx.lineWidth = 1; ctx.strokeRect(x0 + 0.5, y0 + 0.5, side - 1, side - 1);
 
@@ -123,7 +133,7 @@ defineViz('tworeadings', {
       drawHandle(ctx, sx(t.x), sy(t.y), INK, colors, 'test x');
       const dot = t.x * w.x + t.y * w.y;
       ctx.textAlign = 'left';
-      api.readout('rd', `w·x = ${dot.toFixed(2)}  ·  the weight is an arrow, off in its own space; x meets it only at the shadow`);
+      api.readout('rd', `w·x = ${dot.toFixed(2)}  ·  w is used as a projection direction, not declared as a data prototype`);
     } else {
       // the weight as a place: a point among the data + closeness link
       const d2 = (t.x - w.x) ** 2 + (t.y - w.y) ** 2; const k = Math.exp(-d2 / (2 * SIG * SIG));

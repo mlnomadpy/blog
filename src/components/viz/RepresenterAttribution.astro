@@ -24,7 +24,7 @@ const POS = '#b3661b', NEG = '#4a7fb3', NROWS = 7, MAXCTX = 64;
 const show = (c) => (c === '\n' ? '\\n' : c === ' ' ? '␣' : c);
 
 defineViz('repattr', {
-  title: 'The FFN output is a representer vote:  out = Σᵤ k(Wᵤ, x) vᵤ',
+  title: 'The FFN output is a finite kernel expansion:  out = Σᵤ k(Wᵤ, x) vᵤ',
   height: 460,
   controls: [
     { type: 'text', name: 'prompt', label: 'prompt', value: 'To be, or not to b', width: 240, maxLength: 80 },
@@ -63,7 +63,7 @@ defineViz('repattr', {
     const order = [...r.probs.keys()].sort((a, b) => r.probs[b] - r.probs[a]).slice(0, 5);
     T(ctx, colors, 'small', { color: colors.faint }); ctx.fillText('also likely: ' + order.slice(1).map(i => `${show(itos[i])} ${(r.probs[i] * 100 | 0)}%`).join('   '), pad, y + 26);
 
-    // ── the representer decomposition ──
+    // The exact slot-by-slot arithmetic decomposition.
     y += 54;
     T(ctx, colors, 'label', { color: colors.fg }); ctx.fillText('which memory slots wrote that prediction', pad, y);
     y += 8;

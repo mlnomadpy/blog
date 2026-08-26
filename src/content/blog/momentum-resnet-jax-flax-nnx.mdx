@@ -38,7 +38,7 @@ keywords:
 ---
 import CiteAs from '../../components/CiteAs.astro';
 
-*The [explainer](/blog/skip-connections-are-half-of-newton/) read a residual block $x + F(x)$ as one forward-Euler step and asked what the missing half of Newton's law, a velocity state, buys a trained network. This is the implementation: the two integrators in eight lines of the same code, the momentum residual network as a [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html) module with one extra line of state, the training runs on the task a first-order flow cannot get exactly right, and the rewind that reconstructs the input from the output until arithmetic runs out. The published numbers are from `scripts/momentum_resnet.py`; every code block below runs as written in `scripts/momentum_nnx_check.py`, and every figure is rendered from real runs by `scripts/render_momentum_gifs.py`.*
+*Hand the trained network only its own output and ask for its input back. In double precision it comes home to the thirteenth decimal. In single precision, with the friction turned from 0.9 down to 0.3, the same loop returns garbage. Nothing in the formula changes between those two runs, and working out what does is the sharpest thing in this companion. The [explainer](/blog/skip-connections-are-half-of-newton/) reads a residual block $x + F(x)$ as one forward-Euler step and asks what a velocity state buys; below are the two integrators in eight lines apiece, the momentum residual network as a [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html) module with one extra line of state, the rings task a first-order flow cannot separate exactly, and the rewind.*
 
 *Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/momentum-resnet-jax-flax-nnx): the same code, block by block, with the math written out and every figure reproduced from a real run.*
 
@@ -73,7 +73,7 @@ Euler injects a sliver of energy on the outside of every curve, and twenty orbit
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/momentum-orbits.gif" alt="Forward Euler and leapfrog integrating the same Kepler orbit side by side; the Euler planet spirals outward, gaining 68.3 percent energy over 20 orbits, while the leapfrog orbit stays closed with 0.016 percent maximum deviation; energy curves draw below" loading="lazy" width="880" height="580" />
-  <figcaption>The code above, run: one planet, one launch, one step size, twenty orbits of a real two-body problem integrated in float64. The dashed curve is the true ellipse. Euler moves the position with a stale velocity and pays +68.3% of its energy for it; leapfrog's deviation never exceeds 0.016%. This is the cost of collapsing two ledgers into one, and it is the exact defect a plain residual network inherits. Rendered by <code>scripts/render_momentum_gifs.py</code>.</figcaption>
+  <figcaption>The code above, run: one planet, one launch, one step size, twenty orbits of a real two-body problem integrated in float64. The dashed curve is the true ellipse. Euler moves the position with a stale velocity and pays +68.3% of its energy for it; leapfrog's deviation never exceeds 0.016%. This is the cost of collapsing two ledgers into one, and it is the exact defect a plain residual network inherits.</figcaption>
 </figure>
 
 ## One module, one dial
@@ -109,7 +109,7 @@ class MomentumResNet(nnx.Module):
         return (self.readout(x), x, v) if return_state else self.readout(x)
 ```
 
-Two decisions in the constructor matter for everything downstream. The residual stream is **width 2**, so the hidden state is a literal point in a plane and every trajectory in this post is the state itself, not a projection. And the total integration time is fixed at $T = L\,h = 8$, so depth refines the *same* flow: $L = 32$ means steps of $h = 0.25$. The blocks are per-layer (untied), a tiny $2 \to 16 \to 2$ tanh MLP each, exactly the explainer's setup.
+Two decisions in the constructor matter for everything downstream. The residual stream is **width 2**, so the hidden state is a literal point in a plane and every trajectory in this post is the state itself, not a projection. And the total integration time is fixed at $T = L\,h = 8$, so depth refines the *same* flow: $L = 32$ means steps of $h = 0.25$. The blocks are per-layer (untied), a tiny $2 \to 16 \to 2$ tanh MLP each, the explainer's setup unchanged.
 
 ## Training on the task a flow cannot get exactly right
 
@@ -161,23 +161,23 @@ Watch that training happen rather than take the two numbers. The run below is th
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/momentum-crystallize.gif" alt="Training telemetry of the momentum net on rings: the decision-probability field over the input plane organizing from undecided smoke to a hard closed contour, hidden trajectories straightening, and the training loss drawing itself down six orders of magnitude over 4000 real Adam steps" loading="lazy" width="945" height="514" />
-  <figcaption>The real training run, 4000 Adam steps with a snapshot every 50: left, the class-probability field over the input plane with the decision contour; middle, the hidden trajectories of 16 test points; right, the training loss on a log axis. Test accuracy reaches 100% before step 50 and the loss still falls another five decades while the field crystallizes. Telemetry dumped by <code>scripts/momentum_gif_data.py</code> (the identical training, rerun with dense logging); rendered by <code>scripts/render_momentum_gifs.py</code>.</figcaption>
+  <figcaption>The real training run, 4000 Adam steps with a snapshot every 50: left, the class-probability field over the input plane with the decision contour; middle, the hidden trajectories of 16 test points; right, the training loss on a log axis. Test accuracy reaches 100% before step 50 and the loss still falls another five decades while the field crystallizes. Telemetry from the identical training, rerun with dense logging.</figcaption>
 </figure>
 
 ## The ceiling, measured
 
-Two training runs is not a result. The 99.80% against 100.00% above is one seed at one depth, and before reading anything into a fifth of a point, two questions have to survive the full sweep in `scripts/momentum_resnet.py`: does the gap hold across three seeds and three depths, and does a plain net that is deep enough to be a true flow ever touch the 100% line at all? The sweep's first answer is a null. There is **no cliff** anywhere in it: on two moons both rules sit between 99.85% and 100% everywhere, and even on rings the plain net at depth 128 posts 99.85% on average.
+Two training runs is not a result. The 99.80% against 100.00% above is one seed at one depth, and before reading anything into a fifth of a point, two questions have to survive the full sweep: does the gap hold across three seeds and three depths, and does a plain net that is deep enough to be a true flow ever touch the 100% line at all? The sweep's first answer is a null. There is **no cliff** anywhere in it: on two moons both rules sit between 99.85% and 100% everywhere, and even on rings the plain net at depth 128 posts 99.85% on average.
 
 What the theorem forbids is *exactness*, and exactness is the one line in the figure that matters: which dots ever touch the dashed 100% line.
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/momentum-ceiling.png" alt="Test accuracy versus depth on the rings task, three seeds per point: the plain residual net's seed band touches the dashed 100 percent exact-separation line only at depth 8, and never again at depths 32 and 128, while the momentum net's dots sit on the line" loading="lazy" width="882" height="546" />
-  <figcaption>Every seed of the rings sweep from <code>scripts/momentum_resnet.py</code>, against the line that matters: 100% is exact separation, the thing a first-order planar flow can never achieve on an enclosed class. The plain net (orange) touches the line only at depth 8, where h = 1 is too coarse to be a flow; once it becomes one, its band hangs just below, at 99.76% and 99.95% best-seed, in all 6 runs. The momentum net (teal) sits on the line in every seed at L = 8 and 32. Rendered by <code>scripts/render_momentum_gifs.py</code>.</figcaption>
+  <figcaption>Every seed of the rings sweep, against the line that matters: 100% is exact separation, the thing a first-order planar flow can never achieve on an enclosed class. The plain net (orange) touches the line only at depth 8, where h = 1 is too coarse to be a flow; once it becomes one, its band hangs just below, at 99.76% and 99.95% best-seed, in all 6 runs. The momentum net (teal) sits on the line in every seed at L = 8 and 32.</figcaption>
 </figure>
 
 The seed accounting behind the dots: at depth 8 the plain net is not yet a flow (steps of $h = 1$ can jump the wall) and it hits 100.0% in two seeds of three; at depths 32 and 128, where it refines into a true flow, it never touches 100% again in any of its six runs, its best seeds stalling at 99.76% and 99.95%, while the momentum net pins 100.0% in every seed at depths 8 and 32. On spirals the same ledger shows up as reliability rather than a ceiling: the plain net's three depth-128 seeds spread from 92.9% to 98.3%, the momentum net's sit within six tenths of a point of each other.
 
-The whole sweep fits in one table, so the plot above can be audited at a glance: three seeds per cell, mean test accuracy with the min-to-max seed range in parentheses, from `scripts/momentum_resnet.py`.
+The whole sweep fits in one table, so the plot above can be audited at a glance: three seeds per cell, mean test accuracy with the min-to-max seed range in parentheses.
 
 | task | depth $L$ | plain net, $\mu = 0$ (%) | momentum net, $\mu = 0.9$ (%) |
 | --- | --- | --- | --- |
@@ -191,15 +191,15 @@ The whole sweep fits in one table, so the plot above can be audited at a glance:
 | rings | 32 | 99.64 (99.56 to 99.76) | 100.00 (100.0 in all seeds) |
 | rings | 128 | 99.85 (99.76 to 99.95) | 99.95 (99.85 to 100.0) |
 
-The 1890s uniqueness theorem did not predict a collapse; it predicted a *ceiling*, and the ceiling is exactly where the runs put it. A homeomorphism cornered by topology squeezes the surrounding class into a thin filament, hides its mistakes inside it, and pays a stray handful of test points as rent, forever.
+The 1890s uniqueness theorem did not predict a collapse; it predicted a *ceiling*, and the ceiling is where the runs put it. A homeomorphism cornered by topology squeezes the surrounding class into a thin filament, hides its mistakes inside it, and pays a stray handful of test points as rent, forever.
 
 ## Watching the state instead of the scoreboard
 
-Two networks separated by a tenth of a point on the scoreboard are doing violently different things underneath, and with a width-2 stream we can just look. The exported hidden trajectories of the two trained depth-32 rings nets (from `public/momentum-resnet/trajectories.json`, the same states the explainer's panels integrate) play out below, block by block.
+Two networks separated by a tenth of a point on the scoreboard are doing violently different things underneath, and with a width-2 stream we can just look. The exported hidden trajectories of the two trained depth-32 rings nets, the same states the explainer's panels integrate, play out below, block by block.
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/momentum-depth-lapse.gif" alt="The literal width-2 hidden states of 32 test points flowing through the plain net and the momentum net side by side, layer by layer: the plain net's paths kink at every block, the momentum net's coast on smooth crossing curves; path-length and turning-angle readouts accumulate" loading="lazy" width="924" height="556" />
-  <figcaption>Depth as a time-lapse: the same test points carried through the two trained depth-32 rings nets, drawn in the network's own 2-D hidden space (no projection exists to hide anything). The readouts accumulate as the layers pass: over the full test set the run measures a mean turn of 52.9 degrees per layer for the plain net against 9.6 for the momentum net, at nearly identical total path lengths, 15.9 versus 14.7 stream units. Same journey, no shortcut; the difference is inertia. Data from <code>scripts/momentum_resnet.py</code>; rendered by <code>scripts/render_momentum_gifs.py</code>.</figcaption>
+  <figcaption>Depth as a time-lapse: the same test points carried through the two trained depth-32 rings nets, drawn in the network's own 2-D hidden space (no projection exists to hide anything). The readouts accumulate as the layers pass: over the full test set the run measures a mean turn of 52.9 degrees per layer for the plain net against 9.6 for the momentum net, at nearly identical total path lengths, 15.9 versus 14.7 stream units. Same journey, no shortcut; the difference is inertia.</figcaption>
 </figure>
 
 That is Prediction 1 of the explainer on real weights: Euler trajectories turn as sharply as the local field because every step forgets the last one; momentum trajectories coast through turns, overshoot slightly, and curve back, the way things with mass move.
@@ -210,7 +210,7 @@ The velocity state itself is worth seeing, because it is the whole mechanism and
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/momentum-velocity-ledger.gif" alt="Test points moving through the trained momentum net with their real velocity vectors attached, arrows growing as the ledger fills; below, the mean kinetic energy per layer draws itself, staying near zero for the first half of depth and then climbing to 16 as the classes separate" loading="lazy" width="903" height="588" />
-  <figcaption>The second ledger at work in the trained rings net: each arrow is the real velocity state v carried by a test point, and the strip below is the mean kinetic energy of the shown points per layer. The ledger fills slowly from v = 0, carries the enclosed class out across the ring on smooth crossing paths through mid-depth, then funds the final sprint to the readout, where the mean kinetic energy climbs to 16. The block never moves the state; it deposits into v, and v moves the state. Forward pass of the exported weights in <code>public/momentum-resnet/inertia.json</code>; rendered by <code>scripts/render_momentum_gifs.py</code>.</figcaption>
+  <figcaption>The second ledger at work in the trained rings net: each arrow is the real velocity state v carried by a test point, and the strip below is the mean kinetic energy of the shown points per layer. The ledger fills slowly from v = 0, carries the enclosed class out across the ring on smooth crossing paths through mid-depth, then funds the final sprint to the readout, where the mean kinetic energy climbs to 16. The block never moves the state; it deposits into v, and v moves the state. Forward pass of the exported trained weights.</figcaption>
 </figure>
 
 ## Running the whole network backward
@@ -228,7 +228,7 @@ def rewind(model, xL, vL):
     return x, v
 ```
 
-Try to write this for the plain block and you can't: $x + F(x)$ overwrote its own input, and recovering it means solving a nonlinear equation with no uniqueness guarantee. The velocity is the receipt that makes the computation un-doable.
+Try to write this for the plain block and you can't: $x + F(x)$ overwrote its own input, and recovering it means solving a nonlinear equation with no uniqueness guarantee. The velocity is the receipt that makes the computation reversible.
 
 Run it on the trained net, in double precision, and the receipt is honored to the last digit:
 
@@ -244,11 +244,11 @@ rewind mu=0.6 float32: max |x0_rec - x0| = 1.7e+02
 rewind mu=0.3 float32: max |x0_rec - x0| = 9.7e+09
 ```
 
-Nothing is wrong with the formula. Look at the last line of `rewind`: every backward step **divides by $\mu$**, so whatever rounding noise the forward pass left behind is amplified by $(1/\mu)$ per layer. At $\mu = 0.9$ that is a factor of $29$ across 32 layers, gentle enough that single precision still comes home to $10^{-4}$. At $\mu = 0.3$ it is a factor of $5 \times 10^{16}$, and the past is simply gone. The explainer's canonical run (`scripts/momentum_resnet.py`) measures the same law on its single-precision forward pass: $3.7 \times 10^{-4}$ at $\mu = 0.9$, $54$ at $\mu = 0.6$, $3.7 \times 10^{10}$ at $\mu = 0.3$. The friction dial is a memory dial: a lightly damped dynamics can be rewound, a heavily damped one has burned its own history, and floating point is just the messenger. None of this is news to the architects: Sander et al. (2021) discuss precisely this finite-precision leak, and their exactly-invertible implementation stores the low-order bits each forward update would discard so the backward pass can hand them back. The three error lines above are the reason that bookkeeping exists.
+Nothing is wrong with the formula. Look at the last line of `rewind`: every backward step **divides by $\mu$**, so whatever rounding noise the forward pass left behind is amplified by $(1/\mu)$ per layer. At $\mu = 0.9$ that is a factor of $29$ across 32 layers, gentle enough that single precision still comes home to $10^{-4}$. At $\mu = 0.3$ it is a factor of $5 \times 10^{16}$, and the past is simply gone. The explainer's canonical run measures the same law on its single-precision forward pass: $3.7 \times 10^{-4}$ at $\mu = 0.9$, $54$ at $\mu = 0.6$, $3.7 \times 10^{10}$ at $\mu = 0.3$. The friction dial is a memory dial: a lightly damped system can be rewound, a heavily damped one has burned its own history, and floating point is just the messenger. None of this is news to the architects: Sander et al. (2021) discuss precisely this finite-precision leak, and their exactly-invertible implementation stores the low-order bits each forward update would discard so the backward pass can hand them back. The three error lines above are the reason that bookkeeping exists.
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/momentum-rewind.gif" alt="Three acts: test points flow forward through the trained momentum net; hollow markers then retrace the exact path home from only the final position and velocity, with the float64 error curve flat near 1e-13; then the float32 rewind errors at mu 0.9, 0.6 and 0.3 rise along dotted one-over-mu-to-the-k prediction lines on a log axis, reaching 1e10" loading="lazy" width="945" height="525" />
-  <figcaption>The rewind, run on the exported trained weights. First the forward pass (float64); then the backward pass is handed only the final (x, v) of each point and retraces every layer, the hollow rings landing back on the forward path with a worst error near 1e-13. Then the same rewind in float32 at three frictions: each curve is the measured reconstruction error against layers rewound, and each dotted line is the pure (1/mu)^k prediction. This render measures 2.7e-4, 3.2e+1 and 1.3e+10 at mu = 0.9, 0.6, 0.3; the canonical script's single-precision pass lands at 3.7e-4, 54 and 3.7e+10, the same amplification law on a different noise floor. Friction is the thief of memory. Rendered by <code>scripts/render_momentum_gifs.py</code>.</figcaption>
+  <figcaption>The rewind, run on the exported trained weights. First the forward pass (float64); then the backward pass is handed only the final (x, v) of each point and retraces every layer, the hollow rings landing back on the forward path with a worst error near 1e-13. Then the same rewind in float32 at three frictions: each curve is the measured reconstruction error against layers rewound, and each dotted line is the pure (1/mu)^k prediction. This render measures 2.7e-4, 3.2e+1 and 1.3e+10 at mu = 0.9, 0.6, 0.3; the canonical script's single-precision pass lands at 3.7e-4, 54 and 3.7e+10, the same amplification law on a different noise floor. Friction is the thief of memory.</figcaption>
 </figure>
 
 This is not a party trick. A network you can run backward is a network you can train **without caching activations**: recompute each block's input from its output during the backward pass, and the memory cost of depth almost vanishes. That is the engineering payoff Sander et al. (2021) built Momentum ResNets around, and it falls out of the same physics that keeps the leapfrog planet on its ellipse: time-reversible integrators conserve the information the rewind needs, and $\mu$ is the dial that decides how much of it survives arithmetic.

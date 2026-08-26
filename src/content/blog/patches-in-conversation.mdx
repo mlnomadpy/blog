@@ -1,0 +1,120 @@
+---
+title: "Sixteen Patches in Conversation"
+seoTitle: "A Recursive Yat Mixer: Patches in Conversation"
+description: "A single kernel layer under a linear readout cannot condition one patch or channel on another. This experiment adds a weight-tied four-round mixer with separate token and channel kernel maps and sphere-normalized skips. On one grayscale CIFAR-100 setup, the measured coarse factor shifts and the bootstrap naming count rises past forty; additional seeds and datasets remain the publication gate."
+seoDescription: "A recursive Yat mixer on grayscale CIFAR-100: token and channel mixing as kernel maps, skips on the sphere, and the coarse factor the flat model was missing."
+pubDate: 2026-08-02
+draft: true
+tags: [kernels, yat, mixer, recursion, cifar100, interpretability]
+references:
+  - authors: "Tolstikhin, I., Houlsby, N., Kolesnikov, A., Beyer, L., Zhai, X., Unterthiner, T., Yung, J., Steiner, A., Keysers, D., Uszkoreit, J., Lucic, M., Dosovitskiy, A."
+    year: 2021
+    title: "MLP-Mixer: An All-MLP Architecture for Vision"
+    venue: "NeurIPS 2021"
+  - authors: "Lan, Z., Chen, M., Goodman, S., Gimpel, K., Sharma, P., Soricut, R."
+    year: 2020
+    title: "ALBERT: A Lite BERT for Self-supervised Learning of Language Representations"
+    venue: "ICLR 2020"
+  - authors: "Loshchilov, I., Hsieh, C.-P., Sun, S., Ginsburg, B."
+    year: 2024
+    title: "nGPT: Normalized Transformer with Representation Learning on the Hypersphere"
+    arxiv: "2410.01131"
+  - authors: "Bouhsine, T."
+    year: 2026
+    title: "A Universal Reproducing Kernel Hilbert Space from Polynomial Alignment and IMQ Distance"
+    arxiv: "2605.03262"
+keywords:
+  - recursive mlp mixer
+  - kernel network depth
+  - weight tied recursion
+  - hypersphere residual
+---
+import RecursionWalk from '../../components/viz/RecursionWalk.astro';
+import FactorizationRace from '../../components/viz/FactorizationRace.astro';
+import DepthMountain from '../../components/viz/DepthMountain.astro';
+import PatchTalk from '../../components/viz/PatchTalk.astro';
+import GateLadder from '../../components/viz/GateLadder.astro';
+import CiteAs from '../../components/CiteAs.astro';
+import SeriesNav from '../../components/SeriesNav.astro';
+
+<SeriesNav />
+
+*A single kernel layer under a linear readout forbids two conversations. Concepts cannot condition on each other, because each one votes on every image independently and the votes are summed once. Regions of an image cannot talk either, because a whole-image prototype matches the scene rather than the object. [Under Mercer's microscope](/blog/mercer-microscope) on a hundred classes, those two silences accounted for most of the ceiling. This post opens both channels.*
+
+## Three constraints before a single layer
+
+The obvious repair is the standard one: stack layers. Depth does not destroy every instrument, since any hidden representation still has a feature Gram matrix. What it does destroy is the simplest input-space reading: a center in layer two lives among hidden states, not among pixels, and an empirical spectrum is not automatically a parts list. So the architecture gets designed backwards, preserving the quantities this experiment can still audit.
+
+**Every layer exposes a certified comparison.** [The Yat kernel is PSD](/blog/yat-protocol), so each bank evaluates a declared kernel on the space entering that layer. Composing layers produces a finite feature map $h(x)$ and therefore the induced PSD kernel $h(x)^\top h(y)$, a fact that would also hold for a ReLU representation. What Yat preserves is the ability to factor each layer's score into alignment and proximity against named centers in that layer's own state space. The original input-space RKHS and universality theorem do not pass through composition unchanged.
+
+**The geometry must stay readable.** Every instrument in the audit reads angles and distances. A residual stream that drifts in norm changes the meaning of both between layers, and the softening question, is $\varepsilon$ small against the distances the layer sees, stops having a stable referent. So the skip connection is not $h + f(h)$ but
+
+$$
+h \;\leftarrow\; \Pi\!\left(h + \alpha\, f(h)\right), \qquad \Pi(v) = \frac{v}{\lVert v \rVert},
+$$
+
+a residual step followed by projection back onto the unit sphere, with $\alpha$ a learned scalar step size. Tokens live on $\mathbb{S}^{m-1}$ at every depth, never off it, and each mixing step is a move along the sphere whose length the optimizer chooses.
+
+**One block, applied $r$ times.** Instead of $r$ different layers, one weight-tied block reused, in the family ALBERT made standard for transformers and [the fixed-point post](/blog/your-network-is-a-fixed-point) built the machinery for here. Recursion keeps the parameter count honest, and it turns depth into a *dial on a single operator*, a fact a later section will exploit mercilessly.
+
+Inside the block, the two forbidden conversations get one Yat score bank each: a **token-mixing** bank reads each channel's profile across sixteen patches, then a **channel-mixing** bank reads each patch's hidden vector. Only the first embedding bank has prototypes that are literal pixel patches. Deeper centers are hidden-state templates, readable through their activations and channel factors but not printable as raw images without a separate preimage analysis. The whole network, bundle `kgl_blog-mixer-v1`, is 107,884 parameters against the flat model's 1,151,078, with a bracketed learning rate and three seeds.
+
+<RecursionWalk caption="The trained network, run live on a test image. Left: the sixteen patches the image becomes. Middle: the cosine between every pair of patch tokens on the sphere, after the number of conversation rounds you dial; at round zero each patch knows only its own pixels, and the matrix is whatever patch resemblance happens to exist. Right: the verdict a readout would give if the recursion stopped at this depth. The same weights run every round; only the number of applications changes." />
+
+## What each round of conversation is worth
+
+The recursion dial makes a clean experiment: train the whole machine end to end at a fixed depth $r$ and see what the conversation bought. Five depths, same bracketed rate, same data:
+
+| rounds $r$ | best top-1 | final fine | = coarse | $\times$ sibling pick |
+| --- | --- | --- | --- | --- |
+| 0 (silence) | 7.4 | 7.3 | 14.8 | 49.4 |
+| 1 | 14.2 | 14.2 | 23.2 | 61.0 |
+| 2 | 19.8 | 19.8 | 29.8 | 66.3 |
+| **4** | **21.4** | **20.9** | **30.9** | **67.6** |
+| 8 | 19.7 | 19.6 | 29.4 | 66.9 |
+
+The zero row repeats an experiment already run once here: [cutting an image into patches and pooling their ballots without communication](/blog/patch-parts) cost 13.5 points on ten classes, and at a hundred classes the silent-patch machine manages 7.4 percent, less than half of what the flat whole-image model gets with the same silence. Patching *destroys* information unless the patches can talk. Then one round of talk doubles the accuracy, two rounds nearly triple it, and the fifth through eighth rounds give a little of it back. Depth of conversation is worth more than everything else in the table, and it saturates.
+
+<FactorizationRace caption="The ceiling factorization as a live curve through training, three seeds at the trained depth of four. Blue is the coarse factor, green the sibling pick, red their product; the dashed lines are where the flat whole-image model finished each factor. The sibling pick saturates near the flat model's value by mid-training. The coarse factor is the one that climbs past its dashed line and keeps going, which is the factor the hundred-class autopsy named as the bottleneck." />
+
+## The factor that moved
+
+The flat whole-image model's 17.2 percent factored as $0.260 \times 0.661$: the sibling pick was already strong, and crossing twenty-five percent would take a coarse factor near 38. So the single number to watch in the mixer is the coarse factor, and across three seeds it lands at **30.9, 29.9, and 25.1 percent** against the flat model's 26.0, while the sibling pick holds at 67.6, 67.4, and 62.4 against 66.1. The conversation moved the factor the theory pointed at, left the factor that was already fine alone, and did it with a tenth of the parameters. Best seed top-1: **21.4 percent** against the flat model's 17.65.
+
+It did not reach twenty-five. A coarse factor of 31 is a third of the distance from 26 to the 38 the target demands, and the seed spread is wide: the third seed found a visibly worse solution (15.7 = 25.1 × 62.4), which brings the three-seed mean to 19.4 ± 2.1 and keeps this result an existence proof rather than a law. What separates the good seeds from the bad one turns out to be the strangest regularity in the whole run.
+
+Every arm of the grid learned its own token step size $\alpha_t$, the scalar that multiplies what the patch conversation adds before the sphere projection. Across every trained arm, rate sweep, depth sweep, and seeds, the split is exact: **every run that finished above 19 percent learned $\alpha_t < 0$** (between $-1.0$ and $-1.5$), and **every run that finished below 17 learned $\alpha_t > 0$** (between $+3.9$ and $+7.5$), the lagging seed included. The good networks do not add the conversation, they *subtract* it. What survives the sphere projection is each token minus a kernel-weighted digest of the patches it resembles: a contrast operation, closer to lateral inhibition than to smoothing, and the optimizer finds it from a positive initialization, crossing zero on its way.
+
+<PatchTalk caption="Who holds the levers, on a real image. The token-mix outputs are kernel scores, never negative, and the step that adds them is negative, so a round of conversation can only suppress a token's channels, in proportion to kernel affinity. Hover a patch: every neighbour is tinted by the exact gradient of that suppression, computed live on the real token state; blue neighbours dial the hovered patch's update up, red dial it down, and the bars rank all fifteen by control." />
+
+## A program, not a flow
+
+A weight-tied block invites a question none of the fixed-depth posts could ask: the operator that was applied four times in training can be applied any number of times at inference, with no retraining, no new parameters. [The energy-conserving network](/blog/a-network-that-conserves-energy) survived exactly this test, running at four times its training depth, because its block was a discretization of a flow: more applications just meant finer steps along the same trajectory. If the mixer's recursion were a flow toward some fixed point of understanding, accuracy should hold, or improve, as $r$ grows past four.
+
+<DepthMountain caption="The trained operator applied r times at inference, r from 0 to 12, full test set, all three seeds. The dashed red line is the flat whole-image baseline. The curve is a mountain with its summit precisely at the trained depth: two rounds short is a 15-point collapse, four rounds past is worse than the flat model, twelve rounds is chance." />
+
+The curve answers no. Accuracy peaks at exactly $r = 4$ and falls off a cliff on *both* sides: 5.5 percent at two rounds, 2.8 percent at eight, chance by twelve. The trained operator is not contractive toward a useful fixed point; iterated past its budget it carries every token to some attractor where class information is gone. What training produced is a **four-step program**, a staged computation in which round three's output is meaningful only as round four's input, not a dynamical system settling toward an answer. The two depth-friendly architectures built here earned that friendliness from structure, a conserved energy, a contraction; weight sharing alone buys none of it. That is worth knowing, because the recursion here was chosen for parameter honesty and auditability, and the mountain says those come at the price of a network that must be run at precisely its native depth.
+
+## The microscope survives the depth
+
+The whole point of the three constraints was that the instruments should still work, so the last measurement turns them on the trained mixer itself (all local, no new training).
+
+**The naming gate opens.** The flat model's headline was that only 14.7 ± 1.2 of its hundred concept axes were identifiable under bootstrap resampling, with the anonymous haze beyond them feeding both accuracy factors in the same proportion. Run the identical instrument, the logit-covariance basis at the pooled layer, the same 0.9 bootstrap gate, on the mixer: the two good seeds name **46 and 33 axes** of one hundred, and the lagging seed names 77. Composition did not just move accuracy; it multiplied the number of directions the data can pin down.
+
+The lagging seed is the caution in the reading. It names the *most* while classifying the worst, so identifiability is measuring how sharply the training measure resolves a function's coordinates, not how good the function is. Two further numbers say the same thing from the other side. Solve the assignment before scoring, so that an axis is not counted lost when a resample merely swaps it with its neighbour, and the counts rise to 52, 43, and 88, in the same order. Compare the leading forty-dimensional subspaces by principal angle instead of comparing axes one at a time, and every seed sits above 0.99, the worst classifier highest of all. A concept count is a property of the microscope's grip, and it moves independently of the scoreboard in both directions.
+
+<GateLadder caption="One instrument, four networks. Each strip is the bootstrap stability of the hundred concept axes, ranked; green bars clear the 0.9 naming gate. Top: the flat whole-image model, where the gate closes near fifteen. Below: the three mixer seeds. Hover any strip to read a single axis's stability." />
+
+**The idle softening survives its hardest test yet.** Three Yat layers, three learned $\varepsilon$, three very different input geometries: raw patch pixels, channel profiles across sixteen positions, unit tokens on a 256-sphere. Measured against the squared distances each layer actually sees, the softenings sit at $6 \times 10^{-4}$, $3 \times 10^{-2}$, and $2 \times 10^{-4}$ of their layer's median. The pattern from [the protocol](/blog/yat-protocol), [the patch study](/blog/patch-parts), and [the hundred-class audit](/blog/mercer-microscope), that winning runs leave the softening idle, extends through depth at each tested scale.
+
+*Scope: one run on Kaggle (bundle `kgl_blog-mixer-v1`): grayscale CIFAR-100, 8-by-8 patches, one Yat embed (m = 256), one weight-tied mixer block of two Yat banks with learned step scalars and sphere renormalization after every residual add, mean pooling, linear readout; learning rate bracketed in-run at 1e-2, recursion depth swept over 0, 1, 2, 4, 8 on one seed, three seeds at the winner; every accuracy on the full test set, coarse factors against the dataset's twenty superclasses. Depth transfer, the concept audit, and the softening ratios are local replays of the trained weights. Three seeds on one dataset at one patch size, with the 2.1-point spread and the single lagging basin stated above; 21.4 percent is an existence proof about architecture under this program's standing frame, not a benchmark claim.*
+
+## What the mixer settled
+
+The experiment was to open the two conversations a flat kernel layer forbids without giving up the kernel. Mixing moved the coarse factor and only the coarse factor, which is where the factorization pointed, at a tenth of the parameter count. The conversation that works is subtractive, a contrast pass rather than a blur, and the grid separates cleanly on the sign of one learned scalar. The recursion that made the block auditable turned out to be a program with a native depth rather than a flow, and the instruments, which is to say the reason this architecture exists, came through intact and found more than twice as many nameable concepts on the other side. Twenty-five percent is still standing: the coarse factor covered a third of the distance, and the open question is which of width, tokens, or a pooling that itself attends closes the rest without breaking what just survived.
+
+<CiteAs
+  slug="patches-in-conversation"
+  title="Sixteen Patches in Conversation"
+  pubDate="2026-08-02"
+/>

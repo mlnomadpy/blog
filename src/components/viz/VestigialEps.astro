@@ -1,0 +1,104 @@
+---
+interface Props {
+  caption?: string;
+  height?: number;
+}
+const { caption, height = 440 } = Astro.props;
+---
+<figure class="viz vestigialeps" data-caption={caption} data-height={height} data-height-mobile="540" tabindex="0">
+  <div class="viz-cell"></div>
+</figure>
+
+<script>
+// The softening length against the distances it is supposed to soften. The
+// histogram is every distance from a test image to a trained prototype; the
+// marker is epsilon. They are four orders of magnitude apart, which is the
+// whole finding: the softening never engages. Slide it up and watch how far
+// it has to travel before the network even notices.
+import { defineViz } from './engine/vizkit.js';
+import { T, fmt, gate, loadingText } from './engine/draw.js';
+import { load } from './yatprotocol.js';
+
+defineViz('vestigialeps', {
+  title: 'The softening length, against the distances it softens',
+  height: 440,
+  controls: [
+    { type: 'range', name: 'i', label: 'raise ε', min: 0, max: 10, step: 1, value: 0, int: true, play: { period: 8000, loop: false } },
+    { type: 'readout', name: 'rd' },
+  ],
+
+  setup(api) {
+    gate(api, () => load('eps'), (a, data) => { a.state.data = data; });
+  },
+
+  draw(api) {
+    const { ctx, colors, size: { W, H } } = api, st = api.state;
+    if (!st.ready) { loadingText(api, 'loading the audit…'); return; }
+    const d = st.data;
+    const i = Math.min(Math.round(api.get('i')), d.sweep.length - 1);
+    const cur = d.sweep[i];
+    const pad = 14, top = 32;
+    const box = { x: pad + 30, y: top, w: W - 2 * pad - 40, h: H - top - 146 };
+
+    // x axis spans epsilon..the far tail of the distance distribution, in log10
+    const lo = Math.log10(d.trained_eps) - 0.4;
+    const hi = d.edges[d.edges.length - 1] + 0.4;
+    const lx = (v) => box.x + ((v - lo) / (hi - lo)) * box.w;
+    ctx.strokeStyle = colors.border;
+    ctx.strokeRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1);
+
+    // the distance distribution
+    const maxH = Math.max(...d.hist);
+    for (let b = 0; b < d.hist.length; b++) {
+      const x0 = lx(d.edges[b]), x1 = lx(d.edges[b + 1]);
+      const h = (d.hist[b] / maxH) * (box.h - 26);
+      ctx.fillStyle = colors.muted;
+      ctx.globalAlpha = 0.5;
+      ctx.fillRect(x0, box.y + box.h - h, Math.max(1, x1 - x0 - 1), h);
+      ctx.globalAlpha = 1;
+    }
+    T(ctx, colors, 'small');
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (const p of [-2, -1, 0, 1, 2, 3, 4]) {
+      const x = lx(p);
+      if (x < box.x || x > box.x + box.w) continue;
+      ctx.fillText('1e' + p, x, box.y + box.h + 4);
+    }
+    ctx.textAlign = 'left';
+    ctx.fillText('squared distance from a test image to a prototype (log scale)', box.x, box.y + box.h + 19);
+
+    // the trained epsilon, and where the dial has moved it
+    const mark = (v, color, label, dashed) => {
+      const x = lx(Math.log10(v));
+      ctx.strokeStyle = color; ctx.lineWidth = 2;
+      if (dashed) ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(x, box.y + 6); ctx.lineTo(x, box.y + box.h); ctx.stroke();
+      ctx.setLineDash([]); ctx.lineWidth = 1;
+      T(ctx, colors, 'small');
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      ctx.fillStyle = color;
+      ctx.fillText(label, Math.min(x + 4, box.x + box.w - 120), box.y + (dashed ? 18 : 32));
+    };
+    mark(d.trained_eps, '#c2553a', `ε as trained = ${fmt(d.trained_eps, 3)}`, false);
+    if (i > 0) mark(cur.eps, colors.accent, `ε raised to ${fmt(cur.eps, 1)}`, true);
+
+    // the accuracy the dial costs
+    const ay = H - 80;
+    T(ctx, colors, 'label');
+    ctx.fillStyle = colors.fg; ctx.textAlign = 'left';
+    ctx.fillText('accuracy along the dial (same weights, nothing retrained)', pad, ay - 6);
+    const bw = (W - 2 * pad) / d.sweep.length;
+    for (let k = 0; k < d.sweep.length; k++) {
+      const s = d.sweep[k];
+      const h = Math.max(1, ((s.acc - 50) / 40) * 34);
+      ctx.fillStyle = k === i ? colors.accent : colors.muted;
+      ctx.globalAlpha = k === i ? 1 : 0.45;
+      ctx.fillRect(pad + k * bw + 2, ay + 34 - h, bw - 4, h);
+      ctx.globalAlpha = 1;
+    }
+    T(ctx, colors, 'small');
+    ctx.fillText('the bars are the measured accuracy at each ε on the dial; the network only notices once ε reaches the distances themselves', pad, H - 12);
+    api.readout('rd', `ε = ${fmt(cur.eps, 3)} (${fmt(cur.ratio, 4)}× the median distance): accuracy ${fmt(cur.acc, 2)}%`);
+  },
+});
+</script>

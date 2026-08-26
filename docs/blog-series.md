@@ -7,6 +7,8 @@ the open threads for future posts.
 
 _Last updated: 2026-07-19 (added the draft `the-geometry-of-attention`, the attention-territory post, to the catalog, beat log, and concept ledger). `D` = draft._
 
+> **2026-08-25 consolidation note.** This file preserves development history, including retired working slugs. The live canonical registry is `src/data/series.ts`. Eleven repetitive explainer/companion files were merged into six canonical explainers and four companions; the redirect map and retained evidence are recorded in `docs/blog-editorial-plan-2026-08-24.md`.
+
 ---
 
 ## 1. House conventions (read before writing a post)
@@ -24,6 +26,36 @@ These are hard rules we have converged on. Breaking them has cost rewrites.
 - **Never surface "jax-js"** in reader-facing captions/titles/readouts. Frame it as the post's real computation run live in the browser.
 - One concept per visualization. Do not pack teach + forget + vote into one panel. A post wants several focused panels (4+ is a good target), each a different visual idiom.
 - Physics-inspired framing is encouraged where honest (the Yat denominator is a softened inverse-square law; prototypes are masses; classification is falling into a basin; superposition gives order-independence).
+
+**Viz compute budget (added 2026-07-28 after a profiling pass).** Panels that
+compute live must not block the main thread on every interaction. The rules that
+came out of measuring the existing ones:
+- **Never recompute what a control only narrows.** LazyLive rebuilt its whole
+  feature bank on each width change (26-190 ms of jank per change); because a
+  smaller bank is a *prefix* of the widest one (same seed sequence), it now
+  builds once at MAXM and every dial setting reads the first m columns through a
+  `stride` argument on `makeHead`. Dial changes: 190 ms -> 0-2 ms, bit-identical
+  output (verified).
+- **Edits are incremental, not full rebuilds.** `surgery.js` caches the intact
+  logits and subtracts only the modes actually deleted (`predictWith`,
+  `cutSweep`), so a cut costs |deleted| x n x C instead of K x n x C: one cut is
+  0.1-0.4 ms instead of 2.6 ms, and a 512-cut sweep is one pass.
+- **Flatten nested JSON payloads to typed arrays once** (`prepare()`), never walk
+  arrays-of-arrays in an inner loop.
+- **Hoist per-sample invariants**: prototype norms are `bankNorms()` computed
+  once, not recomputed per image.
+- **Preallocate optimizer scratch**: `makeHead` reuses its gradient buffers
+  instead of allocating a pair per step.
+- **Cache glyph sprites**: `grayGlyph(..., {key})` in `engine/draw.js` paints a
+  thumbnail once and blits it after; a panel drawing dozens of thumbnails per
+  frame must pass a content-identifying key.
+- Tiling/loop-blocking was tried on the feature builder and did NOT help (the
+  loop is compute-bound, not bandwidth-bound); don't bother.
+- **Interaction must be tested, not assumed.** A profiling pass found
+  ConceptScalpel's concept switches were dead (the hit-test array was declared
+  and never populated) because only the default render had been screenshotted.
+  Drive real clicks/hovers over the built page (CDP `Input.dispatchMouseEvent`)
+  and assert the readout changes.
 
 **GIFs (companion).** Rendered by a `scripts/render_*.py`. Pace them slowly (about half the first instinct), give them real UI (legend, labels, titles), keep file size ~<1.6 MB.
 
@@ -104,6 +136,19 @@ capstone (the Yat prototype story returned to the transformer).
 | live | survival-model-on-trial | survival-model-on-trial-jax-flax-nnx |
 | **D** | you-dont-have-to-solve-a-kernel-machine | you-dont-have-to-solve-a-kernel-machine-jax-flax-nnx |
 | **D** | lazy-training | lazy-training-jax-flax-nnx |
+
+### Arc C.5: the kernel as an instrument (registered in series.ts 2026-07-28)
+These six were written as one run and belonged to no arc in `src/data/series.ts`
+until the audit found them; they are now the `kernel-as-instrument` series.
+All six are drafts, so the arc stays hidden on the site until one publishes.
+| status | explainer | companion |
+| --- | --- | --- |
+| **D** | mercer-microscope | -- (companion wanted) |
+| **D** | spectral-surgery | -- (companion wanted) |
+| **D** | yat-protocol | -- (companion wanted) |
+| **D** | patch-parts | -- (companion wanted) |
+| **D** | fifteen-ideas | -- (companion wanted) |
+| **D** | patches-in-conversation | -- (companion wanted) |
 
 ### Arc D: networks as integrators (new, opened 2026-07-04)
 The standing move: numerical analysis as an architecture catalog. Each
@@ -323,6 +368,236 @@ from the TRAJ bundle kgl_blog-yatlazy-traj: random-init drifts to ghostly
 garment texture without becoming pictures, lazy-travel movement + accuracy
 through epochs) + 2 PNGs (ladder scoreboard, anti-lazy law). TRAJ=1 mode
 added to yat_lazy.py (per-epoch W snapshots).
+
+### C11. mercer-microscope  (DRAFT, 2026-07-27)
+Title: "The Trained Network, Under Mercer's Microscope" (slug mercer-microscope).
+Point Mercer at the TRAINED artifact: the network's own kernel K_net = sum phi phi
+(finite-rank, changes as prototypes move), discrete-Mercer-decomposed on the full
+test set at EVERY EPOCH (`scripts/yat_mercer.py`, bundle `kgl_blog-mercer-v1`:
+the lazy post's m=256 protocol, trained 88.84±0.20 vs frozen twin 84.10±0.15,
+3 seeds; per-epoch full-model snapshots for s0; analysis
+`export_mercer_viz.py`). Register from the kernel book's Mercer chapter (ch07):
+discrete Mercer / Gram eigendecomposition, effective dimension, ellipsoid
+picture, source condition (NOT "kernel-target alignment"), measure-dependence
+warning stated ("the kernel is intrinsic, its spectral coordinates are not").
+FINDINGS: (a) GRAB-THEN-REFINE: epoch 1 collapses effective dimension 14.7->4.7
+and leaps top-10 label energy 0.39->0.58; epochs 2-12 relax PR back to ~10 and
+ease align10 to 0.52 while acc climbs 83->88.9 (align40 peaks 0.69 then drifts):
+coarse alignment first, fine modes after (links three-states' reorganization);
+(b) modes are legible concepts: mode 1 = soft torso-wear vs footwear, 27.4% of
+trace, 38% of readout weight, poles shown as real images; early modes carve
+coarse partitions, near-class splits (sandal/sneaker) live in the fine tail;
+(c) TRUNCATION: trained net rebuilt from top-k modes: k=12 -> 81% of its 88.15,
+k=32 -> 85.3, within 1pt at k=64/256; frozen twin needs all 256 for its 83.5
+(k=12: 64.6): training = manufacturing a favorable source condition.
+Four fresh panels (mercer.js): SpectrumScrub (per-epoch spectrum + cumulative
+label-energy curve, epoch timeline), ModeGallery (clickable eigenvalue bars,
+pole thumbnails, per-class profile), ClassModeMap (10x16 sign map), and
+TruncationDial (LIVE rank-k rebuild from shipped eigen-coordinates of 800 test
+images, incremental logits, both arms). Assets public/mercer-microscope/
+{spectrum,modes,trunc,numbers}.json. Spends by link: Mercer-as-price-list
+(what-can-a-weight-be), d_eff (regularization post), reorganization
+(three-states), prototype pictures (C1), lazy-training protocol/frozen twin.
+New-derived: empirical Mercer decomposition of a trained net as an instrument,
+grab-then-refine spectral dynamics, eigenmodes-as-concepts galleries,
+mode-truncation self-summary. Companion (JAX + GIFs) not yet built.
+
+### C12. spectral-surgery  (DRAFT, 2026-07-28)
+Title: "The Concept That Would Not Die" (slug spectral-surgery). The microscope's
+tool test, and a productive FAILURE post (in the calibration post's tradition of
+betting against the series and reporting the loss). Cut a Mercer mode out of the
+trained net: exact, one line (readout splits over modes; zero row k of Ahat).
+Analysis `scripts/spectral_surgery.py`, a LOCAL replay of the mercer-v1 seed-0
+final snapshot (88.15% test); no new Kaggle run. FINDINGS: (a) modes ARE where
+the function lives: cutting mode 1 costs 9.58 pts vs 0.23 for a random direction
+of matched readout energy and 0.38 for deleting the most-used prototype (~40x);
+drop order != eigenvalue order (mode 5, 1/6 the eigenvalue, costs 8.22); (b)
+FAILURE 1, damage is NOT surgical: predicted-vs-measured pair damage r=0.49
+(rank 0.39) so the class-mode map points the right way and no further, and the
+damage CONCENTRATION on the worst pair is LOWER for a mode cut (0.112) than for
+a random direction (0.159) or a prototype deletion (0.173): a mode is a shared
+coordinate, not a class-pair detector; (c) FAILURE 2, silence != erase (links
+C5.5): refit a fresh readout after silencing mode 1 -> 99.95% on Shirt/Boot;
+project the mode out of the FEATURES and refit -> still 98.60%. Orthogonal is
+not independent (Mercer diagonalizes the covariance, not the information;
+superposition cite); (d) THE PRICE OF FORGETTING (the headline): delete the r
+most pair-discriminative modes from the features + refit each time: r=8 pair
+92.65 / task 86.45; r=16 pair 85.45 / task 50.53; r=128 pair 55.95 (still above
+chance) / task 26.35. The network dies before the distinction does; (e) no quiet
+corner: deleting the bottom 128 of 256 modes costs 0.12 pts, the top 8 cost 53.
+CONCLUSION: read the network in the spectrum, write to it in the neurons.
+Four fresh panels (surgery.js, all live from a 256-mode 800-image payload):
+ConceptScalpel (16 clickable concept switches, live confusion matrix + broken
+images), DamagePredicted (predict-vs-measure scatter, hover names pairs),
+ForgettingPrice (the crossing curves), TopVsBottom (512 live cuts, incremental
+logits). Assets public/spectral-surgery/{surgery,predict,recovery,live,numbers}.json.
+Spends by link: prototype deletion/exact unlearning (C2), silenced-vs-erased
+(C5.5), the microscope's modes + class-mode map (C11), superposition
+(attention-is-a-kernel). New-derived: mode deletion as an exact edit, the
+selectivity controls, concentration-vs-random, the erasure price curve,
+"orthogonal is not independent". Companion (JAX + GIFs) not yet built.
+
+### C13. yat-protocol  (DRAFT, 2026-07-29)  <- the interpretability capstone
+Title: "How to Interrogate a Kernel Network" (slug yat-protocol). Turns the
+series' legibility claim into a checkable AUDIT, deliberately built only from
+Yat-specific affordances (product of two named channels; centres are pictures;
+b/eps are post-hoc dials). One script `scripts/yat_protocol.py` (local replay of
+kgl_blog-mercer-v1 seed 0, 88.15%), payloads via export_yat_protocol_viz.py.
+FIVE INSTRUMENTS + findings: Y1 concepts = eigendecompose the LOGIT covariance
+S = A^T C A (not the feature covariance): the function factors through <=10
+dims, so 10 concepts reproduce the model EXACTLY and 9 beat the microscope's 64
+variance modes (this CORRECTS mercer-microscope's truncation framing, stated in
+post). Y2 channel ledger (the core Yat move): freeze alignment or proximity at
+its per-unit mean and re-score each concept -> coarse high-gain concepts use
+PLACE (34% proximity, 49% smooth), fine ones are pure DIRECTION (96-100%
+alignment, 21-25% smooth); two independent measures agree. Y3 eps dial +
+ADMISSIBILITY AUDIT (the hook): trained eps 0.0291 vs median d^2 299.7 (ratio
+9.7e-5; closest test point d^2=26.8) -> the softening NEVER ENGAGES; x10,000
+costs nothing, needs ~3x median d^2 to cost a point, 30x -> 58%. Y5 b dial: b=0
+(the non-universal case) costs 3.6 pts (88.15->84.52); trained b near-optimal
+(0.25x 86.70, 4x 75.45, 16x 28.57): the universality-buying linear term measured
+as accuracy. Y4 support + write path: concept support 144-173 of 256 prototypes,
+deleting the top 4 rows does nothing and top 64 damages diffusely -> quantifies
+WHY spectral-surgery's write path failed. Hygiene rules: bootstrap stability
+(0.990-1.000 for the named 8) and state-the-measure; failures listed in-post
+(the eps dial CANNOT corroborate Y2 because eps is vestigial; Y1's rank-10 is
+partly by construction). Four fresh panels (yatprotocol.js): ConceptBasis (live
+rebuild from k concepts vs the variance curve), ChannelLedger (live R^2 scatters
++ the concept rendered as a SIGNED picture), VestigialEps (eps against the
+distance histogram, four orders of magnitude apart), SupportMap (256x10 support
+heat + heaviest prototypes + 90% coverage count). Assets public/yat-protocol/
+{eps,basis,ledger,support}.json. Spends by link: prototype pictures (C1), exact
+row edit (C2), attention scalars/b promotion (BxC), microscope modes (C11),
+surgery failure (C12). New-derived: the whole protocol.
+OPEN: Y2 needs a second corroborating method; patch-level variant proposed
+(shared MLP over patches + mean pooling) which should make proximity matter and
+narrow concept support.
+
+### C14. patch-parts  (DRAFT, 2026-07-30)
+Title: "A Network Made of Parts" (slug patch-parts). USER'S IDEA: cut the image
+into patches, ONE shared Yat bank per patch, MEAN pool, linear readout (= a ViT
+with attention removed). `scripts/yat_patches.py` (bundle kgl_blog-patches-v1,
+sizes 28/14/7/4 -> 1/4/16/49 patches, m=256, 3 seeds), audited by
+export_patches_viz.py running the yat-protocol instruments at each size.
+THE GIFT: mean pooling is linear so logits = mean_p (A^T phi(x_p)): the output
+IS the average of per-patch ballots, so attribution is exact and gradient-free
+(panel PatchBallots).
+ACCURACY (the shape-vs-parts price): 88.84+-0.20 (28) -> 86.74 (14) -> 80.90
+(7) -> 75.28+-0.15 (4). Mean pooling is permutation invariant, so the 13.5-pt
+fall = the price of forgetting the arrangement.
+THREE PREDICTIONS, TWO REFUTED (the post's spine):
+ (1) eps would stop being vestigial: FAILS. median d^2 collapses 299.7 -> 3.48
+     (86x) but TRAINING TAKES EPS DOWN WITH IT (0.0291 -> 0.0026), ratio moves
+     only 9.7e-5 -> 7.6e-4. The softening is idle BY CHOICE at every scale, a
+     stronger claim than the original. Qualification: at 4px the CLOSEST patch
+     finally reaches the floor (min d^2 0.003 vs eps 0.0026, was 1,100x at
+     whole images). Panel ScaleChase.
+ (2) proximity channel would carry concepts: NON-MONOTONE, unexplained: place%
+     of concept 1 = 34 -> 2 -> 0 -> 52. Reported straight as the open thread.
+ (3) concept support would narrow enough to edit: FAILS CLEANLY. 173/172/187/174
+     of 256 at every granularity: diffuseness is NOT caused by input size, so
+     the write path stays broken (confirms spectral-surgery independently).
+CLOSE: the network declines locality twice even when handed a space where it is
+available: "patching bought legibility, not locality". Three panels
+(patchparts.js): PatchBallots (click an image, exact ballot grid + tally, opens
+on a correct example), GranularityDial (prototype gallery per size + the four
+audit readings), ScaleChase (eps vs median/min d^2 on one log axis).
+Assets public/patch-parts/{sizes,votes,parts}.json.
+Spends by link: prototype pictures (C1), hand-built detector vocabulary (C4),
+exact row edit (C2), surgery failure (C12), the protocol (C13), Yat attention
+(BxC) as the attention-pooled cousin. New-derived: exact per-patch ballots from
+mean pooling, the shape-vs-parts price, eps-chases-the-scale, granularity
+invariance of concept support. OPEN: attention pooling vs mean pooling on the
+same patch features; explaining the non-monotone channel ledger.
+
+### C15. fifteen-ideas  (DRAFT, 2026-07-31)
+Title: "One Hundred Classes, Fifteen Ideas" (slug fifteen-ideas). The audit's
+second exam, on USER'S suggestion to go past 10 classes: grayscale CIFAR-100
+(`scripts/yat_cifar.py`, bundle kgl_blog-cifar-v1: m=1024 on raw 32x32
+luminance, LR bracketed in-run at 3e-3 [sweep 17.08/16.66/14.50], 3 seeds,
+17.65±0.17% top-1 = 18x chance, existence framing). Audited by the v2
+instrument `scripts/yat_audit.py` (nulls + seed spreads + verdicts + bootstrap
+gate + two-method ledger + refit test + measure sweep + NEW Y6 hierarchy
+instrument using the 20 ground-truth superclasses; report
+yat_audit_trained_cifar100g.json). FINDINGS: (a) Y1 finally a MEASUREMENT:
+14.7±1.2 identifiable concepts of 100 available (was 15.3 before the
+2026-07-28 instrument fix rethreaded the RNG; 18.3±0.9 once the assignment
+is solved, and the leading subspaces sit at 0.999/0.994/0.984/0.983 for
+k=5/10/20/40, so most of the "haze" boundary is rank order, not
+instability) (gate: bootstrap |cos|>0.9,
+falls at rank ~12); the truncation curve never elbows (k=15 -> 12.4 of 17.2,
+k=30 -> 15.4, last 40 dims < 1 pt) so the claim is "fifteen nameable ideas
+plus an anonymous haze worth ~5 pts in aggregate"; (b) Y6 verdict COARSE
+FIRST against ground truth: top-10 gain-weighted superclass alignment
+0.549±0.003 vs null 0.197±0.051, tail 0.122 BELOW null (late axes cut within
+superclasses); (c) idle-eps REPLICATES cross-dataset (ratio 6.2e-4, closest
+point 78x eps) with the LR twist: hotter rates drive eps INTO the distances
+(0.16 -> 21 -> 88) and accuracy falls, so idleness is the winning optimizer's
+choice; (d) support NOT LOCALIZED with a null (471±7 of 1024 vs null 608) and
+refit-after-delete comes back whole (HIDDEN NOT ERASED); (e) the channel
+ledger FLIPS: direction-driven, place at/below chance, and this time the two
+methods AGREE (|A-B|=0.03, certified) -> FMNIST's place reading was
+dataset-specific; (f) RETRACTED 2026-07-28: the claimed MEASURE-SENSITIVE
+failure mode was an instrument bug. `i_measure` hardcoded `for c in range(10)`,
+so on CIFAR-100 the "class-balanced" measure was 800 points drawn from TEN of
+the hundred classes and the published 0.870 was that subsample, not a balanced
+one. Fixed to `range(M.C)` with equal counts per class: agreement is 0.971 to
+test and **0.998** to a genuinely class-balanced measure, and as subspaces
+(principal angles) 0.997 and 1.000. The basis is measure-STABLE; the post now
+says so, and uses the axis-vs-subspace gap as the forward hook. Four fresh panels (fifteen.js): HundredRebuild (live k-of-100
+rebuild + bootstrap-stability strip with the naming gate), TaxonomyLens (100
+classes in their 20 superclass boxes, coloured by concept loading, alignment
+curve vs null band; class names extracted from the parquet's own hf schema
+metadata), EpsFollows (distance histogram + 3 seeds' eps + the
+eps-follows-the-rate sweep), SupportVsNull (real vs random support ticks +
+the deletable-committee zone + refit trio). Assets public/fifteen-ideas/
+{rebuild,taxonomy,support,eps}.json via export_cifar_viz.py. Infra: canonical
+CIFAR mirror stalls on Kaggle workers (died at 86%/38min): loader prefers the
+HF parquet with torchvision fallback, in both yat_cifar.py and yat_audit.py.
+(g) WELCH-BOUND LINK (added 2026-07-27, user's ask): the 100-class codebook
+in the 15-dim identifiable subspace is the overloaded d<<C regime of
+welch-bound-good-latent-space, and it is MEASURED (`scripts/yat_welch_check.py`
+on the same bundle, report results/yat_welch_check.json): Welch floor for
+(100,15) rms 0.239; frame-potential descent ATTAINS it (max 0.761); random
+0.259; trained network 0.402±0.003 rms, max 0.967±0.003, i.e. WORSE than
+random by the identification standard. The excess is the taxonomy: cross-
+superclass pairs -0.016 (near simplex -1/99), sibling pairs +0.389; top-30
+confused pairs cos +0.757 vs -0.004 rest (spearman conf-vs-cos 0.365);
+control: class-mean cloud's own erank in full 1024-dim feature space is 10.2,
+so crowding is not the projection. Dial fact: floor falls with k but network
+rms flattens ~0.38 past 15 (siblings 0.44..0.37 across k=5..30), so past the
+identifiable count coherence is taxonomy not scarcity. Named pairs: plain-sea
+0.96/31 conf, keyboard-worm 0.91/22, caterpillar-lizard 0.95 cross-superclass
+(grayscale look-alikes). Fifth panel CodebookSqueeze (live k-dial repack:
+sib-vs-cross cosine histogram + moving Welch floor + rms-vs-k curves + the
+nine most-confused pairs pinned, hover names them; payload welch.json = class
+means as unit coords in the progressive 30-axis concept basis, so truncate+
+renormalize IS the projection).
+(h) CEILING ANATOMY (added 2026-07-27, user asked "why not 25%"): the accuracy
+FACTORIZES through the taxonomy (`scripts/yat_ceiling.py`, final-epoch
+weights, report results/yat_ceiling.json): coarse-right 26.02±0.39% (20-way,
+chance 5) x sibling-pick-given-coarse 66.09±0.63% (5-way, chance 20) =
+17.19±0.10% fine. VERDICT: the ceiling is COARSE-dominated; the sibling pick
+is the model's stronger skill; crossing 25% needs the coarse factor at ~38%.
+Error ledger: 10.66% of errors land in-superclass (2.6x the 4.04% chance),
+15.3% on the ~5% tightest pairs (3x share) -> collisions are a TAX not the
+deficit. Truncation to 15 nameable axes keeps 86%/84% of the two factors, so
+the haze feeds both proportionally (more anonymous width is not the path).
+Structural read: f = A^T phi(x)+b forbids two conversations: concepts cannot
+compose (votes summed once, no conjunctions) and regions cannot talk (whole-
+image templates match the scene; patch-parts measured the silent-patch horn
+at 13.5 pts). HundredRebuild extended: blue 20-way superclass curves next to
+red 100-way (rebuild.json += coarse_curves + fine2coarse; live subset readout
+gives both). Post now ENDS on the C16 seed (see §5 mixer entry).
+Spends by link: the protocol + its correction history (C13), surgery (C12),
+microscope (C11), patch scale-chase (C14), existence-proof frame (C0), the
+Welch/simplex/ETF codebook geometry (welch-bound-good-latent-space, spent by
+link with new measurement on top).
+New-derived: identifiability-gated concept counting, the nameable-head-plus-
+anonymous-haze reading, taxonomy-verdict instrument, eps-follows-the-rate,
+measure sensitivity at 100 classes, the taxonomy-tax packing reading (trained
+codebook = even superclass packing + glued siblings, crosstalk billed as
+confusions). Companion (JAX + GIFs) not yet built.
 
 ### D1. skip-connections-are-half-of-newton  (LIVE, 2026-07-04; opens Arc D)
 A skip connection x + f(x) is forward Euler: depth=time, hidden state=position,
@@ -602,7 +877,7 @@ census checkpoints = a PNG grid, four snapshots are four facts).
 | pointwise activations wreck manifold geometry (diagonal-Jacobian modulation) | activations-are-bad-for-geometry |
 | **opposition is not difference**: max difference of unit vectors is orthogonality (cos 0), not antipodality (cos -1); antiparallel pairs collapse to a 1-D line and waste a dimension | opposite-is-not-different |
 | contrastive-loss history/taxonomy (pair/triplet/InfoNCE/CLIP/SupCon/SigLIP/align+uniform/cos->0); "which losses know when to stop" | untangling-the-moons |
-| the latent codebook: collapse; **regular simplex** as optimal centered code (pairwise cos -1/(C-1)); Welch bound + equiangular tight frame when concepts outnumber dimensions; neural collapse | welch-bound-good-latent-space |
+| the latent codebook: collapse; **regular simplex** as optimal centered code (pairwise cos -1/(C-1)); Welch bound + equiangular tight frame when concepts outnumber dimensions; neural collapse | welch-bound-good-latent-space (measured on a trained Yat codebook in fifteen-ideas C15g: 100 codes / 15 dims, rms 0.402 vs floor 0.239, excess = taxonomy) |
 | latent space = lossy finite-dim encoding of a label-similarity kernel; codebook = top eigenmodes, dark knowledge rides the modes below; structured codebook makes better mistakes; simplex is optimal only when classes are strangers | latent-on-the-spectrum |
 | three states of information (random/organized/structured, matter analogy); loss plateaus = reorganization before it shows in the loss | three-states-of-information |
 | separate-vs-represent tradeoff; the modality gap as a chosen readout, not a bug | modality-gap-complementary (D) |
@@ -643,6 +918,10 @@ census checkpoints = a PNG grid, four snapshots are four facts).
 
 | frozen random bank = Monte Carlo kernel estimate (one neuron, one sample, 1/sqrt(m)); the width ladder with a power-law climb to a kernel floor; the anti-lazy movement law (travel ~ sqrt(m) while the trained-minus-frozen gap shrinks); the redundancy inversion (random bank: 5 effective directions beat the data bank's 230); Gaussian-RBF parallel-gap ceiling | C10 (draft) |
 
+| the trained network's own kernel K_net decomposed as an instrument (discrete Mercer on the empirical measure); grab-then-refine spectral dynamics of training; eigenmodes as ranked legible concepts (pole galleries, class-mode sign map); rank-k truncation as the network's self-summary; training = manufacturing a favorable source condition | C11 (draft) |
+
+| mode deletion as an exact readout edit; "orthogonal is not independent" (a Mercer basis diagonalizes the covariance, not the information); damage concentration vs random/prototype controls; the price-of-forgetting curve (the net dies before the distinction does); read-in-the-spectrum / write-in-the-neurons division of labour | C12 (draft) |
+
 Reuse these only by reference (link the prior post), never by re-derivation.
 
 ---
@@ -667,6 +946,276 @@ Near-term obligations (unblock existing posts):
 1. **C5 companion** (`your-network-is-a-fixed-point` JAX + GIFs): no longer gates publish (C5 shipped 2026-07-08); still the top companion debt. GIF slate: residual collapsing to equilibrium; scattered starts contracting (~0.66/step, Banach); boundary freezing with the plateau at depth 6; settle-time map/histogram; **implicit differentiation** (the `custom_vjp` adjoint solved by the same iteration, the concept the post never shows); the 27x27 flood-fill climbing to 99.5% + the r=0.98 scatter.
 2. **what-an-mlp-knows companion** (train the Yat trunk on arithmetic painting in Flax NNX): reproduces the paper's knockout/naming numbers inside the repo, re-drives KnockoutBars with real JSON, and yields 5-6 natural GIFs (footprints emerging, knockout bars from a real run, prototype drift, slot surgery).
 3. **Finish modality-gap-complementary** (a live post links to it) and unpark simo2 when the SimO2/AFCL paper settles (then add `scripts/jax-simo2/` with the b-sweep bifurcation run).
+
+**COMMITTED NEXT (user-directed, 2026-07-27): C16 - the Yat mixer with recursive blocks.**
+Seeded at the end of fifteen-ideas ("Why seventeen percent, and not twenty-five").
+Design constraints fixed by the user: MLP-mixer shape with a RECURSIVE block
+(weight-tied, ALBERT-style, ties to edit-a-fixed-point machinery), alternating
+token mixing (patches talk) and channel mixing (concepts talk); BOTH mixing
+steps built from the Yat kernel map so every layer stays a Mercer feature map
+and the RKHS/spectral toolbox survives composition (the audit must run on the
+deep model, that is the point); skip connections ON THE SPHERE, never off:
+renormalize after every residual add (nGPT lesson from D2, but here it is
+theory-load-bearing: the instruments read angles/distances, so the network
+must compute in the geometry the instruments read). The experiment the seed
+promises: does the COARSE factor (26% -> target ~38%) double under mixing,
+and does the identifiable concept count climb past 15 when concepts can
+compose. Audit it with the same v2 instrument + ceiling factorization so the
+before/after is one table. Dataset: grayscale CIFAR-100 again (same bundle
+conventions), so kgl_blog-cifar-v1 is the frozen baseline row.
+STATUS 2026-07-27: `scripts/yat_mixer.py` written and locally smoke-tested
+(CPU, learning confirmed: fine/coarse/fgc all move, alphas train). Concrete
+design: 8x8 patches -> 16 tokens of 64 px; per-patch Yat embed to m=256
+(prototypes stay patch pictures); ONE MixerBlock applied R times: token-mix
+YatLayer(16->16) on the transposed axis, then channel-mix YatLayer(256->256),
+each with a learned residual scalar (a_t, a_c init 0.5) and sphere() renorm
+per token after EVERY residual add; mean-pool tokens -> linear head. In-run
+telemetry: every epoch logs fine, coarse, fine-given-coarse (the ceiling
+factorization is a curve, not a post-hoc read), plus b/eps per Yat layer
+(three more idle-softening rows for the eps law) and the alphas. Arms: LR
+bracket {3e-3,1e-2,3e-2} at R=4; RSWEEP {0,1,2,4,8} at bracketed rate (R=0 =
+embed+pool+head control, isolates mixing); 3 seeds at the winner, weights
+saved as mixer_trained_s{seed}.npz (We/Wt/Wc/A + b,eps per layer + alphas +
+config). Kaggle: smoke slug blog-mixer-smoke, full slug blog-mixer-v1
+(SWEEP=1;RSWEEP=1;SEEDS_N=3;EPOCHS=24; NOTE kgl --env separator is ';').
+FIRST NUMBERS (bundle kgl_blog-mixer-smoke, which accidentally ran the full
+default arm: 3 seeds, r=4, m=256, lr=1e-2, 24 epochs, 37s/arm on the P100):
+best 19.33+-2.27; seed 0 final fine 20.83 = coarse 30.82 x fgc 67.59, seed 2
+similar (20.25 = 30.39 x 66.63), seed 1 lags (15.52 = 25.02 x 62.03, found a
+different basin: its a_t=+4.6 where the two good seeds learn NEGATIVE token
+alphas a_t=-1.2/-1.5 with a_c~5-6). Reading: the COARSE factor moved 26->31
+while fgc held ~67, exactly the prediction of the ceiling section; mixing at
+m=256 (4x fewer channels than the flat 1024 baseline) already clears the flat
+17.65. Seed variance 2.3 pts is the current caveat; the negative-token-alpha
+basin is a finding to chase (token mixing used SUBTRACTIVELY = contrast
+between patches?). eps rows: eps_ch 0.037-0.104, eps_tok 0.0017-0.14 on
+unit-sphere distances O(1): NOT obviously idle at depth, another eps-law data
+point to read carefully in the post.
+DONE 2026-07-27: full grid ran (bundle kgl_blog-mixer-v1, ~7 min total,
+37s/arm on the P100) and the DRAFT POST SHIPPED: "Sixteen Patches in
+Conversation" (slug patches-in-conversation, pubDate 2026-08-02, draft:true).
+GRID: LR bracket at R=4 -> 1e-2 (3e-3: 9.8 still climbing, 3e-2: 15.6);
+RSWEEP at 1e-2: R=0 7.4 / R=1 14.2 / R=2 19.8 / R=4 21.4 / R=8 19.7 -> R=4;
+seeds at winner: best 21.41/16.43/20.22 (mean 19.35+-2.12), final fine
+20.88 = 30.88 x 67.62, 20.15 = 29.90 x 67.39, 15.69 = 25.14 x 62.41.
+FINDINGS: (a) COARSE FACTOR MOVED as C15h predicted (26.0 -> 30.9 good
+seeds) while fgc held ~67; a third of the distance to the 38-for-25% target;
+107,884 params vs the flat 1,151,078 (a tenth). (b) ALPHA SIGN LAW: every
+arm >19% learned a_t in [-1.5,-1.0], every arm <17% learned a_t in
+[+3.9,+7.5] (lagging seed 1 included); token outputs are nonneg so a_t<0
+means the conversation ONLY SUBTRACTS (lateral inhibition / contrast); at
+the influence-gradient level signs are mixed (most levers positive), so the
+subtraction story is stated at the UPDATE level, not the gradient level
+(first PatchTalk caption draft got this wrong; probe caught it). (c) DEPTH
+TRANSFER IS A MOUNTAIN: trained-at-4 run at r=0..12 peaks EXACTLY at 4
+(20.9) and collapses both ways (r=2 5.5, r=8 2.8, r=12 chance): weight-tied
+recursion here is a 4-step PROGRAM, not a flow; contrast with D3's leapfrog
+depth transfer, which had structure (conservation) to earn it. (d) NAMING
+GATE OPENS: same i_concepts instrument on the pooled layer names 46/33 (good
+seeds) and 77 (lagging seed) of 100 vs flat 14.7+-1.2 (numbers restated
+2026-07-28 after the RNG fix; were 45/37/79 vs 15.3); the lagging seed
+names MOST while classifying worst -> identifiability measures the measure's
+grip, decoupled from accuracy. Reinforced by two readings added in the same
+pass: solving the assignment raises the counts to 52/43/88 in the same order,
+and the leading 40-dim subspaces sit at 0.995/0.993/0.999 by principal angle,
+with the WORST classifier the most stable. Naming count tracks eigengap, not
+function quality. This is the seed of the next arc's first post. (e) EPS IDLE AT DEPTH: embed 6e-4, token
+3e-2, channel 2e-4 of each layer's median d2 (corrects the earlier smoke
+speculation that depth eps looked engaged). ARTIFACTS: local analysis
+scripts export_mixer_viz.py (verifies numpy forward == kaggle to 0.02);
+assets public/patches-in-conversation/{weights,story,thumbs}.json (weights
+= REAL seed-0 network, panels run it live in JS: walk/gram/influence in
+patchconv.js); five fresh panels RecursionWalk (live forward, r dial,
+default image 1 = bicycle fixed by the conversation: sweet_pepper -> camel
+-> bicycle -> cup), FactorizationRace, DepthMountain, PatchTalk (exact
+kernel-gradient lever map, signed), GateLadder (4 stability strips);
+verified: build green, vizcheck 5/0/0, all dials+hovers CDP-probed, numbers
+match python. Companion (JAX + GIFs) NOT yet built: owes the token-walk
+GIF, the mountain GIF, the factorization race GIF, alpha-crossing-zero GIF.
+Open threads: which of width / more tokens / attention-pooling closes the
+remaining coarse gap; why the bad basin has positive a_t (basin selection by
+init?); can a contraction constraint make the recursion a flow without
+losing accuracy.
+
+**FULL-CORPUS AUDIT, 2026-07-28.** Six independent readers went through all 78
+posts cold (one per arc plus a reader-experience pass), then a verification pass
+checked the flagged numbers against the run bundles. Findings and what was done:
+
+*Verified defects, all corrected.*
+1. `train-the-features`: `construct_vs_optimize.py` guards training with `if ep > 0`,
+   so the epoch-0 arm the post called "the trained head" had zero optimizer steps.
+   The headline "the trained head sorts at chance while the constructed one reaches
+   74%" compared a built head against an *untrained* one. Reframed: at epoch 0
+   nothing has trained, the 74% measures how much class structure survives a random
+   stack, and the post now names the control it does not run (a fitted linear probe
+   on the same frozen features, i.e. the classical random-features baseline).
+2. `attention-is-a-compatibility-kernel`: description said 1.1 percent, seoDescription
+   said 1.4%, and the QualityTieBxC caption said "1.4 percent apart: 1.4923 against
+   1.5131" where 1.5131 is the b=0 ablation, not the kernel (1.5089). All unified to
+   1.1 percent / 1.5089. The learning-rate-cliff argument appeared twice, three
+   paragraphs apart, both times closing on the identical sentence; the duplicate is
+   gone. The swap section's unexplained 1.75 is now labelled as what the log says it
+   is, a single-seed final-step figure.
+3. `a-network-that-conserves-energy`: scope note cited `kgl_blog-hamiltonian-v1`, but
+   `export_hamiltonian_viz.py` reads v2 and only v2 has the quoted pendulum numbers
+   (v1 is 3.45e-05 / 1.15e-05 / 9.62% / 0.20%). Corrected to v2 in the explainer and
+   the companion. Rings leapfrog extrapolation is 99.9 to 99.8, not 99.8 to 99.8.
+4. `depth-on-demand`: "16 to 68, factor 4.3, slope 0.32" was the moons curve presented
+   as a three-dataset result; the true aggregate is 17.2 to 77.4, factor 4.5, slope
+   0.33, and spirals (20.2 to 95.5) is now named. Margin-correlation range corrected
+   to -0.29..+0.31. The force correlations are seed 0 only and now say so;
+   `check_stiffness()` was defined after `__main__` so it never ran, and is now wired
+   in and persisted to `public/depth-on-demand/stiffness.json`.
+5. `readout-as-convex-combination` promised that `mlp-block-is-a-representer-theorem`
+   builds its convex regime; that post builds signed, unnormalized coefficients, which
+   is the *linear* corner of the same taxonomy. Both posts now say so, and mlp-block
+   states what exactness buys (a trustworthy edit) and what it costs (contribution
+   mass).
+6. `a-risk-model-that-names-its-reasons` still said "It comes free" about a 0.627 vs
+   0.623 tie whose own standard deviation is 3x the baseline's, and which
+   `survival-model-on-trial` later qualifies. Rewritten with the seed spread stated
+   and a forward link.
+
+*The structural finding, reported independently by three readers.* **The kernel is
+never isolated as a variable.** Four construction posts classify with `max` over 20
+k-means centroids per class and never run the Euclidean control at matched K; the
+fixed-point post attributes contraction, adaptive halting and maze extrapolation to
+the kernel with no non-kernel operator ablation; meanwhile eps has now been measured
+idle five separate ways and the channel ledger reads the concepts as direction-driven.
+Two of the kernel's three distinctive ingredients are measured to be decoration, and
+that sentence currently exists only as a subordinate clause in `patch-parts`. The
+highest-leverage experiment available is the ablation that prices the kernel: Yat vs
+Gaussian RBF vs Euclidean nearest-centroid vs linear, matched everything, across
+pictures / editing / abstention / hand-construction. Either outcome is publishable.
+Related: **RBF networks (1988) are cited nowhere in eleven Arc C posts**, and the
+maze-extrapolation result has uncited prior art (Schwarzschild 2021, Bansal 2022).
+
+*Scale.* The largest dataset any script in this repo loads is grayscale 32x32
+CIFAR-100. Across 46 explainers the empirical base is 2-D toys (rings in 17 posts),
+Fashion-MNIST (14), char Shakespeare (4), METABRIC and California Housing (1 each).
+`you-dont-have-to-solve-a-kernel-machine` earned a 511k-row Covertype result and a
+90.1% end-to-end Fashion-MNIST run, and no later post points the instruments at it.
+
+*Navigation, fixed.* Six posts belonged to no arc (now `kernel-as-instrument`);
+`representation-geometry` presented as complete while ending on two drafts (now
+`ongoing`); prev/next dead-ended at every arc boundary (now hands across, skipping
+arcs with nothing published); `/series` existed but was unreachable from the header
+(now in the nav); the home page led with Latest and pointed its most prominent
+secondary link at `/archive`, which sorts newest-first and inverts every arc's
+reading order (Series now leads, and a "New here?" block names two cold-entry posts).
+
+**ACCURACY CAMPAIGN, opened 2026-07-28 (user: "don't you think we need to get
+a higher accuracy first to know that we have something?"). YES, and the corpus
+own data proves it.** The decisive measurement: concentration -> nameability ->
+WORSE accuracy. Old mixer seed 1 has p=0.55, N=134, 77 nameable axes and 15.69%;
+seeds 0/2 have p~1.0, N~210, 46/33 nameable and ~20.5%. The naming instrument
+REWARDS UNDERFITTING, so every "legible" finding in the audit line is partly a
+symptom of a half-trained model and may invert at higher accuracy. Auditing at
+17% was measuring scaffolding. Accuracy first, then re-audit.
+
+DIAGNOSIS (scripts/yat_diagnose.py, mixer_diagnose.py, mixer_capacity.py, all
+local ridge on frozen features, no retraining):
+- optimization is NOT the problem: SGD 17.07 vs best ridge on the same features
+  16.13 (flat model). The head is at the ceiling of its features.
+- the flat model has NO useful spectral decay: lambda_k ~ k^-1.01, capacity
+  exponent p=0.99, N(1e-4)=959 of 1024, top-15 hold 39.9% of trace, CKA 0.042.
+- the mixer is better on every count: CKA 0.080 at a QUARTER of the dimension.
+- STAGED: mixer embed alone (r=0) ridges 7.80% with N=20.4 and top-15 at 98.5%;
+  r=1 14.10 (N=49.5); r=4 19.02 (N=211.5). The recursion is largely REBUILDING
+  RANK that mean pooling destroyed.
+- data: mixer ridge 1k 10.57 -> 50k 19.02, error ~ n^-0.025, 10x -> 24.5%.
+- width: still paying, 192->256 bought +0.60.
+- representation: raw gray pixels ridge 9.54, Yat bank on them 16.13, raw COLOUR
+  pixels 15.40, random ReLU 2048 13.91. GRAYSCALE COST ABOUT AS MUCH AS THE
+  ENTIRE KERNEL LAYER BUYS.
+
+FIRST INTERVENTION (bundle kgl_blog-mixer-pool-v2, GPU, ~20 arms):
+pool at m=256: mean 21.40 / max 20.92 / meanmax 21.39 / concat 21.94.
+width at concat: 128 21.73 / 256 21.94 / 512 22.26 / 1024 22.73 (still climbing).
+3 seeds at m=1024+concat: **23.05 +- 0.25**, up from 19.35 +- 2.12. Accuracy
++3.7 and the SEED SPREAD COLLAPSED 8x; the lagging-basin problem is gone.
+CAUTION, a wrong prediction of mine recorded straight: the frozen-weight ridge
+probe said concat was worth +4.06 (23.08 vs 19.02) and I predicted the gain
+would GROW under end-to-end training. It shrank to +0.54. The probe flattered
+a richer readout given features trained for a poorer one, and had a swept
+lambda where SGD had none. The 93% effective-dimension collapse is real; the
+accuracy attributed to it was mostly probe artifact. This also means the claim
+that this supplies patch-parts' missing control was OVERSTATED.
+
+POOLING THEORY (v3 running): mean pooling is the kernel mean embedding of the
+token set under a LINEAR map, and a mean embedding is injective only if its
+kernel is CHARACTERISTIC, which the linear one is not. So mean pooling is the
+guaranteed-lossy member of its family and the 3076->211 collapse is that loss
+measured. Fix = average in a better space, not stop averaging. New arms in
+yat_mixer.py: `kme` (mu = mean of psi(h_i), psi a Yat bank: permutation-
+invariant, output stays m, still Mercer, +65k params) and `nw{Q}` (Nadaraya-
+Watson with Q learned queries, Yat kernel weights that need NO softmax since
+kappa>=0; Q=1 is an adaptive mean that CANNOT raise rank because its output
+stays in the convex hull; Q dials toward concat). Param costs at m=256: mean
+107,884 / nw1 108,142 (+258!) / kme 173,422 / nw4 185,710 / concat 491,884.
+If kme or nw4 matches concat it wins outright on parameters.
+
+QUEUED (user-suggested, in priority order): data augmentation (crop/flip; in
+kernel terms this approximates the GROUP-AVERAGED kernel, still PSD, and it
+attacks the invariance failure that is the classical reason kernels lose on
+images), colour (~+6 by the linear proxy; 8x8x3 patches are still pictures),
+readout regularization (the concat head at m=1024 is ~1.6M params, now the
+largest block; group lasso OVER TOKENS both regularizes and says which patches
+the readout uses), MoE/gated readout (a localized sum of kernels, targets the
+weak COARSE factor specifically), overlapping multi-scale patches (the
+compositional-kernel move from the Shankar line).
+
+**THE DANGER LIST: a killer-app candidate, tested and REFUTED 2026-07-28.**
+`scripts/yat_forecast.py`, CIFAR-100g, 3 seeds, one command. The proposal was
+to forecast a model's confusions from its concept codebook BEFORE seeing test
+data, as the application that proves the interpretability is real. Built
+honestly (concept basis and all 100 class-mean directions from TRAIN only; test
+set untouched until scoring; headline metric = share of all errors landing on
+the top-k of 4950 pairs).
+
+WHAT WORKS: the list beats chance 5.7x at k=20 (2.3% of all errors on 0.4% of
+pairs) and beats the label-only taxonomy forecaster ~2x (2.3 vs 1.1).
+
+WHAT KILLS IT: the concept basis contributes NOTHING. At k=20, error mass is
+concept head (k=15) 2.3%, a RANDOM 15-dim subspace 2.1%, the TAIL that fails
+the naming gate 3.1%, plain class-mean cosine with no decomposition at all
+3.0%, readout columns 2.8%, and averaged logits with no geometry whatsoever
+3.5%. So (a) a random subspace ties the concept subspace (Johnson-Lindenstrauss:
+15 dims preserves pairwise structure for 100 points), (b) the "anonymous haze"
+outpredicts the named head, which fits C15's own finding that the head is
+COARSE and confusions are FINE, and (c) the best ranker uses no interpretability
+at all. Also: only 10.7% of errors are within-superclass, and on the other 89%
+every ranker is at 0.6-1.4%, so the forecast is narrow as well as unearned.
+
+SECONDARY FINDING: `yat_welch_check.py:110` computes class means from **Zte**,
+i.e. test features. Fine for describing a geometry, not fine for a prediction
+claim. Honest train-only is 2.3% at k=20 vs 1.9% leaky (the leak HURT here, so
+nothing published is inflated by it), and rho 0.383 train vs 0.365 leaky.
+
+READING: this is the FOURTH independent instance of the corpus pattern that the
+distinctive machinery is decoration (after idle eps x5, the direction-driven
+channel ledger, and the never-isolated kernel). It also separates two properties
+the field routinely conflates: a basis can pass the naming gate and still fail
+to predict behaviour. "Identifiable" and "explanatory" are not the same
+property, and that is now measured. Consequence for the new arc: the
+application is CERTIFICATION, not behavioural prediction; do not build a post
+that sells the danger list as a product.
+
+**Phrase watch (2026-07-27, user called it: "make sure you are not a shallow
+writer"). Extended 2026-07-28 into a measured pre-ship check: `scripts/ticcheck.py`,
+wired into the blog-writing skill. Corpus baseline at audit time: inverted-epigram
+closer 45 in 27 posts, rhetorical-question heading 44 in 23, "computed live in your
+browser" 37 in 17, "every number is from a real run" 39 in 28, certification adverb
+"exactly the/what" 126, money metaphor 483. A voice-growth rule was added to the
+skill: early arcs teach, middle arcs reference, late arcs assume; never tell the
+reader they are late; no debt-recitation openers; do not pre-announce a failure as
+valuable.** "earns its keep" appeared 12x across 10 posts; ALL purged, each
+site rewritten contextually. Style rule going forward: no stock idiom appears
+in more than ONE live post; before shipping, grep the draft's pet phrases
+against src/content/blog/. Current watch list (counts at audit): "load-bearing"
+(now <=1 per post; desc+thesis echo in yat-protocol is deliberate), "the price
+of" (16 across 13 posts, mostly 1x each, tolerated), "is the finding/point/
+argument" (19, thinned in fifteen-ideas), "cashes out" (1, fine).
 
 New-post candidates, in rough order of appeal:
 4. **Adversarial robustness: "a bounded neuron is hard to fool."** Locality means an attacker must push the input out of the true basin and into a wrong one, a large move, where a direction-neuron flips on an imperceptible nudge. Unifies with OOD (attack = climbing out of a basin; OOD = sitting between basins), ties straight back to the AttractorField. **Risk:** apparent robustness can be gradient masking. Must verify with FGSM + PGD on a Yat net vs a matched ReLU net (accuracy-vs-perturbation curves) before committing. Strongest candidate.

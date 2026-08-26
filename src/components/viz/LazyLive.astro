@@ -19,7 +19,7 @@ import { defineViz } from './engine/vizkit.js';
 import { T, fmt, axes, gate, loadingText } from './engine/draw.js';
 import { load, randomBank, yatFeatures, makeHead, drawGlyph } from './lazytrain.js';
 
-const D = 196, K = 10, BATCH = 128;
+const D = 196, K = 10, BATCH = 128, MAXM = 512;
 
 defineViz('lazylive', {
   title: 'Frozen random features, a readout learning live',
@@ -28,7 +28,7 @@ defineViz('lazylive', {
   controls: [
     { type: 'play' },
     { type: 'reset' },
-    { type: 'select', name: 'm', label: 'frozen units m', value: '64', options: ['16', '32', '64', '128', '256', '512'].map((v) => ({ value: v, label: v })) },
+    { type: 'select', name: 'm', label: 'frozen units m', reset: false, value: '64', options: ['16', '32', '64', '128', '256', '512'].map((v) => ({ value: v, label: v })) },
     { type: 'button', name: 'reseed', label: 'New random bank' },
     { type: 'readout', name: 'rd' },
   ],
@@ -46,10 +46,14 @@ defineViz('lazylive', {
     });
   },
 
+  onControl(name, value, api) {
+    if (name === 'm') rebuild(api, false);
+  },
+
   onAction(name, api) {
     if (name === 'reseed') {
       api.state.seed += 17;
-      rebuild(api);
+      rebuild(api, true);
     }
   },
 
@@ -59,7 +63,7 @@ defineViz('lazylive', {
     const n = st.data.ytr.length;
     const idx = [];
     for (let i = 0; i < BATCH; i++) idx.push((Math.random() * n) | 0);
-    const loss = st.head.step(st.F, st.data.ytr, idx);
+    const loss = st.head.step(st.F, st.ytrArr, idx);
     st.stepCount++;
     if (st.stepCount % 4 === 0) {
       st.lossHist.push(loss);
@@ -81,7 +85,7 @@ defineViz('lazylive', {
     ctx.fillText('the frozen bank (first 8 of ' + st.m + ', pure noise)', pad, top - 6);
     for (let i = 0; i < 8; i++) {
       const gx = pad + (i % 4) * (gw + 6), gy = top + Math.floor(i / 4) * (gw + 6);
-      drawGlyph(ctx, st.W.slice(i * D, (i + 1) * D), 14, gx, gy, gw, gw);
+      drawGlyph(ctx, st.W.subarray(i * D, (i + 1) * D), 14, gx, gy, gw, gw, false, `w${st.seed}:${st.m}:${i}`);
       ctx.strokeStyle = colors.border; ctx.strokeRect(gx + 0.5, gy + 0.5, gw - 1, gw - 1);
     }
 
@@ -93,7 +97,7 @@ defineViz('lazylive', {
     for (let i = 0; i < 16; i++) {
       const gx = pad + (i % 4) * (tw + 6), gy = ty0 + Math.floor(i / 4) * (tw + 6);
       const img = st.data.Xte[i];
-      drawGlyph(ctx, img, 14, gx, gy, tw, tw, true);
+      drawGlyph(ctx, img, 14, gx, gy, tw, tw, true, 'xte' + i);
       const pred = st.head.predict(st.Fte, i);
       const good = pred === st.data.yte[i];
       if (good) ok16++;
@@ -130,10 +134,10 @@ defineViz('lazylive', {
   },
 });
 
-function rebuild(api) {
+function rebuild(api, freshBank) {
   const st = api.state;
   st.stepCount = 0; st.lossHist = []; st.accHist = [];
-  st.F = null;
+  if (freshBank) st.bankSeed = null;
   buildBank(api);
 }
 
@@ -145,22 +149,37 @@ function buildBank(api) {
   api.render();
   setTimeout(() => {
     const n = st.data.ytr.length, nte = st.data.yte.length;
-    const Xtr = new Float32Array(n * D), Xte = new Float32Array(nte * D);
-    st.data.Xtr.forEach((img, i) => img.forEach((v, a) => { Xtr[i * D + a] = v / 255; }));
-    st.data.Xte.forEach((img, i) => img.forEach((v, a) => { Xte[i * D + a] = v / 255; }));
-    st.W = randomBank(st.m, D, 1234 + st.seed);
-    st.F = yatFeatures(Xtr, n, D, st.W, st.m);
-    st.Fte = yatFeatures(Xte, nte, D, st.W, st.m);
-    st.head = makeHead(st.m, K, 0.02);
+    // the pixel blocks are flattened once and reused by every bank
+    if (!st.Xtr) {
+      st.Xtr = new Float32Array(n * D);
+      st.Xte = new Float32Array(nte * D);
+      for (let i = 0; i < n; i++) {
+        const img = st.data.Xtr[i];
+        for (let a = 0; a < D; a++) st.Xtr[i * D + a] = img[a] / 255;
+      }
+      for (let i = 0; i < nte; i++) {
+        const img = st.data.Xte[i];
+        for (let a = 0; a < D; a++) st.Xte[i * D + a] = img[a] / 255;
+      }
+      st.ytrArr = Int32Array.from(st.data.ytr);
+      st.yteArr = Int32Array.from(st.data.yte);
+    }
+    // The bank for a smaller m is a prefix of the widest bank (same seed
+    // sequence), so the features are computed once at MAXM and every dial
+    // setting reads the first m columns: changing m costs nothing.
+    if (st.bankSeed !== st.seed) {
+      st.W = randomBank(MAXM, D, 1234 + st.seed);
+      st.F = yatFeatures(st.Xtr, n, D, st.W, MAXM);
+      st.Fte = yatFeatures(st.Xte, nte, D, st.W, MAXM);
+      st.bankSeed = st.seed;
+    }
+    st.head = makeHead(st.m, K, 0.02, MAXM);
     st.building = false;
     api.render();
   }, 30);
 }
 
 function testAcc(st) {
-  const nte = st.data.yte.length;
-  let ok = 0;
-  for (let i = 0; i < nte; i++) if (st.head.predict(st.Fte, i) === st.data.yte[i]) ok++;
-  return (100 * ok) / nte;
+  return st.head.accuracy(st.Fte, st.yteArr, st.yteArr.length);
 }
 </script>

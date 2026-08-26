@@ -33,7 +33,10 @@ defineViz('frozenbanks', {
       a.state.data = data;
       const nte = data.yte.length;
       a.state.Xte = new Float32Array(nte * D);
-      data.Xte.forEach((img, i) => img.forEach((v, x) => { a.state.Xte[i * D + x] = v / 255; }));
+      for (let i = 0; i < nte; i++) {
+        const img = data.Xte[i];
+        for (let x = 0; x < D; x++) a.state.Xte[i * D + x] = img[x] / 255;
+      }
     });
     api.canvas.addEventListener('pointerdown', (e) => {
       if (!st.ready) return;
@@ -48,11 +51,13 @@ defineViz('frozenbanks', {
       const proto = Float32Array.from(hit.img, (v) => lo + v * (hi - lo));
       const nte = st.data.yte.length;
       const resp = [];
+      let ww = 0;                       // the prototype's norm is fixed
+      for (let a2 = 0; a2 < D; a2++) ww += proto[a2] * proto[a2];
       for (let i = 0; i < nte; i++) {
-        let dot = 0, ww = 0, xx = 0;
+        let dot = 0, xx = 0;
         for (let a2 = 0; a2 < D; a2++) {
-          const xv = st.Xte[i * D + a2], wv = proto[a2];
-          dot += wv * xv; ww += wv * wv; xx += xv * xv;
+          const xv = st.Xte[i * D + a2];
+          dot += proto[a2] * xv; xx += xv * xv;
         }
         const n = dot + B0;
         resp.push([(n * n) / (Math.max(0, xx + ww - 2 * dot) + EPS0), i]);
@@ -84,7 +89,7 @@ defineViz('frozenbanks', {
       for (let i = 0; i < Math.min(imgs.length, cols * rows); i++) {
         const gx = x0 + (i % cols) * (s + 4), gy = top + Math.floor(i / cols) * (s + 4);
         const flat = Array.isArray(imgs[i][0]) ? imgs[i].flat() : imgs[i];
-        drawGlyph(ctx, flat, 14, gx, gy, s, s, b.id === 'yat_data');
+        drawGlyph(ctx, flat, 14, gx, gy, s, s, b.id === 'yat_data', `fb${b.id}:${i}`);
         const selected = st.sel && st.sel.bank === b.id && st.sel.idx === i;
         ctx.strokeStyle = selected ? colors.accent : colors.border;
         ctx.lineWidth = selected ? 2 : 1;
@@ -101,7 +106,7 @@ defineViz('frozenbanks', {
     if (st.sel && st.top) {
       st.top.forEach(([v, i], k) => {
         const gx = pad + k * (s + 10);
-        drawGlyph(ctx, st.data.Xte[i], 14, gx, ry, s, s, true);
+        drawGlyph(ctx, st.data.Xte[i], 14, gx, ry, s, s, true, 'fx' + i);
         ctx.strokeStyle = colors.border;
         ctx.strokeRect(gx + 0.5, ry + 0.5, s - 1, s - 1);
         T(ctx, colors, 'small');

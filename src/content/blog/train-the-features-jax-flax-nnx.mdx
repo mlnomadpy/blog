@@ -1,9 +1,10 @@
 ---
-title: "Constructing the Head on Learned Features, in JAX/Flax NNX"
-seoTitle: "Constructed Head on Learned Features in JAX"
-description: "A runnable companion: train a small conv backbone in Flax NNX, then on its frozen features build a constructed Yat head with no gradient steps and compare. The constructed head lands within a couple of points of the trained one, and even a random backbone's features sort at 73% while its trained head is at chance."
+title: "Constructing the Fashion-MNIST Network, in JAX/Flax NNX"
+seoTitle: "Build Fashion-MNIST Features and Head in JAX"
+description: "Train a small backbone and place its prototype head, then remove training entirely: implement fixed Sobel orientation channels, pool them into 343 named features, and classify with a constructed Yat head."
 seoDescription: "Train a Flax NNX conv backbone, then build a Yat head on its frozen features with no training: 85.9% vs 87.7%, and 73% from a random backbone."
 pubDate: 2026-06-22T17:00:00-07:00
+updatedDate: 2026-08-25
 draft: false
 tags: [ml, kernels, representation-learning, transfer-learning, jax, flax, nnx, implementation, prototypes, yat, deep-learning]
 references:
@@ -33,7 +34,7 @@ keywords:
 ---
 import CiteAs from '../../components/CiteAs.astro';
 
-*The [explainer](/blog/train-the-features/) split a network into a backbone that builds features and a head that classifies, trained only the backbone, and built the head by hand. This is the implementation in JAX. The backbone is a small [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html) convolutional network with a normal training loop; the head is a constructed Yat vote placed on the frozen features, with no gradient steps. The whole point is to run both and see how little the head needs. Every number is from a real run; the script is `scripts/jax_train_features.py`.*
+*The head in this post is a function, not a module. That is the shortest way to state what the [explainer](/blog/train-the-features/) was arguing: split a network into a backbone that builds features and a head that classifies, train only the backbone, and the classifier can be placed by hand rather than fitted. So there are two pieces of code here, a small [Flax NNX](https://flax.readthedocs.io/en/latest/api_reference/flax.nnx/module.html) convolutional network with an ordinary training loop, and fifteen lines of k-means and kernel arithmetic that never see a gradient. Run both on the same frozen features and the gap between them is where the argument lives: 85.9% against 87.7%, measured here.*
 
 *Prefer a notebook? Run the whole thing on [Kaggle](https://www.kaggle.com/code/skywolfmo/train-the-features-jax-flax-nnx): the same code, block by block, with the math written out and every figure reproduced from a real run.*
 
@@ -101,7 +102,7 @@ print(con_rand)   # 72.7%
 
 <figure class="jax-fig jax-fig-wide">
   <img src="/blog/train-free-lunch.png" alt="Test images sorted by two heads on the same random-backbone features into ten class bins: a coin flip sits at 10% while the built Yat head sorts them into the right bins at 73%" loading="lazy" width="968" height="528" />
-  <figcaption>The free lunch. The same random-backbone features, sorted by two heads into ten class bins. A coin flip lands them anywhere, at the 10% you would expect from a network that never trained; the built Yat head puts the very same features into the right bins at 73%, each dot coloured by its true class so a same-coloured column is a hit. The structure was already in the random filters; the head only had to read it. Rendered by <code>scripts/render_train_features_gifs.py</code>.</figcaption>
+  <figcaption>The free lunch. The same random-backbone features, sorted by two heads into ten class bins. A coin flip lands them anywhere, at the 10% you would expect from a network that never trained; the built Yat head puts the very same features into the right bins at 73%, each dot coloured by its true class so a same-coloured column is a hit. The structure was already in the random filters; the head only had to read it.</figcaption>
 </figure>
 
 ## Train the backbone, compare the heads
@@ -130,33 +131,78 @@ trained = accuracy(net, Xte, yte)                       # 87.7%
 con = accuracy(build_head(feats(net, Xtr), ytr, feats(net, Xte)), yte)   # 85.9%
 ```
 
-So the curve runs from 72.7% on random features to 85.9% on trained ones, all read by a head that was never trained, always a point or two under the trained head and never more. (The explainer's 74 / 83.2 / 85.7 are from its reference run, the PyTorch pipeline in `scripts/construct_vs_optimize.py`; the numbers on this page are this post's own JAX run. The story is identical, the last digits move with the framework and the seed.) The accuracy lives in the representation. The classifier, and its edits, are furniture you place.
+So the curve runs from 72.7% on random features to 85.9% on trained ones, all read by a head that was never trained, always a point or two under the trained head and never more. (The explainer's 74 / 83.2 / 85.7 are from its reference run, a PyTorch pipeline; the numbers on this page are this post's own JAX run. The story is identical, the last digits move with the framework and the seed.) The accuracy lives in the representation. The classifier, and its edits, are furniture you place.
 
 <figure class="jax-fig">
   <img src="/blog/train-crystallize.gif" alt="A 2D cloud of Fashion-MNIST test features condensing smoothly from a tangle into separated class droplets as the backbone trains, with a thermometer showing the built head's accuracy climbing" loading="lazy" width="672" height="684" />
-  <figcaption>What training the backbone does, read the whole way by a head that is never trained. Each dot is a test image, placed by the backbone's features at that moment. The untrained cloud is a warm tangle the built head reads at 73%; as the backbone trains the classes condense into droplets and the same built head climbs to 86%, with no head training at any point. Rendered by <code>scripts/render_train_features_gifs.py</code>.</figcaption>
+  <figcaption>What training the backbone does, read the whole way by a head that is never trained. Each dot is a test image, placed by the backbone's features at that moment. The untrained cloud is a warm tangle the built head reads at 73%; as the backbone trains the classes condense into droplets and the same built head climbs to 86%, with no head training at any point.</figcaption>
 </figure>
 
 <figure class="jax-fig">
   <img src="/blog/train-errors-melt.gif" alt="The same 2D feature cloud over training epochs, each point colored green if the never-trained built head classifies it correctly and red if not, the red points turning green as the backbone trains" loading="lazy" width="696" height="708" />
-  <figcaption>The same untangling, scored. Now each point is coloured by the never-trained built head's real verdict: green if it gets that test image right, red if it misses. The head is frozen the whole time, yet its mistakes melt away, from 206 misses to about 90, purely because the backbone underneath is sharpening the features it reads. Rendered by <code>scripts/render_train_features_gifs.py</code>.</figcaption>
+  <figcaption>The same untangling, scored. Now each point is coloured by the never-trained built head's real verdict: green if it gets that test image right, red if it misses. The head is frozen the whole time, yet its mistakes melt away, from 206 misses to about 90, purely because the backbone underneath is sharpening the features it reads.</figcaption>
 </figure>
 
 <figure class="jax-fig">
   <img src="/blog/train-two-heads.png" alt="Two accuracy curves over training epochs: the built head starts high at 73% and the trained head climbs from chance to finish only a couple of points above it" loading="lazy" width="792" height="600" />
-  <figcaption>The two heads, read off the same backbone as it trains. The built head is good immediately, at 73% before a single gradient step, because it just reads the features. The trained head starts at chance and has to climb, and after six epochs it finishes only a point or two ahead. The gap is all training the head ever buys. Rendered by <code>scripts/render_train_features_gifs.py</code>.</figcaption>
+  <figcaption>The two readings, taken off the same backbone as it trains. The built head is good immediately, at 73% before a single gradient step, because it just reads the features. The end-to-end curve starts at chance, where nothing has trained yet, and after six epochs finishes only a point or two ahead. That margin is what training the head buys once the features exist.</figcaption>
 </figure>
 
 <figure class="jax-fig">
-  <img src="/blog/train-head-swap.png" alt="A bar chart on one frozen trained backbone with three heads side by side: a random linear head at 16%, the built Yat head at 86%, and the trained linear head at 88%" loading="lazy" width="816" height="600" />
-  <figcaption>The thesis in one chart. Freeze the trained backbone and bolt on three different heads, side by side. A random, untrained linear head reads its features at 16%, near chance; the built Yat head, placed with no gradient, reads them at 86%; the trained linear head, at 88%. Once the features are good, the head is furniture: any reasonable one recovers almost all the accuracy, and training it buys the last point or two. Rendered by <code>scripts/render_train_features_gifs.py</code>.</figcaption>
+  <img src="/blog/train-head-swap-read.gif" alt="A bar chart on one frozen trained backbone with three heads side by side: a random linear head at 16%, the built Yat head at 86%, and the trained linear head at 88%" loading="lazy" width="816" height="600" />
+  <figcaption>The thesis in one chart. Freeze the trained backbone and bolt on three different heads, side by side. A random, untrained linear head reads its features at 16%, near chance; the built Yat head, placed with no gradient, reads them at 86%; the trained linear head, at 88%. Once the features are good, the head is furniture: any reasonable one recovers almost all the accuracy, and training it buys the last point or two. The reveal holds the backbone fixed and introduces the three heads in comparison order.</figcaption>
 </figure>
 
 ---
 
-*The strength of random convolutional features is from [Saxe et al. (2011)](https://proceedings.mlr.press/v15/saxe11a.html); the prototype head from [Chen et al. (2019)](https://arxiv.org/abs/1806.10574); [Fashion-MNIST](https://arxiv.org/abs/1708.07747) from Xiao et al. (2017); the Yat kernel from [Bouhsine (2026)](https://arxiv.org/abs/2605.03262). The conceptual companion is [You Only Have to Train the Features](/blog/train-the-features/).*
+*The strength of random convolutional features is from [Saxe et al. (2011)](https://proceedings.mlr.press/v15/saxe11a.html); the prototype head from [Chen et al. (2019)](https://arxiv.org/abs/1806.10574); [Fashion-MNIST](https://arxiv.org/abs/1708.07747) from Xiao et al. (2017); the Yat kernel from [Bouhsine (2026)](https://arxiv.org/abs/2605.03262). The conceptual companion is [On Fashion-MNIST, the Head Can Be Built by Hand](/blog/train-the-features/).*
 
-<CiteAs slug="train-the-features-jax-flax-nnx" title="Constructing the Head on Learned Features, in JAX/Flax NNX" pubDate="2026-06-22T17:00:00-07:00" />
+## Remove the trained backbone
+
+The second construction replaces the NNX backbone with a stateless JAX function. Two fixed Sobel kernels produce horizontal and vertical gradients; six angular bins plus one corner channel form the feature bank:
+
+```python
+NB, GRID = 6, 7
+CENTERS = jnp.linspace(0, jnp.pi, NB, endpoint=False)
+
+@jax.jit
+def handbuilt_features(imgs):
+    gx, gy = conv3x3(imgs, SX), conv3x3(imgs, SY)
+    mag = jnp.sqrt(gx**2 + gy**2) + 1e-6
+    ang = jnp.mod(jnp.arctan2(gy, gx), jnp.pi)
+    dist = jnp.abs(jnp.mod(ang[:, None] - CENTERS[None, :, None, None]
+                           + jnp.pi / 2, jnp.pi) - jnp.pi / 2)
+    edges = jnp.clip(1 - dist / (jnp.pi / NB), 0, 1) * mag[:, None]
+    corner = (jnp.abs(gx) * jnp.abs(gy))[:, None]
+    chans = jnp.concatenate([edges, corner], axis=1)
+    pooled = chans.reshape(len(imgs), 7, 7, 4, 7, 4).mean((3, 5))
+    z = pooled.reshape(len(imgs), 343)
+    return z / (jnp.linalg.norm(z, axis=1, keepdims=True) + 1e-6)
+```
+
+<figure class="jax-fig jax-fig-wide">
+  <img src="/blog/handbuilt-coarsegrain-build.gif" alt="Seven fixed detector maps pooled over a seven-by-seven spatial grid and flattened into 343 named features" loading="lazy" width="968" height="540" />
+  <figcaption>Every coordinate is one detector in one patch. The extractor has no state and no learned parameter.</figcaption>
+</figure>
+
+Run class-conditioned k-means on those features, store twenty centers per class, and score each class by its strongest Yat-kernel match. K-means estimates prototype locations from labeled class subsets, so the system is zero-gradient rather than data-free.
+
+```python
+Ftr, Fte = np.asarray(handbuilt_features(Xtr)), np.asarray(handbuilt_features(Xte))
+W, labels = fit_classwise_kmeans(Ftr, ytr, per_class=20)
+scores = yat_kernel(jnp.asarray(Fte), jnp.asarray(W), b=0.5, eps=eps)
+pred = np.stack([np.max(scores[:, labels == c], axis=1) for c in range(10)], axis=1).argmax(1)
+print(100 * np.mean(pred == yte))  # 83.3
+```
+
+<figure class="jax-fig">
+  <img src="/blog/handbuilt-yat-well-read.gif" alt="Four Fashion-MNIST images scored against ten class-specific prototype wells, including one honest error" loading="lazy" width="900" height="620" />
+  <figcaption>The actual ten class scores for four held-out images. The deepest well wins; the error remains visible rather than edited out.</figcaption>
+</figure>
+
+The combined file now contains both comparisons: a constructed head on random and learned backbone features, and a fully hand-built feature extractor with the same prototype logic. The latter reaches 83.3% on this Fashion-MNIST setup; it does not imply that fixed edges transfer to datasets whose useful statistics are not dominated by garment contours.
+
+<CiteAs slug="train-the-features-jax-flax-nnx" title="Constructing the Fashion-MNIST Network, in JAX/Flax NNX" pubDate="2026-06-22T17:00:00-07:00" />
 
 <style>{`
 .jax-fig { margin: 1.8rem auto; text-align: center; }
