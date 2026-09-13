@@ -68,8 +68,9 @@ const id = `kb-${Math.random().toString(36).slice(2, 9)}`;
     const modeBtns = wrap.querySelectorAll('[data-group="mode"] button');
     const readout = document.getElementById(id + '-readout');
 
-    // ΔOCR (percentage points), verbatim from Table 2 of Painting Arithmetic
-    // (public/papers/painting-arithmetic.pdf). The paper reports SLOT and RANDOM
+    // Historical ΔOCR (percentage points) from Table 2 of the withdrawn
+    // Painting Arithmetic draft (retained in git history), not independently
+    // reproduced measurements. The draft reports SLOT and RANDOM
     // only for the × and + subsets, and a per-operator baseline only for ×
     // (86.5% -> 42.7% under ROW), so this chart shows deltas, nothing invented.
     const TABLE2 = {

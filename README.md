@@ -45,14 +45,6 @@ inherently more interpretable than the MLP that follows it.
 
 On AI education in Morocco and the cost of staying behind.
 
-## Companion papers
-
-A few posts have longer write-ups as PDFs in [`papers/`](./papers):
-
-- *Painting Arithmetic with Kernel MLPs* — the experiment behind *What an MLP Knows*
-- *Opposite Is Not Different* — the three-landmark argument
-- *Activations Are Bad for Geometry* — the Jacobian-modulation theorem
-
 ## Stack
 
 Astro 5 + MDX, KaTeX for math, giscus for comments, hand-rolled canvas viz.

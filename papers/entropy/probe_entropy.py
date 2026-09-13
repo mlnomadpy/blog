@@ -1,7 +1,7 @@
 """Reproducible probes for the entropy-paper audit.
 
 These calculations can refute universal claims and check algebra, but passing
-numeric tests do not prove theorems.  See 08-tool-verification-log.md.
+numeric tests do not prove theorems. The original audit is retained in git history.
 """
 
 from __future__ import annotations
