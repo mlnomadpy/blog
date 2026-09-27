@@ -1,0 +1,538 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="generator" content="Astro v5.18.1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#fbfaf6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)"><title>What Would Count as Proof?</title><meta name="description" content="A personal essay on feeling like an imposter in mathematics, AI, software engineering, and electrical engineering despite evidence of competence."><meta name="keywords" content="notes, mathematics, imposter-syndrome, identity, learning, research, personal"><meta name="author" content="Taha Bouhsine"><link rel="canonical" href="https://tahabouhsine.com/blog/writeups/what-would-count-as-proof/"><link rel="icon" href="/blog/favicon.svg" type="image/svg+xml"><link rel="alternate" type="application/rss+xml" title="Records of the !mmortal Data Scientist" href="/blog/rss.xml"><link rel="sitemap" href="/blog/sitemap-index.xml"><link rel="me" href="https://github.com/mlnomadpy"><link rel="me" href="https://x.com/mlnomadpy"><link rel="me" href="https://www.linkedin.com/in/tahabsn/"><link rel="me" href="https://scholar.google.com/citations?user=IsBjb3EAAAAJ"><link rel="me" href="https://g.dev/tahabsn"><link rel="author" href="https://github.com/mlnomadpy"><meta property="og:type" content="article"><meta property="og:site_name" content="Records of the !mmortal Data Scientist"><meta property="og:title" content="What Would Count as Proof?"><meta property="og:description" content="A personal essay on feeling like an imposter in mathematics, AI, software engineering, and electrical engineering despite evidence of competence."><meta property="og:url" content="https://tahabouhsine.com/blog/writeups/what-would-count-as-proof/"><meta property="og:locale" content="en_US"><meta property="og:image" content="https://tahabouhsine.com/blog/og/writeups/what-would-count-as-proof.png"><meta property="og:image:alt" content="What Would Count as Proof? — Records of the !mmortal Data Scientist"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:type" content="image/png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@mlnomadpy"><meta name="twitter:creator" content="@mlnomadpy"><meta name="twitter:title" content="What Would Count as Proof?"><meta name="twitter:description" content="A personal essay on feeling like an imposter in mathematics, AI, software engineering, and electrical engineering despite evidence of competence."><meta name="twitter:image" content="https://tahabouhsine.com/blog/og/writeups/what-would-count-as-proof.png"><meta name="twitter:image:alt" content="What Would Count as Proof? — Records of the !mmortal Data Scientist"><meta property="article:published_time" content="2026-09-27T00:00:00.000Z"><meta property="article:author" content="Taha Bouhsine"><meta property="article:section" content="Notes"><meta property="article:tag" content="notes"><meta property="article:tag" content="mathematics"><meta property="article:tag" content="imposter-syndrome"><meta property="article:tag" content="identity"><meta property="article:tag" content="learning"><meta property="article:tag" content="research"><meta property="article:tag" content="personal"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","@id":"https://tahabouhsine.com/blog/writeups/what-would-count-as-proof/#article","headline":"What Would Count as Proof?","name":"What Would Count as Proof?","description":"A personal essay on feeling like an imposter in mathematics, AI, software engineering, and electrical engineering despite evidence of competence.","image":["https://tahabouhsine.com/blog/og/writeups/what-would-count-as-proof.png"],"datePublished":"2026-09-27T00:00:00.000Z","dateModified":"2026-09-27T00:00:00.000Z","author":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#author","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","jobTitle":"Machine Learning Researcher","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"publisher":{"@type":"Person","@id":"https://tahabouhsine.com/blog/#publisher","name":"Taha Bouhsine","url":"https://github.com/mlnomadpy","sameAs":["https://github.com/mlnomadpy","https://x.com/mlnomadpy","https://www.linkedin.com/in/tahabsn/","https://scholar.google.com/citations?user=IsBjb3EAAAAJ","https://g.dev/tahabsn"]},"mainEntityOfPage":{"@type":"WebPage","@id":"https://tahabouhsine.com/blog/writeups/what-would-count-as-proof/"},"keywords":"notes, mathematics, imposter-syndrome, identity, learning, research, personal","url":"https://tahabouhsine.com/blog/writeups/what-would-count-as-proof/","inLanguage":"en-US","wordCount":2136,"timeRequired":"PT11M","articleSection":"Notes","isPartOf":{"@type":"Blog","@id":"https://tahabouhsine.com/blog/","name":"Records of the !mmortal Data Scientist","url":"https://tahabouhsine.com/blog/"}}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Blog","item":"https://tahabouhsine.com/blog/"},{"@type":"ListItem","position":2,"name":"Notes","item":"https://tahabouhsine.com/blog/tag/notes/"},{"@type":"ListItem","position":3,"name":"What Would Count as Proof?","item":"https://tahabouhsine.com/blog/writeups/what-would-count-as-proof/"}]}</script><script>
+    (function () {
+      if (window.__gaSetup) return;
+      window.__gaSetup = true;
+      var GA_ID = 'G-373438VHJB';
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ dataLayer.push(arguments); }
+      window.gtag = window.gtag || gtag;
+      window.__gaEventQueue = window.__gaEventQueue || [];
+      window.__trackGA = function (eventName, params) {
+        if (!eventName) return;
+        var item = { name: eventName, params: params || {} };
+        if (window.__gaLoaded) {
+          gtag('event', item.name, item.params);
+        } else {
+          window.__gaEventQueue.push(item);
+        }
+      };
+
+      // Track whether the first astro:page-load has fired, so a mid-session
+      // Accept can still record the current page.
+      window.__gaFirstLoadDone = window.__gaFirstLoadDone || false;
+      document.addEventListener('astro:page-load', function () { window.__gaFirstLoadDone = true; });
+
+      window.__loadGA = function () {
+        if (window.__gaLoaded) return;
+        window.__gaLoaded = true;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+        document.head.appendChild(s);
+        gtag('js', new Date());
+        gtag('config', GA_ID, { send_page_view: false });
+        (window.__gaEventQueue || []).splice(0).forEach(function (item) {
+          gtag('event', item.name, item.params);
+        });
+        function sendPV() {
+          gtag('event', 'page_view', {
+            page_title: document.title,
+            page_location: location.href,
+            page_path: location.pathname + location.search,
+          });
+        }
+        document.addEventListener('astro:page-load', sendPV);
+        // If the initial page-load already happened (accept mid-session),
+        // record this page now; otherwise the listener catches the first one.
+        if (window.__gaFirstLoadDone) sendPV();
+      };
+
+      try {
+        if (localStorage.getItem('analytics-consent') === 'granted') window.__loadGA();
+      } catch (e) {}
+    })();
+  </script><script>
+  (() => {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'light' || stored === 'dark') {
+      document.documentElement.setAttribute('data-theme', stored);
+    }
+  })();
+</script><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/blog/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CDGfc0hd.js"></script><link rel="stylesheet" href="/blog/_astro/_slug_.DDq-TDm1.css">
+<style>.kicker[data-astro-cid-avt6dfgd]{font-family:var(--mono);font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;margin:0 0 .5rem}.kicker[data-astro-cid-avt6dfgd] a[data-astro-cid-avt6dfgd]{color:var(--fg-faint);text-decoration:none}.kicker[data-astro-cid-avt6dfgd] a[data-astro-cid-avt6dfgd]:hover{color:var(--accent)}.tag-row[data-astro-cid-avt6dfgd]{margin-top:.65rem}.tag-row[data-astro-cid-avt6dfgd] .tag[data-astro-cid-avt6dfgd]{display:inline-block;font-family:var(--mono);font-size:.72rem;color:var(--fg-muted);margin-right:.6rem}.back-link[data-astro-cid-avt6dfgd]{margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border);font-family:var(--mono);font-size:.82rem}.back-link[data-astro-cid-avt6dfgd] a[data-astro-cid-avt6dfgd]{color:var(--fg-faint);text-decoration:none}.back-link[data-astro-cid-avt6dfgd] a[data-astro-cid-avt6dfgd]:hover{color:var(--accent)}
+</style></head> <body> <a href="#main" class="skip-link">Skip to content</a> <header class="site-header"> <div class="site-header-inner"> <a class="brand" href="/blog/">Records of the !mmortal Data Scientist</a> <nav aria-label="Primary"> <a href="/blog/">posts</a><a href="/blog/series">series</a><a href="/blog/archive">archive</a><a href="/blog/map">map</a><a href="/blog/writeups" aria-current="page">writeups</a><a href="/blog/search">search</a><a href="/blog/tags">tags</a><a href="/blog/about">about</a> <a href="/blog/rss.xml" aria-label="RSS feed">rss</a> <button class="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark theme" data-theme-toggle> <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path> </svg> <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"> <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path> </svg> </button> <script>
+  (() => {
+    const apply = (theme) => {
+      document.documentElement.setAttribute('data-theme', theme);
+      const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+      if (meta) meta.setAttribute('content', theme === 'dark' ? '#0e1116' : '#fbfaf6');
+      // Sync giscus iframe if present
+      const giscus = document.querySelector('iframe.giscus-frame');
+      if (giscus && giscus.contentWindow) {
+        giscus.contentWindow.postMessage(
+          { giscus: { setConfig: { theme: theme === 'dark' ? 'dark' : 'light' } } },
+          'https://giscus.app'
+        );
+      }
+    };
+
+    const init = () => {
+      const btns = document.querySelectorAll('[data-theme-toggle]');
+      btns.forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', () => {
+          const current = document.documentElement.getAttribute('data-theme')
+            || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          const next = current === 'dark' ? 'light' : 'dark';
+          localStorage.setItem('theme', next);
+          apply(next);
+        });
+      });
+    };
+
+    init();
+    document.addEventListener('astro:after-swap', init);
+    document.addEventListener('astro:page-load', init);
+  })();
+</script> </nav> </div> </header> <main id="main">  <div class="reading-progress" data-reading-progress aria-hidden="true"></div> <script>
+  (() => {
+    const init = () => {
+      const bar = document.querySelector('[data-reading-progress]');
+      if (!bar) return;
+      const update = () => {
+        const h = document.documentElement;
+        const scrolled = h.scrollTop;
+        const max = h.scrollHeight - h.clientHeight;
+        const pct = max > 0 ? Math.min(100, (scrolled / max) * 100) : 0;
+        bar.style.width = pct + '%';
+      };
+      // Coalesce scroll events into one paint per frame so fast/touch
+      // scrolling stays smooth.
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => { update(); ticking = false; });
+      };
+      update();
+      window.removeEventListener('scroll', window.__rp_onScroll || (() => {}));
+      window.removeEventListener('resize', window.__rp_onScroll || (() => {}));
+      window.__rp_onScroll = onScroll;
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+    };
+    init();
+    document.addEventListener('astro:page-load', init);
+    document.addEventListener('astro:after-swap', init);
+  })();
+</script> <article data-blog-post data-astro-cid-avt6dfgd> <header class="post-header" data-astro-cid-avt6dfgd> <p class="kicker" data-astro-cid-avt6dfgd><a href="/blog/writeups/" data-astro-cid-avt6dfgd>writeups</a></p>  <h1 data-astro-cid-avt6dfgd>What Would Count as Proof?</h1> <p class="meta" data-astro-cid-avt6dfgd> <time datetime="2026-09-27T00:00:00.000Z" data-astro-cid-avt6dfgd>September 27, 2026</time>   · 11 min read </p> <p class="tag-row" data-astro-cid-avt6dfgd> <span class="tag" data-astro-cid-avt6dfgd>#notes</span><span class="tag" data-astro-cid-avt6dfgd>#mathematics</span><span class="tag" data-astro-cid-avt6dfgd>#imposter-syndrome</span><span class="tag" data-astro-cid-avt6dfgd>#identity</span><span class="tag" data-astro-cid-avt6dfgd>#learning</span><span class="tag" data-astro-cid-avt6dfgd>#research</span><span class="tag" data-astro-cid-avt6dfgd>#personal</span> </p> </header>  <p>I have a bachelor’s degree and a master’s in mathematics. Before those, there
+was the high-school diploma. I can list the qualifications without hesitation.</p>
+<p>I have more trouble saying that I am a mathematician.</p>
+<p>There are too many things I still do not understand. Subjects I could study
+for years. Arguments I cannot yet follow. Questions for which I would have to
+begin much earlier than I feel someone with my education should need to begin.
+The qualifications do not disappear when I think about those things. They
+simply stop feeling like an answer.</p>
+<p>I know I studied mathematics. I know I earned the degrees. What I cannot quite
+settle is how much knowledge the word <em>mathematician</em> asks me to possess before
+I can use it without feeling that I have overstated something.</p>
+<p>The same hesitation follows me into AI, software engineering, and electrical
+engineering. I have
+evidence that I can do the work. Between me and myself, the doubt remains.</p>
+<p>Nobody needs to accuse me. Nobody even needs to be there.</p>
+<p>So what would I need to have? Another qualification? A particular result? The
+ability to answer a question I cannot answer now?</p>
+<p>What would count as proof, and would I accept it if I had it?</p>
+<h2 id="what-i-can-say-the-diploma-proves">What I can say the diploma proves<a class="heading-anchor-link" aria-label="Link to heading" href="#what-i-can-say-the-diploma-proves"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Perhaps part of the difficulty is that I do not connect my diplomas very
+strongly with the knowledge I have.</p>
+<p>I do not mean that the degrees were meaningless. They took study and work.
+They record something I completed. But when I ask myself whether I understand
+mathematics, I am asking about what I can do with an idea now. Can I explain
+why an argument holds? Can I reconstruct the reasoning? Can I recognize when
+an assumption matters instead of merely remembering that it was on the page?</p>
+<p>A qualification cannot answer each of those questions for me.</p>
+<p>There is a reasonable concern here, and I do not want reassurance to erase it.
+Passing an assessment and understanding a subject deeply are not identical.
+Knowing a result and knowing how to arrive at it are different achievements.
+There are gaps worth finding, including gaps in things I have already studied.
+If a piece of work depends on one of them, the degree does not do the missing
+work on my behalf.</p>
+<p>But there is another step I seem to take almost immediately.</p>
+<p>I find something I do not understand, and the question becomes whether I
+deserve the name at all.</p>
+<p>That is much more than the discovery tells me. The gap might be serious. It
+might limit what I can responsibly attempt or explain. It does not, by itself,
+tell me what to make of everything I do understand. Yet the missing knowledge
+feels more revealing than the knowledge I have. It seems to show the truth
+about me, while the qualifications remain something I would have to explain.</p>
+<p>I can be cautious about what a diploma proves without treating it as though
+it proves nothing.</p>
+<p>I understand that sentence more easily than I feel it.</p>
+<h2 id="how-much-does-the-name-promise">How much does the name promise?<a class="heading-anchor-link" aria-label="Link to heading" href="#how-much-does-the-name-promise"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Saying that I studied mathematics describes something that happened. Saying
+that I am a mathematician feels like making a claim about whatever might
+happen next.</p>
+<p>Someone could ask me something.</p>
+<p>Even alone, I can imagine the question I would not know how to answer. I do
+not need an actual person to ask it. I already know enough about the size of
+the subject to supply questions that would defeat me.</p>
+<p>Perhaps this is where the name becomes difficult. I hear more inside it than
+I could possibly demonstrate in a sentence. It seems to include familiarity
+with subjects I have not studied, ease with ideas I still find difficult, and
+a kind of intellectual readiness I do not consistently feel.</p>
+<p>What exactly am I claiming when I say it?</p>
+<p>That I have an education in the field? That I work with its ideas? That I can
+contribute something? Or that I should be able to meet any part of it without
+being lost?</p>
+<p>These claims ask for different evidence. If I leave them mixed together, I
+can meet one and still feel dishonest because I have not met another.</p>
+<p>I do not need to settle a universal definition of who gets to be called a
+mathematician. People use the word in different ways. But I need to understand
+what I require of myself when I hear it. Otherwise, I am trying to satisfy a
+condition I have never stated clearly enough to examine.</p>
+<h2 id="the-people-i-compare-myself-with">The people I compare myself with<a class="heading-anchor-link" aria-label="Link to heading" href="#the-people-i-compare-myself-with"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>I compare myself with people at the top of the fields I care about.</p>
+<p>There is much to learn from doing that. Their work makes possibilities
+visible. An argument can show me a level of understanding I want to develop.
+Something they make can change what I think is worth attempting. I do not
+want to stop looking closely at excellent work just because the comparison
+can be uncomfortable.</p>
+<p>But being inspired by someone’s understanding and using it to decide whether
+my own understanding counts are different uses of the same encounter.</p>
+<p>If someone knows much more mathematics than I do, that difference may be
+real. I do not need to protect myself by pretending otherwise. The question
+is what follows from it. Does their greater ability tell me where I could
+learn, or does it mean I am pretending to belong to the field?</p>
+<p>Somewhere in the comparison, <em>good enough to call myself this</em> becomes
+difficult to separate from <em>as good as the people I most admire</em>.</p>
+<p>Then even substantial knowledge can feel insufficient. I can acknowledge
+that I know something and immediately place it beside someone who knows it
+more deeply. The comparison is accurate in one respect and still unfair in
+what I ask it to decide. Another person’s excellence cannot tell me, on its
+own, whether I am misrepresenting my own ability.</p>
+<p>There is also a question I find uncomfortable: would I apply the same
+requirement to someone else?</p>
+<p>Would I hear about their education, look at what they can do, and then refuse
+to count it because a much stronger person exists? Would I expect them to
+reach the top of a field before they were allowed to say they worked in it?</p>
+<p>I need to answer that honestly. If my standard changes when the person is
+me, calling it rigor does not settle whether it is fair.</p>
+<h2 id="the-feeling-survives-a-change-of-subject">The feeling survives a change of subject<a class="heading-anchor-link" aria-label="Link to heading" href="#the-feeling-survives-a-change-of-subject"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Mathematics gives this difficulty its clearest form for me, but changing
+fields does not remove it.</p>
+<p>I feel it in AI, in software engineering, and in electrical engineering.
+There is evidence that I
+can do these things, and there is still a private reluctance to let that
+evidence become a description of me.</p>
+<p>The evidence has limits, of course. Being able to do one kind of work does
+not establish competence in every other kind. A successful implementation
+does not answer every theoretical question. Understanding a method does not
+mean knowing how to build every system that might use it. I would be making
+a mistake if I treated one success as permission to claim everything nearby.</p>
+<p>But I can make the opposite mistake too. I can ask a particular achievement
+to establish so much that it is guaranteed to seem insufficient.</p>
+<p>Then I am left with an odd arrangement. I can say that I did the work. I can
+accept that the evidence exists. But saying what that suggests about my
+ability feels like a step I am not entitled to take.</p>
+<p>Perhaps I distrust that step because I do not want to become someone whose
+confidence travels much farther than his understanding. I care about the
+difference. I want the words I use about myself to be accurate.</p>
+<p>Accuracy should also make room for what is there.</p>
+<p>If I acknowledge only my limitations, I have not necessarily described myself
+more honestly. I have described one part in detail and left the other part
+out.</p>
+<h2 id="the-gap-deserves-attention-what-else-does-it-deserve">The gap deserves attention. What else does it deserve?<a class="heading-anchor-link" aria-label="Link to heading" href="#the-gap-deserves-attention-what-else-does-it-deserve"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>I do not want to solve this by declaring every doubt an imposter feeling.
+Sometimes I am unprepared. Sometimes there is something I should understand
+before I continue. Feeling better about myself would not repair that.</p>
+<p>What I want is to be more exact about the demand a gap makes.</p>
+<p>Suppose I cannot explain a step in a proof. I may need to return to a
+definition, work through an example, or discover an assumption I missed.
+There is a question I can pursue. I can eventually check whether I understand
+the step better.</p>
+<p>If I turn the same difficulty into “Am I really a mathematician?”, the task
+changes. Understanding the step may no longer be enough. There will be
+another proof, another subject, another person whose knowledge makes mine
+look small. I have attached a much larger uncertainty to something that
+initially asked me to learn a particular thing.</p>
+<p>That example is the distinction I want to keep in view. A real limitation
+can require work without requiring a verdict on everything I have become.</p>
+<p>The struggle is that knowing this does not automatically change how the
+limitation feels. I can explain why the larger conclusion does not follow
+and still find it convincing when it concerns me. The doubt persists beside
+the explanation.</p>
+<p>This is why another person listing my qualifications back to me would not
+quite answer the problem. I have not forgotten them. I am having trouble
+deciding what I am allowed to conclude from them.</p>
+<h2 id="evidence-i-could-actually-use">Evidence I could actually use<a class="heading-anchor-link" aria-label="Link to heading" href="#evidence-i-could-actually-use"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>Perhaps the question needs to become smaller before I can answer it honestly.</p>
+<p>What am I claiming I can do?</p>
+<p>For a particular mathematical argument, I can ask whether I understand the
+definitions, whether the steps follow, and whether I can account for the
+assumptions. Someone else can examine the reasoning and find what I missed.
+For a piece of software, I can ask what it is supposed to do, how it behaves,
+and what has actually been checked. The evidence will be different because
+the claims are different.</p>
+<p>These questions do not ask me to feel impressive. They ask me to make an
+account of the work that can be examined and corrected.</p>
+<p>They also leave room for an honest limit. I can know enough for one task and
+need help with another. I can have a substantial education and still need to
+study something fundamental. I can be capable of learning a missing idea
+without pretending I already know it.</p>
+<p>None of that guarantees that I will feel comfortable with the name. But it
+gives me something more useful than asking whether I am enough for an entire
+field at once.</p>
+<p>There are three questions here that I keep bringing too close together:</p>
+<p>What can I do?</p>
+<p>What do I claim I can do?</p>
+<p>Do I feel like the person those answers describe?</p>
+<p>The first two can be made precise. The third may take longer. I do not want
+to force agreement by inflating what I know. I also do not want the feeling
+to have the final word about evidence it has not answered.</p>
+<h2 id="what-would-i-let-count">What would I let count?<a class="heading-anchor-link" aria-label="Link to heading" href="#what-would-i-let-count"><span class="heading-anchor" aria-hidden="true">#</span></a></h2>
+<p>I still hesitate.</p>
+<p>Writing this does not give me the missing mathematics. It does not make me
+as good as the people I compare myself with, and it does not remove the
+distance between being able to do something and feeling entitled to say so.</p>
+<p>But it makes me less certain that another qualification would settle the
+question. If I cannot say what evidence I would accept, I cannot reasonably
+expect the next achievement to persuade me.</p>
+<p>I want to keep studying. There are things I do not understand because I have
+not learned them, things I need to revisit, and things difficult enough that
+understanding them would be meaningful work. I want to give those questions
+the attention they deserve.</p>
+<p>I also want to be able to recognize what I have already learned without
+feeling that recognition is a promise never to be confused again.</p>
+<p>My degrees cannot answer every question someone could ask me. The work I can
+do cannot make me capable of every task. I can accept those limits. What I
+am trying to understand is why the limits so often feel like the whole
+description.</p>
+<p>For now, I can say something smaller than “I have finally proved myself.”</p>
+<p>I studied mathematics. I earned the degrees. There are things I understand
+and things I can do because of that work. There is also a great deal I do
+not know.</p>
+<p>I am trying to let the last sentence stand without making it erase the
+others.</p>  <p class="back-link" data-astro-cid-avt6dfgd><a href="/blog/writeups/" data-astro-cid-avt6dfgd>← all writeups</a></p> </article> <section aria-label="Comments" id="giscus-mount" style="margin-top:3rem" data-giscus="{&#34;repo&#34;:&#34;mlnomadpy/blog&#34;,&#34;repoId&#34;:&#34;MDEwOlJlcG9zaXRvcnk0MDQ4MzY2NDU=&#34;,&#34;category&#34;:&#34;Announcements&#34;,&#34;categoryId&#34;:&#34;DIC_kwDOGCFRJc4C9EiR&#34;,&#34;mapping&#34;:&#34;pathname&#34;,&#34;reactionsEnabled&#34;:&#34;1&#34;,&#34;emitMetadata&#34;:&#34;0&#34;,&#34;inputPosition&#34;:&#34;top&#34;,&#34;theme&#34;:&#34;preferred_color_scheme&#34;,&#34;lang&#34;:&#34;en&#34;}"></section><script>
+    (() => {
+      const load = () => {
+        const mount = document.getElementById('giscus-mount');
+        if (!mount || mount.dataset.loaded === '1') return;
+        const cfg = JSON.parse(mount.dataset.giscus);
+        const theme = document.documentElement.getAttribute('data-theme')
+          || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        const s = document.createElement('script');
+        s.src = 'https://giscus.app/client.js';
+        s.async = true;
+        s.crossOrigin = 'anonymous';
+        const attrs = {
+          'data-repo': cfg.repo,
+          'data-repo-id': cfg.repoId,
+          'data-category': cfg.category,
+          'data-category-id': cfg.categoryId,
+          'data-mapping': cfg.mapping,
+          'data-strict': '0',
+          'data-reactions-enabled': cfg.reactionsEnabled,
+          'data-emit-metadata': cfg.emitMetadata,
+          'data-input-position': cfg.inputPosition,
+          'data-theme': theme,
+          'data-lang': cfg.lang,
+          'data-loading': 'lazy',
+        };
+        for (const k in attrs) s.setAttribute(k, attrs[k]);
+        mount.appendChild(s);
+        mount.dataset.loaded = '1';
+      };
+      load();
+      document.addEventListener('astro:page-load', load);
+      document.addEventListener('astro:after-swap', load);
+    })();
+  </script> <script>
+  (() => {
+    const enhance = () => {
+      document.querySelectorAll('pre').forEach((pre) => {
+        if (pre.dataset.copyEnhanced) return;
+        pre.dataset.copyEnhanced = '1';
+        const btn = document.createElement('button');
+        btn.className = 'code-copy';
+        btn.type = 'button';
+        btn.textContent = 'copy';
+        btn.setAttribute('aria-label', 'Copy code');
+        btn.addEventListener('click', async () => {
+          const code = pre.querySelector('code');
+          const text = (code ? code.innerText : pre.innerText) || '';
+          try {
+            await navigator.clipboard.writeText(text);
+            btn.textContent = 'copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = 'copy';
+              btn.classList.remove('copied');
+            }, 1500);
+          } catch {
+            btn.textContent = 'error';
+          }
+        });
+        pre.appendChild(btn);
+      });
+    };
+    enhance();
+    document.addEventListener('astro:page-load', enhance);
+    document.addEventListener('astro:after-swap', enhance);
+  })();
+</script>  </main> <footer class="site-footer"> <span>© 2026 Taha Bouhsine</span> <span class="site-footer__links"> <a href="https://github.com/mlnomadpy" target="_blank" rel="noopener noreferrer">github</a> <a class="site-footer__support" href="https://buymeacoffee.com/mlnomadpy" target="_blank" rel="noopener noreferrer" aria-label="Support this blog on Buy Me a Coffee">
+buy me a coffee
+</a> </span> </footer> <div id="consent-banner" class="consent-banner" role="dialog" aria-live="polite" aria-label="Analytics consent" hidden><p class="consent-text">
+I use Google Analytics to see which posts get read. It sets cookies only
+      if you accept. No ads, no selling data.
+</p><div class="consent-actions"><button type="button" id="consent-decline" class="consent-btn consent-decline">Decline</button><button type="button" id="consent-accept" class="consent-btn consent-accept">Accept</button></div></div>
+
+  <script>
+    (() => {
+      const KEY = 'analytics-consent';
+      const setup = () => {
+        const banner = document.getElementById('consent-banner');
+        if (!banner) return;
+        let choice = null;
+        try { choice = localStorage.getItem(KEY); } catch (e) {}
+        // Already decided → keep hidden.
+        if (choice === 'granted' || choice === 'denied') { banner.hidden = true; return; }
+        banner.hidden = false;
+
+        const decide = (value) => {
+          try { localStorage.setItem(KEY, value); } catch (e) {}
+          banner.hidden = true;
+          if (value === 'granted' && typeof window.__loadGA === 'function') window.__loadGA();
+        };
+        const accept = document.getElementById('consent-accept');
+        const decline = document.getElementById('consent-decline');
+        if (accept && !accept.dataset.bound) {
+          accept.dataset.bound = '1';
+          accept.addEventListener('click', () => decide('granted'));
+        }
+        if (decline && !decline.dataset.bound) {
+          decline.dataset.bound = '1';
+          decline.addEventListener('click', () => decide('denied'));
+        }
+      };
+      setup();
+      document.addEventListener('astro:page-load', setup);
+    })();
+  </script>
+
+  <style>
+    /* Author `display:flex` below would otherwise override the UA [hidden]
+       rule, leaving the banner visible after a choice. This wins on specificity. */
+    .consent-banner[hidden] { display: none !important; }
+    .consent-banner {
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      right: 1rem;
+      max-width: 30rem;
+      margin-left: auto;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+      padding: 0.95rem 1.1rem;
+      background: var(--bg-elev, #fff);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      font-family: var(--sans);
+    }
+    .consent-text {
+      margin: 0;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: var(--fg-muted);
+    }
+    .consent-actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+    }
+    .consent-btn {
+      font-family: var(--sans);
+      font-size: 0.82rem;
+      padding: 0.4rem 0.95rem;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    }
+    .consent-decline {
+      background: transparent;
+      color: var(--fg-muted);
+    }
+    .consent-decline:hover { color: var(--fg); border-color: var(--fg-faint); }
+    .consent-accept {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg);
+      font-weight: 600;
+    }
+    .consent-accept:hover { filter: brightness(1.05); }
+    @media (max-width: 520px) {
+      .consent-banner { left: 0.6rem; right: 0.6rem; bottom: 0.6rem; }
+    }
+  </style> <script>
+      // Inject a fullscreen toggle button onto every .viz figure on the page.
+      (() => {
+        const ENTER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10V4h6"/><path d="M20 10V4h-6"/><path d="M4 14v6h6"/><path d="M20 14v6h-6"/></svg>';
+        const EXIT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H4v6"/><path d="M14 4h6v6"/><path d="M10 20H4v-6"/><path d="M14 20h6v-6"/></svg>';
+        const inFs = () => document.fullscreenElement || document.webkitFullscreenElement;
+        const enhance = () => {
+          document.querySelectorAll('.viz').forEach((fig) => {
+            if (fig.dataset.fsReady) return;
+            fig.dataset.fsReady = '1';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'viz-fs-btn';
+            btn.setAttribute('aria-label', 'Toggle fullscreen');
+            btn.innerHTML = ENTER_SVG + '<span>fullscreen</span>';
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              try {
+                if (inFs() === fig) {
+                  await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen?.());
+                } else if (fig.requestFullscreen) {
+                  await fig.requestFullscreen();
+                } else if (fig.webkitRequestFullscreen) {
+                  await fig.webkitRequestFullscreen();
+                }
+              } catch (_) {}
+            });
+            fig.appendChild(btn);
+          });
+          const sync = () => {
+            document.querySelectorAll('.viz-fs-btn').forEach((b) => {
+              const fig = b.parentElement;
+              const open = inFs() === fig;
+              b.innerHTML = (open ? EXIT_SVG : ENTER_SVG) + '<span>' + (open ? 'exit' : 'fullscreen') + '</span>';
+            });
+          };
+          document.addEventListener('fullscreenchange', sync);
+          document.addEventListener('webkitfullscreenchange', sync);
+        };
+        enhance();
+        document.addEventListener('astro:page-load', enhance);
+        document.addEventListener('astro:after-swap', enhance);
+      })();
+
+      // Teardown registry for the bespoke (non-vizkit) viz. Those hand-rolled their
+      // own observers / rAF loops and never cleaned up, so on an Astro view-transition
+      // swap the detached canvas kept firing forever. Each such viz pushes a {n:node,
+      // c:cleanup} entry here; we sweep on every swap and dispose whatever detached.
+      // vizkit-based viz self-clean via their own alive() guard and are not listed.
+      (() => {
+        const R = window.__vizReg || (window.__vizReg = new Set());
+        if (window.__vizSweepHooked) return;
+        window.__vizSweepHooked = true;
+        const sweep = () => { R.forEach((e) => { if (!e.n || !e.n.isConnected) { R.delete(e); try { e.c(); } catch (_) {} } }); };
+        document.addEventListener('astro:after-swap', sweep);
+        document.addEventListener('astro:page-load', sweep);
+      })();
+    </script> </body> </html> 
